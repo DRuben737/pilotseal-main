@@ -14,18 +14,28 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-white text-black">
-        <header className="border-b border-gray-200">
-          <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-            <a href="/" className="font-semibold">
-              PilotSeal
+      <header className="bg-black text-white">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+          <a href="/" className="font-semibold text-white">
+            PilotSeal
+          </a>
+
+          <nav className="flex gap-6 text-sm">
+            <a className="text-gray-300 hover:text-white transition-colors" href="/tools">
+              Tools
             </a>
-            <nav className="flex gap-5 text-sm text-gray-700">
-              <a className="hover:underline" href="/tools">Tools</a>
-              <a className="hover:underline" href="/endorsements">Endorsements</a>
-              <a className="hover:underline" href="/disclaimer">Disclaimer</a>
-            </nav>
-          </div>
-        </header>
+            <a className="text-gray-300 hover:text-white transition-colors" href="/endorsements">
+              Endorsements
+            </a>
+            <a className="text-gray-300 hover:text-white transition-colors" href="/about">
+              About
+            </a>
+            <a className="text-gray-300 hover:text-white transition-colors" href="/disclaimer">
+              Disclaimer
+            </a>
+          </nav>
+        </div>
+      </header>
 
         {children}
 
