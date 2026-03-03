@@ -20,12 +20,9 @@ export default function RootLayout({
               PilotSeal
             </a>
             <nav className="flex gap-5 text-sm text-gray-700">
-              <a className="hover:underline" href="/tools">
-                Tools
-              </a>
-              <a className="hover:underline" href="/disclaimer">
-                Disclaimer
-              </a>
+              <a className="hover:underline" href="/tools">Tools</a>
+              <a className="hover:underline" href="/endorsements">Endorsements</a>
+              <a className="hover:underline" href="/disclaimer">Disclaimer</a>
             </nav>
           </div>
         </header>
