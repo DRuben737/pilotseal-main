@@ -19,6 +19,23 @@ const faqs = [
   },
 ];
 
+const guides = [
+  {
+    title: "Student Solo Endorsements",
+    desc: "Clarity, aircraft scope, and recordkeeping consistency for student solo authorizations.",
+    href: "/endorsements/student-solo",
+  },
+  {
+    title: "Knowledge Test Endorsements",
+    desc: "Structure and scope knowledge-test authorizations clearly and consistently.",
+    href: "/endorsements/knowledge-test",
+  },
+  {
+    title: "Practical Test (Checkride) Endorsements",
+    desc: "Explicit, verifiable checkride endorsements aligned with training records and scope.",
+    href: "/endorsements/practical-test",
+  },
+];
 export default function EndorsementsPage() {
   return (
     <main className="min-h-screen bg-white text-black px-6 py-16">
@@ -129,70 +146,24 @@ export default function EndorsementsPage() {
             <section className="mt-14">
             <h2 className="text-2xl font-semibold">Structured endorsement guides</h2>
             <p className="mt-3 text-gray-700">
-                Detailed guides focused on specific endorsement contexts.
-                Each page explains scope, common pitfalls, and workflow considerations.
+                Detailed guides focused on specific endorsement contexts. Each page explains scope,
+                common pitfalls, and workflow considerations.
             </p>
 
             <div className="mt-6 grid gap-4">
-                <div className="rounded-2xl border border-gray-200 p-6">
-                <div className="flex items-start justify-between gap-6">
+                {guides.map((g) => (
+                <div key={g.href} className="rounded-2xl border border-gray-200 p-6">
+                    <div className="flex items-start justify-between gap-6">
                     <div>
-                    <h3 className="text-lg font-semibold">
-                        Student Solo Endorsements
-                    </h3>
-                    <p className="mt-2 text-gray-700">
-                        Guidance on clarity, aircraft scope, and recordkeeping consistency
-                        for student solo authorizations.
-                    </p>
+                        <h3 className="text-lg font-semibold">{g.title}</h3>
+                        <p className="mt-2 text-gray-700">{g.desc}</p>
                     </div>
-                    <a
-                    className="text-sm font-medium underline whitespace-nowrap"
-                    href="/endorsements/student-solo"
-                    >
-                    Read →
+                    <a className="text-sm font-medium underline whitespace-nowrap" href={g.href}>
+                        Read →
                     </a>
-                </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 p-6">
-                <div className="flex items-start justify-between gap-6">
-                    <div>
-                    <h3 className="text-lg font-semibold">
-                        Knowledge Test Endorsements
-                    </h3>
-                    <p className="mt-2 text-gray-700">
-                        How to structure and scope knowledge-test authorizations clearly
-                        and consistently.
-                    </p>
                     </div>
-                    <a
-                    className="text-sm font-medium underline whitespace-nowrap"
-                    href="/endorsements/knowledge-test"
-                    >
-                    Read →
-                    </a>
                 </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 p-6">
-                <div className="flex items-start justify-between gap-6">
-                    <div>
-                    <h3 className="text-lg font-semibold">
-                        Practical Test (Checkride) Endorsements
-                    </h3>
-                    <p className="mt-2 text-gray-700">
-                        Writing explicit, verifiable checkride endorsements aligned with
-                        training records and certificate/rating scope.
-                    </p>
-                    </div>
-                    <a
-                    className="text-sm font-medium underline whitespace-nowrap"
-                    href="/endorsements/practical-test"
-                    >
-                    Read →
-                    </a>
-                </div>
-                </div>
+                ))}
             </div>
             </section>
             <div className="rounded-2xl border border-gray-200 p-6">

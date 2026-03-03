@@ -59,7 +59,7 @@ export default function KnowledgeTestPage() {
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div>
             <p className="text-sm text-gray-500">
-              Endorsements / Knowledge Test
+              <a className="underline" href="/endorsements">Endorsements</a> / Knowledge Test
             </p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight">
               Knowledge Test Endorsements
@@ -181,6 +181,53 @@ export default function KnowledgeTestPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="mt-12">
+        <h2 className="text-2xl font-semibold">Related guides</h2>
+        <div className="mt-4 grid gap-4">
+            <div className="rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-6">
+                <div>
+                <h3 className="text-lg font-semibold">Student Solo Endorsements</h3>
+                <p className="mt-2 text-gray-700">
+                    Clarity, aircraft scope, and recordkeeping consistency for student solo authorizations.
+                </p>
+                </div>
+                <a className="text-sm font-medium underline whitespace-nowrap" href="/endorsements/student-solo">
+                Read →
+                </a>
+            </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-6">
+                <div>
+                <h3 className="text-lg font-semibold">Knowledge Test Endorsements</h3>
+                <p className="mt-2 text-gray-700">
+                    Structure and scope knowledge-test authorizations clearly and consistently.
+                </p>
+                </div>
+                <a className="text-sm font-medium underline whitespace-nowrap" href="/endorsements/knowledge-test">
+                Read →
+                </a>
+            </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-start justify-between gap-6">
+                <div>
+                <h3 className="text-lg font-semibold">Practical Test (Checkride) Endorsements</h3>
+                <p className="mt-2 text-gray-700">
+                    Explicit, verifiable checkride endorsements aligned with training records and scope.
+                </p>
+                </div>
+                <a className="text-sm font-medium underline whitespace-nowrap" href="/endorsements/practical-test">
+                Read →
+                </a>
+            </div>
+            </div>
+        </div>
         </section>
 
         <div className="mt-12 border-t pt-8 text-sm text-gray-600">
