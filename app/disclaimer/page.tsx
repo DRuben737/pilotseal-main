@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function DisclaimerPage() {
   return (
     <main className="min-h-screen bg-white text-black px-6 py-16">
@@ -33,9 +35,9 @@ export default function DisclaimerPage() {
         </p>
 
         <div className="mt-12 border-t pt-8 text-sm text-gray-600">
-          <a className="underline" href="/">
+          <Link className="underline" href="/">
             ← Back to home
-          </a>
+          </Link>
         </div>
       </div>
     </main>

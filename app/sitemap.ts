@@ -16,5 +16,36 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/endorsements/student-solo`, lastModified: new Date() },
     { url: `${baseUrl}/endorsements/knowledge-test`, lastModified: new Date() },
     { url: `${baseUrl}/endorsements/practical-test`, lastModified: new Date() },
+    {
+      url: `${baseUrl}/endorsements/flight-review-currency`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${baseUrl}/endorsements/high-performance-complex`,
+      lastModified: new Date(),
+    },
+    { url: `${baseUrl}/endorsements/tailwheel`, lastModified: new Date() },
+    {
+      url: `${baseUrl}/endorsements/instrument-proficiency`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${baseUrl}/endorsements/additional-category-class`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${baseUrl}/endorsements/solo-cross-country`,
+      lastModified: new Date(),
+    },
+    { url: `${baseUrl}/endorsements/multi-engine`, lastModified: new Date() },
+    { url: `${baseUrl}/endorsements/spin-training`, lastModified: new Date() },
+    {
+      url: `${baseUrl}/endorsements/instrument-knowledge-test`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${baseUrl}/endorsements/commercial-knowledge-test`,
+      lastModified: new Date(),
+    },
   ];
 }
