@@ -26,11 +26,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${manrope.variable} ${fraunces.variable} text-black`}>
-        <header className="sticky top-0 z-50 px-3 pt-3">
-          <div className="site-shell glass-panel rounded-[24px] px-4 py-4 sm:px-6">
-            <div className="flex items-center justify-between gap-5">
+        <header className="px-3 pt-3 sm:sticky sm:top-0 sm:z-50">
+          <div className="site-shell glass-panel rounded-[20px] px-4 py-3 sm:rounded-[24px] sm:px-6 sm:py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
               <Link href="/" className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-extrabold text-white">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-extrabold text-white sm:h-11 sm:w-11">
                   PS
                 </span>
                 <span>
@@ -43,7 +43,7 @@ export default function RootLayout({
                 </span>
               </Link>
 
-              <nav className="flex flex-wrap items-center justify-end gap-2 text-sm">
+              <nav className="grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-end">
                 <Link
                   className="secondary-button px-4 py-2 text-sm"
                   href="/endorsements"
@@ -73,7 +73,7 @@ export default function RootLayout({
           </div>
         </header>
 
-        <div className="pb-12 pt-8">{children}</div>
+        <div className="pb-12 pt-4 sm:pt-8">{children}</div>
 
         <footer className="px-3 pb-8">
           <div className="site-shell section-panel px-6 py-8">
