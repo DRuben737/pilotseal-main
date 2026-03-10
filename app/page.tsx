@@ -33,8 +33,6 @@ export default function Home() {
       eyebrow: "Reference",
     },
   ];
-  const quickTools = featuredTools.slice(0, 3);
-
   return (
     <main className="page-shell page-home px-3">
       <div className="site-shell page-stack space-y-8">
@@ -53,25 +51,12 @@ export default function Home() {
             </div>
 
             <div className="content-card image-card image-card-hero overflow-hidden p-3">
-              <p className="muted-kicker">Tool-first homepage</p>
               <AdaptiveImageSlot
                 src={home1Image}
                 alt="PilotSeal homepage visual"
-                frameClassName="mt-4"
                 priority
               />
             </div>
-          </div>
-
-          <div className="home-quick-grid mt-5">
-            {quickTools.map((tool) => (
-              <Link key={tool.title} href={tool.href} className="content-card card-link home-quick-card p-4">
-                <p className="muted-kicker">{tool.eyebrow}</p>
-                <h3 className="mt-2 text-lg font-semibold">{tool.title}</h3>
-                <p className="copy-muted mt-2 leading-7">{tool.desc}</p>
-                <span className="reference-chip mt-4 inline-flex">Open tool</span>
-              </Link>
-            ))}
           </div>
         </section>
 
@@ -115,12 +100,10 @@ export default function Home() {
           <div className="section-panel-tools home-balanced-panel px-6 py-7 sm:px-8">
             <p className="muted-kicker">Highlighted workflow</p>
             <h2 className="section-title mt-2 text-3xl font-semibold">
-              Flight Brief keeps weather, NOTAMs, and risk notes in one place
+              Flight Brief
             </h2>
-            <p className="copy-muted mt-4 leading-8">
-              When the task is preflight review, the value is speed and
-              clarity. This workflow is designed to reduce tab-hopping and make
-              the operational picture easier to scan before takeoff.
+            <p className="copy-muted mt-3 leading-7">
+              Weather, NOTAMs, risk.
             </p>
             <AdaptiveImageSlot
               src={smartNotamImage}
@@ -132,12 +115,10 @@ export default function Home() {
           <section className="content-card home-balanced-panel p-6">
             <p className="muted-kicker">Articles</p>
             <h2 className="section-title mt-2 text-2xl font-semibold">
-              Need guidance before you open a tool?
+              Articles
             </h2>
-            <p className="copy-muted mt-4 leading-8">
-              PilotSeal also includes article and guide content for users who
-              want scope, context, and FAA training references before they
-              start drafting or calculating.
+            <p className="copy-muted mt-3 leading-7">
+              Context, checks, references.
             </p>
             <AdaptiveImageSlot
               src={home3Image}

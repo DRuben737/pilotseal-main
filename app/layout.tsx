@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fraunces, Manrope } from "next/font/google";
+import SiteNav from "@/components/ui/SiteNav";
 import "./globals.css";
 import "@/components/tools-native/styles/Nighttime.css";
 import "@/components/tools-native/styles/EndorsementGenerator.css";
@@ -31,47 +32,17 @@ export default function RootLayout({
       <body className={`${manrope.variable} ${fraunces.variable} app-body text-black`}>
         <header className="px-3 pt-3 sm:sticky sm:top-0 sm:z-50">
           <div className="site-shell app-header-shell glass-panel rounded-[20px] px-4 py-3 sm:rounded-[24px] sm:px-6 sm:py-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+            <div className="flex items-center justify-between gap-4">
               <Link href="/" className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-extrabold text-white sm:h-11 sm:w-11">
                   PS
                 </span>
-                <span>
-                  <span className="display-title block text-xl font-semibold leading-none text-[var(--foreground)]">
-                    PilotSeal
-                  </span>
-                  <span className="mt-1 block text-xs uppercase tracking-[0.18em] text-[var(--ink-soft)]">
-                    Tools, articles, compliance
-                  </span>
+                <span className="display-title block text-xl font-semibold leading-none text-[var(--foreground)]">
+                  PilotSeal
                 </span>
               </Link>
 
-              <nav className="grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-end">
-                <Link
-                  className="secondary-button px-4 py-2 text-sm"
-                  href="/"
-                >
-                  Home
-                </Link>
-                <Link
-                  className="secondary-button px-4 py-2 text-sm"
-                  href="/tools"
-                >
-                  Tools
-                </Link>
-                <Link
-                  className="secondary-button px-4 py-2 text-sm"
-                  href="/intro"
-                >
-                  Articles
-                </Link>
-                <Link
-                  className="secondary-button px-4 py-2 text-sm"
-                  href="/disclaimer"
-                >
-                  Disclaimer
-                </Link>
-              </nav>
+              <SiteNav />
             </div>
           </div>
         </header>
@@ -84,10 +55,7 @@ export default function RootLayout({
               <div>
                 <p className="eyebrow">Pilot workflow, not legal advice</p>
                 <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-                  PilotSeal helps CFIs and student pilots move through
-                  endorsement drafting, flight briefing, and planning
-                  workflows faster. Always verify applicability against current
-                  FAA references before use.
+                  Faster drafting, briefing, and planning. Verify FAA applicability before use.
                 </p>
               </div>
 

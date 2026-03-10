@@ -40,12 +40,11 @@ export default function ToolsPage() {
         <section className="tools-minimal-shell">
           <div className="tools-minimal-top">
             <div>
-              <p className="muted-kicker">Tools</p>
               <h1 className="tools-minimal-title">PilotSeal tools</h1>
             </div>
             <div className="flex flex-wrap gap-3">
               <Link href="/tools/endorsement-generator" className="primary-button">
-                Open Generator
+                Generator
               </Link>
               <Link href="/disclaimer" className="secondary-button">
                 Disclaimer
@@ -59,17 +58,15 @@ export default function ToolsPage() {
             const toolImage = toolImages[tool.key];
 
             return (
-              <article key={tool.key} className="tools-priority-card">
+              <article key={tool.key} className="tools-priority-card tools-priority-card-compact">
                 <div className="tools-priority-copy">
-                  <p className="muted-kicker">{tool.eyebrow}</p>
                   <h2 className="tools-priority-title">{tool.title}</h2>
-                  <p className="copy-muted">{tool.description}</p>
-                  <Link className="primary-button mt-5" href={`/tools/${tool.key}`}>
-                    Open {tool.title}
+                  <Link className="primary-button tools-card-button mt-4" href={`/tools/${tool.key}`}>
+                    Open
                   </Link>
                 </div>
                 {toolImage ? (
-                  <div className="tools-preview-frame">
+                  <div className="tools-preview-frame tools-preview-frame-square">
                     <Image
                       src={toolImage.src}
                       alt={toolImage.alt}
@@ -84,16 +81,11 @@ export default function ToolsPage() {
 
         {secondaryTools.length > 0 ? (
           <section className="tools-secondary-shell">
-            <div className="tools-secondary-header">
-              <p className="muted-kicker">More tools</p>
-            </div>
             <div className="tools-secondary-grid">
               {secondaryTools.map((tool) => (
-                <article key={tool.key} className="tools-secondary-card">
+                <article key={tool.key} className="tools-secondary-card tools-secondary-card-compact">
                   <div>
-                    <p className="muted-kicker">{tool.eyebrow}</p>
-                    <h3 className="mt-2 text-xl font-semibold">{tool.title}</h3>
-                    <p className="copy-muted mt-3 leading-7">{tool.description}</p>
+                    <h3 className="text-lg font-semibold">{tool.title}</h3>
                   </div>
                   <Link className="reference-chip" href={`/tools/${tool.key}`}>
                     Open

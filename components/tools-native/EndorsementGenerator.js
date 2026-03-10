@@ -173,6 +173,7 @@ function EndorsementGenerator() {
 
     const handlePointerDown = (event) => {
       drawing = true;
+      canvas.setPointerCapture?.(event.pointerId);
       const { x, y } = getPoint(event);
       context.beginPath();
       context.moveTo(x, y);
@@ -269,7 +270,6 @@ function EndorsementGenerator() {
 
   const openModal = () => setModalIsOpen(true);
   const closeModal = () => setModalIsOpen(false);
-
   const handleChange = (field) => (event) => {
     const nextValue = formatInputValue(field, event.target.value);
     setFormData((prev) => ({ ...prev, [field]: nextValue }));
@@ -498,9 +498,7 @@ function EndorsementGenerator() {
       <div className={styles.page}>
         <section className={styles.utilityBar}>
           <h1 className={styles.utilityTitle}>Endorsement Generator</h1>
-          <p className={styles.utilityNote}>
-            {selectedTemplates.length} selected. Verify wording against current FAA references before signing.
-          </p>
+          <p className={styles.utilityNote}>{selectedTemplates.length} selected</p>
         </section>
 
         <div className={styles.workspace}>
@@ -509,7 +507,6 @@ function EndorsementGenerator() {
               <div className={styles.sectionHeader}>
                 <div>
                   <h2>Certificate details</h2>
-                  <p>Required fields are marked and reused across every selected endorsement.</p>
                 </div>
               </div>
 
@@ -540,11 +537,12 @@ function EndorsementGenerator() {
               <div className={styles.sectionHeader}>
                 <div>
                   <h2>Signature</h2>
-                  <p>Draw a signature now or leave it blank and sign the printed page by hand.</p>
                 </div>
-                <button className={styles.ghostButton} onClick={clearSignature} type="button">
-                  Clear signature
-                </button>
+                <div className={styles.signatureActions}>
+                  <button className={styles.ghostButton} onClick={clearSignature} type="button">
+                    Clear
+                  </button>
+                </div>
               </div>
 
               <div className={styles.signatureFrame}>
@@ -556,7 +554,6 @@ function EndorsementGenerator() {
               <div className={styles.sectionHeader}>
                 <div>
                   <h2>Export</h2>
-                  <p>Select templates first, then generate and review the packet before printing.</p>
                 </div>
               </div>
 
@@ -585,7 +582,6 @@ function EndorsementGenerator() {
               <div className={styles.sectionHeader}>
                 <div>
                   <h2>Selection summary</h2>
-                  <p>Current endorsement packet contents.</p>
                 </div>
               </div>
 
