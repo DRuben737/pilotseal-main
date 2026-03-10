@@ -28,6 +28,7 @@ export type GuideFaq = {
 export type GuideReference = {
   title: string;
   note: string;
+  href: string;
 };
 
 export type GuideSection =
@@ -73,14 +74,17 @@ export const defaultGuideReferences: GuideReference[] = [
   {
     title: "FAR Part 61",
     note: "Core pilot certification and endorsement requirements live here, so it is the baseline reference for scope, eligibility, and authorization.",
+    href: "https://www.ecfr.gov/current/title-14/chapter-I/subchapter-D/part-61",
   },
   {
     title: "AC 61-65",
     note: "Use this as the primary endorsement wording reference when you need examples and FAA-endorsed phrasing structure.",
+    href: "https://www.faa.gov/regulations_policies/advisory_circulars/index.cfm/go/document.information/documentID/1044476",
   },
   {
     title: "AC 61-98",
     note: "Useful when the scenario overlaps with flight reviews, currency, or other recurrent training and proficiency contexts.",
+    href: "https://www.faa.gov/regulations_policies/advisory_circulars/index.cfm/go/document.information/documentID/1043281",
   },
 ];
 

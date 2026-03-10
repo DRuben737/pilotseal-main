@@ -1,0 +1,271 @@
+.page {
+  display: grid;
+  gap: 1rem;
+}
+
+.utilityBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.1rem 0.1rem 0;
+}
+
+.utilityTitle {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.2vw, 1.8rem);
+  line-height: 1.1;
+}
+
+.utilityNote {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.5;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.9fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.mainPanel,
+.sidePanel {
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  padding: 1.25rem;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.sectionHeader p {
+  margin: 0.35rem 0 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.inputGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field span {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.field input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+  background: #fff;
+}
+
+.field input:focus {
+  outline: 2px solid rgba(15, 118, 110, 0.2);
+  border-color: #0f766e;
+}
+
+.field small {
+  color: #b91c1c;
+  font-size: 0.8rem;
+}
+
+.fieldError {
+  border-color: #dc2626 !important;
+  background: #fff7f7 !important;
+}
+
+.signatureFrame {
+  padding: 0.85rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f8fafc, #eef2f7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.signatureCanvas {
+  width: 100%;
+  height: 220px;
+  display: block;
+  border-radius: 16px;
+  background: #fff;
+  border: 2px dashed rgba(15, 118, 110, 0.26);
+  touch-action: none;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton {
+  border: none;
+  border-radius: 999px;
+  padding: 0.85rem 1.2rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, #0f766e, #0f4c81);
+  color: #fff;
+}
+
+.secondaryButton {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.ghostButton {
+  background: transparent;
+  color: #0f766e;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.status {
+  margin: 1rem 0 0;
+  color: #0f4c81;
+  line-height: 1.6;
+}
+
+.inlineError {
+  margin: 0.5rem 0 0;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.selectedList {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.selectedCard {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  padding: 0.95rem;
+  background: #f8fafc;
+}
+
+.selectedMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.selectedMeta span {
+  display: inline-flex;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #0f4c81;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.selectedMeta button {
+  border: none;
+  background: transparent;
+  color: #b91c1c;
+  cursor: pointer;
+  padding: 0;
+}
+
+.selectedCard h3 {
+  margin: 0.65rem 0 0.45rem;
+  font-size: 1rem;
+}
+
+.selectedCard p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+  font-size: 0.92rem;
+}
+
+.emptyState {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+.emptyState p {
+  margin: 0;
+  color: #475569;
+}
+
+.noteList {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #475569;
+  display: grid;
+  gap: 0.65rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 960px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .utilityBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .utilityNote {
+    text-align: left;
+  }
+
+  .inputGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .signatureCanvas {
+    height: 180px;
+  }
+}

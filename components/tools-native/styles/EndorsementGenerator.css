@@ -1,0 +1,191 @@
+.endorsementModal {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  height: min(82vh, 860px);
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.endorsementModalHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  padding: 1.25rem 1.25rem 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.endorsementModalHeader h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.endorsementModalHeader p {
+  margin: 0.4rem 0 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.endorsementModalActions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.modalGhostButton,
+.modalPrimaryButton {
+  border: none;
+  border-radius: 999px;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+}
+
+.modalGhostButton {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.modalPrimaryButton {
+  background: linear-gradient(135deg, #0f766e, #0f4c81);
+  color: #fff;
+}
+
+.endorsementModalToolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.25rem 0;
+}
+
+.endorsementModalSearch {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+}
+
+.endorsementResultCount {
+  color: #475569;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.endorsementSelectedBar {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding: 1rem 1.25rem 0;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.endorsementChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: #ecfeff;
+  color: #155e75;
+  border: 1px solid rgba(8, 145, 178, 0.16);
+  white-space: nowrap;
+}
+
+.endorsementChipRemove {
+  border: none;
+  background: transparent;
+  color: #b91c1c;
+  cursor: pointer;
+  padding: 0;
+}
+
+.endorsementTemplateScroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.endorsementTemplateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  min-height: min-content;
+}
+
+.endorsementTemplateCard {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  padding: 1rem;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.endorsementTemplateCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.08);
+}
+
+.endorsementTemplateCardSelected {
+  border-color: #0f766e;
+  background: #f0fdfa;
+}
+
+.endorsementTemplateTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.endorsementTemplateCategory {
+  display: inline-flex;
+  padding: 0.28rem 0.58rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #0f4c81;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.endorsementTemplateToggle {
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.endorsementTemplateCard h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.endorsementTemplatePreview {
+  margin: 0.75rem 0 0;
+  color: #475569;
+  line-height: 1.6;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 720px) {
+  .endorsementModalHeader,
+  .endorsementModalToolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .endorsementModalActions {
+    justify-content: stretch;
+  }
+
+  .modalGhostButton,
+  .modalPrimaryButton {
+    width: 100%;
+  }
+}

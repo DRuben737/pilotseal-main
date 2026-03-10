@@ -10,7 +10,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     { url: `${baseUrl}/`, lastModified: new Date() },
+    { url: `${baseUrl}/intro`, lastModified: new Date() },
     { url: `${baseUrl}/tools`, lastModified: new Date() },
+    {
+      url: `${baseUrl}/tools/endorsement-generator`,
+      lastModified: new Date(),
+    },
+    { url: `${baseUrl}/tools/flight-brief`, lastModified: new Date() },
+    { url: `${baseUrl}/tools/wb`, lastModified: new Date() },
+    { url: `${baseUrl}/tools/nighttime`, lastModified: new Date() },
+    { url: `${baseUrl}/tools/decoder`, lastModified: new Date() },
+    { url: `${baseUrl}/privacy`, lastModified: new Date() },
     { url: `${baseUrl}/disclaimer`, lastModified: new Date() },
     { url: `${baseUrl}/endorsements`, lastModified: new Date() },
     { url: `${baseUrl}/endorsements/student-solo`, lastModified: new Date() },

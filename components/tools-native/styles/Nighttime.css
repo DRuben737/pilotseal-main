@@ -1,0 +1,94 @@
+
+
+
+.nighttime-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  background-color: #1a1a2e;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  color: #f0f0f0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.nighttime-header {
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  color: #ffdd57;
+}
+
+.nighttime-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.nighttime-form label {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.nighttime-form input,
+.nighttime-form select {
+  padding: 0.5rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+}
+
+.nighttime-button {
+  padding: 0.75rem;
+  background-color: #3f72af;
+  color: white;
+  font-size: 1rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.nighttime-button:hover {
+  background-color: #020916;
+}
+
+.nighttime-results {
+  margin-top: 1.5rem;
+  background-color: #16213e;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+@media screen and (max-width: 600px) {
+  .nighttime-container {
+    padding: 1rem;
+  }
+
+  .nighttime-header {
+    font-size: 1.5rem;
+  }
+}
+.highlight-cards {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  margin-top: 3rem;
+}
+
+.highlight-cards .card {
+  flex: 1;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: bold;
+  background: #f9f9f9;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.card.night { border-left: 5px solid #4a90e2; }
+.card.currency { border-left: 5px solid #f5a623; }
+.card.lights { border-left: 5px solid #7ed321; }

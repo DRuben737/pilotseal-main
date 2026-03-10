@@ -77,41 +77,36 @@ const faqs = [
 
 export default function EndorsementsPage() {
   return (
-    <main className="px-3">
-      <div className="site-shell space-y-8">
-        <section className="hero-panel hero-endorsements overflow-hidden px-6 py-10 sm:px-10 sm:py-14">
+    <main className="page-shell page-endorsements px-3">
+      <div className="site-shell page-stack space-y-8">
+        <section className="hero-panel hero-endorsements hero-compact overflow-hidden px-6 py-7 sm:px-8 sm:py-9">
           <div className="reading-rail">
             <div>
               <p className="eyebrow">FAA endorsement guide</p>
-              <h1 className="display-title mt-5 max-w-3xl text-5xl font-semibold leading-[0.95] text-[var(--foreground)] sm:text-6xl">
+              <h1 className="display-title mt-4 max-w-3xl text-3xl font-semibold leading-[0.95] text-[var(--foreground)] sm:text-4xl">
                 Find the right endorsement page fast, then draft from a cleaner
                 starting point.
               </h1>
-              <p className="copy-muted mt-6 max-w-2xl text-lg leading-8">
-                This page now works like an operations index, not a long essay.
-                Pick the scenario first, review the relevant FAA references,
-                then use the Endorsement Generator when the scope is clear.
+              <p className="copy-muted mt-4 max-w-2xl leading-7">
+                Pick the scenario, scan the references, then draft.
               </p>
 
-              <div className="mt-8 flex flex-wrap gap-3">
-                <a
-                  href="https://tool.pilotseal.com/endorsement-generator"
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="/tools/endorsement-generator"
                   className="primary-button"
                 >
                   Open Endorsement Generator
-                </a>
+                </Link>
                 <a href="#guide-entry" className="secondary-button">
                   Browse guide pages
                 </a>
               </div>
             </div>
 
-            <div className="content-card p-6 sm:p-7">
-              <p className="muted-kicker">Read this like a preflight brief</p>
-              <h2 className="section-title mt-3 text-2xl font-semibold">
-                Fast path
-              </h2>
-              <ol className="mt-5 space-y-4 text-sm leading-7 text-[var(--muted)]">
+            <div className="content-card p-5 sm:p-6">
+              <p className="muted-kicker">Fast path</p>
+              <ol className="mt-3 space-y-3 text-sm leading-7 text-[var(--muted)]">
                 {workflow.map((item, index) => (
                   <li
                     key={item}
@@ -205,10 +200,17 @@ export default function EndorsementsPage() {
           </h2>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {defaultGuideReferences.map((reference) => (
-              <div key={reference.title} className="content-card p-6">
+              <a
+                key={reference.title}
+                href={reference.href}
+                target="_blank"
+                rel="noreferrer"
+                className="content-card card-link reference-card p-6"
+              >
                 <h3 className="text-lg font-semibold">{reference.title}</h3>
                 <p className="copy-muted mt-3 leading-7">{reference.note}</p>
-              </div>
+                <span className="reference-chip mt-4 inline-flex">Open source</span>
+              </a>
             ))}
           </div>
         </section>
@@ -221,12 +223,12 @@ export default function EndorsementsPage() {
                 Additional endorsement scenarios
               </h2>
             </div>
-            <a
-              href="https://tool.pilotseal.com/endorsement-generator"
+            <Link
+              href="/tools/endorsement-generator"
               className="secondary-button"
             >
               Draft with the generator
-            </a>
+            </Link>
           </div>
 
           <div className="guide-grid mt-6">
@@ -259,12 +261,12 @@ export default function EndorsementsPage() {
               random copied text.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href="https://tool.pilotseal.com/endorsement-generator"
+              <Link
+                href="/tools/endorsement-generator"
                 className="primary-button"
               >
                 Open Endorsement Generator
-              </a>
+              </Link>
               <Link href="/disclaimer" className="secondary-button">
                 Read disclaimer
               </Link>
@@ -273,15 +275,16 @@ export default function EndorsementsPage() {
 
           <section className="content-card p-6">
             <p className="muted-kicker">FAQ</p>
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 space-y-3">
               {faqs.map((faq) => (
-                <div
-                  key={faq.q}
-                  className="rounded-2xl bg-[var(--surface-muted)] px-5 py-5"
-                >
-                  <p className="font-semibold">{faq.q}</p>
-                  <p className="copy-muted mt-2 leading-7">{faq.a}</p>
-                </div>
+                <details key={faq.q} className="article-disclosure article-faq">
+                  <summary className="article-summary article-summary-compact">
+                    <p className="font-semibold">{faq.q}</p>
+                  </summary>
+                  <div className="article-disclosure-body">
+                    <p className="copy-muted mt-2 leading-7">{faq.a}</p>
+                  </div>
+                </details>
               ))}
             </div>
           </section>
