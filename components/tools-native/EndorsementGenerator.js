@@ -5,6 +5,8 @@ import Modal from 'react-modal';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import templates from './templates';
 import styles from './EndorsementGenerator.module.css';
+import { fetchSavedPeople } from '@/lib/saved-people';
+import { getSupabaseClient } from '@/lib/supabase';
 
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
@@ -133,6 +135,11 @@ function EndorsementGenerator() {
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, and generate a PDF packet.');
+  const [sessionEmail, setSessionEmail] = useState('');
+  const [savedCfis, setSavedCfis] = useState([]);
+  const [savedStudents, setSavedStudents] = useState([]);
+  const [selectedCfiId, setSelectedCfiId] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
 
   const canvasRef = useRef(null);
   const signatureDirtyRef = useRef(false);
@@ -220,6 +227,48 @@ function EndorsementGenerator() {
     };
   }, []);
 
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+
+    async function loadSavedProfiles() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        setSessionEmail(session?.user?.email || '');
+
+        if (!session?.user) {
+          setSavedCfis([]);
+          setSavedStudents([]);
+          return;
+        }
+
+        const [cfis, students] = await Promise.all([
+          fetchSavedPeople(session.user.id, 'cfi'),
+          fetchSavedPeople(session.user.id, 'student'),
+        ]);
+
+        setSavedCfis(cfis);
+        setSavedStudents(students);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    loadSavedProfiles();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      loadSavedProfiles();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const visibleTemplates = templateEntries
     .map(([title, body]) => ({
       title,
@@ -281,6 +330,35 @@ function EndorsementGenerator() {
     );
 
     setErrors((prev) => ({ ...prev, selectedTemplates: undefined }));
+  };
+
+  const handleSelectCfi = (event) => {
+    const nextId = event.target.value;
+    setSelectedCfiId(nextId);
+
+    const selected = savedCfis.find((person) => person.id === nextId);
+    if (!selected) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      instructorName: selected.display_name || prev.instructorName,
+      instructorCertNumber: selected.cert_number || '',
+      instructorCertExpDate: selected.cert_exp_date || '',
+    }));
+  };
+
+  const handleSelectStudent = (event) => {
+    const nextId = event.target.value;
+    setSelectedStudentId(nextId);
+
+    const selected = savedStudents.find((person) => person.id === nextId);
+    if (!selected) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      studentName: selected.display_name || prev.studentName,
+      studentCertNumber: selected.cert_number || '',
+    }));
   };
 
   const validateForm = () => {
@@ -539,6 +617,37 @@ function EndorsementGenerator() {
                   <h2>Certificate details</h2>
                 </div>
               </div>
+
+              {sessionEmail ? (
+                <div className={styles.savedProfiles}>
+                  <p className={styles.savedProfileHint}>Signed in as {sessionEmail}. Select saved profiles to autofill the form.</p>
+                  <div className={styles.savedProfileRow}>
+                    <label className={styles.field}>
+                      <span>Saved CFI</span>
+                      <select value={selectedCfiId} onChange={handleSelectCfi}>
+                        <option value="">Select a saved CFI</option>
+                        {savedCfis.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className={styles.field}>
+                      <span>Saved Student</span>
+                      <select value={selectedStudentId} onChange={handleSelectStudent}>
+                        <option value="">Select a saved student</option>
+                        {savedStudents.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
 
               <div className={styles.inputGrid}>
                 {FIELD_CONFIG.map((field) => (

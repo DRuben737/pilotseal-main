@@ -84,7 +84,20 @@
   background: #fff;
 }
 
+.field select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+  background: #fff;
+}
+
 .field input:focus {
+  outline: 2px solid rgba(15, 118, 110, 0.2);
+  border-color: #0f766e;
+}
+
+.field select:focus {
   outline: 2px solid rgba(15, 118, 110, 0.2);
   border-color: #0f766e;
 }
@@ -165,6 +178,28 @@
   margin: 1rem 0 0;
   color: #0f4c81;
   line-height: 1.6;
+}
+
+.savedProfiles {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.savedProfileRow {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.savedProfileHint {
+  margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
 }
 
 .inlineError {
@@ -252,6 +287,15 @@
   .field input {
     min-width: 0;
     max-width: 100%;
+  }
+
+  .field select {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .savedProfileRow {
+    grid-template-columns: 1fr;
   }
 
   .signatureCanvas {
