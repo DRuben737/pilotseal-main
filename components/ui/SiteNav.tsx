@@ -81,7 +81,7 @@ export default function SiteNav() {
 
           {!isAuthenticated ? (
             <Link
-              className="primary-button site-nav-mobile-login"
+              className="site-nav-link site-nav-link-active site-nav-mobile-login"
               href="/login"
               onClick={() => setMobileOpen(false)}
             >
