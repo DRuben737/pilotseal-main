@@ -1200,16 +1200,6 @@ ${riskComments}
           {currentStep === 4 && (
             <section className="flightbrief-panel">
               <h2>Risk Assessment</h2>
-              <div className="flightbrief-riskSummary">
-                <div className="flightbrief-riskBadge">
-                  <span>Total</span>
-                  <strong>{totalRisk}</strong>
-                </div>
-                <div className="flightbrief-riskMeta">
-                  <strong style={{ color: riskMeta.color }}>{riskMeta.level}</strong>
-                  <p>{riskMeta.advice}</p>
-                </div>
-              </div>
               <div className="risk-columns">
                 <div className="static-risk-column">
                   <div className="flightbrief-riskColumnHead">
@@ -1275,6 +1265,17 @@ ${riskComments}
               <div className="section inline-label-input">
                 <label className="label" htmlFor="riskComments"><strong>Risk Discussion / Comments</strong></label>
                 <textarea id="riskComments" rows="3" className="input-field" value={riskComments} onChange={(e) => setRiskComments(e.target.value)} placeholder="Notes from discussion with senior/chief pilot..." />
+              </div>
+
+              <div className="flightbrief-riskSummary">
+                <div className="flightbrief-riskBadge">
+                  <span>Total</span>
+                  <strong>{totalRisk}</strong>
+                </div>
+                <div className="flightbrief-riskMeta">
+                  <strong style={{ color: riskMeta.color }}>{riskMeta.level}</strong>
+                  <p>{riskMeta.advice}</p>
+                </div>
               </div>
 
               {riskGates.length > 0 && (

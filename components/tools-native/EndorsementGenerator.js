@@ -156,7 +156,7 @@ function EndorsementGenerator() {
     canvas.width = width * ratio;
     canvas.height = height * ratio;
     context.scale(ratio, ratio);
-    context.lineWidth = 2.6;
+    context.lineWidth = 6.4;
     context.lineCap = 'round';
     context.lineJoin = 'round';
     context.strokeStyle = '#0f172a';
@@ -349,10 +349,15 @@ function EndorsementGenerator() {
       const pageHeight = 792;
       const margin = 32;
       const columns = 2;
-      const boxWidth = 248;
-      const boxPadding = 3;
-      const textWidth = boxWidth - boxPadding * 2;
-      const rowWidth = columns * boxWidth;
+      const boxGapX = 5;
+      const boxGapY = 5;
+      const boxWidth = 245;
+      const boxPaddingX = 2;
+      const boxPaddingTop = 0;
+      const boxPaddingBottom = 0;
+      const signatureDrop = lineHeight * 2;
+      const textWidth = boxWidth - boxPaddingX * 2;
+      const rowWidth = columns * boxWidth + boxGapX;
       const baseX = (pageWidth - rowWidth) / 2;
 
       let signatureImage;
@@ -369,8 +374,8 @@ function EndorsementGenerator() {
           const content = createTemplateDraft(templateKey);
           const lines = splitTextIntoLines(content, font, fontSize, textWidth);
           const textHeight = lines.length * lineHeight;
-          const signatureHeight = signatureImage ? 18 : 8;
-          const boxHeight = textHeight + signatureHeight + boxPadding * 2 + 2;
+          const signatureHeight = signatureImage ? 16 + signatureDrop : 7 + signatureDrop;
+          const boxHeight = textHeight + signatureHeight + boxPaddingTop + boxPaddingBottom;
 
           return {
             templateKey,
@@ -391,14 +396,20 @@ function EndorsementGenerator() {
       let currentHeight = 0;
 
       rows.forEach((row) => {
-        if (currentPageRows.length > 0 && currentHeight + row.rowHeight > maxTableHeight) {
+        const nextHeight = currentPageRows.length > 0
+          ? currentHeight + boxGapY + row.rowHeight
+          : currentHeight + row.rowHeight;
+
+        if (currentPageRows.length > 0 && nextHeight > maxTableHeight) {
           pages.push(currentPageRows);
           currentPageRows = [];
           currentHeight = 0;
         }
 
         currentPageRows.push(row);
-        currentHeight += row.rowHeight;
+        currentHeight = currentPageRows.length > 1
+          ? currentHeight + boxGapY + row.rowHeight
+          : currentHeight + row.rowHeight;
       });
 
       if (currentPageRows.length > 0) {
@@ -407,45 +418,29 @@ function EndorsementGenerator() {
 
       pages.forEach((pageRows) => {
         const page = doc.addPage([pageWidth, pageHeight]);
-        const tableHeight = pageRows.reduce((sum, row) => sum + row.rowHeight, 0);
-        const tableTop = pageHeight - margin;
-        const tableBottom = tableTop - tableHeight;
-
-        page.drawRectangle({
-          x: baseX,
-          y: tableBottom,
-          width: rowWidth,
-          height: tableHeight,
-          borderColor: rgb(0.15, 0.23, 0.33),
-          borderWidth: 1,
-        });
-
-        page.drawLine({
-          start: { x: baseX + boxWidth, y: tableBottom },
-          end: { x: baseX + boxWidth, y: tableTop },
-          thickness: 1,
-          color: rgb(0.15, 0.23, 0.33),
-        });
-
-        let currentTop = tableTop;
+        let currentTop = pageHeight - margin;
         pageRows.forEach((row, rowIndex) => {
           if (rowIndex > 0) {
-            page.drawLine({
-              start: { x: baseX, y: currentTop },
-              end: { x: baseX + rowWidth, y: currentTop },
-              thickness: 1,
-              color: rgb(0.15, 0.23, 0.33),
-            });
+            currentTop -= boxGapY;
           }
 
           row.cells.forEach((template, columnIndex) => {
-            const x = baseX + columnIndex * boxWidth;
-            const boxY = currentTop - row.rowHeight;
+            const x = baseX + columnIndex * (boxWidth + boxGapX);
+            const boxY = currentTop - template.boxHeight;
 
-            let textY = currentTop - boxPadding - lineHeight;
+            page.drawRectangle({
+              x,
+              y: boxY,
+              width: boxWidth,
+              height: template.boxHeight,
+              borderColor: rgb(0.15, 0.23, 0.33),
+              borderWidth: 1,
+            });
+
+            let textY = currentTop - fontSize - boxPaddingTop;
             template.lines.forEach((line) => {
               page.drawText(line, {
-                x: x + boxPadding,
+                x: x + boxPaddingX,
                 y: textY,
                 size: fontSize,
                 font,
@@ -453,9 +448,9 @@ function EndorsementGenerator() {
               textY -= lineHeight;
             });
 
-            const signatureLabelY = boxY + boxPadding + (signatureImage ? 7 : 3);
+            const signatureLabelY = boxY + boxPaddingBottom + (signatureImage ? 6 : 2);
             page.drawText('Signature:', {
-              x: x + boxPadding,
+              x: x + boxPaddingX,
               y: signatureLabelY,
               size: fontSize,
               font,
@@ -464,15 +459,15 @@ function EndorsementGenerator() {
             if (signatureImage) {
               page.drawImage(signatureImage, {
                 x: x + 56,
-                y: signatureLabelY - 5,
-                width: 54,
-                height: 22,
+                y: signatureLabelY - 8,
+                width: 72,
+                height: 30,
               });
             } else {
               page.drawLine({
                 start: { x: x + 56, y: signatureLabelY + 2 },
                 end: { x: x + 130, y: signatureLabelY + 2 },
-                thickness: 0.8,
+                thickness: 1.15,
                 color: rgb(0.15, 0.23, 0.33),
               });
             }
