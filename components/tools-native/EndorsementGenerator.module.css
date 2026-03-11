@@ -181,7 +181,7 @@
 .selectedCard {
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 18px;
-  padding: 0.95rem;
+  padding: 0.8rem 0.95rem;
   background: #f8fafc;
 }
 
@@ -192,15 +192,9 @@
   align-items: center;
 }
 
-.selectedMeta span {
-  display: inline-flex;
-  padding: 0.25rem 0.55rem;
-  border-radius: 999px;
-  background: #dbeafe;
-  color: #0f4c81;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
+.selectedMeta h3 {
+  margin: 0;
+  font-size: 1rem;
 }
 
 .selectedMeta button {
@@ -209,18 +203,6 @@
   color: #b91c1c;
   cursor: pointer;
   padding: 0;
-}
-
-.selectedCard h3 {
-  margin: 0.65rem 0 0.45rem;
-  font-size: 1rem;
-}
-
-.selectedCard p {
-  margin: 0;
-  color: #475569;
-  line-height: 1.6;
-  font-size: 0.92rem;
 }
 
 .emptyState {
@@ -265,6 +247,11 @@
 
   .card {
     padding: 1rem;
+  }
+
+  .field input {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .signatureCanvas {

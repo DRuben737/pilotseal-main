@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 const navItems = [
@@ -12,9 +12,34 @@ const navItems = [
 
 export default function SiteNav() {
   const [open, setOpen] = useState(false);
+  const navRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!navRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
 
   return (
-    <div className="site-nav">
+    <div className="site-nav" ref={navRef}>
       <button
         type="button"
         className="site-nav-toggle"

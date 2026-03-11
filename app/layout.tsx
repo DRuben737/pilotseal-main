@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${manrope.variable} ${fraunces.variable} app-body text-black`}>
-        <header className="px-3 pt-3 sm:sticky sm:top-0 sm:z-50">
+        <header className="relative z-80 px-3 pt-3">
           <div className="site-shell app-header-shell glass-panel rounded-[20px] px-4 py-3 sm:rounded-[24px] sm:px-6 sm:py-4">
             <div className="flex items-center justify-between gap-4">
               <Link href="/" className="flex items-center gap-3">

@@ -1,13 +1,13 @@
 import Link from "next/link";
-import AdaptiveImageSlot from "@/components/ui/AdaptiveImageSlot";
-import endorsementPageImage from "@/images/endorsementpage.png";
-import art5Image from "@/images/art5.png";
+import art1Image from "@/images/art1.png";
+import art2Image from "@/images/art2.png";
+import art4Image from "@/images/art4.png";
 import { guideCards } from "@/app/endorsements/guide-content";
 
 const articleImages = [
-  { src: "/intro-why-section.png", alt: "Intro why section image placeholder" },
-  { src: "/intro-search-paths.png", alt: "Intro search paths image placeholder" },
-  { src: "/intro-featured-guides.png", alt: "Intro featured guides image placeholder" },
+  { src: art1Image, alt: "Article overview visual" },
+  { src: art2Image, alt: "Article search paths visual" },
+  { src: art4Image, alt: "Featured guides visual" },
 ];
 
 export function IntroContent() {
@@ -54,8 +54,11 @@ export function IntroContent() {
   return (
     <main className="page-shell page-intro px-3">
       <div className="site-shell page-stack space-y-8">
-        <section className="hero-panel hero-about hero-compact overflow-hidden px-6 py-7 sm:px-8 sm:py-9">
-          <div className="reading-rail">
+        <section
+          className="hero-panel hero-about hero-compact section-bg-image overflow-hidden px-6 py-7 sm:px-8 sm:py-9"
+          style={{ ["--panel-image" as string]: `url(${articleImages[0].src.src})` }}
+        >
+          <div className="reading-rail article-reading-layout">
             <div>
               <p className="eyebrow">Intro</p>
               <h1 className="display-title mt-4 max-w-3xl text-3xl font-semibold leading-[0.95] text-[var(--foreground)] sm:text-4xl">
@@ -73,16 +76,6 @@ export function IntroContent() {
                   Open Tools
                 </Link>
               </div>
-            </div>
-
-            <div className="content-card overflow-hidden p-3 sm:p-4">
-              <p className="muted-kicker">SEO content surface</p>
-              <AdaptiveImageSlot
-                src={endorsementPageImage}
-                alt="PilotSeal article and guide surface"
-                frameClassName="mt-4"
-                priority
-              />
             </div>
           </div>
         </section>
@@ -110,7 +103,10 @@ export function IntroContent() {
         </section>
 
         <section className="masonry-grid">
-          <section className="section-panel-about px-6 py-8 sm:px-8">
+          <section
+            className="section-panel-about section-bg-image px-6 py-8 sm:px-8"
+            style={{ ["--panel-image" as string]: `url(${articleImages[0].src.src})` }}
+          >
             <p className="muted-kicker">Why this section matters</p>
             <h2 className="section-title mt-2 text-3xl font-semibold">
               Good training content helps users arrive at the right tool with less confusion
@@ -125,15 +121,12 @@ export function IntroContent() {
               Read here when you need background, then move to Tools when you
               are ready to act.
             </p>
-            <AdaptiveImageSlot
-              src={articleImages[0].src}
-              alt={articleImages[0].alt}
-              label="intro-why-section.png"
-              frameClassName="intro-inline-image mt-6"
-            />
           </section>
 
-          <section className="content-card p-6">
+          <section
+            className="content-card section-bg-image p-6"
+            style={{ ["--panel-image" as string]: `url(${articleImages[1].src.src})` }}
+          >
             <p className="muted-kicker">Common search paths</p>
             <h2 className="section-title mt-2 text-2xl font-semibold">
               Topics pilots and instructors routinely need to review
@@ -144,23 +137,21 @@ export function IntroContent() {
               <li>Flight review, IPC, and recurrent training scenarios</li>
               <li>Readers comparing guidance before they open a tool</li>
             </ul>
-            <AdaptiveImageSlot
-              src={articleImages[1].src}
-              alt={articleImages[1].alt}
-              label="intro-search-paths.png"
-              frameClassName="intro-inline-image mt-6"
-            />
           </section>
         </section>
 
         <section className="reading-rail">
-          <section className="content-card overflow-hidden p-3 sm:p-4">
-            <p className="muted-kicker px-3 pt-3">Guide surface</p>
-            <AdaptiveImageSlot
-              src={endorsementPageImage}
-              alt="PilotSeal guide and article surface"
-              frameClassName="mt-4"
-            />
+          <section
+            className="content-card section-bg-image p-6 sm:p-7"
+            style={{ ["--panel-image" as string]: `url(${articleImages[2].src.src})` }}
+          >
+            <p className="muted-kicker">Guide surface</p>
+            <h2 className="section-title mt-2 text-2xl font-semibold">
+              Article paths and guide surfaces in one place
+            </h2>
+            <p className="copy-muted mt-4 leading-8">
+              Browse explanation-first reading paths before moving into tools or narrower endorsement guides.
+            </p>
           </section>
 
           <section className="content-card-dark p-6">
@@ -205,16 +196,14 @@ export function IntroContent() {
           </div>
         </section>
 
-        <section className="section-panel-about px-6 py-7 sm:px-8">
+        <section
+          className="section-panel-about section-bg-image px-6 py-7 sm:px-8"
+          style={{ ["--panel-image" as string]: `url(${articleImages[2].src.src})` }}
+        >
           <p className="muted-kicker">Featured articles</p>
           <h2 className="section-title mt-2 text-2xl font-semibold">
             Start with the guide categories users ask for most often
           </h2>
-          <AdaptiveImageSlot
-            src={art5Image}
-            alt="Featured articles visual"
-            frameClassName="intro-inline-image intro-inline-image-featured mt-6"
-          />
           <div className="mt-6 space-y-3">
             {featuredArticles.map((article) => (
               <details key={article.href} className="article-disclosure article-faq">

@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 
 /** ------------------ constants ------------------ */
 const API_BASE = "https://brief.r1978244759.workers.dev";
-const FLIGHT_BRIEF_DRAFT_KEY = "pilotseal.flightBriefDraft";
-const FLIGHT_BRIEF_PROFILE_KEY = "pilotseal.flightBriefProfile";
 
 /** ------------------ utils (pure functions) ------------------ */
 function normalizeICAO(s) {
@@ -166,28 +164,6 @@ function nmsNotamsUrl(airports) {
   return `${API_BASE}/notams?airports=${qs}`;
 }
 
-function loadStorageItem(key, fallback) {
-  if (typeof window === "undefined") return fallback;
-
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch (error) {
-    console.error(`Failed to load ${key}:`, error);
-    return fallback;
-  }
-}
-
-function saveStorageItem(key, value) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Failed to save ${key}:`, error);
-  }
-}
-
 /** ------------------ Component ------------------ */
 export default function FlightBrief() {
   /** ---- core form ---- */
@@ -291,8 +267,7 @@ export default function FlightBrief() {
   const [otherRisks, setOtherRisks] = useState(0); // 0..5
   const [riskComments, setRiskComments] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
-  const [draftStatus, setDraftStatus] = useState("Draft autosaves on this device.");
-  const [profileStatus, setProfileStatus] = useState("Common fields can be reused on this device.");
+  const topRef = useRef(null);
 
   const staticScore = useMemo(
     () => sumChecked(STATIC_RISKS, staticChecked) + (parseInt(imsafe, 10) || 0),
@@ -736,212 +711,36 @@ ${riskComments}
   }, [notamByIcao, airportsForWxAndNotams]);
 
   const steps = [
-    { id: "overview", title: "Flight Info", description: "Crew, timing, aircraft, and fuel." },
-    { id: "route", title: "Route", description: "Departure, route type, stops, and lesson plan." },
-    { id: "weather", title: "Weather", description: "METAR, TAF, AIRMET/SIGMET, DA, and NOTAMs." },
-    { id: "aircraft", title: "Aircraft", description: "Weight, limits, and maintenance status." },
-    { id: "risk", title: "Risk", description: "Risk scoring, gates, discussion, and final report." },
+    { id: "overview", title: "Flight Info" },
+    { id: "route", title: "Route" },
+    { id: "weather", title: "Weather" },
+    { id: "aircraft", title: "Aircraft" },
+    { id: "risk", title: "Risk" },
   ];
 
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === steps.length - 1;
 
-  const draftPayload = useMemo(
-    () => ({
-      studentName,
-      instructorName,
-      flightRules,
-      flightDate,
-      etd,
-      eta,
-      aircraftId,
-      fuel,
-      fuelTime,
-      routeMode,
-      departure,
-      arrival,
-      stops,
-      lessonPractice,
-      fieldElevation,
-      outsideTemp,
-      weatherNotes,
-      grossWeight,
-      withinLimitsConfirmed,
-      mxNow,
-      mxDue,
-      staticChecked,
-      dynamicChecked,
-      imsafe,
-      otherRisks,
-      riskComments,
-      currentStep,
-    }),
-    [
-      studentName,
-      instructorName,
-      flightRules,
-      flightDate,
-      etd,
-      eta,
-      aircraftId,
-      fuel,
-      fuelTime,
-      routeMode,
-      departure,
-      arrival,
-      stops,
-      lessonPractice,
-      fieldElevation,
-      outsideTemp,
-      weatherNotes,
-      grossWeight,
-      withinLimitsConfirmed,
-      mxNow,
-      mxDue,
-      staticChecked,
-      dynamicChecked,
-      imsafe,
-      otherRisks,
-      riskComments,
-      currentStep,
-    ]
-  );
-
-  const profilePayload = useMemo(
-    () => ({
-      instructorName,
-      aircraftId,
-      fuel,
-      fuelTime,
-      routeMode,
-      departure,
-      arrival: routeMode === "local" ? departure : arrival,
-      fieldElevation,
-      mxNow,
-      mxDue,
-    }),
-    [instructorName, aircraftId, fuel, fuelTime, routeMode, departure, arrival, fieldElevation, mxNow, mxDue]
-  );
-
-  useEffect(() => {
-    const savedDraft = loadStorageItem(FLIGHT_BRIEF_DRAFT_KEY, null);
-    const savedProfile = loadStorageItem(FLIGHT_BRIEF_PROFILE_KEY, null);
-
-    if (savedDraft) {
-      setStudentName(savedDraft.studentName || "");
-      setInstructorName(savedDraft.instructorName || "");
-      setFlightRules(savedDraft.flightRules || "VFR");
-      setFlightDate(savedDraft.flightDate || "");
-      setEtd(savedDraft.etd || "");
-      setEta(savedDraft.eta || "");
-      setAircraftId(savedDraft.aircraftId || "");
-      setFuel(savedDraft.fuel || "");
-      setFuelTime(savedDraft.fuelTime || "");
-      setRouteMode(savedDraft.routeMode || "local");
-      setDeparture(savedDraft.departure || "");
-      setArrival(savedDraft.arrival || "");
-      setStops(Array.isArray(savedDraft.stops) && savedDraft.stops.length ? savedDraft.stops : [""]);
-      setLessonPractice(savedDraft.lessonPractice || "");
-      setFieldElevation(savedDraft.fieldElevation || "");
-      setOutsideTemp(savedDraft.outsideTemp || "");
-      setWeatherNotes(savedDraft.weatherNotes || "");
-      setGrossWeight(savedDraft.grossWeight || "");
-      setWithinLimitsConfirmed(!!savedDraft.withinLimitsConfirmed);
-      setMxNow(savedDraft.mxNow || "");
-      setMxDue(savedDraft.mxDue || "");
-      setStaticChecked(savedDraft.staticChecked || {});
-      setDynamicChecked(savedDraft.dynamicChecked || {});
-      setImsafe(savedDraft.imsafe || 0);
-      setOtherRisks(savedDraft.otherRisks || 0);
-      setRiskComments(savedDraft.riskComments || "");
-      setCurrentStep(savedDraft.currentStep || 0);
-      setDraftStatus("Recovered your last draft on this device.");
-      return;
-    }
-
-    if (savedProfile) {
-      setInstructorName(savedProfile.instructorName || "");
-      setAircraftId(savedProfile.aircraftId || "");
-      setFuel(savedProfile.fuel || "");
-      setFuelTime(savedProfile.fuelTime || "");
-      setRouteMode(savedProfile.routeMode || "local");
-      setDeparture(savedProfile.departure || "");
-      setArrival(savedProfile.arrival || "");
-      setFieldElevation(savedProfile.fieldElevation || "");
-      setMxNow(savedProfile.mxNow || "");
-      setMxDue(savedProfile.mxDue || "");
-      setDraftStatus("Loaded your saved common flight info.");
-    }
+  const scrollToTop = useCallback(() => {
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
-
-  useEffect(() => {
-    saveStorageItem(FLIGHT_BRIEF_DRAFT_KEY, {
-      ...draftPayload,
-      updatedAt: new Date().toISOString(),
-    });
-    setDraftStatus("Draft autosaved on this device.");
-  }, [draftPayload]);
-
-  useEffect(() => {
-    saveStorageItem(FLIGHT_BRIEF_PROFILE_KEY, {
-      ...profilePayload,
-      updatedAt: new Date().toISOString(),
-    });
-  }, [profilePayload]);
 
   const goToNextStep = () => {
     setCurrentStep((step) => Math.min(step + 1, steps.length - 1));
+    scrollToTop();
   };
 
   const goToPreviousStep = () => {
     setCurrentStep((step) => Math.max(step - 1, 0));
-  };
-
-  const clearDraft = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(FLIGHT_BRIEF_DRAFT_KEY);
-    }
-    setDraftStatus("Draft cleared. Current fields remain until you refresh or change them.");
-  };
-
-  const loadSavedProfile = () => {
-    const savedProfile = loadStorageItem(FLIGHT_BRIEF_PROFILE_KEY, null);
-    if (!savedProfile) {
-      setProfileStatus("No saved common info found on this device.");
-      return;
-    }
-
-    setInstructorName(savedProfile.instructorName || "");
-    setAircraftId(savedProfile.aircraftId || "");
-    setFuel(savedProfile.fuel || "");
-    setFuelTime(savedProfile.fuelTime || "");
-    setRouteMode(savedProfile.routeMode || "local");
-    setDeparture(savedProfile.departure || "");
-    setArrival(savedProfile.arrival || "");
-    setFieldElevation(savedProfile.fieldElevation || "");
-    setMxNow(savedProfile.mxNow || "");
-    setMxDue(savedProfile.mxDue || "");
-    setProfileStatus("Saved common info applied to the form.");
-  };
-
-  const clearSavedProfile = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(FLIGHT_BRIEF_PROFILE_KEY);
-    }
-    setProfileStatus("Saved common info cleared from this device.");
+    scrollToTop();
   };
 
   return (
-    <div className="flightbrief-body">
+    <div className="flightbrief-body" ref={topRef}>
       <div className="flight-section">
         <div className="flightbrief-header">
           <div>
             <h1 className="text-3xl font-bold text-center mb-6">Flight Brief</h1>
-            <p className="flightbrief-subtitle">Move step by step, fill each section, then generate the final brief.</p>
-            <div className="flightbrief-statusStack">
-              <span>{draftStatus}</span>
-              <span>{profileStatus}</span>
-            </div>
           </div>
           <div className="flightbrief-stepBadge">
             Step {currentStep + 1} of {steps.length}
@@ -954,13 +753,13 @@ ${riskComments}
               key={step.id}
               type="button"
               className={`flightbrief-step ${index === currentStep ? "active" : ""} ${index < currentStep ? "completed" : ""}`}
-              onClick={() => setCurrentStep(index)}
+              onClick={() => {
+                setCurrentStep(index);
+                scrollToTop();
+              }}
             >
               <span className="flightbrief-stepIndex">{index + 1}</span>
-              <span>
-                <strong>{step.title}</strong>
-                <small>{step.description}</small>
-              </span>
+              <strong>{step.title}</strong>
             </button>
           ))}
         </div>
@@ -969,24 +768,6 @@ ${riskComments}
           {currentStep === 0 && (
             <section className="flightbrief-panel">
               <h2 className="text-xl font-bold mb-4">Flight Information</h2>
-
-              <div className="flightbrief-memoryCard">
-                <div>
-                  <strong>Device memory</strong>
-                  <p>Draft saves automatically. Common flight info is also remembered for reuse on this device.</p>
-                </div>
-                <div className="flightbrief-memoryActions">
-                  <button type="button" className="flightbrief-memoryButton secondary" onClick={loadSavedProfile}>
-                    Load saved info
-                  </button>
-                  <button type="button" className="flightbrief-memoryButton secondary" onClick={clearDraft}>
-                    Clear draft
-                  </button>
-                  <button type="button" className="flightbrief-memoryButton danger" onClick={clearSavedProfile}>
-                    Clear saved info
-                  </button>
-                </div>
-              </div>
 
               <div className="inline-label-input">
                 <label className="label" htmlFor="studentName">Student Name(Pilot Flying):</label>
@@ -1419,96 +1200,114 @@ ${riskComments}
           {currentStep === 4 && (
             <section className="flightbrief-panel">
               <h2>Risk Assessment</h2>
+              <div className="flightbrief-riskSummary">
+                <div className="flightbrief-riskBadge">
+                  <span>Total</span>
+                  <strong>{totalRisk}</strong>
+                </div>
+                <div className="flightbrief-riskMeta">
+                  <strong style={{ color: riskMeta.color }}>{riskMeta.level}</strong>
+                  <p>{riskMeta.advice}</p>
+                </div>
+              </div>
               <div className="risk-columns">
-          <div className="static-risk-column">
-            <h3>Static Risk</h3>
-            {STATIC_RISKS.map((r) => (
-              <div className="risk-item" key={r.id}>
-                <label htmlFor={r.id}>{r.label}:</label>
-                <input
-                  type="checkbox"
-                  id={r.id}
-                  checked={!!staticChecked[r.id]}
-                  onChange={(e) => setStaticChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
-                />
+                <div className="static-risk-column">
+                  <div className="flightbrief-riskColumnHead">
+                    <div>
+                      <h3>Static Risk</h3>
+                      <p>Pilot, instructor, recency.</p>
+                    </div>
+                    <strong>{staticScore}</strong>
+                  </div>
+                  <div className="flightbrief-riskList">
+                    {STATIC_RISKS.map((r) => (
+                      <label className="risk-item" key={r.id} htmlFor={r.id}>
+                        <span className="risk-item-copy">
+                          <strong>{r.label}</strong>
+                          <small>{r.value} pt</small>
+                        </span>
+                        <input
+                          type="checkbox"
+                          id={r.id}
+                          checked={!!staticChecked[r.id]}
+                          onChange={(e) => setStaticChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="risk-item risk-item-number">
+                    <label htmlFor="imsafe-risk">IMSAFE</label>
+                    <input type="number" id="imsafe-risk" min="0" max="6" value={imsafe} onChange={(e) => setImsafe(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="dynamic-risk-column">
+                  <div className="flightbrief-riskColumnHead">
+                    <div>
+                      <h3>Dynamic Risk</h3>
+                      <p>Weather, mission, conditions.</p>
+                    </div>
+                    <strong>{dynamicScore}</strong>
+                  </div>
+                  <div className="flightbrief-riskList">
+                    {DYNAMIC_RISKS.map((r) => (
+                      <label className="risk-item" key={r.id} htmlFor={r.id}>
+                        <span className="risk-item-copy">
+                          <strong>{r.label}</strong>
+                          <small>{r.value} pt</small>
+                        </span>
+                        <input
+                          type="checkbox"
+                          id={r.id}
+                          checked={!!dynamicChecked[r.id]}
+                          onChange={(e) => setDynamicChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="risk-item risk-item-number">
+                    <label htmlFor="other-risk">Other Risks</label>
+                    <input id="other-risk" type="number" min="0" max="5" value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)} />
+                  </div>
+                </div>
               </div>
-            ))}
-            <div className="risk-item">
-              <label htmlFor="imsafe-risk">IMSAFE (each factor counts 1):</label>
-              <input type="number" id="imsafe-risk" min="0" max="6" value={imsafe} onChange={(e) => setImsafe(e.target.value)} />
-            </div>
-          </div>
 
-          <div className="dynamic-risk-column">
-            <h3>Dynamic Risk</h3>
-            {DYNAMIC_RISKS.map((r) => (
-              <div className="risk-item" key={r.id}>
-                <label htmlFor={r.id}>{r.label}:</label>
-                <input
-                  type="checkbox"
-                  id={r.id}
-                  checked={!!dynamicChecked[r.id]}
-                  onChange={(e) => setDynamicChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
-                />
+              <div className="section inline-label-input">
+                <label className="label" htmlFor="riskComments"><strong>Risk Discussion / Comments</strong></label>
+                <textarea id="riskComments" rows="3" className="input-field" value={riskComments} onChange={(e) => setRiskComments(e.target.value)} placeholder="Notes from discussion with senior/chief pilot..." />
               </div>
-            ))}
-            <div className="risk-item">
-              <label htmlFor="other-risk">Other Risks:</label>
-              <input id="other-risk" type="number" min="0" max="5" value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)} />
-            </div>
-          </div>
-        </div>
 
-        <div className="section inline-label-input">
-          <label className="label" htmlFor="riskComments"><strong>Risk Discussion / Comments</strong></label>
-          <textarea id="riskComments" rows="3" className="input-field" value={riskComments} onChange={(e) => setRiskComments(e.target.value)} placeholder="Notes from discussion with senior/chief pilot..." />
-        </div>
-
-        <div style={{ fontWeight: "bold", marginTop: "10px" }}>
-          Total Risk Score: <span>{totalRisk}</span>
-          <span style={{ marginLeft: "15px", fontWeight: "bold", color: riskMeta.color }}>{riskMeta.level}</span>
-          <div style={{ marginTop: "5px", fontStyle: "italic" }}>{riskMeta.advice}</div>
-        </div>
-        {riskGates.length > 0 && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: 12,
-              borderRadius: 10,
-              border: "1px solid #f59e0b",
-              background: "#fffbeb",
-              color: "#92400e",
-            }}
-          >
-            <div style={{ fontWeight: 900, marginBottom: 6 }}>⚠️ Mandatory Review Items</div>
-            <ul style={{ marginLeft: 18, listStyle: "disc" }}>
-              {riskGates.map((g, idx) => (
-                <li key={idx} style={{ marginBottom: 4 }}>
-                  {g}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+              {riskGates.length > 0 && (
+                <div className="flightbrief-gatesCard">
+                  <div className="flightbrief-gatesTitle">Mandatory Review Items</div>
+                  <ul className="flightbrief-gatesList">
+                    {riskGates.map((g, idx) => (
+                      <li key={idx}>{g}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </section>
           )}
         </form>
 
         <div className="flightbrief-nav">
           <button type="button" className="flightbrief-navButton secondary" onClick={goToPreviousStep} disabled={isFirstStep}>
-            Previous
+            <span className="flightbrief-navButtonDesktop">Previous</span>
+            <span className="flightbrief-navButtonMobile" aria-hidden="true">‹</span>
           </button>
           <div className="flightbrief-navMeta">
             <strong>{steps[currentStep].title}</strong>
-            <span>{steps[currentStep].description}</span>
           </div>
           {isLastStep ? (
             <button type="button" className="flightbrief-navButton primary" onClick={generateReport}>
-              Generate Flight Brief Report
+              <span className="flightbrief-navButtonDesktop">Generate Flight Brief Report</span>
+              <span className="flightbrief-navButtonMobile" aria-hidden="true">✓</span>
             </button>
           ) : (
             <button type="button" className="flightbrief-navButton primary" onClick={goToNextStep}>
-              Next
+              <span className="flightbrief-navButtonDesktop">Next</span>
+              <span className="flightbrief-navButtonMobile" aria-hidden="true">›</span>
             </button>
           )}
         </div>

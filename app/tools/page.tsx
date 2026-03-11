@@ -37,22 +37,6 @@ export default function ToolsPage() {
   return (
     <main className="page-shell page-tools px-3">
       <div className="site-shell page-stack space-y-6">
-        <section className="tools-minimal-shell">
-          <div className="tools-minimal-top">
-            <div>
-              <h1 className="tools-minimal-title">PilotSeal tools</h1>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/tools/endorsement-generator" className="primary-button">
-                Generator
-              </Link>
-              <Link href="/disclaimer" className="secondary-button">
-                Disclaimer
-              </Link>
-            </div>
-          </div>
-        </section>
-
         <section className="tools-priority-grid">
           {priorityTools.map((tool) => {
             const toolImage = toolImages[tool.key];

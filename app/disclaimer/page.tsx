@@ -1,17 +1,22 @@
 import Link from "next/link";
-import AdaptiveImageSlot from "@/components/ui/AdaptiveImageSlot";
+import dis1Image from "@/images/dis1.png";
+import dis2Image from "@/images/dis2.png";
+import dis3Image from "@/images/dis3.png";
 
 export default function DisclaimerPage() {
   const disclaimerImages = {
-    hero: "/disclaimer-hero.png",
-    notes: "/disclaimer-notes.png",
+    hero: dis1Image,
+    notes: dis2Image,
   };
 
   return (
     <main className="page-shell page-disclaimer px-3">
       <div className="site-shell page-stack space-y-8">
-        <section className="hero-panel hero-about overflow-hidden px-6 py-10 sm:px-10 sm:py-14">
-          <div className="reading-rail">
+        <section
+          className="hero-panel hero-about section-bg-image overflow-hidden px-6 py-10 sm:px-10 sm:py-14"
+          style={{ ["--panel-image" as string]: `url(${disclaimerImages.hero.src})` }}
+        >
+          <div className="reading-rail article-reading-layout">
             <div className="max-w-3xl">
               <p className="eyebrow">Disclaimer</p>
               <h1 className="display-title mt-4 text-3xl font-semibold leading-[0.95] text-[var(--foreground)] sm:text-4xl">
@@ -23,13 +28,6 @@ export default function DisclaimerPage() {
                 training materials, or the judgment of a certificated flight
                 instructor.
               </p>
-            </div>
-            <div className="content-card overflow-hidden p-3 sm:p-4">
-              <AdaptiveImageSlot
-                src={disclaimerImages.hero}
-                alt="Disclaimer hero image placeholder"
-                label="disclaimer-hero.png"
-              />
             </div>
           </div>
         </section>
@@ -56,7 +54,10 @@ export default function DisclaimerPage() {
             </p>
           </section>
 
-          <section className="content-card p-6">
+          <section
+            className="content-card section-bg-image p-6"
+            style={{ ["--panel-image" as string]: `url(${disclaimerImages.notes.src})` }}
+          >
             <h2 className="section-title text-2xl font-semibold">
               Not legal advice
             </h2>
@@ -65,16 +66,13 @@ export default function DisclaimerPage() {
               official interpretation, consult the FAA or qualified
               professionals.
             </p>
-            <AdaptiveImageSlot
-              src={disclaimerImages.notes}
-              alt="Disclaimer notes image placeholder"
-              label="disclaimer-notes.png"
-              frameClassName="intro-inline-image mt-6"
-            />
           </section>
         </section>
 
-        <section className="section-panel-about px-6 py-8 sm:px-8">
+        <section
+          className="section-panel-about section-bg-image px-6 py-8 sm:px-8"
+          style={{ ["--panel-image" as string]: `url(${dis3Image.src})` }}
+        >
           <div className="flex flex-wrap gap-3">
             <Link className="secondary-button" href="/">
               Back to home

@@ -248,11 +248,8 @@ function EndorsementGenerator() {
     });
 
   const selectedTemplateDetails = selectedTemplates.map((title) => {
-    const body = templates[title];
     return {
       title,
-      category: getTemplateCategory(title),
-      preview: buildPreviewText(body),
     };
   });
 
@@ -353,11 +350,9 @@ function EndorsementGenerator() {
       const margin = 32;
       const columns = 2;
       const boxWidth = 248;
-      const boxPadding = 7;
-      const boxSpacingX = 20;
-      const boxSpacingY = 22;
+      const boxPadding = 3;
       const textWidth = boxWidth - boxPadding * 2;
-      const rowWidth = columns * boxWidth + boxSpacingX;
+      const rowWidth = columns * boxWidth;
       const baseX = (pageWidth - rowWidth) / 2;
 
       let signatureImage;
@@ -368,16 +363,14 @@ function EndorsementGenerator() {
         signatureImage = await doc.embedPng(signatureImageBytes);
       }
 
-      let page = doc.addPage([pageWidth, pageHeight]);
-      let y = pageHeight - margin;
-
+      const rows = [];
       for (let index = 0; index < selectedTemplates.length; index += columns) {
         const rowTemplates = selectedTemplates.slice(index, index + columns).map((templateKey) => {
           const content = createTemplateDraft(templateKey);
           const lines = splitTextIntoLines(content, font, fontSize, textWidth);
           const textHeight = lines.length * lineHeight;
-          const signatureHeight = signatureImage ? 30 : 14;
-          const boxHeight = textHeight + signatureHeight + boxPadding * 2 + 12;
+          const signatureHeight = signatureImage ? 18 : 8;
+          const boxHeight = textHeight + signatureHeight + boxPadding * 2 + 2;
 
           return {
             templateKey,
@@ -386,66 +379,108 @@ function EndorsementGenerator() {
           };
         });
 
-        const rowHeight = Math.max(...rowTemplates.map((template) => template.boxHeight));
+        rows.push({
+          cells: rowTemplates,
+          rowHeight: Math.max(...rowTemplates.map((template) => template.boxHeight)),
+        });
+      }
 
-        if (y - rowHeight < margin) {
-          page = doc.addPage([pageWidth, pageHeight]);
-          y = pageHeight - margin;
+      const maxTableHeight = pageHeight - margin * 2;
+      const pages = [];
+      let currentPageRows = [];
+      let currentHeight = 0;
+
+      rows.forEach((row) => {
+        if (currentPageRows.length > 0 && currentHeight + row.rowHeight > maxTableHeight) {
+          pages.push(currentPageRows);
+          currentPageRows = [];
+          currentHeight = 0;
         }
 
-        for (let columnIndex = 0; columnIndex < rowTemplates.length; columnIndex += 1) {
-          const template = rowTemplates[columnIndex];
-          const x = baseX + columnIndex * (boxWidth + boxSpacingX);
-          const boxY = y - template.boxHeight;
+        currentPageRows.push(row);
+        currentHeight += row.rowHeight;
+      });
 
-          page.drawRectangle({
-            x,
-            y: boxY,
-            width: boxWidth,
-            height: template.boxHeight,
-            borderColor: rgb(0.15, 0.23, 0.33),
-            borderWidth: 1,
-          });
+      if (currentPageRows.length > 0) {
+        pages.push(currentPageRows);
+      }
 
-          let textY = y - boxPadding - lineHeight;
-          for (let lineIndex = 0; lineIndex < template.lines.length; lineIndex += 1) {
-            const line = template.lines[lineIndex];
-            page.drawText(line, {
-              x: x + boxPadding,
-              y: textY,
-              size: fontSize,
-              font,
-            });
-            textY -= lineHeight;
-          }
+      pages.forEach((pageRows) => {
+        const page = doc.addPage([pageWidth, pageHeight]);
+        const tableHeight = pageRows.reduce((sum, row) => sum + row.rowHeight, 0);
+        const tableTop = pageHeight - margin;
+        const tableBottom = tableTop - tableHeight;
 
-          const signatureLabelY = boxY + boxPadding + (signatureImage ? 14 : 6);
-          page.drawText('Signature:', {
-            x: x + boxPadding,
-            y: signatureLabelY,
-            size: fontSize,
-            font,
-          });
+        page.drawRectangle({
+          x: baseX,
+          y: tableBottom,
+          width: rowWidth,
+          height: tableHeight,
+          borderColor: rgb(0.15, 0.23, 0.33),
+          borderWidth: 1,
+        });
 
-          if (signatureImage) {
-            page.drawImage(signatureImage, {
-              x: x + 56,
-              y: signatureLabelY - 5,
-              width: 54,
-              height: 22,
-            });
-          } else {
+        page.drawLine({
+          start: { x: baseX + boxWidth, y: tableBottom },
+          end: { x: baseX + boxWidth, y: tableTop },
+          thickness: 1,
+          color: rgb(0.15, 0.23, 0.33),
+        });
+
+        let currentTop = tableTop;
+        pageRows.forEach((row, rowIndex) => {
+          if (rowIndex > 0) {
             page.drawLine({
-              start: { x: x + 56, y: signatureLabelY + 2 },
-              end: { x: x + 130, y: signatureLabelY + 2 },
-              thickness: 0.8,
+              start: { x: baseX, y: currentTop },
+              end: { x: baseX + rowWidth, y: currentTop },
+              thickness: 1,
               color: rgb(0.15, 0.23, 0.33),
             });
           }
-        }
 
-        y -= rowHeight + boxSpacingY;
-      }
+          row.cells.forEach((template, columnIndex) => {
+            const x = baseX + columnIndex * boxWidth;
+            const boxY = currentTop - row.rowHeight;
+
+            let textY = currentTop - boxPadding - lineHeight;
+            template.lines.forEach((line) => {
+              page.drawText(line, {
+                x: x + boxPadding,
+                y: textY,
+                size: fontSize,
+                font,
+              });
+              textY -= lineHeight;
+            });
+
+            const signatureLabelY = boxY + boxPadding + (signatureImage ? 7 : 3);
+            page.drawText('Signature:', {
+              x: x + boxPadding,
+              y: signatureLabelY,
+              size: fontSize,
+              font,
+            });
+
+            if (signatureImage) {
+              page.drawImage(signatureImage, {
+                x: x + 56,
+                y: signatureLabelY - 5,
+                width: 54,
+                height: 22,
+              });
+            } else {
+              page.drawLine({
+                start: { x: x + 56, y: signatureLabelY + 2 },
+                end: { x: x + 130, y: signatureLabelY + 2 },
+                thickness: 0.8,
+                color: rgb(0.15, 0.23, 0.33),
+              });
+            }
+          });
+
+          currentTop -= row.rowHeight;
+        });
+      });
 
       const pdfBytes = await doc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -590,13 +625,11 @@ function EndorsementGenerator() {
                   {selectedTemplateDetails.map((template) => (
                     <div key={template.title} className={styles.selectedCard}>
                       <div className={styles.selectedMeta}>
-                        <span>{template.category}</span>
+                        <h3>{template.title}</h3>
                         <button type="button" onClick={() => handleTemplateSelection(template.title)}>
                           Remove
                         </button>
                       </div>
-                      <h3>{template.title}</h3>
-                      <p>{template.preview.slice(0, 160)}...</p>
                     </div>
                   ))}
                 </div>

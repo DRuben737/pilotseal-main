@@ -1,10 +1,9 @@
 import Link from "next/link";
 
-import AdaptiveImageSlot from "@/components/ui/AdaptiveImageSlot";
 import home1Image from "@/images/home1.png";
 import home2Image from "@/images/home2.png";
 import home3Image from "@/images/home3.png";
-import smartNotamImage from "@/images/smartnotam.png";
+import { guideCards } from "@/app/endorsements/guide-content";
 
 export default function Home() {
   const featuredTools = [
@@ -20,23 +19,18 @@ export default function Home() {
       href: "/tools/flight-brief",
       eyebrow: "Preflight",
     },
-    {
-      title: "Weight & Balance",
-      desc: "Run loading scenarios and visualize CG movement before the dispatch conversation gets messy.",
-      href: "/tools/wb",
-      eyebrow: "Safety",
-    },
-    {
-      title: "Night Time Calculator",
-      desc: "Check civil twilight, night currency windows, and time-of-use references quickly.",
-      href: "/tools/nighttime",
-      eyebrow: "Reference",
-    },
   ];
+  const articleEntrances = [
+    { ...guideCards["student-solo"], short: "Solo basics" },
+    { ...guideCards["solo-cross-country"], short: "Route clarity" },
+    { ...guideCards["knowledge-test"], short: "Test signoff" },
+  ];
+
   return (
     <main className="page-shell page-home px-3">
       <div className="site-shell page-stack space-y-8">
-        <section className="hero-panel hero-home overflow-hidden px-6 py-7 sm:px-8 sm:py-8">
+        <section className="hero-panel hero-home home-panel-with-bg overflow-hidden px-6 py-7 sm:px-8 sm:py-8">
+          <div className="home-panel-bg" style={{ ["--panel-image" as string]: `url(${home1Image.src})` }} aria-hidden="true" />
           <div className="home-hero-grid">
             <div className="home-hero-copy">
               <p className="eyebrow">Home</p>
@@ -49,38 +43,24 @@ export default function Home() {
                 faster through planning, endorsement, and review tasks.
               </p>
             </div>
-
-            <div className="content-card image-card image-card-hero overflow-hidden p-3">
-              <AdaptiveImageSlot
-                src={home1Image}
-                alt="PilotSeal homepage visual"
-                priority
-              />
-            </div>
           </div>
         </section>
 
-        <section className="section-panel-tools px-6 py-8 sm:px-8">
+        <section className="section-panel-tools home-panel-with-bg overflow-hidden px-6 py-8 sm:px-8">
+          <div className="home-panel-bg home-panel-bg-soft" style={{ ["--panel-image" as string]: `url(${home2Image.src})` }} aria-hidden="true" />
           <div className="home-section-heading">
             <div>
               <p className="muted-kicker">Featured tools</p>
               <h2 className="section-title mt-2 text-3xl font-semibold">
-                Open the tools pilots and instructors use most
+                Toolbox
               </h2>
             </div>
             <Link href="/tools" className="secondary-button">
-              Full tool index
+              Explore more
             </Link>
           </div>
 
           <div className="home-featured-grid mt-6">
-            <div className="content-card image-card image-card-featured overflow-hidden p-3 sm:p-4">
-              <AdaptiveImageSlot
-                src={home2Image}
-                alt="Featured tools visual"
-                frameClassName="image-fit-frame-compact"
-              />
-            </div>
             <div className="home-featured-list">
               {featuredTools.map((tool) => (
                 <div key={tool.title} className="content-card card-link home-tool-card p-5">
@@ -97,40 +77,27 @@ export default function Home() {
         </section>
 
         <section className="home-bottom-grid">
-          <div className="section-panel-tools home-balanced-panel px-6 py-7 sm:px-8">
-            <p className="muted-kicker">Highlighted workflow</p>
-            <h2 className="section-title mt-2 text-3xl font-semibold">
-              Flight Brief
-            </h2>
-            <p className="copy-muted mt-3 leading-7">
-              Weather, NOTAMs, risk.
-            </p>
-            <AdaptiveImageSlot
-              src={smartNotamImage}
-              alt="Flight Brief Smart NOTAM interface"
-              frameClassName="mt-6"
-            />
-          </div>
-
-          <section className="content-card home-balanced-panel p-6">
+          <section className="content-card home-balanced-panel home-panel-with-bg overflow-hidden p-6 md:col-span-2">
+            <div className="home-panel-bg" style={{ ["--panel-image" as string]: `url(${home3Image.src})` }} aria-hidden="true" />
             <p className="muted-kicker">Articles</p>
             <h2 className="section-title mt-2 text-2xl font-semibold">
               Articles
             </h2>
             <p className="copy-muted mt-3 leading-7">
-              Context, checks, references.
+              Context fast.
             </p>
-            <AdaptiveImageSlot
-              src={home3Image}
-              alt="Home articles visual"
-              frameClassName="intro-inline-image mt-6"
-            />
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {articleEntrances.map((article) => (
+                <Link key={article.href} href={article.href} className="content-card card-link p-5">
+                  <p className="muted-kicker">{article.short}</p>
+                  <h3 className="mt-2 text-lg font-semibold">{article.title}</h3>
+                  <span className="reference-chip mt-4 inline-flex">Read article</span>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-5">
               <Link href="/intro" className="secondary-button">
-                Read articles
-              </Link>
-              <Link href="/disclaimer" className="primary-button">
-                Disclaimer
+                Explore articles
               </Link>
             </div>
           </section>
