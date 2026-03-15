@@ -86,21 +86,21 @@ function riskCategory(total) {
     return {
       level: "🟢 LOW RISK",
       color: "green",
-      advice: "Risk acceptable after discussion. Flight may proceed.",
+      recommendation: "Risk acceptable after discussion. Flight may proceed.",
     };
   }
   if (total <= 15) {
     return {
       level: "🟡 MODERATE RISK",
       color: "orange",
-      advice:
+      recommendation:
         "Consult with senior or chief instructor to discuss risk mitigation. May proceed after reduction.",
     };
   }
   return {
     level: "🔴 HIGH RISK",
     color: "red",
-    advice:
+    recommendation:
       "Flight requires Chief Pilot approval. Discuss flight plan in detail.",
   };
 }
@@ -643,7 +643,7 @@ Total Dynamic Risk Score: ${dynamicScore}
 
 Total Risk Score: ${totalRisk}
 Category: ${riskMeta.level}
-Advice: ${riskMeta.advice}
+Recommendation: ${riskMeta.recommendation}
 
 🗒️ Risk Discussion / Comments:
 ${riskComments}
@@ -696,7 +696,7 @@ ${riskComments}
     dynamicScore,
     totalRisk,
     riskMeta.level,
-    riskMeta.advice,
+    riskMeta.recommendation,
     riskComments,
   ]);
 
@@ -1274,7 +1274,7 @@ ${riskComments}
                 </div>
                 <div className="flightbrief-riskMeta">
                   <strong style={{ color: riskMeta.color }}>{riskMeta.level}</strong>
-                  <p>{riskMeta.advice}</p>
+                  <p>{riskMeta.recommendation}</p>
                 </div>
               </div>
 

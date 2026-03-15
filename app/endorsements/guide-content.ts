@@ -170,7 +170,7 @@ export const endorsementGuides: Record<GuideSlug, EndorsementGuide> = {
     breadcrumb: "Student Solo",
     title: "Student Solo Endorsements",
     heroDescription:
-      "A practical guide for CFIs and student pilots focused on clarity, scope, and recordkeeping consistency. This is educational—always verify against current FAA requirements.",
+      "A practical guide for CFIs and student pilots focused on clarity, scope, and recordkeeping consistency, with endorsement language aligned to FAA guidance including AC 61-65.",
     sections: [
       {
         kind: "text",
@@ -232,7 +232,7 @@ export const endorsementGuides: Record<GuideSlug, EndorsementGuide> = {
     faqs: [
       {
         q: "Is this page a substitute for FAR/AIM or FAA guidance?",
-        a: "No. This guide is educational. Always verify requirements and wording against current FAA regulations and guidance for your specific scenario.",
+        a: "No. This guide supports drafting and recordkeeping review, but instructors should still verify requirements and wording against current FAA regulations and guidance for the specific scenario.",
       },
       {
         q: "Can I use PilotSeal’s tool output as-is?",
@@ -255,7 +255,7 @@ export const endorsementGuides: Record<GuideSlug, EndorsementGuide> = {
     breadcrumb: "Knowledge Test",
     title: "Knowledge Test Endorsements",
     heroDescription:
-      "A practical guide focused on clear scope, verifiable recordkeeping, and reducing template mistakes. Educational only—always verify against current FAA requirements.",
+      "A practical guide focused on clear scope, verifiable recordkeeping, and reducing template mistakes, with language aligned to FAA guidance including AC 61-65.",
     sections: [
       {
         kind: "text",
@@ -317,7 +317,7 @@ export const endorsementGuides: Record<GuideSlug, EndorsementGuide> = {
     faqs: [
       {
         q: "Does PilotSeal replace FAA regulations or guidance for knowledge tests?",
-        a: "No. This page is educational. Always verify current requirements, references, and applicability for your specific scenario.",
+        a: "No. PilotSeal provides a structured drafting reference, and instructors should still verify current requirements, references, and applicability for the specific scenario.",
       },
       {
         q: "What’s the main goal of a knowledge-test endorsement?",
@@ -402,7 +402,7 @@ export const endorsementGuides: Record<GuideSlug, EndorsementGuide> = {
     faqs: [
       {
         q: "Is this page a substitute for FAA regs, ACS, or examiner guidance?",
-        a: "No. This is educational only. Always verify requirements, references, and applicability for your checkride scenario.",
+        a: "No. This page supports drafting and review, and instructors should still verify requirements, references, and applicability for the specific checkride scenario.",
       },
       {
         q: "What makes a practical-test endorsement ‘good’?",
@@ -562,7 +562,7 @@ export const endorsementGuides: Record<GuideSlug, EndorsementGuide> = {
       },
       {
         q: "Is this page a replacement for FAA references?",
-        a: "No. It is educational only. Always verify current requirements and applicability for the exact aircraft and training scenario.",
+        a: "No. It supports endorsement drafting and recordkeeping review, and instructors should still verify current requirements and applicability for the exact aircraft and training scenario.",
       },
     ],
   },

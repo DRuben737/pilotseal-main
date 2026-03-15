@@ -238,6 +238,29 @@ a {
   border-radius: 24px;
 }
 
+.endorsement-disclaimer {
+  border: 1px solid rgba(15, 92, 77, 0.12);
+  background: linear-gradient(180deg, rgba(240, 248, 245, 0.9), rgba(246, 250, 248, 0.98));
+  border-radius: 18px;
+  padding: 1rem 1.125rem;
+}
+
+.endorsement-disclaimer-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.endorsement-disclaimer-copy {
+  margin: 0.55rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
 .section-panel-tools {
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(48, 74, 108, 0.12);

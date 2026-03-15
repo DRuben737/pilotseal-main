@@ -1,4 +1,5 @@
 import Link from "next/link";
+import EndorsementDisclaimer from "@/components/legal/EndorsementDisclaimer";
 
 import { defaultGuideReferences, guideCards } from "./guide-content";
 
@@ -67,7 +68,7 @@ const faqs = [
   },
   {
     q: "Does PilotSeal replace FAA regulations or legal interpretation?",
-    a: "No. PilotSeal is educational. Always verify wording, applicability, and currency against FAR/AIM and relevant FAA guidance for your specific scenario.",
+    a: "No. PilotSeal supports drafting and workflow review. Verify wording, applicability, and currency against FAR/AIM and relevant FAA guidance for your specific scenario.",
   },
   {
     q: "Can I copy endorsement text directly into a logbook?",
@@ -271,6 +272,7 @@ export default function EndorsementsPage() {
                 Read disclaimer
               </Link>
             </div>
+            <EndorsementDisclaimer className="mt-6" />
           </div>
 
           <section className="content-card p-6">

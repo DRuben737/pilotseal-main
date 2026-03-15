@@ -54,9 +54,12 @@ export default function RootLayout({
             <div className="site-shell app-footer-shell section-panel px-6 py-8">
               <div className="grid gap-8 md:grid-cols-[1.4fr_0.8fr_0.8fr]">
                 <div>
-                  <p className="eyebrow">Pilot workflow, not legal advice</p>
+                  <p className="eyebrow">FAA-oriented workflow support</p>
                   <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-                    Faster drafting, briefing, and planning. Verify FAA applicability before use.
+                    PilotSeal tools reference FAA guidance such as Advisory
+                    Circular AC 61-65. They are intended to assist instructors
+                    and pilots but do not replace FAA regulations or instructor
+                    judgment.
                   </p>
                 </div>
 

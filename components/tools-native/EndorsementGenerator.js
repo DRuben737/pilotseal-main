@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import EndorsementDisclaimer from '@/components/legal/EndorsementDisclaimer';
 import templates from './templates';
 import styles from './EndorsementGenerator.module.css';
 import { fetchSavedPeople } from '@/lib/saved-people';
@@ -713,6 +714,7 @@ function EndorsementGenerator() {
 
               <p className={styles.status}>{statusMessage}</p>
               {errors.selectedTemplates ? <p className={styles.inlineError}>{errors.selectedTemplates}</p> : null}
+              <EndorsementDisclaimer className="mt-5" />
             </div>
           </section>
 

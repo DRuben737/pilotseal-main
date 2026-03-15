@@ -1,4 +1,5 @@
 import Link from "next/link";
+import EndorsementDisclaimer from "@/components/legal/EndorsementDisclaimer";
 
 import {
   defaultGuideReferences,
@@ -221,6 +222,7 @@ export default function EndorsementGuidePage({
               Read disclaimer
             </Link>
           </div>
+          <EndorsementDisclaimer className="mt-6" />
         </section>
 
         {guide.faqs && guide.faqs.length > 0 ? (
