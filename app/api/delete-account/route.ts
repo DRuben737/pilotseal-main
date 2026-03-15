@@ -2,42 +2,19 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function POST(request: Request) {
   try {
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
       console.error("Delete account route missing Supabase environment variables.");
       return NextResponse.json({ error: "Server configuration error." }, { status: 500 });
-    }
-
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "";
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
     const { userId } = (await request.json()) as { userId?: string };
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId." }, { status: 400 });
-    }
-
-    const authClient = createClient(supabaseUrl, supabaseAnonKey);
-    const {
-      data: { user },
-      error: userError,
-    } = await authClient.auth.getUser(token);
-
-    if (userError || !user) {
-      console.error("Delete account auth failed:", userError);
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
-
-    if (user.id !== userId) {
-      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
