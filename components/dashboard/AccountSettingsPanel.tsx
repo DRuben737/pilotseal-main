@@ -1,14 +1,19 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export default function AccountSettingsPanel() {
+  const router = useRouter();
   const { loading, session } = useAuthSession();
-  const [role, setRole] = useState("");
+  const [role, setRole] = useState("User");
   const [status, setStatus] = useState("Checking account settings...");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,7 +21,7 @@ export default function AccountSettingsPanel() {
     async function loadProfile() {
       if (!session?.user?.id) {
         if (!cancelled) {
-          setRole("");
+          setRole("User");
           setStatus("No active session.");
         }
         return;
@@ -26,13 +31,14 @@ export default function AccountSettingsPanel() {
         const profile = await fetchCurrentProfile(session.user.id);
 
         if (!cancelled) {
-          setRole(profile?.role ?? "");
+          setRole(profile?.role === "admin" ? "Admin" : "User");
           setStatus("Account settings are synchronized.");
         }
       } catch (error) {
         console.error(error);
 
         if (!cancelled) {
+          setRole("User");
           setStatus("Unable to load account settings right now.");
         }
       }
@@ -44,6 +50,42 @@ export default function AccountSettingsPanel() {
       cancelled = true;
     };
   }, [session?.user?.id]);
+
+  async function handleDeleteAccount() {
+    if (!session?.user?.id || !session.access_token) {
+      setStatus("You must be signed in to delete your account.");
+      return;
+    }
+
+    setDeleting(true);
+    setStatus("Deleting account...");
+
+    try {
+      const response = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userId: session.user.id }),
+      });
+
+      const payload = (await response.json()) as { error?: string; success?: boolean };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Unable to delete account.");
+      }
+
+      const supabase = getSupabaseClient();
+      await supabase.auth.signOut();
+      router.replace("/");
+    } catch (error) {
+      console.error(error);
+      setStatus(error instanceof Error ? error.message : "Unable to delete account.");
+      setDeleting(false);
+      return;
+    }
+  }
 
   return (
     <div className="grid gap-6">
@@ -68,13 +110,56 @@ export default function AccountSettingsPanel() {
 
         <article className="saas-panel">
           <p className="saas-label">Role</p>
-          <p className="saas-value">{role || "Unknown"}</p>
+          <p className="saas-value">{role}</p>
         </article>
 
         <article className="saas-panel">
           <p className="saas-label">System status</p>
           <p className="saas-meta-text">{loading ? "Checking session..." : status}</p>
         </article>
+      </section>
+
+      <section className="saas-panel saas-danger-panel">
+        <p className="saas-label">Danger zone</p>
+        <h3 className="saas-subsection-title">Delete account</h3>
+        <p className="saas-meta-text mt-3">
+          This action permanently deletes your PilotSeal account and all saved data.
+        </p>
+
+        {!confirmDelete ? (
+          <button
+            type="button"
+            className="danger-button mt-5"
+            disabled={!session?.user?.id || deleting}
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete account
+          </button>
+        ) : (
+          <div className="saas-inline-form mt-5">
+            <p className="saas-meta-text">
+              Confirm account deletion. This cannot be undone.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="danger-button"
+                disabled={deleting}
+                onClick={handleDeleteAccount}
+              >
+                {deleting ? "Deleting account..." : "Confirm delete"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

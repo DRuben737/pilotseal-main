@@ -32,7 +32,7 @@ export default function NotificationManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [status, setStatus] = useState("Manage outbound notifications from this workspace.");
+  const [status, setStatus] = useState("Review notification history from this workspace.");
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [form, setForm] = useState(emptyForm);
 
@@ -51,9 +51,21 @@ export default function NotificationManager() {
 
       try {
         setLoading(true);
-        const profile = await fetchCurrentProfile(session.user.id);
+        const [profileResult, historyResult] = await Promise.allSettled([
+          fetchCurrentProfile(session.user.id),
+          fetchNotificationHistory(),
+        ]);
+        const profile = profileResult.status === "fulfilled" ? profileResult.value : null;
+        const history = historyResult.status === "fulfilled" ? historyResult.value : [];
         const nextIsAdmin = profile?.role === "admin";
-        const history = nextIsAdmin ? await fetchNotificationHistory() : [];
+
+        if (profileResult.status === "rejected") {
+          console.error("Notification manager profile failed:", profileResult.reason);
+        }
+
+        if (historyResult.status === "rejected") {
+          console.error("Notification history failed:", historyResult.reason);
+        }
 
         if (!cancelled) {
           setIsAdmin(nextIsAdmin);
@@ -61,7 +73,7 @@ export default function NotificationManager() {
           setStatus(
             nextIsAdmin
               ? "Notification center synchronized."
-              : "Notification management is available to admin users."
+              : "Read-only notification history."
           );
         }
       } catch (error) {
@@ -160,7 +172,6 @@ export default function NotificationManager() {
 
   async function handleDelete(id: string) {
     if (!isAdmin) {
-      setStatus("Only admin users can manage notifications.");
       return;
     }
 
@@ -183,7 +194,6 @@ export default function NotificationManager() {
 
   async function handleSendNow(id: string) {
     if (!isAdmin) {
-      setStatus("Only admin users can manage notifications.");
       return;
     }
 
@@ -215,110 +225,116 @@ export default function NotificationManager() {
       </section>
 
       <section className="saas-form-grid">
-        <article className="saas-panel">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="saas-subsection-title">
-              {form.id ? "Edit notification" : "Create notification"}
-            </h3>
-            <button type="button" className="ghost-button" onClick={resetForm}>
-              Clear form
-            </button>
-          </div>
-
-          <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
-            <label className="saas-field">
-              <span>Title</span>
-              <input
-                value={form.title}
-                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                required
-              />
-            </label>
-
-            <label className="saas-field">
-              <span>Message</span>
-              <textarea
-                value={form.message}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, message: event.target.value }))
-                }
-                rows={5}
-                required
-              />
-            </label>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="saas-field">
-                <span>Priority</span>
-                <select
-                  value={form.priority}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      priority: event.target.value as NotificationPriority,
-                    }))
-                  }
-                >
-                  {priorityOptions.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priority}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="saas-field">
-                <span>Status</span>
-                <select
-                  value={form.status}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      status: event.target.value as NotificationStatus,
-                    }))
-                  }
-                >
-                  {statusOptions.map((statusValue) => (
-                    <option key={statusValue} value={statusValue}>
-                      {statusValue}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="saas-field">
-                <span>Scheduled time</span>
-                <input
-                  type="datetime-local"
-                  value={form.scheduledAt}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, scheduledAt: event.target.value }))
-                  }
-                />
-              </label>
+        {isAdmin ? (
+          <article className="saas-panel">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="saas-subsection-title">
+                {form.id ? "Edit notification" : "Create notification"}
+              </h3>
+              <button type="button" className="ghost-button" onClick={resetForm}>
+                Clear form
+              </button>
             </div>
 
-            <button
-              className="primary-button justify-center"
-              type="submit"
-              disabled={saving || !form.title.trim() || !form.message.trim()}
-            >
-              {saving ? "Saving..." : form.id ? "Update notification" : "Create notification"}
-            </button>
-          </form>
-        </article>
+            <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
+              <label className="saas-field">
+                <span>Title</span>
+                <input
+                  value={form.title}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, title: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+
+              <label className="saas-field">
+                <span>Message</span>
+                <textarea
+                  value={form.message}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, message: event.target.value }))
+                  }
+                  rows={5}
+                  required
+                />
+              </label>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="saas-field">
+                  <span>Priority</span>
+                  <select
+                    value={form.priority}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        priority: event.target.value as NotificationPriority,
+                      }))
+                    }
+                  >
+                    {priorityOptions.map((priority) => (
+                      <option key={priority} value={priority}>
+                        {priority}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="saas-field">
+                  <span>Status</span>
+                  <select
+                    value={form.status}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        status: event.target.value as NotificationStatus,
+                      }))
+                    }
+                  >
+                    {statusOptions.map((statusValue) => (
+                      <option key={statusValue} value={statusValue}>
+                        {statusValue}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="saas-field">
+                  <span>Scheduled time</span>
+                  <input
+                    type="datetime-local"
+                    value={form.scheduledAt}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, scheduledAt: event.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+
+              <button
+                className="primary-button justify-center"
+                type="submit"
+                disabled={saving || !form.title.trim() || !form.message.trim()}
+              >
+                {saving ? "Saving..." : form.id ? "Update notification" : "Create notification"}
+              </button>
+            </form>
+          </article>
+        ) : (
+          <article className="saas-panel">
+            <h3 className="saas-subsection-title">Notification access</h3>
+            <p className="saas-meta-text mt-4">
+              You can review notification history here. Creating, deleting, and scheduling notices
+              is restricted to admins.
+            </p>
+          </article>
+        )}
 
         <article className="saas-panel">
           <div className="flex items-center justify-between gap-3">
             <h3 className="saas-subsection-title">Notification history</h3>
             <span className="saas-pill">{notifications.length}</span>
           </div>
-
-          {!isAdmin && !loading ? (
-            <p className="saas-empty-state mt-5">
-              Notification management is reserved for admin users.
-            </p>
-          ) : null}
 
           <div className="mt-5 grid gap-3">
             {notifications.length === 0 ? (
@@ -344,30 +360,34 @@ export default function NotificationManager() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      disabled={saving}
-                      onClick={() => handleEdit(notification)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={saving || notification.status === "sent"}
-                      onClick={() => handleSendNow(notification.id)}
-                    >
-                      Send now
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-button"
-                      disabled={saving}
-                      onClick={() => handleDelete(notification.id)}
-                    >
-                      Delete
-                    </button>
+                    {isAdmin ? (
+                      <>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={saving}
+                          onClick={() => handleEdit(notification)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={saving || notification.status === "sent"}
+                          onClick={() => handleSendNow(notification.id)}
+                        >
+                          Send now
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-button"
+                          disabled={saving}
+                          onClick={() => handleDelete(notification.id)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </article>
               ))

@@ -1,8 +1,10 @@
 import { getSupabaseClient } from "@/lib/supabase";
 
 export type UserProfile = {
+  created_at?: string;
+  email?: string | null;
   id: string;
-  role: "admin" | "users" | string;
+  role: "admin" | "user" | string;
 };
 
 export async function fetchCurrentProfile(userId: string) {
@@ -10,13 +12,13 @@ export async function fetchCurrentProfile(userId: string) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, email, role, created_at")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw error;
   }
 
-  return data as UserProfile;
+  return (data as UserProfile | null) ?? null;
 }

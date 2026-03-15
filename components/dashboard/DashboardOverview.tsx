@@ -43,8 +43,7 @@ const quickLinks = [
 export default function DashboardOverview() {
   const { session } = useAuthSession();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [warning, setWarning] = useState("");
+  const [statusNote, setStatusNote] = useState("");
   const [metrics, setMetrics] = useState<OverviewMetrics>(defaultMetrics);
 
   useEffect(() => {
@@ -61,8 +60,7 @@ export default function DashboardOverview() {
 
       try {
         setLoading(true);
-        setError("");
-        setWarning("");
+        setStatusNote("");
 
         const results = await Promise.allSettled([
           fetchSavedPeople(session.user.id, "cfi"),
@@ -105,17 +103,14 @@ export default function DashboardOverview() {
             notificationCount: notifications.length,
             role: profile?.role ?? "",
           });
-          setWarning(
-            failedSources.some(({ result }) => result.status === "rejected")
-              ? "Some dashboard sources are unavailable. Showing the data that loaded successfully."
-              : ""
-          );
+          setStatusNote("");
         }
       } catch (loadError) {
         console.error(loadError);
 
         if (!cancelled) {
-          setError("Unable to load dashboard metrics right now.");
+          setMetrics(defaultMetrics);
+          setStatusNote("Dashboard data is temporarily unavailable.");
         }
       } finally {
         if (!cancelled) {
@@ -148,8 +143,7 @@ export default function DashboardOverview() {
             {loading ? "Refreshing dashboard..." : "System synchronized"}
           </div>
         </div>
-        {warning ? <p className="saas-feedback saas-feedback-warning mt-5">{warning}</p> : null}
-        {error ? <p className="saas-feedback saas-feedback-error mt-5">{error}</p> : null}
+        {statusNote ? <p className="saas-meta-text mt-4">{statusNote}</p> : null}
       </section>
 
       <section className="saas-card-grid">
@@ -175,7 +169,7 @@ export default function DashboardOverview() {
           <p className="saas-label">Notifications tracked</p>
           <p className="saas-stat">{loading ? "..." : metrics.notificationCount}</p>
           <p className="saas-meta-text mt-2">
-            {metrics.role ? `Current role: ${metrics.role}` : "Role information will load here."}
+            {metrics.role === "admin" ? "Current role: Admin" : "Current role: User"}
           </p>
         </article>
       </section>
