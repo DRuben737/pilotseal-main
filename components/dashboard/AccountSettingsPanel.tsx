@@ -12,7 +12,6 @@ export default function AccountSettingsPanel() {
   const { loading, session } = useAuthSession();
   const [role, setRole] = useState("User");
   const [status, setStatus] = useState("Checking account settings...");
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -52,8 +51,16 @@ export default function AccountSettingsPanel() {
   }, [session?.user?.id]);
 
   async function handleDeleteAccount() {
-    if (!session?.user?.id || !session.access_token) {
+    if (!session?.user?.id) {
       setStatus("You must be signed in to delete your account.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "This action permanently deletes your account and all saved data."
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -61,11 +68,20 @@ export default function AccountSettingsPanel() {
     setStatus("Deleting account...");
 
     try {
+      const supabase = getSupabaseClient();
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      if (!currentSession?.access_token) {
+        throw new Error("Account deletion failed. Please try again.");
+      }
+
       const response = await fetch("/api/delete-account", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${currentSession.access_token}`,
         },
         body: JSON.stringify({ userId: session.user.id }),
       });
@@ -73,15 +89,15 @@ export default function AccountSettingsPanel() {
       const payload = (await response.json()) as { error?: string; success?: boolean };
 
       if (!response.ok || !payload.success) {
-        throw new Error(payload.error || "Unable to delete account.");
+        throw new Error("Account deletion failed. Please try again.");
       }
 
-      const supabase = getSupabaseClient();
       await supabase.auth.signOut();
+      router.refresh();
       router.replace("/");
     } catch (error) {
       console.error(error);
-      setStatus(error instanceof Error ? error.message : "Unable to delete account.");
+      setStatus("Account deletion failed. Please try again.");
       setDeleting(false);
       return;
     }
@@ -125,41 +141,14 @@ export default function AccountSettingsPanel() {
         <p className="saas-meta-text mt-3">
           This action permanently deletes your PilotSeal account and all saved data.
         </p>
-
-        {!confirmDelete ? (
-          <button
-            type="button"
-            className="danger-button mt-5"
-            disabled={!session?.user?.id || deleting}
-            onClick={() => setConfirmDelete(true)}
-          >
-            Delete account
-          </button>
-        ) : (
-          <div className="saas-inline-form mt-5">
-            <p className="saas-meta-text">
-              Confirm account deletion. This cannot be undone.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                className="danger-button"
-                disabled={deleting}
-                onClick={handleDeleteAccount}
-              >
-                {deleting ? "Deleting account..." : "Confirm delete"}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={deleting}
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          className="danger-button mt-5"
+          disabled={!session?.user?.id || deleting}
+          onClick={handleDeleteAccount}
+        >
+          {deleting ? "Deleting account..." : "Delete account"}
+        </button>
       </section>
     </div>
   );
