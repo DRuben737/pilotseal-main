@@ -9,7 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "@supabase/supabase-js": "^2.99.0",
+    "@types/three": "^0.183.1",
     "luxon": "^3.7.2",
     "next": "16.1.6",
     "pdf-lib": "^1.17.1",
@@ -17,7 +20,9 @@
     "react-dom": "19.2.3",
     "react-modal": "^3.16.3",
     "recharts": "^3.8.0",
-    "suncalc": "^1.9.0"
+    "suncalc": "^1.9.0",
+    "three": "^0.183.2",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.15.8",

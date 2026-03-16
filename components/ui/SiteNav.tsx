@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import PillButton from "@/components/ui/PillButton";
 import UserMenu from "@/components/ui/UserMenu";
 import { getSupabaseClient } from "@/lib/supabase";
 
@@ -27,28 +28,28 @@ export default function SiteNav() {
       <div className="site-nav-desktop">
         <nav className="site-nav-inline">
           {publicNavItems.map((item) => (
-            <Link
+            <PillButton
               key={item.href}
               href={item.href}
-              className={`site-nav-inline-link ${pathname === item.href ? "site-nav-inline-link-active" : ""}`}
+              active={pathname === item.href}
             >
               {item.label}
-            </Link>
+            </PillButton>
           ))}
           {isAuthenticated ? (
-            <Link
+            <PillButton
               href="/dashboard"
-              className={`site-nav-inline-link ${pathname.startsWith("/dashboard") ? "site-nav-inline-link-active" : ""}`}
+              active={pathname.startsWith("/dashboard")}
             >
               Dashboard
-            </Link>
+            </PillButton>
           ) : null}
         </nav>
 
         {!isAuthenticated ? (
-          <Link href="/login" className="site-nav-inline-link site-nav-login">
+          <PillButton href="/login" active={pathname === "/login"} className="site-nav-login">
             {loading ? "Loading..." : "Login"}
-          </Link>
+          </PillButton>
         ) : (
           <UserMenu email={userEmail} />
         )}

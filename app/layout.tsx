@@ -1,8 +1,10 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Inter } from "next/font/google";
+import { Inter, Merriweather } from "next/font/google";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import SiteNav from "@/components/ui/SiteNav";
 import SiteNotificationBanner from "@/components/notifications/SiteNotificationBanner";
+import logoImage from "@/images/logo.png";
 import "./globals.css";
 import "@/components/tools-native/styles/Nighttime.css";
 import "@/components/tools-native/styles/EndorsementGenerator.css";
@@ -11,6 +13,12 @@ import "@/components/tools-native/styles/FlightBrief.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+const merriweather = Merriweather({
+  subsets: ["latin"],
+  weight: ["700"],
+  variable: "--font-merriweather",
 });
 
 export const metadata = {
@@ -26,17 +34,28 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${inter.className} app-body text-black`}>
+      <body
+        className={`${inter.variable} ${merriweather.variable} ${inter.className} app-body text-black`}
+      >
         <AuthSessionProvider>
           <header className="relative z-80 px-3 pt-3">
             <div className="site-shell app-header-shell glass-panel rounded-[20px] px-4 py-3 sm:rounded-[24px] sm:px-6 sm:py-4">
               <div className="flex items-center justify-between gap-4">
-                <Link href="/" className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-extrabold text-white sm:h-11 sm:w-11">
-                    PS
+                <Link href="/" className="site-brand-link">
+                  <span className="site-brand-logo-wrap">
+                    <Image
+                      src={logoImage}
+                      alt="PilotSeal Tools logo"
+                      className="site-brand-logo"
+                      width={56}
+                      height={56}
+                      priority
+                    />
                   </span>
-                  <span className="display-title block text-lg font-semibold leading-none text-[var(--foreground)] sm:text-xl">
-                    PilotSeal
+                  <span className="site-brand-title">
+                    <span className="site-brand-wordmark text-[var(--foreground)]">
+                      PilotSeal
+                    </span>
                   </span>
                 </Link>
 
