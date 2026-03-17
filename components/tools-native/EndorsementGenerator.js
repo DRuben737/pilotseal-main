@@ -135,7 +135,7 @@ function EndorsementGenerator() {
   const [pdfUrl, setPdfUrl] = useState('');
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, and generate a PDF packet.');
+  const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then preview to confirm and open the PDF packet.');
   const [sessionEmail, setSessionEmail] = useState('');
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
@@ -405,18 +405,10 @@ function EndorsementGenerator() {
     );
   };
 
-  const handleGeneratePDF = async () => {
+  const buildPdfUrl = async () => {
     if (!validateForm()) {
-      setStatusMessage('Resolve the highlighted fields before generating the PDF.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Generate ${selectedTemplates.length} endorsement draft(s) for ${formData.studentName.trim()} dated ${formatDateForPdf(formData.date)}?`
-    );
-
-    if (!confirmed) {
-      return;
+      setStatusMessage('Resolve the highlighted fields before previewing the PDF.');
+      return null;
     }
 
     try {
@@ -567,27 +559,49 @@ function EndorsementGenerator() {
       pdfUrlRef.current = nextPdfUrl;
       setPdfUrl(nextPdfUrl);
       setStatusMessage(`PDF ready. Generated ${selectedTemplates.length} endorsement draft(s).`);
+      return nextPdfUrl;
     } catch (error) {
       console.error('Error generating PDF:', error);
       setStatusMessage('Failed to generate PDF. Check the console and try again.');
+      return null;
     }
   };
 
-  const handlePreview = () => {
-    if (!pdfUrl) {
-      setStatusMessage('Generate the PDF before previewing it.');
+  const handlePreview = async () => {
+    if (!validateForm()) {
+      setStatusMessage('Resolve the highlighted fields before previewing the PDF.');
       return;
     }
 
-    const previewWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+    const confirmed = window.confirm(
+      `Preview ${selectedTemplates.length} endorsement draft(s)?\n\nInstructor: ${formData.instructorName.trim()}\nStudent: ${formData.studentName.trim()}\nDate: ${formatDateForPdf(formData.date)}`
+    );
+
+    if (!confirmed) {
+      setStatusMessage('Preview cancelled. Review the confirmation details and try again when ready.');
+      return;
+    }
+
+    const previewWindow = window.open('', '_blank');
     if (!previewWindow) {
       setStatusMessage('The preview window was blocked by the browser.');
+      return;
     }
+
+    previewWindow.document.write('<title>PilotSeal PDF Preview</title><p style="font-family: sans-serif; padding: 20px;">Generating PDF preview...</p>');
+
+    const nextPdfUrl = await buildPdfUrl();
+    if (!nextPdfUrl) {
+      previewWindow.close();
+      return;
+    }
+
+    previewWindow.location.href = nextPdfUrl;
   };
 
   const handlePrint = () => {
     if (!pdfUrl) {
-      setStatusMessage('Generate the PDF before printing it.');
+      setStatusMessage('Open a preview first to generate the PDF before printing.');
       return;
     }
 
@@ -701,10 +715,7 @@ function EndorsementGenerator() {
                 <button className={styles.primaryButton} onClick={openModal} type="button">
                   Select endorsements ({selectedTemplates.length})
                 </button>
-                <button className={styles.secondaryButton} onClick={handleGeneratePDF} type="button">
-                  Generate PDF
-                </button>
-                <button className={styles.secondaryButton} onClick={handlePreview} type="button" disabled={!pdfUrl}>
+                <button className={styles.secondaryButton} onClick={handlePreview} type="button">
                   Preview
                 </button>
                 <button className={styles.secondaryButton} onClick={handlePrint} type="button" disabled={!pdfUrl}>
@@ -757,7 +768,7 @@ function EndorsementGenerator() {
               </div>
               <ul className={styles.noteList}>
                 <li>Use template search to narrow by solo, review, or instructor endorsements.</li>
-                <li>Generating a new PDF replaces the previous in-memory file URL cleanly.</li>
+                <li>Preview now confirms instructor, student, and date before generating the PDF packet.</li>
                 <li>Blank signature mode keeps the signature line but omits the image.</li>
               </ul>
             </div>
