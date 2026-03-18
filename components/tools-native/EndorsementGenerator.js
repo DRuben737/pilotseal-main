@@ -6,7 +6,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import EndorsementDisclaimer from '@/components/legal/EndorsementDisclaimer';
 import templates from './templates';
 import styles from './EndorsementGenerator.module.css';
-import { fetchSavedPeople } from '@/lib/saved-people';
+import { fetchSavedPeople, fetchDefaultCfi } from '@/lib/saved-people';
 import { getSupabaseClient } from '@/lib/supabase';
 
 const FIELD_CONFIG = [
@@ -145,6 +145,7 @@ function EndorsementGenerator() {
   const canvasRef = useRef(null);
   const signatureDirtyRef = useRef(false);
   const pdfUrlRef = useRef('');
+  const defaultCfiAppliedRef = useRef(false);
 
   useEffect(() => {
     Modal.setAppElement(document.body);
@@ -242,16 +243,33 @@ function EndorsementGenerator() {
         if (!session?.user) {
           setSavedCfis([]);
           setSavedStudents([]);
+          defaultCfiAppliedRef.current = false;
           return;
         }
 
-        const [cfis, students] = await Promise.all([
+        const [cfis, students, defaultCfi] = await Promise.all([
           fetchSavedPeople(session.user.id, 'cfi'),
           fetchSavedPeople(session.user.id, 'student'),
+          fetchDefaultCfi(session.user.id),
         ]);
 
         setSavedCfis(cfis);
         setSavedStudents(students);
+
+        if (defaultCfi && !defaultCfiAppliedRef.current) {
+          setSelectedCfiId((current) => current || defaultCfi.id);
+          setFormData((prev) => ({
+            ...prev,
+            instructorName: prev.instructorName.trim() ? prev.instructorName : defaultCfi.display_name || '',
+            instructorCertNumber: prev.instructorCertNumber.trim()
+              ? prev.instructorCertNumber
+              : defaultCfi.cert_number || '',
+            instructorCertExpDate: prev.instructorCertExpDate.trim()
+              ? prev.instructorCertExpDate
+              : defaultCfi.cert_exp_date || '',
+          }));
+          defaultCfiAppliedRef.current = true;
+        }
       } catch (error) {
         console.error(error);
       }
