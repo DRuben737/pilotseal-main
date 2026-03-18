@@ -24,6 +24,27 @@ function normalizeText(value?: string) {
   return nextValue ? nextValue : null;
 }
 
+export function convertToLastDayOfMonth(input: string): string {
+  const trimmed = input.trim();
+  const match = trimmed.match(/^(\d{2})\/(\d{4})$/);
+
+  if (!match) {
+    throw new Error("Certificate expiration must use MM/YYYY.");
+  }
+
+  const month = Number.parseInt(match[1], 10);
+  const year = Number.parseInt(match[2], 10);
+
+  if (month < 1 || month > 12) {
+    throw new Error("Certificate expiration month must be between 01 and 12.");
+  }
+
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${lastDay
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 export function parseCertificateExpiration(value: string | null) {
   if (!value) {
     return null;
@@ -120,6 +141,12 @@ export async function createSavedPerson(input: {
 }) {
   const supabase = getSupabaseClient();
   const nextIsDefault = input.role === "cfi" ? Boolean(input.is_default) : false;
+  const normalizedCertNumber = normalizeText(input.cert_number);
+  const normalizedExpirationInput = normalizeText(input.cert_exp_date);
+  const certExpDate =
+    input.role === "cfi" && normalizedExpirationInput
+      ? convertToLastDayOfMonth(normalizedExpirationInput)
+      : null;
 
   if (nextIsDefault) {
     await setDefaultCfi(input.userId, null);
@@ -131,8 +158,8 @@ export async function createSavedPerson(input: {
       user_id: input.userId,
       role: input.role,
       display_name: input.display_name.trim(),
-      cert_number: normalizeText(input.cert_number),
-      cert_exp_date: input.role === "cfi" ? normalizeText(input.cert_exp_date) : null,
+      cert_number: normalizedCertNumber,
+      cert_exp_date: certExpDate,
       is_default: nextIsDefault,
       alert_sent: false,
     })
