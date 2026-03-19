@@ -6,13 +6,14 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import EndorsementDisclaimer from '@/components/legal/EndorsementDisclaimer';
 import templates from './templates';
 import styles from './EndorsementGenerator.module.css';
-import { fetchSavedPeople, fetchDefaultCfi } from '@/lib/saved-people';
+import { fetchSavedPeople, fetchDefaultCfi, formatStoredDateForDisplay } from '@/lib/saved-people';
+import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
 
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
   { key: 'instructorCertNumber', label: 'Instructor certificate number', type: 'text', required: true, autoComplete: 'off' },
-  { key: 'instructorCertExpDate', label: 'Instructor certificate expiration *', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/YYYY', inputMode: 'numeric', maxLength: 7 },
+  { key: 'instructorCertExpDate', label: 'Instructor certificate expiration *', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
   { key: 'studentName', label: 'Student name', type: 'text', required: true, autoComplete: 'name' },
   { key: 'studentCertNumber', label: 'Student certificate number', type: 'text', required: false, autoComplete: 'off' },
   { key: 'date', label: 'Endorsement date', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
@@ -48,11 +49,14 @@ function formatDateForPdf(value) {
 
 function formatInputValue(field, value) {
   if (field === 'instructorCertExpDate') {
-    const digits = value.replace(/\D/g, '').slice(0, 6);
+    const digits = value.replace(/\D/g, '').slice(0, 8);
     if (digits.length <= 2) {
       return digits;
     }
-    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    if (digits.length <= 4) {
+      return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
   }
 
   if (field === 'date') {
@@ -136,7 +140,7 @@ function EndorsementGenerator() {
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then preview to confirm and open the PDF packet.');
-  const [sessionEmail, setSessionEmail] = useState('');
+  const [sessionIdentity, setSessionIdentity] = useState('');
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedCfiId, setSelectedCfiId] = useState('');
@@ -238,7 +242,7 @@ function EndorsementGenerator() {
           data: { session },
         } = await supabase.auth.getSession();
 
-        setSessionEmail(session?.user?.email || '');
+        setSessionIdentity('');
 
         if (!session?.user) {
           setSavedCfis([]);
@@ -247,14 +251,16 @@ function EndorsementGenerator() {
           return;
         }
 
-        const [cfis, students, defaultCfi] = await Promise.all([
+        const [cfis, students, defaultCfi, profile] = await Promise.all([
           fetchSavedPeople(session.user.id, 'cfi'),
           fetchSavedPeople(session.user.id, 'student'),
           fetchDefaultCfi(session.user.id),
+          fetchCurrentProfile(session.user.id),
         ]);
 
         setSavedCfis(cfis);
         setSavedStudents(students);
+        setSessionIdentity(profile?.display_name || session.user.email || '');
 
         if (defaultCfi && !defaultCfiAppliedRef.current) {
           setSelectedCfiId((current) => current || defaultCfi.id);
@@ -266,7 +272,7 @@ function EndorsementGenerator() {
               : defaultCfi.cert_number || '',
             instructorCertExpDate: prev.instructorCertExpDate.trim()
               ? prev.instructorCertExpDate
-              : defaultCfi.cert_exp_date || '',
+              : formatStoredDateForDisplay(defaultCfi.cert_exp_date) || '',
           }));
           defaultCfiAppliedRef.current = true;
         }
@@ -362,7 +368,7 @@ function EndorsementGenerator() {
       ...prev,
       instructorName: selected.display_name || prev.instructorName,
       instructorCertNumber: selected.cert_number || '',
-      instructorCertExpDate: selected.cert_exp_date || '',
+      instructorCertExpDate: formatStoredDateForDisplay(selected.cert_exp_date) || '',
     }));
   };
 
@@ -389,8 +395,8 @@ function EndorsementGenerator() {
       }
     });
 
-    if (formData.instructorCertExpDate && !/^(0[1-9]|1[0-2])\/\d{4}$/.test(formData.instructorCertExpDate)) {
-      nextErrors.instructorCertExpDate = 'Use MM/YYYY';
+    if (formData.instructorCertExpDate && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(formData.instructorCertExpDate)) {
+      nextErrors.instructorCertExpDate = 'Use MM/DD/YYYY';
     }
 
     if (formData.date && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(formData.date)) {
@@ -651,9 +657,9 @@ function EndorsementGenerator() {
                 </div>
               </div>
 
-              {sessionEmail ? (
+              {sessionIdentity ? (
                 <div className={styles.savedProfiles}>
-                  <p className={styles.savedProfileHint}>Signed in as {sessionEmail}. Select saved profiles to autofill the form.</p>
+                  <p className={styles.savedProfileHint}>Signed in as {sessionIdentity}. Select saved profiles to autofill the form.</p>
                   <div className={styles.savedProfileRow}>
                     <label className={styles.field}>
                       <span>Saved CFI</span>

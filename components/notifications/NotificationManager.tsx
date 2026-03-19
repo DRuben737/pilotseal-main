@@ -32,7 +32,7 @@ export default function NotificationManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [status, setStatus] = useState("Review notification history from this workspace.");
+  const [status, setStatus] = useState("");
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [form, setForm] = useState(emptyForm);
 
@@ -70,11 +70,7 @@ export default function NotificationManager() {
         if (!cancelled) {
           setIsAdmin(nextIsAdmin);
           setNotifications(history);
-          setStatus(
-            nextIsAdmin
-              ? "Notification center synchronized."
-              : "Read-only notification history."
-          );
+          setStatus("");
         }
       } catch (error) {
         console.error(error);
@@ -213,16 +209,8 @@ export default function NotificationManager() {
 
   return (
     <div className="grid gap-6">
-      <section className="saas-panel">
-        <p className="eyebrow">Notification center</p>
-        <h2 className="saas-section-title">Create, schedule, and ship system notices</h2>
-        <p className="saas-section-copy">
-          Manage drafts, future sends, and live notices with delivery priority and history.
-        </p>
-        <p className="saas-feedback saas-feedback-info mt-5">
-          {loading ? "Loading notification center..." : status}
-        </p>
-      </section>
+      {loading ? <p className="saas-meta-text">Loading notifications...</p> : null}
+      {!loading && status ? <p className="saas-meta-text">{status}</p> : null}
 
       <section className="saas-form-grid">
         {isAdmin ? (
@@ -323,10 +311,6 @@ export default function NotificationManager() {
         ) : (
           <article className="saas-panel">
             <h3 className="saas-subsection-title">Notification access</h3>
-            <p className="saas-meta-text mt-4">
-              You can review notification history here. Creating, deleting, and scheduling notices
-              is restricted to admins.
-            </p>
           </article>
         )}
 

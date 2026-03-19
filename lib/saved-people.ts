@@ -24,25 +24,62 @@ function normalizeText(value?: string) {
   return nextValue ? nextValue : null;
 }
 
-export function convertToLastDayOfMonth(input: string): string {
+export function formatUsDateInput(input: string) {
   const trimmed = input.trim();
-  const match = trimmed.match(/^(\d{2})\/(\d{4})$/);
+  const digits = trimmed.replace(/\D/g, "").slice(0, 8);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  }
+
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+export function convertDisplayDateToIso(input: string): string {
+  const trimmed = input.trim();
+  const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
 
   if (!match) {
-    throw new Error("Certificate expiration must use MM/YYYY.");
+    throw new Error("Certificate expiration must use MM/DD/YYYY.");
   }
 
   const month = Number.parseInt(match[1], 10);
-  const year = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[2], 10);
+  const year = Number.parseInt(match[3], 10);
 
   if (month < 1 || month > 12) {
     throw new Error("Certificate expiration month must be between 01 and 12.");
   }
 
-  const lastDay = new Date(year, month, 0).getDate();
-  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${lastDay
+  const maxDay = new Date(year, month, 0).getDate();
+  if (day < 1 || day > maxDay) {
+    throw new Error("Certificate expiration date is invalid.");
+  }
+
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day
     .toString()
     .padStart(2, "0")}`;
+}
+
+export function formatStoredDateForDisplay(value: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${month}/${day}/${year}`;
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+    return value;
+  }
+
+  return value;
 }
 
 export function parseCertificateExpiration(value: string | null) {
@@ -50,16 +87,17 @@ export function parseCertificateExpiration(value: string | null) {
     return null;
   }
 
-  if (/^\d{2}\/\d{4}$/.test(value)) {
-    const [monthText, yearText] = value.split("/");
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+    const [monthText, dayText, yearText] = value.split("/");
     const month = Number.parseInt(monthText, 10);
+    const day = Number.parseInt(dayText, 10);
     const year = Number.parseInt(yearText, 10);
 
-    if (!month || !year) {
+    if (!month || !day || !year) {
       return null;
     }
 
-    return new Date(year, month, 0, 23, 59, 59, 999);
+    return new Date(year, month - 1, day, 23, 59, 59, 999);
   }
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -67,6 +105,19 @@ export function parseCertificateExpiration(value: string | null) {
   }
 
   return null;
+}
+
+export function isOnOrAfterToday(value: string | null) {
+  const parsed = parseCertificateExpiration(value);
+  if (!parsed) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsed.setHours(0, 0, 0, 0);
+
+  return parsed >= today;
 }
 
 export function getExpirationStatus(value: string | null): CfiExpirationStatus {
@@ -143,9 +194,13 @@ export async function createSavedPerson(input: {
   const nextIsDefault = input.role === "cfi" ? Boolean(input.is_default) : false;
   const normalizedCertNumber = normalizeText(input.cert_number);
   const normalizedExpirationInput = normalizeText(input.cert_exp_date);
+  if (input.role === "cfi" && normalizedExpirationInput && !isOnOrAfterToday(normalizedExpirationInput)) {
+    throw new Error("Certificate expiration date cannot be earlier than today.");
+  }
+
   const certExpDate =
     input.role === "cfi" && normalizedExpirationInput
-      ? convertToLastDayOfMonth(normalizedExpirationInput)
+      ? convertDisplayDateToIso(normalizedExpirationInput)
       : null;
 
   if (nextIsDefault) {
@@ -193,8 +248,20 @@ export async function updateSavedPerson(
     display_name: updates.display_name.trim(),
     cert_number: normalizeText(updates.cert_number),
     cert_exp_date:
-      typeof updates.cert_exp_date === "string" ? normalizeText(updates.cert_exp_date) : undefined,
+      typeof updates.cert_exp_date === "string"
+        ? normalizeText(updates.cert_exp_date)
+          ? convertDisplayDateToIso(updates.cert_exp_date)
+          : null
+        : undefined,
   };
+
+  if (
+    typeof updates.cert_exp_date === "string" &&
+    normalizeText(updates.cert_exp_date) &&
+    !isOnOrAfterToday(updates.cert_exp_date)
+  ) {
+    throw new Error("Certificate expiration date cannot be earlier than today.");
+  }
 
   if (typeof updates.alert_sent === "boolean") {
     payload.alert_sent = updates.alert_sent;

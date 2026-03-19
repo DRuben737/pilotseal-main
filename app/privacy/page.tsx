@@ -1,41 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import AdaptiveImageSlot from "@/components/ui/AdaptiveImageSlot";
 
 export const metadata: Metadata = {
   title: "Privacy | PilotSeal",
   description:
-    "Privacy policy for PilotSeal and its pilot training tools.",
+    "Privacy policy for PilotSeal accounts, saved records, and pilot training tools.",
 };
 
 export default function PrivacyPage() {
-  const privacyImages = {
-    hero: "/privacy-hero.png",
-    details: "/privacy-details.png",
-  };
-
   return (
     <main className="page-shell page-policy px-3">
       <div className="site-shell page-stack space-y-8">
-        <section className="hero-panel hero-about overflow-hidden px-6 py-10 sm:px-10 sm:py-14">
-          <div className="reading-rail">
-            <div className="max-w-3xl">
-              <p className="eyebrow">Privacy</p>
-              <h1 className="display-title mt-4 text-3xl font-semibold leading-[0.95] text-[var(--foreground)] sm:text-4xl">
-                Privacy policy for PilotSeal and the tool suite
-              </h1>
-              <p className="copy-muted mt-4 leading-7">
-                Last updated March 10, 2026. This policy covers PilotSeal and the
-                tools available on this site.
-              </p>
-            </div>
-            <div className="content-card overflow-hidden p-3 sm:p-4">
-              <AdaptiveImageSlot
-                src={privacyImages.hero}
-                alt="Privacy hero image placeholder"
-                label="privacy-hero.png"
-              />
-            </div>
+        <section className="hero-panel privacy-atmosphere-surface privacy-atmosphere-hero overflow-hidden px-6 py-10 sm:px-10 sm:py-14">
+          <div className="max-w-3xl">
+            <p className="eyebrow">Privacy</p>
+            <h1 className="display-title mt-4 text-3xl font-semibold leading-[0.95] text-[var(--foreground)] sm:text-4xl">
+              Privacy policy for PilotSeal and the tool suite
+            </h1>
+            <p className="copy-muted mt-4 leading-7">
+              Last updated March 18, 2026. This policy covers PilotSeal and the
+              tools available on this site.
+            </p>
           </div>
         </section>
 
@@ -44,8 +29,8 @@ export default function PrivacyPage() {
           <p className="copy-muted mt-4 leading-8">
             PilotSeal is a browser-based set of aviation tools and supporting
             information pages for CFIs and student pilots. This page explains
-            what information may be collected, how it is used, and what choices
-            users have.
+            what information may be stored when you use an account, how it is
+            used, and what choices you have.
           </p>
         </section>
 
@@ -62,10 +47,17 @@ export default function PrivacyPage() {
               struggling.
             </p>
             <p className="copy-muted mt-4 leading-8">
+              If you create an account, PilotSeal stores account-related data
+              tied to your Supabase user record. This may include your email
+              address, optional display name, medical certificate details,
+              saved CFI records, saved student records, and notification data
+              associated with your workspace.
+            </p>
+            <p className="copy-muted mt-4 leading-8">
               Information entered into tools, such as endorsement details,
               briefing notes, or weight and balance values, is used to generate
-              outputs for the workflow. Unless a tool explicitly says
-              otherwise, PilotSeal does not require account creation.
+              outputs for the workflow. Some tools can be used without saving
+              account data.
             </p>
             <p className="copy-muted mt-4 leading-8">
               Do not enter sensitive personal information unless it is strictly
@@ -73,23 +65,42 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <section className="content-card p-6">
+          <section className="privacy-atmosphere-surface p-6">
             <h2 className="section-title text-2xl font-semibold">
               How information is used
             </h2>
             <ul className="mt-5 list-disc space-y-3 pl-6 text-[var(--muted)]">
               <li>Operate and maintain the site and embedded tools</li>
+              <li>Support saved CFI and student autofill workflows</li>
+              <li>Store optional profile details such as display name and medical certificate inputs</li>
+              <li>Send default CFI expiration reminder emails when enabled by saved account data</li>
               <li>Improve usability, performance, and reliability</li>
               <li>Understand which tools are useful and where users struggle</li>
               <li>Monitor abuse and help keep the service secure</li>
             </ul>
-            <AdaptiveImageSlot
-              src={privacyImages.details}
-              alt="Privacy details image placeholder"
-              label="privacy-details.png"
-              frameClassName="intro-inline-image mt-6"
-            />
           </section>
+        </section>
+
+        <section className="section-panel-about px-6 py-8 sm:px-8">
+          <h2 className="section-title text-3xl font-semibold">
+            Account data and saved records
+          </h2>
+          <p className="copy-muted mt-4 leading-8">
+            Account data is stored through Supabase authentication and database
+            services. Password changes are handled through Supabase Auth.
+            PilotSeal does not display or store your raw password in the site
+            interface.
+          </p>
+          <p className="copy-muted mt-4 leading-8">
+            Saved records may include default CFI selections, certificate
+            numbers, certificate expiration dates, medical certificate inputs,
+            and related profile preferences used to reduce repetitive data
+            entry in endorsement workflows.
+          </p>
+          <p className="copy-muted mt-4 leading-8">
+            If you delete your account from the profile area, your account and
+            associated saved data are removed as part of that deletion flow.
+          </p>
         </section>
 
         <section className="section-panel-about px-6 py-8 sm:px-8">
@@ -119,13 +130,15 @@ export default function PrivacyPage() {
 
         <section className="masonry-grid">
           <section className="content-card p-6">
-            <h2 className="section-title text-2xl font-semibold">Your choices</h2>
-            <ul className="mt-5 list-disc space-y-3 pl-6 text-[var(--muted)]">
+          <h2 className="section-title text-2xl font-semibold">Your choices</h2>
+          <ul className="mt-5 list-disc space-y-3 pl-6 text-[var(--muted)]">
               <li>Disable cookies in your browser settings</li>
               <li>Use privacy settings or extensions that limit tracking</li>
+              <li>Update or remove saved profile details from the dashboard</li>
+              <li>Delete your account if you want saved account data removed</li>
               <li>Choose not to use the site if you do not agree with this policy</li>
-            </ul>
-          </section>
+          </ul>
+        </section>
 
           <section className="content-card-dark p-6">
             <h2 className="section-title text-2xl font-semibold">

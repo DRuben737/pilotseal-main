@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Inter, Merriweather } from "next/font/google";
+import { Inter } from "next/font/google";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import SiteNav from "@/components/ui/SiteNav";
 import SiteNotificationBanner from "@/components/notifications/SiteNotificationBanner";
@@ -13,12 +13,6 @@ import "@/components/tools-native/styles/FlightBrief.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
-});
-
-const merriweather = Merriweather({
-  subsets: ["latin"],
-  weight: ["700"],
-  variable: "--font-merriweather",
 });
 
 export const metadata = {
@@ -34,9 +28,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body
-        className={`${inter.variable} ${merriweather.variable} ${inter.className} app-body text-black`}
-      >
+      <body className={`${inter.variable} ${inter.className} app-body text-black`}>
         <AuthSessionProvider>
           <header className="relative z-80 px-3 pt-3">
             <div className="site-shell app-header-shell glass-panel rounded-[20px] px-4 py-3 sm:rounded-[24px] sm:px-6 sm:py-4">

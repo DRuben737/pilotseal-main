@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import PillButton from "@/components/ui/PillButton";
 import UserMenu from "@/components/ui/UserMenu";
+import { resolveDisplayIdentity } from "@/lib/identity";
+import { fetchCurrentProfile } from "@/lib/profile";
+import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
 
 const publicNavItems = [
@@ -19,39 +21,86 @@ export default function SiteNav() {
   const pathname = usePathname();
   const { loading, session } = useAuthSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [defaultCfiName, setDefaultCfiName] = useState("");
 
   const isAuthenticated = Boolean(session?.user);
   const userEmail = session?.user?.email ?? "";
+  const identityLabel = resolveDisplayIdentity({
+    displayName,
+    defaultCfiName,
+    email: userEmail,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadIdentity() {
+      if (!session?.user?.id) {
+        if (!cancelled) {
+          setDisplayName("");
+          setDefaultCfiName("");
+        }
+        return;
+      }
+
+      try {
+        const [profile, defaultCfi] = await Promise.all([
+          fetchCurrentProfile(session.user.id),
+          fetchDefaultCfi(session.user.id),
+        ]);
+        if (!cancelled) {
+          setDisplayName(profile?.display_name ?? "");
+          setDefaultCfiName(defaultCfi?.display_name ?? "");
+        }
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          setDisplayName("");
+          setDefaultCfiName("");
+        }
+      }
+    }
+
+    void loadIdentity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
 
   return (
     <div className="site-nav">
       <div className="site-nav-desktop">
         <nav className="site-nav-inline">
           {publicNavItems.map((item) => (
-            <PillButton
+            <Link
               key={item.href}
               href={item.href}
-              active={pathname === item.href}
+              className={`site-nav-inline-link ${pathname === item.href ? "site-nav-inline-link-active" : ""}`}
             >
               {item.label}
-            </PillButton>
+            </Link>
           ))}
           {isAuthenticated ? (
-            <PillButton
+            <Link
               href="/dashboard"
-              active={pathname.startsWith("/dashboard")}
+              className={`site-nav-inline-link ${pathname.startsWith("/dashboard") ? "site-nav-inline-link-active" : ""}`}
             >
               Dashboard
-            </PillButton>
+            </Link>
           ) : null}
         </nav>
 
         {!isAuthenticated ? (
-          <PillButton href="/login" active={pathname === "/login"} className="site-nav-login">
+          <Link
+            href="/login"
+            className={`site-nav-inline-link ${pathname === "/login" ? "site-nav-inline-link-active" : ""}`}
+          >
             {loading ? "Loading..." : "Login"}
-          </PillButton>
+          </Link>
         ) : (
-          <UserMenu email={userEmail} />
+          <UserMenu email={userEmail} displayName={identityLabel} />
         )}
       </div>
 
@@ -91,12 +140,12 @@ export default function SiteNav() {
           ) : (
             <div className="site-nav-mobile-account">
               <p className="site-user-dropdown-label">Signed in as</p>
-              <p className="site-user-dropdown-email">{userEmail}</p>
+              <p className="site-user-dropdown-email">{identityLabel}</p>
 
               {[
                 { href: "/dashboard", label: "Dashboard" },
                 { href: "/dashboard/saved-people", label: "Saved People" },
-                { href: "/dashboard/account-settings", label: "Account Settings" },
+                { href: "/dashboard/account-settings", label: "Profile" },
               ].map((item) => (
                 <Link
                   key={item.href}

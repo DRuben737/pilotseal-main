@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import Badge from "@/components/ui/Badge";
@@ -8,7 +8,10 @@ import {
   createSavedPerson,
   deleteSavedPerson,
   fetchSavedPeople,
+  formatStoredDateForDisplay,
+  formatUsDateInput,
   getExpirationStatus,
+  isOnOrAfterToday,
   setDefaultCfi,
   updateSavedPerson,
   type SavedPerson,
@@ -37,7 +40,7 @@ function createDraft(person: SavedPerson): DraftState {
   return {
     display_name: person.display_name,
     cert_number: person.cert_number ?? "",
-    cert_exp_date: person.cert_exp_date ?? "",
+    cert_exp_date: formatStoredDateForDisplay(person.cert_exp_date),
   };
 }
 
@@ -59,11 +62,30 @@ function expirationBadge(person: SavedPerson) {
   return <Badge tone="neutral">No expiration</Badge>;
 }
 
+function toggleSection(
+  section: "cfis" | "students",
+  showCfis: boolean,
+  showStudents: boolean,
+  setShowCfis: Dispatch<SetStateAction<boolean>>,
+  setShowStudents: Dispatch<SetStateAction<boolean>>
+) {
+  if (section === "cfis") {
+    const next = !showCfis;
+    setShowCfis(next);
+    setShowStudents(false);
+    return;
+  }
+
+  const next = !showStudents;
+  setShowStudents(next);
+  setShowCfis(false);
+}
+
 export default function SavedPeopleManager() {
   const { session } = useAuthSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState("Manage saved CFI and student profiles here.");
+  const [status, setStatus] = useState("");
   const [cfis, setCfis] = useState<SavedPerson[]>([]);
   const [students, setStudents] = useState<SavedPerson[]>([]);
   const [cfiForm, setCfiForm] = useState(emptyCfiForm);
@@ -72,6 +94,8 @@ export default function SavedPeopleManager() {
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftState>>({});
+  const [showCfis, setShowCfis] = useState(false);
+  const [showStudents, setShowStudents] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +120,7 @@ export default function SavedPeopleManager() {
         if (!cancelled) {
           setCfis(nextCfis);
           setStudents(nextStudents);
-          setStatus("Saved people synchronized with Supabase.");
+          setStatus("");
         }
       } catch (error) {
         console.error(error);
@@ -154,7 +178,7 @@ export default function SavedPeopleManager() {
       ...current,
       [id]: {
         ...(current[id] ?? { cert_exp_date: "", cert_number: "", display_name: "" }),
-        [field]: value,
+        [field]: field === "cert_exp_date" ? formatUsDateInput(value) : value,
       },
     }));
   }
@@ -169,6 +193,12 @@ export default function SavedPeopleManager() {
 
     try {
       if (role === "cfi") {
+        if (cfiForm.cert_exp_date.trim() && !isOnOrAfterToday(cfiForm.cert_exp_date)) {
+          setStatus("Certificate expiration date cannot be earlier than today.");
+          setSaving(false);
+          return;
+        }
+
         await createSavedPerson({ userId: session.user.id, role, ...cfiForm });
         setCfiForm(emptyCfiForm);
         setShowCfiForm(false);
@@ -203,8 +233,15 @@ export default function SavedPeopleManager() {
     setSaving(true);
 
     try {
+      if (person.role === "cfi" && draft.cert_exp_date.trim() && !isOnOrAfterToday(draft.cert_exp_date)) {
+        setStatus("Certificate expiration date cannot be earlier than today.");
+        setSaving(false);
+        return;
+      }
+
       const expirationChanged =
-        person.role === "cfi" && draft.cert_exp_date.trim() !== (person.cert_exp_date ?? "");
+        person.role === "cfi" &&
+        draft.cert_exp_date.trim() !== formatStoredDateForDisplay(person.cert_exp_date);
 
       await updateSavedPerson(session.user.id, person.id, {
         display_name: draft.display_name,
@@ -265,24 +302,24 @@ export default function SavedPeopleManager() {
 
   return (
     <div className="grid gap-6">
-      <section className="saas-panel">
-        <p className="eyebrow">Saved people</p>
-        <h2 className="saas-section-title">Reusable pilot records</h2>
-        <p className="saas-section-copy">
-          Keep one default CFI on file for endorsement autofill, then maintain the rest inline.
-        </p>
-        <p className="saas-feedback saas-feedback-info mt-5">
-          {loading ? "Loading saved people..." : status}
-        </p>
-      </section>
+      {loading ? <p className="saas-meta-text">Loading saved people...</p> : null}
+      {!loading && status ? <p className="saas-meta-text">{status}</p> : null}
 
       <section className="saas-form-grid">
         <article className="saas-panel">
-          <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            className="saas-section-toggle"
+            onClick={() =>
+              toggleSection("cfis", showCfis, showStudents, setShowCfis, setShowStudents)
+            }
+          >
             <h3 className="saas-subsection-title">Saved CFIs</h3>
             <span className="saas-pill">{cfis.length}</span>
-          </div>
+          </button>
 
+          {showCfis ? (
+            <>
           <div className="mt-5 grid gap-3">
             {cfis.length === 0 ? (
               <p className="saas-empty-state">No CFIs saved yet.</p>
@@ -312,7 +349,7 @@ export default function SavedPeopleManager() {
                         <label className="saas-field">
                           <span>Certificate expiration</span>
                           <input
-                            placeholder="MM/YYYY"
+                            placeholder="MM/DD/YYYY"
                             value={draft.cert_exp_date}
                             onChange={(event) => updateDraft(person.id, "cert_exp_date", event.target.value)}
                           />
@@ -347,7 +384,11 @@ export default function SavedPeopleManager() {
                             </div>
                           </div>
                           <p className="saas-meta-text">{person.cert_number || "No certificate number"}</p>
-                          <p className="saas-meta-text">{person.cert_exp_date || "No expiration saved"}</p>
+                          <p className="saas-meta-text">
+                            {person.cert_exp_date
+                              ? formatStoredDateForDisplay(person.cert_exp_date)
+                              : "No expiration saved"}
+                          </p>
                         </div>
                         <div className="saas-inline-actions">
                           {!person.is_default ? (
@@ -417,10 +458,13 @@ export default function SavedPeopleManager() {
                 <label className="saas-field">
                   <span>Certificate expiration</span>
                   <input
-                    placeholder="MM/YYYY"
+                    placeholder="MM/DD/YYYY"
                     value={cfiForm.cert_exp_date}
                     onChange={(event) =>
-                      setCfiForm((current) => ({ ...current, cert_exp_date: event.target.value }))
+                      setCfiForm((current) => ({
+                        ...current,
+                        cert_exp_date: formatUsDateInput(event.target.value),
+                      }))
                     }
                   />
                 </label>
@@ -445,14 +489,24 @@ export default function SavedPeopleManager() {
               </div>
             ) : null}
           </div>
+            </>
+          ) : null}
         </article>
 
         <article className="saas-panel">
-          <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            className="saas-section-toggle"
+            onClick={() =>
+              toggleSection("students", showCfis, showStudents, setShowCfis, setShowStudents)
+            }
+          >
             <h3 className="saas-subsection-title">Saved students</h3>
             <span className="saas-pill">{students.length}</span>
-          </div>
+          </button>
 
+          {showStudents ? (
+            <>
           <div className="mt-5 grid gap-3">
             {students.length === 0 ? (
               <p className="saas-empty-state">No students saved yet.</p>
@@ -570,6 +624,8 @@ export default function SavedPeopleManager() {
               </div>
             ) : null}
           </div>
+            </>
+          ) : null}
         </article>
       </section>
     </div>

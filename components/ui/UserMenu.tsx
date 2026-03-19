@@ -8,10 +8,10 @@ import { getSupabaseClient } from "@/lib/supabase";
 const accountLinks = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/saved-people", label: "Saved People" },
-  { href: "/dashboard/account-settings", label: "Account Settings" },
+  { href: "/dashboard/account-settings", label: "Profile" },
 ];
 
-export default function UserMenu({ email }: { email: string }) {
+export default function UserMenu({ email, displayName }: { email: string; displayName?: string }) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -61,6 +61,8 @@ export default function UserMenu({ email }: { email: string }) {
     }
   }
 
+  const identityLabel = displayName?.trim() || email || "User";
+
   return (
     <div className="site-user-menu" ref={menuRef}>
       <button
@@ -69,17 +71,17 @@ export default function UserMenu({ email }: { email: string }) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="site-user-avatar">{(email[0] || "U").toUpperCase()}</span>
+        <span className="site-user-avatar">{(identityLabel[0] || "U").toUpperCase()}</span>
         <span className="site-user-meta">
-          <span className="site-user-label">Account</span>
-          <span className="site-user-email">{email}</span>
+          <span className="site-user-label">Profile</span>
+          <span className="site-user-email">{identityLabel}</span>
         </span>
       </button>
 
       <div className={`site-user-dropdown ${open ? "site-user-dropdown-open" : ""}`}>
         <div className="site-user-dropdown-head">
           <p className="site-user-dropdown-label">Signed in as</p>
-          <p className="site-user-dropdown-email">{email}</p>
+          <p className="site-user-dropdown-email">{identityLabel}</p>
         </div>
 
         <div className="site-user-dropdown-links">
