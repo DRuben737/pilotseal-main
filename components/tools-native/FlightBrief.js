@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
+import { useToolState } from "@/stores/toolState";
 
 /** ------------------ constants ------------------ */
 const API_BASE = "https://brief.r1978244759.workers.dev";
@@ -166,57 +167,98 @@ function nmsNotamsUrl(airports) {
 
 /** ------------------ Component ------------------ */
 export default function FlightBrief() {
+  const { brief, setBrief } = useToolState();
+  const setBriefField = useCallback(
+    (key, valueOrUpdater) => {
+      setBrief((current) => {
+        const previousValue = current?.[key];
+        const nextValue =
+          typeof valueOrUpdater === "function" ? valueOrUpdater(previousValue) : valueOrUpdater;
+        return { ...current, [key]: nextValue };
+      });
+    },
+    [setBrief]
+  );
+
   /** ---- core form ---- */
-  const [studentName, setStudentName] = useState("");
-  const [instructorName, setInstructorName] = useState("");
-  const [flightRules, setFlightRules] = useState("VFR");
-  const [flightDate, setFlightDate] = useState("");
-  const [etd, setEtd] = useState("");
-  const [eta, setEta] = useState("");
+  const studentName = brief.studentName ?? "";
+  const setStudentName = useCallback((value) => setBriefField("studentName", value), [setBriefField]);
+  const instructorName = brief.instructorName ?? "";
+  const setInstructorName = useCallback((value) => setBriefField("instructorName", value), [setBriefField]);
+  const flightRules = brief.flightRules ?? "VFR";
+  const setFlightRules = useCallback((value) => setBriefField("flightRules", value), [setBriefField]);
+  const flightDate = brief.flightDate ?? "";
+  const setFlightDate = useCallback((value) => setBriefField("flightDate", value), [setBriefField]);
+  const etd = brief.etd ?? "";
+  const setEtd = useCallback((value) => setBriefField("etd", value), [setBriefField]);
+  const eta = brief.eta ?? "";
+  const setEta = useCallback((value) => setBriefField("eta", value), [setBriefField]);
   const ete = useMemo(() => calcETE(etd, eta), [etd, eta]);
 
 
-  const [aircraftId, setAircraftId] = useState("");
-  const [fuel, setFuel] = useState("");
-  const [fuelTime, setFuelTime] = useState("");
+  const aircraftId = brief.aircraftId ?? "";
+  const setAircraftId = useCallback((value) => setBriefField("aircraftId", value), [setBriefField]);
+  const fuel = brief.fuel ?? "";
+  const setFuel = useCallback((value) => setBriefField("fuel", value), [setBriefField]);
+  const fuelTime = brief.fuelTime ?? "";
+  const setFuelTime = useCallback((value) => setBriefField("fuelTime", value), [setBriefField]);
 
   /** ---- route ---- */
-  const [routeMode, setRouteMode] = useState("local"); // 'local' | 'cross'
-  const [departure, setDeparture] = useState("");
-  const [arrival, setArrival] = useState("");
-  const [stops, setStops] = useState([""]); // at least one input
+  const routeMode = brief.routeMode ?? "local"; // 'local' | 'cross'
+  const setRouteMode = useCallback((value) => setBriefField("routeMode", value), [setBriefField]);
+  const departure = brief.departure ?? "";
+  const setDeparture = useCallback((value) => setBriefField("departure", value), [setBriefField]);
+  const arrival = brief.arrival ?? "";
+  const setArrival = useCallback((value) => setBriefField("arrival", value), [setBriefField]);
+  const stops = brief.stops ?? [""]; // at least one input
+  const setStops = useCallback((value) => setBriefField("stops", value), [setBriefField]);
 
   /** ---- lesson ---- */
-  const [lessonPractice, setLessonPractice] = useState("");
+  const lessonPractice = brief.lessonPractice ?? "";
+  const setLessonPractice = useCallback((value) => setBriefField("lessonPractice", value), [setBriefField]);
 
   /** ---- weather / DA ---- */
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [weatherError, setWeatherError] = useState("");
+  const weatherLoading = brief.weatherLoading ?? false;
+  const setWeatherLoading = useCallback((value) => setBriefField("weatherLoading", value), [setBriefField]);
+  const weatherError = brief.weatherError ?? "";
+  const setWeatherError = useCallback((value) => setBriefField("weatherError", value), [setBriefField]);
 
   // store richer metar for category visualization
-  const [metarByIcaoData, setMetarByIcaoData] = useState({}); // { ICAO: { raw, flight_rules } }
-  const [tafByIcao, setTafByIcao] = useState({}); // { ICAO: "ICAO: raw" }
-  const [airsigmetSummary, setAirsigmetSummary] = useState("");
+  const metarByIcaoData = brief.metarByIcaoData ?? {}; // { ICAO: { raw, flight_rules } }
+  const setMetarByIcaoData = useCallback((value) => setBriefField("metarByIcaoData", value), [setBriefField]);
+  const tafByIcao = brief.tafByIcao ?? {}; // { ICAO: "ICAO: raw" }
+  const setTafByIcao = useCallback((value) => setBriefField("tafByIcao", value), [setBriefField]);
+  const airsigmetSummary = brief.airsigmetSummary ?? "";
+  const setAirsigmetSummary = useCallback((value) => setBriefField("airsigmetSummary", value), [setBriefField]);
 
   const latestAltimeterRef = useRef(null); // inHg number
   const latestTemperatureCRef = useRef(null); // C number
 
-  const [fieldElevation, setFieldElevation] = useState("");
-  const [outsideTemp, setOutsideTemp] = useState(""); // read-only but stored
-  const [daResult, setDaResult] = useState("");
+  const fieldElevation = brief.fieldElevation ?? "";
+  const setFieldElevation = useCallback((value) => setBriefField("fieldElevation", value), [setBriefField]);
+  const outsideTemp = brief.outsideTemp ?? ""; // read-only but stored
+  const setOutsideTemp = useCallback((value) => setBriefField("outsideTemp", value), [setBriefField]);
+  const daResult = brief.daResult ?? "";
+  const setDaResult = useCallback((value) => setBriefField("daResult", value), [setBriefField]);
 
   /** ---- notes ---- */
-  const [weatherNotes, setWeatherNotes] = useState("");
+  const weatherNotes = brief.weatherNotes ?? "";
+  const setWeatherNotes = useCallback((value) => setBriefField("weatherNotes", value), [setBriefField]);
 
   /** ---- NOTAMs (NMS) ---- */
-  const [notamLoading, setNotamLoading] = useState(false);
-  const [notamError, setNotamError] = useState("");
-  const [notamByIcao, setNotamByIcao] = useState({}); // { ICAO: {closures, nav, general} }
+  const notamLoading = brief.notamLoading ?? false;
+  const setNotamLoading = useCallback((value) => setBriefField("notamLoading", value), [setBriefField]);
+  const notamError = brief.notamError ?? "";
+  const setNotamError = useCallback((value) => setBriefField("notamError", value), [setBriefField]);
+  const notamByIcao = brief.notamByIcao ?? {}; // { ICAO: {closures, nav, general} }
+  const setNotamByIcao = useCallback((value) => setBriefField("notamByIcao", value), [setBriefField]);
   // airport-level collapse: { KPAO: true/false }  true=expanded
-  const [notamAirportOpen, setNotamAirportOpen] = useState({});
+  const notamAirportOpen = brief.notamAirportOpen ?? {};
+  const setNotamAirportOpen = useCallback((value) => setBriefField("notamAirportOpen", value), [setBriefField]);
 
   // category-level collapse per airport: { KPAO: { closures:true, nav:false, general:false } }
-  const [notamCategoryOpen, setNotamCategoryOpen] = useState({});
+  const notamCategoryOpen = brief.notamCategoryOpen ?? {};
+  const setNotamCategoryOpen = useCallback((value) => setBriefField("notamCategoryOpen", value), [setBriefField]);
 
   const toggleAirport = useCallback((icao) => {
     setNotamAirportOpen((prev) => ({ ...prev, [icao]: !prev[icao] }));
@@ -239,11 +281,15 @@ export default function FlightBrief() {
   }, []);
 
   /** ---- aircraft conditions ---- */
-  const [grossWeight, setGrossWeight] = useState("");
-  const [withinLimitsConfirmed, setWithinLimitsConfirmed] = useState(false);
+  const grossWeight = brief.grossWeight ?? "";
+  const setGrossWeight = useCallback((value) => setBriefField("grossWeight", value), [setBriefField]);
+  const withinLimitsConfirmed = brief.withinLimitsConfirmed ?? false;
+  const setWithinLimitsConfirmed = useCallback((value) => setBriefField("withinLimitsConfirmed", value), [setBriefField]);
 
-  const [mxNow, setMxNow] = useState("");
-  const [mxDue, setMxDue] = useState("");
+  const mxNow = brief.mxNow ?? "";
+  const setMxNow = useCallback((value) => setBriefField("mxNow", value), [setBriefField]);
+  const mxDue = brief.mxDue ?? "";
+  const setMxDue = useCallback((value) => setBriefField("mxDue", value), [setBriefField]);
 
   const mxRemaining = useMemo(() => {
     const now = parseFloat(mxNow || 0);
@@ -253,20 +299,18 @@ export default function FlightBrief() {
   }, [mxNow, mxDue]);
 
   /** ---- risk ---- */
-  const [staticChecked, setStaticChecked] = useState(() => {
-    const init = {};
-    STATIC_RISKS.forEach((r) => (init[r.id] = false));
-    return init;
-  });
-  const [dynamicChecked, setDynamicChecked] = useState(() => {
-    const init = {};
-    DYNAMIC_RISKS.forEach((r) => (init[r.id] = false));
-    return init;
-  });
-  const [imsafe, setImsafe] = useState(0); // 0..6
-  const [otherRisks, setOtherRisks] = useState(0); // 0..5
-  const [riskComments, setRiskComments] = useState("");
-  const [currentStep, setCurrentStep] = useState(0);
+  const staticChecked = brief.staticChecked ?? {};
+  const setStaticChecked = useCallback((value) => setBriefField("staticChecked", value), [setBriefField]);
+  const dynamicChecked = brief.dynamicChecked ?? {};
+  const setDynamicChecked = useCallback((value) => setBriefField("dynamicChecked", value), [setBriefField]);
+  const imsafe = brief.imsafe ?? 0; // 0..6
+  const setImsafe = useCallback((value) => setBriefField("imsafe", value), [setBriefField]);
+  const otherRisks = brief.otherRisks ?? 0; // 0..5
+  const setOtherRisks = useCallback((value) => setBriefField("otherRisks", value), [setBriefField]);
+  const riskComments = brief.riskComments ?? "";
+  const setRiskComments = useCallback((value) => setBriefField("riskComments", value), [setBriefField]);
+  const currentStep = brief.currentStep ?? 0;
+  const setCurrentStep = useCallback((value) => setBriefField("currentStep", value), [setBriefField]);
   const topRef = useRef(null);
 
   const staticScore = useMemo(

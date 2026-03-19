@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
+import { useToolState } from "@/stores/toolState";
 import decoderData from "./decoderData";
 
 const categoryOptions = ["All", "Weather", "General"];
 
 const Decoder = () => {
-  const [input, setInput] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
+  const { decoder, setDecoder } = useToolState();
+  const input = decoder.input ?? "";
+  const activeCategory = decoder.activeCategory ?? "All";
 
   const words = useMemo(
     () => input.toUpperCase().trim().split(/\s+/).filter(Boolean),
@@ -56,7 +58,9 @@ const Decoder = () => {
           className="decoder-input"
           placeholder="Example: KPDX 121953Z 28012KT 10SM BKN045"
           value={input}
-          onChange={(event) => setInput(event.target.value)}
+          onChange={(event) =>
+            setDecoder((current) => ({ ...current, input: event.target.value }))
+          }
         />
 
         <div className="decoder-chip-group">
@@ -65,7 +69,9 @@ const Decoder = () => {
               key={category}
               type="button"
               className={`decoder-chip ${activeCategory === category ? "decoder-chip-active" : ""}`}
-              onClick={() => setActiveCategory(category)}
+              onClick={() =>
+                setDecoder((current) => ({ ...current, activeCategory: category }))
+              }
             >
               {category}
             </button>

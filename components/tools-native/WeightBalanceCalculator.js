@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
+import { useToolState } from "@/stores/toolState";
 import loadAircraft, { listAirplanes, getAirplaneInfo } from "./aircraft/loadAircraft";
 import { computeWeightAndBalance, computeZeroFuel } from "./lib/weightBalance";
 import CGEnvelopeChart from "./CGEnvelopeChart";
@@ -16,20 +17,19 @@ const fields = [
 
 export default function WeightBalanceCalculator() {
   const airplaneList = listAirplanes();
-  const [selectedTail, setSelectedTail] = useState(airplaneList[0]);
+  const { wb, setWb } = useToolState();
+  const selectedTail = wb.selectedTail || airplaneList[0];
   const airplaneInfo = getAirplaneInfo(selectedTail);
   const aircraftType = airplaneInfo.type;
-
-  const [inputs, setInputs] = useState({
+  const inputs = wb.inputs ?? {
     left_seat: "",
     right_seat: "",
     rear_seat: "",
     baggage_1: "",
     baggage_2: "",
     fuel: "",
-  });
-
-  const [result, setResult] = useState(null);
+  };
+  const result = wb.result ?? null;
 
   const handleCalculate = () => {
     const numericInputs = Object.fromEntries(
@@ -39,11 +39,17 @@ export default function WeightBalanceCalculator() {
     const loaded = loadAircraft(selectedTail);
     const computed = computeWeightAndBalance(loaded, numericInputs);
     const zeroFuel = computeZeroFuel(loaded, numericInputs);
-    setResult({ ...computed, zeroFuel, aircraft: loaded });
+    setWb((current) => ({
+      ...current,
+      result: { ...computed, zeroFuel, aircraft: loaded },
+    }));
   };
 
   const handleChange = (key, value) => {
-    setInputs((prev) => ({ ...prev, [key]: value }));
+    setWb((current) => ({
+      ...current,
+      inputs: { ...(current.inputs ?? {}), [key]: value },
+    }));
   };
 
   return (
@@ -59,7 +65,12 @@ export default function WeightBalanceCalculator() {
               <span>Aircraft</span>
               <select
                 value={selectedTail}
-                onChange={(event) => setSelectedTail(event.target.value)}
+                onChange={(event) =>
+                  setWb((current) => ({
+                    ...current,
+                    selectedTail: event.target.value,
+                  }))
+                }
               >
                 {airplaneList.map((tail) => (
                   <option key={tail} value={tail}>
