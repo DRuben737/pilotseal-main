@@ -2342,24 +2342,36 @@ a {
 
 .wb-shell {
   display: grid;
-  gap: 1rem;
+  gap: 0.7rem;
+}
+
+.wb-shell-embedded {
+  gap: 0.45rem;
 }
 
 .wb-grid {
   display: grid;
-  gap: 1rem;
+  gap: 0.7rem;
 }
 
 .wb-panel {
   border-radius: 24px;
   border: 1px solid rgba(18, 45, 68, 0.1);
   background: rgba(251, 252, 253, 0.94);
-  padding: 1.1rem;
+  padding: 0.95rem;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
 }
 
+.wb-panel-embedded {
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  padding: 0.25rem 0;
+  box-shadow: none;
+}
+
 .wb-section-head {
-  margin-bottom: 1rem;
+  margin-bottom: 0.7rem;
 }
 
 .wb-section-head h3 {
@@ -2376,7 +2388,7 @@ a {
 .wb-input-grid,
 .wb-stat-grid {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.65rem;
 }
 
 .wb-field {
@@ -2409,7 +2421,7 @@ a {
 
 .wb-results {
   display: grid;
-  gap: 1rem;
+  gap: 0.65rem;
   align-content: start;
 }
 
@@ -2466,10 +2478,19 @@ a {
 }
 
 .wb-chart-wrap {
+  display: grid;
+  gap: 0.35rem;
   border-radius: 20px;
   background: white;
   border: 1px solid rgba(148, 163, 184, 0.16);
-  padding: 0.8rem;
+  padding: 0.55rem;
+  min-width: 0;
+}
+
+.wb-chart-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .decoder-shell,
@@ -2667,5 +2688,27 @@ a {
   .night-tool-fields,
   .night-tool-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .wb-panel {
+    padding: 0.8rem;
+    border-radius: 18px;
+  }
+
+  .wb-panel-embedded {
+    padding: 0.15rem 0;
+    border-radius: 0;
+  }
+
+  .wb-result-head,
+  .wb-result-actions {
+    justify-items: start;
+  }
+
+  .wb-chart-wrap {
+    padding: 0.45rem;
+    border-radius: 16px;
   }
 }

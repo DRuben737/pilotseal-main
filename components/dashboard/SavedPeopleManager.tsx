@@ -1,6 +1,6 @@
 "use client";
 
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import Badge from "@/components/ui/Badge";
@@ -23,17 +23,20 @@ const emptyCfiForm = {
   cert_number: "",
   display_name: "",
   is_default: false,
+  weight_lbs: "",
 };
 
 const emptyStudentForm = {
   cert_number: "",
   display_name: "",
+  weight_lbs: "",
 };
 
 type DraftState = {
   display_name: string;
   cert_number: string;
   cert_exp_date: string;
+  weight_lbs: string;
 };
 
 function createDraft(person: SavedPerson): DraftState {
@@ -41,6 +44,7 @@ function createDraft(person: SavedPerson): DraftState {
     display_name: person.display_name,
     cert_number: person.cert_number ?? "",
     cert_exp_date: formatStoredDateForDisplay(person.cert_exp_date),
+    weight_lbs: typeof person.weight_lbs === "number" ? String(person.weight_lbs) : "",
   };
 }
 
@@ -62,25 +66,6 @@ function expirationBadge(person: SavedPerson) {
   return <Badge tone="neutral">No expiration</Badge>;
 }
 
-function toggleSection(
-  section: "cfis" | "students",
-  showCfis: boolean,
-  showStudents: boolean,
-  setShowCfis: Dispatch<SetStateAction<boolean>>,
-  setShowStudents: Dispatch<SetStateAction<boolean>>
-) {
-  if (section === "cfis") {
-    const next = !showCfis;
-    setShowCfis(next);
-    setShowStudents(false);
-    return;
-  }
-
-  const next = !showStudents;
-  setShowStudents(next);
-  setShowCfis(false);
-}
-
 export default function SavedPeopleManager() {
   const { session } = useAuthSession();
   const [loading, setLoading] = useState(true);
@@ -94,8 +79,7 @@ export default function SavedPeopleManager() {
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftState>>({});
-  const [showCfis, setShowCfis] = useState(false);
-  const [showStudents, setShowStudents] = useState(false);
+  const [activeModalRole, setActiveModalRole] = useState<SavedPersonRole | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,9 +106,7 @@ export default function SavedPeopleManager() {
           setStudents(nextStudents);
           setStatus("");
         }
-      } catch (error) {
-        console.error(error);
-
+      } catch {
         if (!cancelled) {
           setStatus("Unable to load saved people right now.");
         }
@@ -173,11 +155,23 @@ export default function SavedPeopleManager() {
     });
   }
 
+  function closeModal() {
+    setActiveModalRole(null);
+    setShowCfiForm(false);
+    setShowStudentForm(false);
+    setEditingId(null);
+  }
+
   function updateDraft(id: string, field: keyof DraftState, value: string) {
     setDrafts((current) => ({
       ...current,
       [id]: {
-        ...(current[id] ?? { cert_exp_date: "", cert_number: "", display_name: "" }),
+        ...(current[id] ?? {
+          cert_exp_date: "",
+          cert_number: "",
+          display_name: "",
+          weight_lbs: "",
+        }),
         [field]: field === "cert_exp_date" ? formatUsDateInput(value) : value,
       },
     }));
@@ -199,11 +193,25 @@ export default function SavedPeopleManager() {
           return;
         }
 
-        await createSavedPerson({ userId: session.user.id, role, ...cfiForm });
+        await createSavedPerson({
+          userId: session.user.id,
+          role,
+          ...cfiForm,
+          weight_lbs: cfiForm.weight_lbs.trim()
+            ? Number.parseFloat(cfiForm.weight_lbs)
+            : null,
+        });
         setCfiForm(emptyCfiForm);
         setShowCfiForm(false);
       } else {
-        await createSavedPerson({ userId: session.user.id, role, ...studentForm });
+        await createSavedPerson({
+          userId: session.user.id,
+          role,
+          ...studentForm,
+          weight_lbs: studentForm.weight_lbs.trim()
+            ? Number.parseFloat(studentForm.weight_lbs)
+            : null,
+        });
         setStudentForm(emptyStudentForm);
         setShowStudentForm(false);
       }
@@ -211,7 +219,6 @@ export default function SavedPeopleManager() {
       await refreshSavedPeople();
       setStatus(`${role === "cfi" ? "CFI" : "Student"} profile saved.`);
     } catch (error) {
-      console.error(error);
       setStatus(error instanceof Error ? error.message : "Failed to save profile.");
     } finally {
       setSaving(false);
@@ -233,7 +240,11 @@ export default function SavedPeopleManager() {
     setSaving(true);
 
     try {
-      if (person.role === "cfi" && draft.cert_exp_date.trim() && !isOnOrAfterToday(draft.cert_exp_date)) {
+      if (
+        person.role === "cfi" &&
+        draft.cert_exp_date.trim() &&
+        !isOnOrAfterToday(draft.cert_exp_date)
+      ) {
         setStatus("Certificate expiration date cannot be earlier than today.");
         setSaving(false);
         return;
@@ -247,13 +258,15 @@ export default function SavedPeopleManager() {
         display_name: draft.display_name,
         cert_number: draft.cert_number,
         cert_exp_date: person.role === "cfi" ? draft.cert_exp_date : undefined,
+        weight_lbs: draft.weight_lbs.trim()
+          ? Number.parseFloat(draft.weight_lbs)
+          : null,
         alert_sent: expirationChanged ? false : undefined,
       });
       await refreshSavedPeople();
       cancelEditing(person.id);
       setStatus("Saved profile updated.");
     } catch (error) {
-      console.error(error);
       setStatus(error instanceof Error ? error.message : "Failed to update profile.");
     } finally {
       setSaving(false);
@@ -273,7 +286,6 @@ export default function SavedPeopleManager() {
       await refreshSavedPeople();
       setStatus("Saved profile deleted.");
     } catch (error) {
-      console.error(error);
       setStatus(error instanceof Error ? error.message : "Failed to delete profile.");
     } finally {
       setSaving(false);
@@ -293,341 +305,362 @@ export default function SavedPeopleManager() {
       await refreshSavedPeople();
       setStatus("Default CFI updated. Endorsement tools will use this record first.");
     } catch (error) {
-      console.error(error);
       setStatus(error instanceof Error ? error.message : "Failed to update default CFI.");
     } finally {
       setSaving(false);
     }
   }
 
+  const activeItems = activeModalRole === "cfi" ? cfis : students;
+  const isCfiModal = activeModalRole === "cfi";
+  const modalTitle = isCfiModal ? "CFIs" : "Students";
+
   return (
-    <div className="grid gap-6">
-      {loading ? <p className="saas-meta-text">Loading saved people...</p> : null}
-      {!loading && status ? <p className="saas-meta-text">{status}</p> : null}
+    <>
+      <div className="saas-form-grid">
+        <section className="saas-panel">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="saas-subsection-title">CFIs</h3>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setActiveModalRole("cfi")}
+            >
+              Manage
+            </button>
+          </div>
+        </section>
 
-      <section className="saas-form-grid">
-        <article className="saas-panel">
-          <button
-            type="button"
-            className="saas-section-toggle"
-            onClick={() =>
-              toggleSection("cfis", showCfis, showStudents, setShowCfis, setShowStudents)
-            }
-          >
-            <h3 className="saas-subsection-title">Saved CFIs</h3>
-            <span className="saas-pill">{cfis.length}</span>
-          </button>
+        <section className="saas-panel">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="saas-subsection-title">Students</h3>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setActiveModalRole("student")}
+            >
+              Manage
+            </button>
+          </div>
+        </section>
+      </div>
 
-          {showCfis ? (
-            <>
-          <div className="mt-5 grid gap-3">
-            {cfis.length === 0 ? (
-              <p className="saas-empty-state">No CFIs saved yet.</p>
-            ) : (
-              cfis.map((person) => {
-                const isEditing = editingId === person.id;
-                const draft = drafts[person.id] ?? createDraft(person);
+      {activeModalRole ? (
+        <div className="Overlay" onClick={closeModal}>
+          <div className="Modal" onClick={(event) => event.stopPropagation()}>
+            <div className="tools-child-shell h-full overflow-y-auto">
+              <div className="tools-child-header">
+                <h2 className="tools-child-title">{modalTitle}</h2>
+                <div className="tools-child-actions">
+                  <button type="button" className="ghost-button" onClick={closeModal}>
+                    Close
+                  </button>
+                </div>
+              </div>
 
-                return (
-                  <article key={person.id} className="saas-list-item saas-list-item-stack">
-                    {isEditing ? (
-                      <div className="saas-inline-form w-full">
+              <div className="mt-5">
+                {loading ? <p className="saas-meta-text">Loading saved people...</p> : null}
+                {!loading && status ? <p className="saas-meta-text mb-4">{status}</p> : null}
+
+                <article className="saas-panel">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="saas-subsection-title">
+                      {isCfiModal ? "Saved CFIs" : "Saved students"}
+                    </h3>
+                    <span className="saas-pill">{activeItems.length}</span>
+                  </div>
+
+                  <div className="mt-5 grid gap-3">
+                    {activeItems.length === 0 ? (
+                      <p className="saas-empty-state">
+                        {isCfiModal ? "No CFIs saved yet." : "No students saved yet."}
+                      </p>
+                    ) : (
+                      activeItems.map((person) => {
+                        const isEditing = editingId === person.id;
+                        const draft = drafts[person.id] ?? createDraft(person);
+
+                        return (
+                          <article key={person.id} className="saas-list-item saas-list-item-stack">
+                            {isEditing ? (
+                              <div className="saas-inline-form w-full">
+                                <label className="saas-field">
+                                  <span>Name</span>
+                                  <input
+                                    value={draft.display_name}
+                                    onChange={(event) =>
+                                      updateDraft(person.id, "display_name", event.target.value)
+                                    }
+                                  />
+                                </label>
+                                <label className="saas-field">
+                                  <span>Certificate number</span>
+                                  <input
+                                    value={draft.cert_number}
+                                    onChange={(event) =>
+                                      updateDraft(person.id, "cert_number", event.target.value)
+                                    }
+                                  />
+                                </label>
+                                {isCfiModal ? (
+                                  <label className="saas-field">
+                                    <span>Certificate expiration</span>
+                                    <input
+                                      placeholder="MM/DD/YYYY"
+                                      value={draft.cert_exp_date}
+                                      onChange={(event) =>
+                                        updateDraft(person.id, "cert_exp_date", event.target.value)
+                                      }
+                                    />
+                                  </label>
+                                ) : null}
+                                <label className="saas-field">
+                                  <span>Weight</span>
+                                  <input
+                                    type="number"
+                                    value={draft.weight_lbs}
+                                    onChange={(event) =>
+                                      updateDraft(person.id, "weight_lbs", event.target.value)
+                                    }
+                                  />
+                                </label>
+                                <div className="saas-inline-actions">
+                                  <button
+                                    type="button"
+                                    className="primary-button"
+                                    disabled={saving}
+                                    onClick={() => void handleInlineSave(person)}
+                                  >
+                                    {saving ? "Saving..." : "Save changes"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    disabled={saving}
+                                    onClick={() => cancelEditing(person.id)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="saas-list-main">
+                                  <div className="saas-list-header">
+                                    <h4 className="saas-card-title">{person.display_name}</h4>
+                                    {isCfiModal ? (
+                                      <div className="saas-list-badges">
+                                        {person.is_default ? (
+                                          <Badge tone="neutral">Default CFI</Badge>
+                                        ) : null}
+                                        {expirationBadge(person)}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  <p className="saas-meta-text">
+                                    {person.cert_number || "No certificate number"}
+                                  </p>
+                                  {isCfiModal ? (
+                                    <p className="saas-meta-text">
+                                      {person.cert_exp_date
+                                        ? formatStoredDateForDisplay(person.cert_exp_date)
+                                        : "No expiration saved"}
+                                    </p>
+                                  ) : null}
+                                  <p className="saas-meta-text">
+                                    Weight{" "}
+                                    {typeof person.weight_lbs === "number"
+                                      ? `${person.weight_lbs} lbs`
+                                      : "--"}
+                                  </p>
+                                </div>
+                                <div className="saas-inline-actions">
+                                  {isCfiModal && !person.is_default ? (
+                                    <button
+                                      type="button"
+                                      className="secondary-button"
+                                      disabled={saving}
+                                      onClick={() => void handleSetDefault(person.id)}
+                                    >
+                                      Set as default
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    disabled={saving}
+                                    onClick={() => startEditing(person)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="danger-button"
+                                    disabled={saving}
+                                    onClick={() => void handleDelete(person.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </article>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="mt-5 grid gap-3">
+                    <button
+                      type="button"
+                      className="secondary-button justify-center"
+                      onClick={() =>
+                        isCfiModal
+                          ? setShowCfiForm((current) => !current)
+                          : setShowStudentForm((current) => !current)
+                      }
+                    >
+                      {isCfiModal
+                        ? showCfiForm
+                          ? "Hide Add CFI"
+                          : "+ Add CFI"
+                        : showStudentForm
+                          ? "Hide Add Student"
+                          : "+ Add Student"}
+                    </button>
+
+                    {isCfiModal && showCfiForm ? (
+                      <div className="saas-inline-form">
                         <label className="saas-field">
                           <span>Name</span>
                           <input
-                            value={draft.display_name}
-                            onChange={(event) => updateDraft(person.id, "display_name", event.target.value)}
+                            value={cfiForm.display_name}
+                            onChange={(event) =>
+                              setCfiForm((current) => ({
+                                ...current,
+                                display_name: event.target.value,
+                              }))
+                            }
                           />
                         </label>
                         <label className="saas-field">
                           <span>Certificate number</span>
                           <input
-                            value={draft.cert_number}
-                            onChange={(event) => updateDraft(person.id, "cert_number", event.target.value)}
+                            value={cfiForm.cert_number}
+                            onChange={(event) =>
+                              setCfiForm((current) => ({
+                                ...current,
+                                cert_number: event.target.value,
+                              }))
+                            }
                           />
                         </label>
                         <label className="saas-field">
                           <span>Certificate expiration</span>
                           <input
                             placeholder="MM/DD/YYYY"
-                            value={draft.cert_exp_date}
-                            onChange={(event) => updateDraft(person.id, "cert_exp_date", event.target.value)}
+                            value={cfiForm.cert_exp_date}
+                            onChange={(event) =>
+                              setCfiForm((current) => ({
+                                ...current,
+                                cert_exp_date: formatUsDateInput(event.target.value),
+                              }))
+                            }
                           />
                         </label>
-                        <div className="saas-inline-actions">
-                          <button
-                            type="button"
-                            className="primary-button"
-                            disabled={saving}
-                            onClick={() => void handleInlineSave(person)}
-                          >
-                            {saving ? "Saving..." : "Save changes"}
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            disabled={saving}
-                            onClick={() => cancelEditing(person.id)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        <label className="saas-field">
+                          <span>Weight</span>
+                          <input
+                            type="number"
+                            value={cfiForm.weight_lbs}
+                            onChange={(event) =>
+                              setCfiForm((current) => ({
+                                ...current,
+                                weight_lbs: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="flex items-center gap-3 text-sm text-[var(--muted)]">
+                          <input
+                            type="checkbox"
+                            checked={cfiForm.is_default}
+                            onChange={(event) =>
+                              setCfiForm((current) => ({
+                                ...current,
+                                is_default: event.target.checked,
+                              }))
+                            }
+                          />
+                          Set as default CFI
+                        </label>
+                        <button
+                          type="button"
+                          className="primary-button justify-center"
+                          disabled={saving || !cfiForm.display_name.trim()}
+                          onClick={() => void handleSave("cfi")}
+                        >
+                          {saving ? "Saving..." : "Save CFI"}
+                        </button>
                       </div>
-                    ) : (
-                      <>
-                        <div className="saas-list-main">
-                          <div className="saas-list-header">
-                            <h4 className="saas-card-title">{person.display_name}</h4>
-                            <div className="saas-list-badges">
-                              {person.is_default ? <Badge tone="neutral">Default CFI</Badge> : null}
-                              {expirationBadge(person)}
-                            </div>
-                          </div>
-                          <p className="saas-meta-text">{person.cert_number || "No certificate number"}</p>
-                          <p className="saas-meta-text">
-                            {person.cert_exp_date
-                              ? formatStoredDateForDisplay(person.cert_exp_date)
-                              : "No expiration saved"}
-                          </p>
-                        </div>
-                        <div className="saas-inline-actions">
-                          {!person.is_default ? (
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              disabled={saving}
-                              onClick={() => void handleSetDefault(person.id)}
-                            >
-                              Set as default
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            disabled={saving}
-                            onClick={() => startEditing(person)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="danger-button"
-                            disabled={saving}
-                            onClick={() => void handleDelete(person.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </article>
-                );
-              })
-            )}
-          </div>
+                    ) : null}
 
-          <div className="mt-5 grid gap-3">
-            <button
-              type="button"
-              className="secondary-button justify-center"
-              onClick={() => setShowCfiForm((current) => !current)}
-            >
-              {showCfiForm ? "Hide Add CFI" : "+ Add CFI"}
-            </button>
-
-            {showCfiForm ? (
-              <div className="saas-inline-form">
-                <label className="saas-field">
-                  <span>Name</span>
-                  <input
-                    value={cfiForm.display_name}
-                    onChange={(event) =>
-                      setCfiForm((current) => ({ ...current, display_name: event.target.value }))
-                    }
-                  />
-                </label>
-                <label className="saas-field">
-                  <span>Certificate number</span>
-                  <input
-                    value={cfiForm.cert_number}
-                    onChange={(event) =>
-                      setCfiForm((current) => ({ ...current, cert_number: event.target.value }))
-                    }
-                  />
-                </label>
-                <label className="saas-field">
-                  <span>Certificate expiration</span>
-                  <input
-                    placeholder="MM/DD/YYYY"
-                    value={cfiForm.cert_exp_date}
-                    onChange={(event) =>
-                      setCfiForm((current) => ({
-                        ...current,
-                        cert_exp_date: formatUsDateInput(event.target.value),
-                      }))
-                    }
-                  />
-                </label>
-                <label className="flex items-center gap-3 text-sm text-[var(--muted)]">
-                  <input
-                    type="checkbox"
-                    checked={cfiForm.is_default}
-                    onChange={(event) =>
-                      setCfiForm((current) => ({ ...current, is_default: event.target.checked }))
-                    }
-                  />
-                  Set as default CFI
-                </label>
-                <button
-                  type="button"
-                  className="primary-button justify-center"
-                  disabled={saving || !cfiForm.display_name.trim()}
-                  onClick={() => void handleSave("cfi")}
-                >
-                  {saving ? "Saving..." : "Save CFI"}
-                </button>
-              </div>
-            ) : null}
-          </div>
-            </>
-          ) : null}
-        </article>
-
-        <article className="saas-panel">
-          <button
-            type="button"
-            className="saas-section-toggle"
-            onClick={() =>
-              toggleSection("students", showCfis, showStudents, setShowCfis, setShowStudents)
-            }
-          >
-            <h3 className="saas-subsection-title">Saved students</h3>
-            <span className="saas-pill">{students.length}</span>
-          </button>
-
-          {showStudents ? (
-            <>
-          <div className="mt-5 grid gap-3">
-            {students.length === 0 ? (
-              <p className="saas-empty-state">No students saved yet.</p>
-            ) : (
-              students.map((person) => {
-                const isEditing = editingId === person.id;
-                const draft = drafts[person.id] ?? createDraft(person);
-
-                return (
-                  <article key={person.id} className="saas-list-item saas-list-item-stack">
-                    {isEditing ? (
-                      <div className="saas-inline-form w-full">
+                    {activeModalRole === "student" && showStudentForm ? (
+                      <div className="saas-inline-form">
                         <label className="saas-field">
                           <span>Name</span>
                           <input
-                            value={draft.display_name}
-                            onChange={(event) => updateDraft(person.id, "display_name", event.target.value)}
+                            value={studentForm.display_name}
+                            onChange={(event) =>
+                              setStudentForm((current) => ({
+                                ...current,
+                                display_name: event.target.value,
+                              }))
+                            }
                           />
                         </label>
                         <label className="saas-field">
                           <span>Certificate number</span>
                           <input
-                            value={draft.cert_number}
-                            onChange={(event) => updateDraft(person.id, "cert_number", event.target.value)}
+                            value={studentForm.cert_number}
+                            onChange={(event) =>
+                              setStudentForm((current) => ({
+                                ...current,
+                                cert_number: event.target.value,
+                              }))
+                            }
                           />
                         </label>
-                        <div className="saas-inline-actions">
-                          <button
-                            type="button"
-                            className="primary-button"
-                            disabled={saving}
-                            onClick={() => void handleInlineSave(person)}
-                          >
-                            {saving ? "Saving..." : "Save changes"}
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            disabled={saving}
-                            onClick={() => cancelEditing(person.id)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        <label className="saas-field">
+                          <span>Weight</span>
+                          <input
+                            type="number"
+                            value={studentForm.weight_lbs}
+                            onChange={(event) =>
+                              setStudentForm((current) => ({
+                                ...current,
+                                weight_lbs: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="primary-button justify-center"
+                          disabled={saving || !studentForm.display_name.trim()}
+                          onClick={() => void handleSave("student")}
+                        >
+                          {saving ? "Saving..." : "Save student"}
+                        </button>
                       </div>
-                    ) : (
-                      <>
-                        <div className="saas-list-main">
-                          <h4 className="saas-card-title">{person.display_name}</h4>
-                          <p className="saas-meta-text">{person.cert_number || "No certificate number"}</p>
-                        </div>
-                        <div className="saas-inline-actions">
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            disabled={saving}
-                            onClick={() => startEditing(person)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="danger-button"
-                            disabled={saving}
-                            onClick={() => void handleDelete(person.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </article>
-                );
-              })
-            )}
-          </div>
-
-          <div className="mt-5 grid gap-3">
-            <button
-              type="button"
-              className="secondary-button justify-center"
-              onClick={() => setShowStudentForm((current) => !current)}
-            >
-              {showStudentForm ? "Hide Add Student" : "+ Add Student"}
-            </button>
-
-            {showStudentForm ? (
-              <div className="saas-inline-form">
-                <label className="saas-field">
-                  <span>Name</span>
-                  <input
-                    value={studentForm.display_name}
-                    onChange={(event) =>
-                      setStudentForm((current) => ({ ...current, display_name: event.target.value }))
-                    }
-                  />
-                </label>
-                <label className="saas-field">
-                  <span>Certificate number</span>
-                  <input
-                    value={studentForm.cert_number}
-                    onChange={(event) =>
-                      setStudentForm((current) => ({ ...current, cert_number: event.target.value }))
-                    }
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="primary-button justify-center"
-                  disabled={saving || !studentForm.display_name.trim()}
-                  onClick={() => void handleSave("student")}
-                >
-                  {saving ? "Saving..." : "Save student"}
-                </button>
+                    ) : null}
+                  </div>
+                </article>
               </div>
-            ) : null}
+            </div>
           </div>
-            </>
-          ) : null}
-        </article>
-      </section>
-    </div>
+        </div>
+      ) : null}
+    </>
   );
 }

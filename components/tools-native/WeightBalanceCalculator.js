@@ -1,162 +1,659 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
+import {
+  fetchAircraft,
+  parseAircraftEnvelopeSet,
+  parseAircraftStations,
+} from "@/lib/aircraft";
+import { fetchSavedPeople } from "@/lib/saved-people";
+import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
-import loadAircraft, { listAirplanes, getAirplaneInfo } from "./aircraft/loadAircraft";
-import { computeWeightAndBalance, computeZeroFuel } from "./lib/weightBalance";
 import CGEnvelopeChart from "./CGEnvelopeChart";
 
-const fields = [
-  { key: "left_seat", label: "Pilot", hint: "Left seat" },
-  { key: "right_seat", label: "Copilot", hint: "Right seat" },
-  { key: "rear_seat", label: "Rear seat", hint: "Passengers" },
-  { key: "baggage_1", label: "Baggage 1", hint: "Forward area" },
-  { key: "baggage_2", label: "Baggage 2", hint: "Aft area" },
-  { key: "fuel", label: "Fuel", hint: "Gallons usable" },
-];
+const DEFAULT_INPUTS = {};
 
-export default function WeightBalanceCalculator() {
-  const airplaneList = listAirplanes();
-  const { wb, setWb } = useToolState();
-  const selectedTail = wb.selectedTail || airplaneList[0];
-  const airplaneInfo = getAirplaneInfo(selectedTail);
-  const aircraftType = airplaneInfo.type;
-  const inputs = wb.inputs ?? {
-    left_seat: "",
-    right_seat: "",
-    rear_seat: "",
-    baggage_1: "",
-    baggage_2: "",
-    fuel: "",
+function toNumber(value) {
+  const parsed = Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getCgBoundsAtWeight(weight, envelope) {
+  if (!Array.isArray(envelope) || envelope.length < 3) {
+    return null;
+  }
+
+  const intersections = [];
+
+  for (let index = 0; index < envelope.length; index += 1) {
+    const current = envelope[index];
+    const next = envelope[(index + 1) % envelope.length];
+
+    const withinSegment =
+      weight >= Math.min(current.weight, next.weight) &&
+      weight <= Math.max(current.weight, next.weight);
+
+    if (!withinSegment) {
+      continue;
+    }
+
+    if (current.weight === next.weight) {
+      intersections.push(current.cg, next.cg);
+      continue;
+    }
+
+    const ratio = (weight - current.weight) / (next.weight - current.weight);
+    const cg = current.cg + ratio * (next.cg - current.cg);
+    intersections.push(cg);
+  }
+
+  const valid = intersections.filter(Number.isFinite).sort((a, b) => a - b);
+  if (valid.length < 2) {
+    return null;
+  }
+
+  return {
+    min: valid[0],
+    max: valid[valid.length - 1],
   };
-  const result = wb.result ?? null;
+}
 
-  const handleCalculate = () => {
-    const numericInputs = Object.fromEntries(
-      Object.entries(inputs).map(([key, value]) => [key, Number(value) || 0])
+function isInsidePolygon(point, polygon) {
+  if (!Array.isArray(polygon) || polygon.length < 3) {
+    return false;
+  }
+
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+
+    const intersects =
+      yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+function resolveAircraftProfile(selectedAircraft) {
+  if (!selectedAircraft?.model) {
+    return null;
+  }
+
+  const stations = parseAircraftStations(selectedAircraft.model.stations);
+  const envelopeSet = parseAircraftEnvelopeSet(selectedAircraft.model.envelope);
+
+  if (stations.length < 1) {
+    return null;
+  }
+
+  return {
+    id: selectedAircraft.id,
+    name: selectedAircraft.name,
+    category: selectedAircraft.model.category ?? selectedAircraft.category ?? null,
+    emptyWeight: toNumber(selectedAircraft.empty_weight),
+    emptyArm: toNumber(selectedAircraft.empty_arm),
+    emptyLatArm: toNumber(selectedAircraft.empty_lat_arm),
+    maxWeight: toNumber(selectedAircraft.max_weight),
+    stations,
+    envelopeSet,
+  };
+}
+
+function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
+  if (!profile) {
+    return null;
+  }
+
+  const isHelicopter = profile.category === "helicopter";
+  const activeEnvelope =
+    envelopeMode === "utility" && profile.envelopeSet.utility.length > 0
+      ? profile.envelopeSet.utility
+      : profile.envelopeSet.normal;
+  const topView = profile.envelopeSet.topView;
+  const sideView = profile.envelopeSet.sideView;
+
+  const stationBreakdown = profile.stations.map((station) => {
+    const input = toNumber(inputs[station.id]);
+    const weight =
+      typeof station.fixedWeight === "number"
+        ? station.fixedWeight
+        : typeof station.weightPerGallon === "number" && station.weightPerGallon > 0
+          ? input * station.weightPerGallon
+          : input;
+
+    return {
+      ...station,
+      input,
+      weight,
+      longMoment: weight * station.arm,
+      latMoment:
+        typeof station.latArm === "number" && Number.isFinite(station.latArm)
+          ? weight * station.latArm
+          : null,
+      isFuelStation:
+        typeof station.weightPerGallon === "number" && station.weightPerGallon > 0,
+      isFixedWeight: typeof station.fixedWeight === "number",
+    };
+  });
+
+  const totalWeight =
+    profile.emptyWeight + stationBreakdown.reduce((sum, station) => sum + station.weight, 0);
+  const totalLongMoment =
+    profile.emptyWeight * profile.emptyArm +
+    stationBreakdown.reduce((sum, station) => sum + station.longMoment, 0);
+  const totalLatMoment =
+    (typeof profile.emptyLatArm === "number" ? profile.emptyWeight * profile.emptyLatArm : 0) +
+    stationBreakdown.reduce(
+      (sum, station) => sum + (typeof station.latMoment === "number" ? station.latMoment : 0),
+      0
     );
+  const cg = totalWeight > 0 ? totalLongMoment / totalWeight : 0;
+  const cgLat =
+    isHelicopter && totalWeight > 0 ? totalLatMoment / totalWeight : null;
+  const zeroFuelBreakdown = stationBreakdown.filter((station) => !station.isFuelStation);
+  const zeroFuelWeight =
+    profile.emptyWeight + zeroFuelBreakdown.reduce((sum, station) => sum + station.weight, 0);
+  const zeroFuelLongMoment =
+    profile.emptyWeight * profile.emptyArm +
+    zeroFuelBreakdown.reduce((sum, station) => sum + station.longMoment, 0);
+  const zeroFuelCg = zeroFuelWeight > 0 ? zeroFuelLongMoment / zeroFuelWeight : null;
+  const zeroFuelLat =
+    isHelicopter && zeroFuelWeight > 0
+      ? ((typeof profile.emptyLatArm === "number"
+          ? profile.emptyWeight * profile.emptyLatArm
+          : 0) +
+          zeroFuelBreakdown.reduce(
+            (sum, station) => sum + (typeof station.latMoment === "number" ? station.latMoment : 0),
+            0
+          )) / zeroFuelWeight
+      : null;
 
-    const loaded = loadAircraft(selectedTail);
-    const computed = computeWeightAndBalance(loaded, numericInputs);
-    const zeroFuel = computeZeroFuel(loaded, numericInputs);
-    setWb((current) => ({
+  const bounds = getCgBoundsAtWeight(totalWeight, activeEnvelope);
+  const maxEnvelopeWeight = activeEnvelope.reduce(
+    (max, point) => Math.max(max, point.weight),
+    0
+  );
+
+  let status = "within";
+  let insideTop = null;
+  let insideSide = null;
+
+  if (isHelicopter) {
+    insideTop =
+      topView.length >= 3 && Number.isFinite(cgLat)
+        ? isInsidePolygon({ x: cg, y: cgLat }, topView)
+        : null;
+    insideSide =
+      sideView.length >= 3
+        ? isInsidePolygon({ x: cg, y: totalWeight }, sideView)
+        : null;
+
+    status =
+      (insideTop === null || insideTop) && (insideSide === null || insideSide)
+        ? "within"
+        : "outside";
+  } else if (maxEnvelopeWeight > 0 && totalWeight > maxEnvelopeWeight) {
+    status = "overweight";
+  } else if (bounds && cg < bounds.min) {
+    status = "forward";
+  } else if (bounds && cg > bounds.max) {
+    status = "aft";
+  }
+
+  return {
+    aircraft_name: profile.name,
+    category: profile.category,
+    total_weight: totalWeight,
+    total_moment: totalLongMoment,
+    cg,
+    cg_long: cg,
+    cg_lat: cgLat,
+    zero_fuel_weight: zeroFuelWeight,
+    zero_fuel_cg: zeroFuelCg,
+    zero_fuel_cg_lat: zeroFuelLat,
+    fuel_weight: stationBreakdown
+      .filter((station) => station.isFuelStation)
+      .reduce((sum, station) => sum + station.weight, 0),
+    status,
+    normal_envelope: profile.envelopeSet.normal,
+    utility_envelope: profile.envelopeSet.utility,
+    top_view_envelope: topView,
+    side_view_envelope: sideView,
+    inside_top_view: insideTop,
+    inside_side_view: insideSide,
+    envelope: activeEnvelope,
+    envelopeMode,
+    hasUtilityEnvelope: profile.envelopeSet.utility.length > 0,
+    stationBreakdown,
+  };
+}
+
+function getStatusLabel(status) {
+  switch (status) {
+    case "within":
+      return "Within envelope";
+    case "forward":
+      return "Forward of envelope";
+    case "aft":
+      return "Aft of envelope";
+    case "overweight":
+      return "Overweight";
+    case "outside":
+      return "Outside envelope";
+    default:
+      return "No result";
+  }
+}
+
+function isPilotStation(station) {
+  return /pilot|left|front/i.test(station.id) || /pilot|left|front/i.test(station.name);
+}
+
+function isRightSeatStation(station) {
+  return /passenger|right|copilot/i.test(station.id) || /passenger|right|copilot/i.test(station.name);
+}
+
+function resolveCrewStations(stations) {
+  const seatStations = stations.filter(
+    (station) =>
+      !(typeof station.weightPerGallon === "number" && station.weightPerGallon > 0) &&
+      !/bag|baggage|cargo/i.test(station.id) &&
+      !/bag|baggage|cargo/i.test(station.name)
+  );
+
+  const leftStation = seatStations.find(isPilotStation) ?? seatStations[0] ?? null;
+  const rightStation =
+    seatStations.find(
+      (station) => station !== leftStation && isRightSeatStation(station)
+    ) ??
+    seatStations.find((station) => station !== leftStation) ??
+    null;
+
+  return { leftStation, rightStation };
+}
+
+function getAircraftType(profile) {
+  return profile?.category === "helicopter" ? "helicopter" : "airplane";
+}
+
+function shouldRenderStation(station, aircraftType) {
+  if (
+    aircraftType === "helicopter" &&
+    (/door/i.test(station.id) || /door/i.test(station.name))
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+export default function WeightBalanceCalculator({
+  stateKey = "wb",
+  embedded = false,
+}) {
+  const {
+    wb,
+    briefWb,
+    setWb,
+    setBriefWb,
+    selectedAircraft,
+    briefSelectedAircraft,
+    setSelectedAircraft,
+    setBriefSelectedAircraft,
+    brief,
+  } = useToolState();
+  const activeWb = stateKey === "briefWb" ? briefWb : wb;
+  const setActiveWb = stateKey === "briefWb" ? setBriefWb : setWb;
+  const activeSelectedAircraft =
+    stateKey === "briefWb" ? briefSelectedAircraft : selectedAircraft;
+  const setActiveSelectedAircraft =
+    stateKey === "briefWb" ? setBriefSelectedAircraft : setSelectedAircraft;
+  const [aircraftOptions, setAircraftOptions] = useState([]);
+  const [savedStudents, setSavedStudents] = useState([]);
+  const [savedCfis, setSavedCfis] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [envelopeMode, setEnvelopeMode] = useState("normal");
+
+  const inputs = activeWb.inputs ?? DEFAULT_INPUTS;
+  const selectedAircraftId = activeWb.selectedTail || activeSelectedAircraft?.id || "";
+  const selectedStudentId = brief?.selectedStudentId ?? "";
+  const selectedInstructorId = brief?.selectedInstructorId ?? "";
+  const briefAircraftId = brief?.aircraftId ?? "";
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+
+    async function loadData() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const [aircraftList, students, cfis] = await Promise.all([
+          fetchAircraft(),
+          embedded && session?.user?.id
+            ? fetchSavedPeople(session.user.id, "student")
+            : Promise.resolve([]),
+          embedded && session?.user?.id
+            ? fetchSavedPeople(session.user.id, "cfi")
+            : Promise.resolve([]),
+        ]);
+
+        setAircraftOptions(aircraftList);
+        setSavedStudents(students);
+        setSavedCfis(cfis);
+
+        if (aircraftList.length > 0) {
+          const persistedAircraft =
+            aircraftList.find((aircraft) => aircraft.id === selectedAircraftId) ??
+            (embedded && briefAircraftId
+              ? aircraftList.find((aircraft) => {
+                  const aircraftName = String(aircraft.name ?? "").trim().toLowerCase();
+                  const nextBriefAircraftId = String(briefAircraftId).trim().toLowerCase();
+                  return (
+                    aircraftName === nextBriefAircraftId ||
+                    String(aircraft.id ?? "").trim().toLowerCase() === nextBriefAircraftId
+                  );
+                })
+              : null) ??
+            aircraftList[0];
+
+          setActiveSelectedAircraft(persistedAircraft);
+          setActiveWb((current) => ({
+            ...current,
+            selectedTail: persistedAircraft.id,
+          }));
+        }
+      } catch {
+        setError("Unable to load aircraft data right now.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadData();
+  }, [briefAircraftId, embedded, selectedAircraftId, setActiveSelectedAircraft, setActiveWb]);
+
+  const aircraftProfile = useMemo(
+    () => resolveAircraftProfile(activeSelectedAircraft),
+    [activeSelectedAircraft]
+  );
+  const aircraftType = getAircraftType(aircraftProfile);
+
+  useEffect(() => {
+    if (!aircraftProfile) {
+      setActiveWb((current) => ({
+        ...current,
+        result: null,
+        status: "",
+      }));
+      return;
+    }
+
+    const result = calculateWeightBalance(aircraftProfile, inputs, envelopeMode);
+    setActiveWb((current) => ({
       ...current,
-      result: { ...computed, zeroFuel, aircraft: loaded },
+      result,
+      status: result?.status ?? "",
+    }));
+  }, [aircraftProfile, envelopeMode, inputs, setActiveWb]);
+
+  const result = activeWb.result;
+  const renderedStations = useMemo(
+    () => (aircraftProfile?.stations ?? []).filter((station) => shouldRenderStation(station, aircraftType)),
+    [aircraftProfile?.stations, aircraftType]
+  );
+  const selectedStudent = savedStudents.find((person) => person.id === selectedStudentId) ?? null;
+  const selectedInstructor =
+    savedCfis.find((person) => person.id === selectedInstructorId) ?? null;
+
+  const handleInputChange = (key, value) => {
+    setActiveWb((current) => ({
+      ...current,
+      inputs: {
+        ...(current.inputs ?? DEFAULT_INPUTS),
+        [key]: value,
+      },
     }));
   };
 
-  const handleChange = (key, value) => {
-    setWb((current) => ({
+  const handleAircraftChange = (event) => {
+    const nextId = event.target.value;
+    const nextAircraft = aircraftOptions.find((aircraft) => aircraft.id === nextId) ?? null;
+
+    setActiveSelectedAircraft(nextAircraft);
+    setActiveWb((current) => ({
       ...current,
-      inputs: { ...(current.inputs ?? {}), [key]: value },
+      selectedTail: nextId,
     }));
   };
+
+  useEffect(() => {
+    setEnvelopeMode("normal");
+  }, [selectedAircraftId]);
+
+  useEffect(() => {
+    if (!embedded || !aircraftProfile || (!selectedStudent && !selectedInstructor)) {
+      return;
+    }
+
+    const { leftStation, rightStation } = resolveCrewStations(renderedStations);
+    const isHelicopter = /helicopter/i.test(aircraftProfile.category ?? "");
+    const leftWeight = isHelicopter
+      ? selectedInstructor?.weight_lbs ?? null
+      : selectedStudent?.weight_lbs ?? null;
+    const rightWeight = isHelicopter
+      ? selectedStudent?.weight_lbs ?? null
+      : selectedInstructor?.weight_lbs ?? null;
+
+    setActiveWb((current) => {
+      const currentInputs = current.inputs ?? DEFAULT_INPUTS;
+      return {
+        ...current,
+        inputs: {
+          ...currentInputs,
+          ...(leftStation
+            ? {
+                [leftStation.id]:
+                  typeof leftWeight === "number" ? String(leftWeight) : currentInputs[leftStation.id] ?? "",
+              }
+            : {}),
+          ...(rightStation
+            ? {
+                [rightStation.id]:
+                  typeof rightWeight === "number" ? String(rightWeight) : currentInputs[rightStation.id] ?? "",
+              }
+            : {}),
+        },
+      };
+    });
+  }, [
+    aircraftProfile,
+    embedded,
+    renderedStations,
+    selectedInstructor,
+    selectedStudent,
+    setActiveWb,
+  ]);
 
   return (
-    <div className="wb-shell">
+    <div className={`wb-shell ${embedded ? "wb-shell-embedded" : ""}`}>
       <div className="wb-grid">
-        <section className="wb-panel">
+        <section className={`wb-panel ${embedded ? "wb-panel-embedded" : ""}`}>
           <div className="wb-section-head">
-            <h3>Aircraft and loading inputs</h3>
-            <p>Start with the aircraft, then enter weights for each station.</p>
+            <h3>Aircraft and loading</h3>
+            <p>
+              {aircraftType === "helicopter"
+                ? "Seat, fuel, and baggage inputs follow the selected helicopter model."
+                : "Seat, fuel, and baggage inputs follow the selected airplane model."}
+            </p>
           </div>
+
           <div className="wb-top-fields">
             <label className="wb-field">
               <span>Aircraft</span>
-              <select
-                value={selectedTail}
-                onChange={(event) =>
-                  setWb((current) => ({
-                    ...current,
-                    selectedTail: event.target.value,
-                  }))
-                }
-              >
-                {airplaneList.map((tail) => (
-                  <option key={tail} value={tail}>
-                    {tail}
+              <select value={selectedAircraftId} onChange={handleAircraftChange} disabled={loading}>
+                <option value="">{loading ? "Loading aircraft..." : "Select an aircraft"}</option>
+                {aircraftOptions.map((aircraft) => (
+                  <option key={aircraft.id} value={aircraft.id}>
+                    {aircraft.name}
                   </option>
                 ))}
               </select>
             </label>
-
-            <label className="wb-field">
-              <span>Model</span>
-              <input value={aircraftType} readOnly />
-            </label>
           </div>
 
+          {error ? <p className="copy-muted mt-2">{error}</p> : null}
+
+          {aircraftType === "airplane" && result?.hasUtilityEnvelope ? (
+            <div className="wb-top-fields">
+              <label className="wb-field">
+                <span>Envelope</span>
+                <select
+                  value={envelopeMode}
+                  onChange={(event) => setEnvelopeMode(event.target.value)}
+                >
+                  <option value="normal">Normal</option>
+                  <option value="utility">Utility</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
+
           <div className="wb-input-grid">
-            {fields.map((field) => (
-              <label key={field.key} className="wb-field">
-                <span>{field.label}</span>
-                <small>{field.hint}</small>
+            {renderedStations.map((station) => (
+              <label key={station.id} className="wb-field">
+                <span>{station.name}</span>
+                <small>
+                  {typeof station.fixedWeight === "number"
+                    ? "Fixed weight"
+                    : typeof station.weightPerGallon === "number" && station.weightPerGallon > 0
+                    ? `Gallons (${station.weightPerGallon} lbs/gal)`
+                    : "lbs"}
+                </small>
                 <input
                   className="wb-number-input"
                   type="number"
-                  value={inputs[field.key]}
-                  onChange={(event) => handleChange(field.key, event.target.value)}
+                  value={
+                    typeof station.fixedWeight === "number"
+                      ? station.fixedWeight
+                      : inputs[station.id] ?? ""
+                  }
+                  onChange={(event) => handleInputChange(station.id, event.target.value)}
+                  readOnly={typeof station.fixedWeight === "number"}
                 />
               </label>
             ))}
           </div>
         </section>
 
-        <section className="wb-panel wb-results">
+        <section className={`wb-panel wb-results ${embedded ? "wb-panel-embedded" : ""}`}>
           <div className="wb-result-head">
             <div>
               <h3>Current result</h3>
               <p className="copy-muted mt-2">
-                Review total weight, CG, and the plotted position before dispatch.
+                CG and total weight update as soon as aircraft or loading changes.
               </p>
             </div>
             <div className="wb-result-actions">
-              <p className={result?.inLimits ? "wb-ok" : "wb-alert"}>
-                {result
-                  ? result.inLimits
-                    ? "Within CG envelope"
-                    : "Out of envelope"
-                  : "Run a calculation to see the result"}
+              <p
+                className={
+                  result?.status === "within" ? "wb-ok" : result ? "wb-alert" : "copy-muted"
+                }
+              >
+                {result ? getStatusLabel(result.status) : "Select aircraft and loading to begin"}
               </p>
-              <button className="primary-button" onClick={handleCalculate} type="button">
-                Calculate
-              </button>
             </div>
           </div>
 
           <div className="wb-stat-grid">
             <div className="wb-stat-card">
               <span>Total weight</span>
-              <strong>{result ? `${result.totalWeight.toFixed(1)} lbs` : "--"}</strong>
-            </div>
-            <div className="wb-stat-card">
-              <span>Center of gravity</span>
-              <strong>{result ? `${result.cg.toFixed(2)} in` : "--"}</strong>
-            </div>
-            <div className="wb-stat-card">
-              <span>Zero-fuel weight</span>
               <strong>
-                {result?.zeroFuel ? `${result.zeroFuel.totalWeight.toFixed(1)} lbs` : "--"}
+                {typeof result?.total_weight === "number"
+                  ? `${result.total_weight.toFixed(1)} lbs`
+                  : "--"}
               </strong>
             </div>
             <div className="wb-stat-card">
-              <span>Zero-fuel CG</span>
+              <span>{aircraftType === "helicopter" ? "CG Long" : "Center of gravity"}</span>
               <strong>
-                {result?.zeroFuel ? `${result.zeroFuel.cg.toFixed(2)} in` : "--"}
+                {typeof result?.cg_long === "number" ? `${result.cg_long.toFixed(2)} in` : "--"}
               </strong>
+            </div>
+            {aircraftType === "helicopter" ? (
+              <div className="wb-stat-card">
+                <span>CG Lat</span>
+                <strong>
+                  {typeof result?.cg_lat === "number" ? `${result.cg_lat.toFixed(2)} in` : "--"}
+                </strong>
+              </div>
+            ) : (
+              <div className="wb-stat-card">
+                <span>Fuel weight</span>
+                <strong>
+                  {typeof result?.fuel_weight === "number"
+                    ? `${result.fuel_weight.toFixed(1)} lbs`
+                    : "--"}
+                </strong>
+              </div>
+            )}
+            <div className="wb-stat-card">
+              <span>Status</span>
+              <strong>{result ? getStatusLabel(result.status) : "--"}</strong>
             </div>
           </div>
 
-          {result ? (
+          {aircraftType === "airplane" &&
+          Array.isArray(result?.normal_envelope) &&
+          result.normal_envelope.length > 0 ? (
             <div className="wb-chart-wrap">
               <CGEnvelopeChart
-                normalEnvelope={result.aircraft.envelopeNormal}
-                utilityEnvelope={result.aircraft.envelopeUtility}
-                currentCG={result.cg}
-                currentWeight={result.totalWeight}
-                zeroFuelCG={result.zeroFuel?.cg}
-                zeroFuelWeight={result.zeroFuel?.totalWeight}
+                title="CG Envelope"
+                xLabel="CG Location (in)"
+                yLabel="Weight (lbs)"
+                primaryPolygon={result.normal_envelope}
+                secondaryPolygon={result.utility_envelope}
+                currentPoint={{ x: result.cg_long, y: result.total_weight }}
+                referencePoint={{ x: result.zero_fuel_cg, y: result.zero_fuel_weight }}
               />
+              <p className="wb-chart-note">Black dot is current CG. Red dot is zero-fuel CG.</p>
+            </div>
+          ) : null}
+
+          {aircraftType === "helicopter" ? (
+            <div className="wb-chart-wrap">
+              <CGEnvelopeChart
+                title="Top View Envelope"
+                xLabel="CG Long"
+                yLabel="CG Lat"
+                primaryPolygon={result?.top_view_envelope}
+                currentPoint={{ x: result?.cg_long, y: result?.cg_lat }}
+                referencePoint={{ x: result?.zero_fuel_cg, y: result?.zero_fuel_cg_lat }}
+              />
+              <CGEnvelopeChart
+                title="Side View Envelope"
+                xLabel="CG Long"
+                yLabel="Weight"
+                primaryPolygon={result?.side_view_envelope}
+                currentPoint={{ x: result?.cg_long, y: result?.total_weight }}
+                referencePoint={{ x: result?.zero_fuel_cg, y: result?.zero_fuel_weight }}
+              />
+              <p className="wb-chart-note">Black dot is current CG. Red dot is zero-fuel CG.</p>
             </div>
           ) : null}
         </section>

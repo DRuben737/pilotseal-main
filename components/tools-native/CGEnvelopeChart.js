@@ -8,157 +8,151 @@ import {
   YAxis,
   CartesianGrid,
   Scatter,
-  Tooltip
+  Tooltip,
 } from "recharts";
 
+function toPlotPoints(points = []) {
+  return points
+    .map((point) => ({
+      x: point.x ?? point.cg ?? point.long,
+      y: point.y ?? point.weight ?? point.lat,
+    }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+}
+
 export default function CGEnvelopeChart({
-  normalEnvelope,
-  utilityEnvelope,
-  currentCG,
-  currentWeight,
-  zeroFuelCG,
-  zeroFuelWeight
+  title = "Envelope",
+  xLabel = "CG Location",
+  yLabel = "Weight",
+  primaryPolygon,
+  secondaryPolygon,
+  currentPoint,
+  referencePoint,
 }) {
-  if (!normalEnvelope || normalEnvelope.length === 0) return null;
+  const primaryPoly = toPlotPoints(primaryPolygon);
+  const secondaryPoly = toPlotPoints(secondaryPolygon);
+  const hasPrimary = primaryPoly.length > 0;
+  const hasSecondary = secondaryPoly.length > 0;
 
-  const normalPoly = normalEnvelope.map(p => ({ x: p.cg, y: p.weight }));
-  const utilityPoly = utilityEnvelope
-    ? utilityEnvelope.map(p => ({ x: p.cg, y: p.weight }))
-    : null;
+  if (!hasPrimary && !hasSecondary) return null;
 
-  const normalLine = [...normalPoly, normalPoly[0]];
-  const utilityLine = utilityPoly ? [...utilityPoly, utilityPoly[0]] : null;
+  const primaryLine = hasPrimary ? [...primaryPoly, primaryPoly[0]] : null;
+  const secondaryLine = hasSecondary ? [...secondaryPoly, secondaryPoly[0]] : null;
 
-  const zeroFuelPoint = {
-    x: zeroFuelCG,
-    y: zeroFuelWeight
+  const current = {
+    x: currentPoint?.x,
+    y: currentPoint?.y,
   };
 
-  const currentPoint = {
-    x: currentCG,
-    y: currentWeight
+  const reference = {
+    x: referencePoint?.x,
+    y: referencePoint?.y,
   };
 
-  const cgLinePoints = [zeroFuelPoint, currentPoint].filter(
-    p => Number.isFinite(p.x) && Number.isFinite(p.y)
+  const tracePoints = [reference, current].filter(
+    (point) => Number.isFinite(point.x) && Number.isFinite(point.y)
   );
 
-  // Auto domain based on envelope + CG points
   const allPointsForDomain = [
-    ...normalPoly,
-    ...cgLinePoints
+    ...primaryPoly,
+    ...secondaryPoly,
+    ...tracePoints,
   ];
 
-  const xs = allPointsForDomain.map(p => p.x).filter(Number.isFinite);
-  const ys = allPointsForDomain.map(p => p.y).filter(Number.isFinite);
+  const xs = allPointsForDomain.map((point) => point.x).filter(Number.isFinite);
+  const ys = allPointsForDomain.map((point) => point.y).filter(Number.isFinite);
 
-  const minX = xs.length ? Math.min(...xs) : 34;
-  const maxX = xs.length ? Math.max(...xs) : 48;
-  const minY = ys.length ? Math.min(...ys) : 1400;
-  const maxY = ys.length ? Math.max(...ys) : 2400;
+  const minX = xs.length ? Math.min(...xs) : 0;
+  const maxX = xs.length ? Math.max(...xs) : 10;
+  const minY = ys.length ? Math.min(...ys) : 0;
+  const maxY = ys.length ? Math.max(...ys) : 10;
 
-  const xDomain = [Math.floor(minX - 0.5), Math.ceil(maxX + 0.5)];
-  const yDomain = [Math.floor(minY - 100), Math.ceil(maxY + 100)];
-
-  // 动态生成横轴（CG）和纵轴（Weight）的刻度
-  const xTicks = [];
-  const xStart = Math.ceil(xDomain[0]);
-  const xEnd = Math.floor(xDomain[1]);
-  for (let x = xStart; x <= xEnd; x += 1) {
-    xTicks.push(x);
-  }
-
-  const yTicks = [];
-  const yStart = Math.ceil(yDomain[0] / 100) * 100;
-  const yEnd = Math.floor(yDomain[1] / 100) * 100;
-  for (let y = yStart; y <= yEnd; y += 100) {
-    yTicks.push(y);
-  }
+  const xPadding = Math.max((maxX - minX) * 0.08, 0.5);
+  const yPadding = Math.max((maxY - minY) * 0.08, 0.5);
 
   return (
-    <div style={{ width: "100%", height: 350, marginTop: 20 }}>
-      <h3>CG Envelope</h3>
+    <div className="cg-envelope-chart">
+      <h3>{title}</h3>
 
       <ResponsiveContainer>
-        <ComposedChart>
+        <ComposedChart margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" />
 
           <XAxis
             dataKey="x"
             type="number"
-            name="CG Location (in)"
-            label={{ value: "CG Location (in)", position: "bottom" }}
+            name={xLabel}
             xAxisId="x"
-            domain={xDomain}
-            ticks={xTicks}
+            domain={[Math.floor(minX - xPadding), Math.ceil(maxX + xPadding)]}
+            tick={{ fontSize: 11 }}
+            tickMargin={4}
+            height={28}
           />
 
           <YAxis
             dataKey="y"
             type="number"
-            name="Weight (lbs)"
-            label={{ value: "Weight (lbs)", angle: -90, position: "insideLeft" }}
+            name={yLabel}
             yAxisId="y"
-            domain={yDomain}
-            ticks={yTicks}
+            domain={[Math.floor(minY - yPadding), Math.ceil(maxY + yPadding)]}
+            tick={{ fontSize: 11 }}
+            tickMargin={4}
+            width={42}
           />
 
           <Tooltip cursor={{ strokeDasharray: "3 3" }} />
 
-          {/* Normal envelope outline */}
-          <Scatter
-            data={normalLine}
-            line={{ stroke: "#000", strokeWidth: 2 }}
-            shape={() => null}
-            xAxisId="x"
-            yAxisId="y"
-          />
-
-          {/* Utility envelope outline */}
-          {utilityLine && (
+          {primaryLine ? (
             <Scatter
-              data={utilityLine}
+              data={primaryLine}
+              line={{ stroke: "#000", strokeWidth: 2 }}
+              shape={() => null}
+              xAxisId="x"
+              yAxisId="y"
+            />
+          ) : null}
+
+          {secondaryLine ? (
+            <Scatter
+              data={secondaryLine}
               line={{ stroke: "#f4b400", strokeWidth: 2, strokeDasharray: "5 5" }}
               shape={() => null}
               xAxisId="x"
               yAxisId="y"
             />
-          )}
+          ) : null}
 
-          {/* CG 趋势线（Zero Fuel → With Fuel）*/}
-          {cgLinePoints.length === 2 && (
+          {tracePoints.length === 2 ? (
             <Scatter
-              data={cgLinePoints}
+              data={tracePoints}
               line={{ stroke: "#555", strokeWidth: 2 }}
               shape={() => null}
               xAxisId="x"
               yAxisId="y"
             />
-          )}
+          ) : null}
 
-          {/* Zero fuel point - red */}
-          {Number.isFinite(zeroFuelPoint.x) && Number.isFinite(zeroFuelPoint.y) && (
+          {Number.isFinite(reference.x) && Number.isFinite(reference.y) ? (
             <Scatter
-              data={[zeroFuelPoint]}
+              data={[reference]}
               shape="circle"
               fill="#e53935"
               r={6}
               xAxisId="x"
               yAxisId="y"
             />
-          )}
+          ) : null}
 
-          {/* With fuel point - black */}
-          {Number.isFinite(currentPoint.x) && Number.isFinite(currentPoint.y) && (
+          {Number.isFinite(current.x) && Number.isFinite(current.y) ? (
             <Scatter
-              data={[currentPoint]}
+              data={[current]}
               shape="circle"
               fill="#000000"
               r={6}
               xAxisId="x"
               yAxisId="y"
             />
-          )}
+          ) : null}
         </ComposedChart>
       </ResponsiveContainer>
     </div>

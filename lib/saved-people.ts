@@ -9,6 +9,7 @@ export type SavedPerson = {
   display_name: string;
   cert_number: string | null;
   cert_exp_date: string | null;
+  weight_lbs?: number | null;
   is_default: boolean;
   alert_sent: boolean;
   created_at: string;
@@ -16,7 +17,11 @@ export type SavedPerson = {
 
 export type CfiExpirationStatus = "valid" | "expiring-soon" | "expired" | "unknown";
 
-const SAVED_PERSON_SELECT =
+const SAVED_PERSON_SELECTS = [
+  "id, user_id, role, display_name, cert_number, cert_exp_date, weight_Ibs, is_default, alert_sent, created_at",
+  "id, user_id, role, display_name, cert_number, cert_exp_date, weight_lbs, is_default, alert_sent, created_at",
+];
+const SAVED_PERSON_SELECT_LEGACY =
   "id, user_id, role, display_name, cert_number, cert_exp_date, is_default, alert_sent, created_at";
 
 function normalizeText(value?: string) {
@@ -143,43 +148,116 @@ export function getExpirationStatus(value: string | null): CfiExpirationStatus {
 
 export const getCfiExpirationStatus = getExpirationStatus;
 
-export async function fetchSavedPeople(userId: string, role?: SavedPersonRole) {
+function withWeightFallback(data: Record<string, unknown>[] | null) {
+  return (data ?? []).map((person) => ({
+    ...person,
+    weight_lbs: (() => {
+      const nextValue =
+        person.weight_lbs ??
+        person.weight_Ibs ??
+        null;
+
+      if (typeof nextValue === "number") {
+        return nextValue;
+      }
+
+      if (typeof nextValue === "string") {
+        const parsed = Number.parseFloat(nextValue);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+
+      return null;
+    })(),
+  })) as SavedPerson[];
+}
+
+async function querySavedPeopleWithWeight(
+  userId: string,
+  role?: SavedPersonRole
+) {
   const supabase = getSupabaseClient();
 
-  let query = supabase
+  for (const select of SAVED_PERSON_SELECTS) {
+    let query = supabase
+      .from("saved_people")
+      .select(select)
+      .eq("user_id", userId)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (role) {
+      query = query.eq("role", role);
+    }
+
+    const { data, error } = await query;
+    if (!error) {
+      return withWeightFallback((data as unknown) as Record<string, unknown>[]);
+    }
+  }
+
+  return null;
+}
+
+export async function fetchSavedPeople(userId: string, role?: SavedPersonRole) {
+  const weightedData = await querySavedPeopleWithWeight(userId, role);
+  if (weightedData) {
+    return weightedData;
+  }
+
+  const supabase = getSupabaseClient();
+  let legacyQuery = supabase
     .from("saved_people")
-    .select(SAVED_PERSON_SELECT)
+    .select(SAVED_PERSON_SELECT_LEGACY)
     .eq("user_id", userId)
     .order("is_default", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (role) {
-    query = query.eq("role", role);
+    legacyQuery = legacyQuery.eq("role", role);
   }
 
-  const { data, error } = await query;
-  if (error) {
-    throw error;
+  const { data: legacyData, error: legacyError } = await legacyQuery;
+  if (legacyError) {
+    throw legacyError;
   }
 
-  return (data ?? []) as SavedPerson[];
+  return withWeightFallback((legacyData as unknown) as Record<string, unknown>[]);
 }
 
 export async function fetchDefaultCfi(userId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+
+  for (const select of SAVED_PERSON_SELECTS) {
+    const { data, error } = await supabase
+      .from("saved_people")
+      .select(select)
+      .eq("user_id", userId)
+      .eq("role", "cfi")
+      .eq("is_default", true)
+      .maybeSingle();
+
+    if (!error) {
+      return (withWeightFallback(
+        data ? [((data as unknown) as Record<string, unknown>)] : []
+      )[0] ?? null) as SavedPerson | null;
+    }
+  }
+
+  const { data: legacyData, error: legacyError } = await supabase
     .from("saved_people")
-    .select(SAVED_PERSON_SELECT)
+    .select(SAVED_PERSON_SELECT_LEGACY)
     .eq("user_id", userId)
     .eq("role", "cfi")
     .eq("is_default", true)
     .maybeSingle();
 
-  if (error) {
-    throw error;
+  if (legacyError) {
+    throw legacyError;
   }
 
-  return (data ?? null) as SavedPerson | null;
+  return (withWeightFallback(
+    legacyData ? [((legacyData as unknown) as Record<string, unknown>)] : []
+  )[0] ?? null) as SavedPerson | null;
 }
 
 export async function createSavedPerson(input: {
@@ -189,12 +267,17 @@ export async function createSavedPerson(input: {
   cert_number?: string;
   cert_exp_date?: string;
   is_default?: boolean;
+  weight_lbs?: number | null;
 }) {
   const supabase = getSupabaseClient();
   const nextIsDefault = input.role === "cfi" ? Boolean(input.is_default) : false;
   const normalizedCertNumber = normalizeText(input.cert_number);
   const normalizedExpirationInput = normalizeText(input.cert_exp_date);
-  if (input.role === "cfi" && normalizedExpirationInput && !isOnOrAfterToday(normalizedExpirationInput)) {
+  if (
+    input.role === "cfi" &&
+    normalizedExpirationInput &&
+    !isOnOrAfterToday(normalizedExpirationInput)
+  ) {
     throw new Error("Certificate expiration date cannot be earlier than today.");
   }
 
@@ -207,25 +290,52 @@ export async function createSavedPerson(input: {
     await setDefaultCfi(input.userId, null);
   }
 
-  const { data, error } = await supabase
-    .from("saved_people")
-    .insert({
-      user_id: input.userId,
-      role: input.role,
-      display_name: input.display_name.trim(),
-      cert_number: normalizedCertNumber,
-      cert_exp_date: certExpDate,
-      is_default: nextIsDefault,
-      alert_sent: false,
-    })
-    .select(SAVED_PERSON_SELECT)
-    .single();
+  const attempts = [
+    {
+      payload: {
+        user_id: input.userId,
+        role: input.role,
+        display_name: input.display_name.trim(),
+        cert_number: normalizedCertNumber,
+        cert_exp_date: certExpDate,
+        weight_Ibs: typeof input.weight_lbs === "number" ? input.weight_lbs : null,
+        is_default: nextIsDefault,
+        alert_sent: false,
+      },
+      select: SAVED_PERSON_SELECTS[0],
+    },
+    {
+      payload: {
+        user_id: input.userId,
+        role: input.role,
+        display_name: input.display_name.trim(),
+        cert_number: normalizedCertNumber,
+        cert_exp_date: certExpDate,
+        weight_lbs: typeof input.weight_lbs === "number" ? input.weight_lbs : null,
+        is_default: nextIsDefault,
+        alert_sent: false,
+      },
+      select: SAVED_PERSON_SELECTS[1],
+    },
+  ];
 
-  if (error) {
-    throw error;
+  let lastError: unknown = null;
+
+  for (const attempt of attempts) {
+    const { data, error } = await supabase
+      .from("saved_people")
+      .insert(attempt.payload)
+      .select(attempt.select)
+      .single();
+
+    if (!error) {
+      return withWeightFallback([((data as unknown) as Record<string, unknown>)])[0];
+    }
+
+    lastError = error;
   }
 
-  return data as SavedPerson;
+  throw lastError;
 }
 
 export async function updateSavedPerson(
@@ -235,6 +345,7 @@ export async function updateSavedPerson(
     display_name: string;
     cert_number?: string;
     cert_exp_date?: string;
+    weight_lbs?: number | null;
     alert_sent?: boolean;
   }
 ) {
@@ -243,6 +354,8 @@ export async function updateSavedPerson(
     display_name: string;
     cert_number: string | null;
     cert_exp_date?: string | null;
+    weight_lbs?: number | null;
+    weight_Ibs?: number | null;
     alert_sent?: boolean;
   } = {
     display_name: updates.display_name.trim(),
@@ -267,19 +380,42 @@ export async function updateSavedPerson(
     payload.alert_sent = updates.alert_sent;
   }
 
-  const { data, error } = await supabase
-    .from("saved_people")
-    .update(payload)
-    .eq("id", id)
-    .eq("user_id", userId)
-    .select(SAVED_PERSON_SELECT)
-    .single();
-
-  if (error) {
-    throw error;
+  if ("weight_lbs" in updates) {
+    payload.weight_Ibs =
+      typeof updates.weight_lbs === "number" ? updates.weight_lbs : null;
   }
 
-  return data as SavedPerson;
+  const attempts = [
+    { payload, select: SAVED_PERSON_SELECTS[0] },
+    {
+      payload: {
+        ...payload,
+        weight_lbs: payload.weight_Ibs,
+        weight_Ibs: undefined,
+      },
+      select: SAVED_PERSON_SELECTS[1],
+    },
+  ];
+
+  let lastError: unknown = null;
+
+  for (const attempt of attempts) {
+    const { data, error } = await supabase
+      .from("saved_people")
+      .update(attempt.payload)
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select(attempt.select)
+      .single();
+
+    if (!error) {
+      return withWeightFallback([((data as unknown) as Record<string, unknown>)])[0];
+    }
+
+    lastError = error;
+  }
+
+  throw lastError;
 }
 
 export async function setDefaultCfi(userId: string, id: string | null) {

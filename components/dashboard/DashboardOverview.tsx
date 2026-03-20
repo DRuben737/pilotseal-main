@@ -79,21 +79,6 @@ export default function DashboardOverview() {
         const notifications =
           notificationsResult?.[0]?.status === "fulfilled" ? notificationsResult[0].value : [];
 
-        [
-          ...results.map((result, index) => ({
-            label: ["saved_cfis", "saved_students", "profile", "default_cfi"][index],
-            result,
-          })),
-          ...((notificationsResult ?? []).map((result) => ({
-            label: "notification_history",
-            result,
-          })) ?? []),
-        ].forEach(({ label, result }) => {
-          if (result.status === "rejected") {
-            console.error("Dashboard metric failed:", label, result.reason);
-          }
-        });
-
         if (!cancelled) {
           setMetrics({
             cfiCount: cfis.length,
@@ -109,8 +94,6 @@ export default function DashboardOverview() {
           setStatusNote("");
         }
       } catch (loadError) {
-        console.error(loadError);
-
         if (!cancelled) {
           setMetrics(defaultMetrics);
           setStatusNote("Dashboard data is temporarily unavailable.");

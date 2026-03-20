@@ -28,6 +28,8 @@ const INITIAL_FORM_DATA = {
   date: '',
 };
 
+const BASE_FIELD_KEYS = new Set(FIELD_CONFIG.map((field) => field.key));
+
 const templateEntries = Object.entries(templates);
 
 function sanitizeText(text) {
@@ -129,17 +131,71 @@ function getTemplateCategory(title) {
 }
 
 function buildPreviewText(body) {
-  return body.replace(/\s+/g, ' ').replace(/\{[^}]+\}/g, '_____').trim();
+  return body.replace(/\s+/g, ' ').replace(/\{[^}]+\}/g, '[field]').trim();
+}
+
+function getFieldHelperText(field) {
+  return field.placeholder || `Used to complete the ${field.label.toLowerCase()} portion of the selected endorsement.`;
+}
+
+function getFieldSelectPrompt(field) {
+  if (field.type === 'multi-select') {
+    return 'Select one or more';
+  }
+
+  return field.required ? 'Select' : 'Optional';
+}
+
+function hasFieldValue(value) {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  return String(value ?? '').trim().length > 0;
+}
+
+function joinWithAnd(values) {
+  if (values.length <= 1) {
+    return values[0] || '';
+  }
+
+  if (values.length === 2) {
+    return `${values[0]} and ${values[1]}`;
+  }
+
+  return `${values.slice(0, -1).join(', ')}, and ${values.at(-1)}`;
+}
+
+function formatTemplateFieldValue(key, value) {
+  if (key === 'cfiKnowledgeTests') {
+    const selected = Array.isArray(value) ? value.filter(Boolean) : [];
+    if (selected.length === 0) {
+      return '';
+    }
+
+    const joined = joinWithAnd(selected);
+    return selected.length === 1
+      ? `${joined} airman knowledge test`
+      : `${joined} airman knowledge tests`;
+  }
+
+  if (Array.isArray(value)) {
+    return joinWithAnd(value.filter(Boolean));
+  }
+
+  return BASE_FIELD_KEYS.has(key) ? value : formatDateForPdf(String(value ?? '').trim());
 }
 
 function EndorsementGenerator() {
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [errors, setErrors] = useState({});
   const [modalIsOpen, setModalIsOpen] = useState(false);
+  const [detailsModalIsOpen, setDetailsModalIsOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then preview to confirm and open the PDF packet.');
+  const [templateFieldData, setTemplateFieldData] = useState({});
   const [sessionIdentity, setSessionIdentity] = useState('');
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
@@ -295,11 +351,11 @@ function EndorsementGenerator() {
   }, []);
 
   const visibleTemplates = templateEntries
-    .map(([title, body]) => ({
+    .map(([title, template]) => ({
       title,
-      body,
+      template,
       category: getTemplateCategory(title),
-      preview: buildPreviewText(body),
+      preview: buildPreviewText(template.text),
       selected: selectedTemplates.includes(title),
     }))
     .filter((template) => {
@@ -324,8 +380,44 @@ function EndorsementGenerator() {
   const selectedTemplateDetails = selectedTemplates.map((title) => {
     return {
       title,
+      fields: templates[title]?.fields ?? [],
     };
   });
+
+  const selectedTemplateFields = selectedTemplates.reduce((accumulator, templateKey) => {
+    const template = templates[templateKey];
+    if (!template) {
+      return accumulator;
+    }
+
+    template.fields.forEach((field) => {
+      if (!accumulator.some((existingField) => existingField.key === field.key)) {
+        accumulator.push(field);
+      }
+    });
+
+    return accumulator;
+  }, []);
+
+  const completedTemplateFieldCount = selectedTemplateFields.filter((field) =>
+    hasFieldValue(templateFieldData[field.key])
+  ).length;
+
+  const getFieldsForTemplates = (templateKeys) =>
+    templateKeys.reduce((accumulator, templateKey) => {
+      const template = templates[templateKey];
+      if (!template) {
+        return accumulator;
+      }
+
+      template.fields.forEach((field) => {
+        if (!accumulator.some((existingField) => existingField.key === field.key)) {
+          accumulator.push(field);
+        }
+      });
+
+      return accumulator;
+    }, []);
 
   const clearSignature = () => {
     const canvas = canvasRef.current;
@@ -341,20 +433,57 @@ function EndorsementGenerator() {
 
   const openModal = () => setModalIsOpen(true);
   const closeModal = () => setModalIsOpen(false);
+  const openDetailsModal = () => setDetailsModalIsOpen(true);
+  const closeDetailsModal = () => setDetailsModalIsOpen(false);
   const handleChange = (field) => (event) => {
     const nextValue = formatInputValue(field, event.target.value);
     setFormData((prev) => ({ ...prev, [field]: nextValue }));
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
+  const handleDynamicFieldChange = (field) => (event) => {
+    const nextValue = field.type === 'multi-select'
+      ? Array.from(event.target.selectedOptions, (option) => option.value)
+      : event.target.value;
+
+    setTemplateFieldData((prev) => ({ ...prev, [field.key]: nextValue }));
+    setErrors((prev) => ({ ...prev, [field.key]: undefined }));
+  };
+
+  const handleMultiSelectToggle = (fieldKey, option) => {
+    setTemplateFieldData((prev) => {
+      const current = Array.isArray(prev[fieldKey]) ? prev[fieldKey] : [];
+      const nextValue = current.includes(option)
+        ? current.filter((item) => item !== option)
+        : [...current, option];
+
+      return { ...prev, [fieldKey]: nextValue };
+    });
+    setErrors((prev) => ({ ...prev, [fieldKey]: undefined }));
+  };
+
   const handleTemplateSelection = (templateKey) => {
-    setSelectedTemplates((prevSelected) =>
-      prevSelected.includes(templateKey)
-        ? prevSelected.filter((key) => key !== templateKey)
-        : [...prevSelected, templateKey]
-    );
+    const isAlreadySelected = selectedTemplates.includes(templateKey);
+    const nextSelected = isAlreadySelected
+      ? selectedTemplates.filter((key) => key !== templateKey)
+      : [...selectedTemplates, templateKey];
+
+    setSelectedTemplates(nextSelected);
 
     setErrors((prev) => ({ ...prev, selectedTemplates: undefined }));
+
+    if (!isAlreadySelected) {
+      const nextFields = getFieldsForTemplates(nextSelected);
+      const hasMissingRequiredFields = nextFields.some(
+        (field) => field.required && !hasFieldValue(templateFieldData[field.key])
+      );
+
+      if (hasMissingRequiredFields) {
+        setModalIsOpen(false);
+        setDetailsModalIsOpen(true);
+        setStatusMessage('Complete the template details required for the endorsement wording.');
+      }
+    }
   };
 
   const handleSelectCfi = (event) => {
@@ -388,10 +517,19 @@ function EndorsementGenerator() {
 
   const validateForm = () => {
     const nextErrors = {};
+    let hasTemplateFieldErrors = false;
 
     FIELD_CONFIG.forEach((field) => {
       if (field.required && !formData[field.key].trim()) {
         nextErrors[field.key] = 'Required';
+      }
+    });
+
+    selectedTemplateFields.forEach((field) => {
+      const value = templateFieldData[field.key];
+      if (field.required && !hasFieldValue(value)) {
+        nextErrors[field.key] = 'Required';
+        hasTemplateFieldErrors = true;
       }
     });
 
@@ -408,6 +546,9 @@ function EndorsementGenerator() {
     }
 
     setErrors(nextErrors);
+    if (hasTemplateFieldErrors) {
+      setDetailsModalIsOpen(true);
+    }
     return Object.keys(nextErrors).length === 0;
   };
 
@@ -419,12 +560,20 @@ function EndorsementGenerator() {
       instructorName: formData.instructorName.trim(),
       instructorCertNumber: formData.instructorCertNumber.trim(),
       instructorCertExpDate: formatDateForPdf(formData.instructorCertExpDate),
+      ...Object.fromEntries(
+        Object.entries(templateFieldData).map(([key, value]) => [
+          key,
+          formatTemplateFieldValue(key, value),
+        ])
+      ),
     };
+
+    const template = templates[templateKey];
 
     return sanitizeText(
       Object.entries(mappedData).reduce(
         (content, [token, value]) => content.replaceAll(`{${token}}`, value),
-        templates[templateKey]
+        template.text
       )
     );
   };
@@ -711,6 +860,36 @@ function EndorsementGenerator() {
               </div>
             </div>
 
+            {selectedTemplateFields.length > 0 ? (
+              <div className={styles.card}>
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <h2>Template details</h2>
+                    <p className={styles.sectionCopy}>
+                      Complete the extra endorsement-specific entries in a separate dialog before previewing the PDF.
+                    </p>
+                  </div>
+                  <button className={styles.ghostButton} onClick={openDetailsModal} type="button">
+                    {completedTemplateFieldCount === selectedTemplateFields.length ? 'Review details' : 'Add details'}
+                  </button>
+                </div>
+
+                <div className={styles.templateDetailsSummary}>
+                  <span>
+                    {completedTemplateFieldCount} of {selectedTemplateFields.length} required field
+                    {selectedTemplateFields.length === 1 ? '' : 's'} completed
+                  </span>
+                  {selectedTemplateDetails
+                    .filter((template) => template.fields.length > 0)
+                    .map((template) => (
+                      <span key={template.title} className={styles.templateDetailsChip}>
+                        {template.title}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className={styles.card}>
               <div className={styles.sectionHeader}>
                 <div>
@@ -801,6 +980,109 @@ function EndorsementGenerator() {
       </div>
 
       <Modal
+        isOpen={detailsModalIsOpen}
+        onRequestClose={closeDetailsModal}
+        contentLabel="Complete template details"
+        className="Modal"
+        overlayClassName="Overlay"
+      >
+          <div className="endorsementModal endorsementModalDetails">
+            <div className="endorsementModalHeader">
+              <div>
+                <h2>Template details</h2>
+                <p>These values complete the selected endorsement wording before PDF generation.</p>
+              </div>
+              <div className="endorsementModalActions">
+                <button
+                  type="button"
+                  className="modalGhostButton"
+                  onClick={() => {
+                    closeDetailsModal();
+                    openModal();
+                  }}
+                >
+                  Select next endorsement
+                </button>
+                <button type="button" className="modalPrimaryButton" onClick={closeDetailsModal}>
+                  Finish selection
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.templateDetailsModalBody}>
+              <div className={styles.templateDetailsModalMeta}>
+                <span>
+                  {completedTemplateFieldCount} of {selectedTemplateFields.length} required field
+                  {selectedTemplateFields.length === 1 ? '' : 's'} completed
+                </span>
+                <div className={styles.templateDetailsSummary}>
+                  {selectedTemplateDetails
+                    .filter((template) => template.fields.length > 0)
+                    .map((template) => (
+                      <span key={template.title} className={styles.templateDetailsChip}>
+                        {template.title}
+                      </span>
+                    ))}
+                </div>
+              </div>
+
+              <div className={styles.templateDetailsModalGrid}>
+                {selectedTemplateFields.map((field) => (
+                  <label key={field.key} className={`${styles.field} ${styles.templateDetailsField}`}>
+                    <span>
+                      {field.label}
+                      {field.required ? ' *' : ' (optional)'}
+                    </span>
+                    <p className={styles.templateDetailsFieldHint}>{getFieldHelperText(field)}</p>
+                    {field.type === 'select' ? (
+                    <select
+                      value={templateFieldData[field.key] || ''}
+                      onChange={handleDynamicFieldChange(field)}
+                      className={errors[field.key] ? styles.fieldError : ''}
+                      title={getFieldHelperText(field)}
+                    >
+                      <option value="">{getFieldSelectPrompt(field)}</option>
+                      {field.options?.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                      </select>
+                    ) : field.type === 'multi-select' ? (
+                      <div className={`${styles.templateOptionGrid} ${errors[field.key] ? styles.fieldError : ''}`}>
+                        {field.options?.map((option) => {
+                          const selected = (templateFieldData[field.key] || []).includes(option);
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              className={`${styles.templateOptionPill} ${selected ? styles.templateOptionPillActive : ''}`}
+                              onClick={() => handleMultiSelectToggle(field.key, option)}
+                              aria-pressed={selected}
+                            >
+                              {option}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <input
+                        type={field.type === 'date' ? 'date' : 'text'}
+                        value={templateFieldData[field.key] || ''}
+                        onChange={handleDynamicFieldChange(field)}
+                        className={errors[field.key] ? styles.fieldError : ''}
+                        placeholder={getFieldHelperText(field)}
+                      />
+                    )}
+                    {errors[field.key] ? <small>{errors[field.key]}</small> : null}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Modal>
+
+      <Modal
         isOpen={modalIsOpen}
         onRequestClose={closeModal}
         contentLabel="Select endorsement templates"
@@ -818,7 +1100,7 @@ function EndorsementGenerator() {
                 Clear all
               </button>
               <button type="button" className="modalPrimaryButton" onClick={closeModal}>
-                Done
+                Finish selection
               </button>
             </div>
           </div>

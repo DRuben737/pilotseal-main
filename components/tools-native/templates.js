@@ -1,7 +1,7 @@
 // src/templates.js
 
 
-const templates = {
+const rawTemplates = {
 "TSA U.S. Citizenship":`
 I certify that {studentName} {studentCertNumber} has presented me a ____________(U.S. birth certificate or U.S. passport) and ______________(the relevant control or sequential number on the document, if any) establishing that {studentName} is a U.S. citizen or national in accordance with 49 CFR § 1552.3(h).  
 Date: {date}           *
@@ -285,4 +285,394 @@ Date: {date}           *
 
 };
 
-  export default templates;
+const BASE_FIELD_KEYS = new Set([
+  "studentName",
+  "studentCertNumber",
+  "date",
+  "instructorName",
+  "instructorCertNumber",
+  "instructorCertExpDate",
+]);
+
+const FIELD_LIBRARY = {
+  aircraft: { label: "Aircraft (make & model)", type: "text", required: true },
+  aircraftCategory: {
+    label: "Aircraft category",
+    type: "select",
+    required: true,
+    options: ["Airplane", "Helicopter", "Glider", "Powered-Lift"],
+    placeholder: "Used where the endorsement names the aircraft category.",
+  },
+  airspaceName: { label: "Airspace name", type: "text", required: true },
+  airportName: { label: "Airport name", type: "text", required: true },
+  airportPair: { label: "Airport names", type: "text", required: true },
+  annualReviewDueDate: { label: "Annual review due date", type: "date", required: true },
+  category: {
+    label: "Category",
+    type: "select",
+    required: true,
+    options: ["Airplane", "Helicopter"],
+    placeholder: "Select the specific category required by the endorsement.",
+  },
+  categoryClass: {
+    label: "Category and class",
+    type: "select",
+    required: true,
+    options: [
+      "Airplane Single-Engine Land",
+      "Airplane Multi-Engine Land",
+      "Airplane Single-Engine Sea",
+      "Airplane Multi-Engine Sea",
+      "Rotorcraft Helicopter",
+      "Rotorcraft Gyroplane",
+      "Glider",
+      "Powered-Lift",
+      "Airship",
+      "Free Balloon",
+      "Lighter-Than-Air",
+    ],
+    placeholder: "Select the exact category and class named in the endorsement.",
+  },
+  certificateType: {
+    label: "Certificate type",
+    type: "select",
+    required: true,
+    options: [
+      "Student Pilot",
+      "Sport Pilot",
+      "Recreational Pilot",
+      "Private Pilot",
+      "Commercial Pilot",
+      "Flight Instructor",
+      "Ground Instructor",
+      "Instrument Rating",
+      "Airline Transport Pilot",
+    ],
+    placeholder: "Select the certificate or rating referenced in the endorsement.",
+  },
+  citizenshipDocument: {
+    label: "Citizenship document",
+    type: "select",
+    required: true,
+    options: ["U.S. birth certificate", "U.S. passport"],
+  },
+  citizenshipDocumentNumber: {
+    label: "Document control or sequential number",
+    type: "text",
+    required: true,
+    placeholder: "Used to identify the citizenship document reviewed.",
+  },
+  flightInstructorKnowledgeTest: {
+    label: "Instructor knowledge test",
+    type: "select",
+    required: true,
+    options: ["FIA", "FIH"],
+    placeholder: "Select the exact instructor knowledge test named in the endorsement.",
+  },
+  cfiKnowledgeTests: {
+    label: "CFI knowledge tests with deficiencies",
+    type: "multi-select",
+    required: true,
+    options: ["FIA", "FIH", "FOI", "FII"],
+    placeholder: "Select every instructor knowledge test covered by this deficiency endorsement.",
+  },
+  flightInstructorInstrumentRating: {
+    label: "CFII category",
+    type: "select",
+    required: true,
+    options: ["Airplane", "Helicopter"],
+    placeholder: "Select the aircraft category for the CFII practical test.",
+  },
+  classCategory: { label: "Category and class", type: "text", required: true },
+  eventDate: { label: "Date", type: "date", required: true },
+  groundInstructorType: {
+    label: "Ground instructor type",
+    type: "select",
+    required: true,
+    options: ["Basic", "Advanced", "Instrument"],
+    placeholder: "Select the exact ground instructor type named in the endorsement.",
+  },
+  instrumentRating: {
+    label: "Instrument rating sought",
+    type: "select",
+    required: true,
+    options: ["Instrument-Airplane", "Instrument-Helicopter"],
+    placeholder: "Select the exact instrument rating named in the endorsement.",
+  },
+  knowledgeTestName: {
+    label: "Knowledge test",
+    type: "select",
+    required: true,
+    options: [
+      "Private Pilot Airplane",
+      "Private Pilot Helicopter",
+      "Commercial Pilot Airplane",
+      "Commercial Pilot Helicopter",
+      "Instrument Rating Airplane",
+      "Instrument Rating Helicopter",
+      "Fundamentals of Instructing",
+      "Flight Instructor Airplane",
+      "Flight Instructor Helicopter",
+      "Flight Instructor Instrument Airplane",
+      "Flight Instructor Instrument Helicopter",
+    ],
+    placeholder: "Enter the exact knowledge test name referenced in the endorsement.",
+  },
+  limitations: {
+    label: "Limitations",
+    type: "text",
+    required: true,
+    placeholder: "Used to complete the endorsement conditions or limitations.",
+  },
+  localConditions: {
+    label: "Conditions or limitations",
+    type: "text",
+    required: true,
+    placeholder: "Used to complete the conditions or limitations sentence in the endorsement.",
+  },
+  practicalTestCertificate: {
+    label: "Certificate sought",
+    type: "text",
+    required: true,
+    placeholder: "Used where the endorsement names the certificate being sought.",
+  },
+  practicalTestType: {
+    label: "Practical test",
+    type: "select",
+    required: true,
+    options: [
+      "Sport Pilot practical test",
+      "Private Pilot practical test",
+      "Commercial Pilot practical test",
+      "Instrument Rating practical test",
+      "Flight Instructor practical test",
+      "Flight Instructor Instrument practical test",
+    ],
+    placeholder: "Select the exact practical test referenced in the endorsement.",
+  },
+  proficiencyCheckName: {
+    label: "Proficiency check",
+    type: "text",
+    required: true,
+    placeholder: "Used to complete the exact proficiency check name.",
+  },
+  routeDescription: {
+    label: "Route of flight",
+    type: "text",
+    required: true,
+    placeholder: "Used to complete the route portion of the endorsement.",
+  },
+  routeFrom: {
+    label: "Departure airport",
+    type: "text",
+    required: true,
+    placeholder: "Used for the route or repeated solo route in the endorsement.",
+  },
+  routeTo: {
+    label: "Arrival airport",
+    type: "text",
+    required: true,
+    placeholder: "Used for the route or repeated solo route in the endorsement.",
+  },
+  routeLandings: {
+    label: "Landing airports",
+    type: "text",
+    required: true,
+    placeholder: "List the airports where landings are planned.",
+  },
+  routeStudentName: {
+    label: "Student name for planning review",
+    type: "text",
+    required: true,
+    placeholder: "Used in the cross-country planning review sentence.",
+  },
+  tailwheelAircraftType: {
+    label: "Tailwheel aircraft type",
+    type: "text",
+    required: true,
+    placeholder: "Used to identify the tailwheel airplane type in the endorsement.",
+  },
+  trainingAircraft: {
+    label: "Aircraft description",
+    type: "text",
+    required: true,
+    placeholder: "Enter the make and model or aircraft description required by this endorsement.",
+  },
+};
+
+const REPLACEMENTS = [
+  [/_{3,}\(U\.S\. birth certificate or U\.S\. passport\)/g, "{citizenshipDocument}"],
+  [/_+\(the relevant control or sequential number on the document, if any\)/g, "{citizenshipDocumentNumber}"],
+  [/issuance of _____ certificate/gi, "issuance of {certificateType} certificate"],
+  [/for the __________\(make\s*&\s*model\)/gi, "for the {aircraft}"],
+  [/to the __________\(make\s*&\s*model\)/gi, "to the {aircraft}"],
+  [/in __________\(make\s*&\s*model\)/gi, "in {aircraft}"],
+  [/in a __________\(make\s*&\s*model\)/gi, "in a {aircraft}"],
+  [/\(airport name\)/gi, "{airportName}"],
+  [/\(name of airport\)/gi, "{airportName}"],
+  [/\(name of Class B, C, or D\)/gi, "{airspaceName}"],
+  [/\(name of Class B\)/gi, "{airspaceName}"],
+  [/\(List any applicable conditions or limitations\.\)/gi, "{localConditions}"],
+  [/\(Limitations attached\.\)/gi, "{localConditions}"],
+  [/Limitations:_{3,}\.?/gi, "Limitations: {limitations}."],
+  [/\(aircraft  category\)/gi, "{aircraftCategory}"],
+  [/\(specific category and class\)/gi, "{categoryClass}"],
+  [/\(name of\) proficiency check/gi, "{proficiencyCheckName} proficiency check"],
+  [/\(type of\) practical test/gi, "{practicalTestType} practical test"],
+  [/PVT-_{3,}/g, "PVT-{categoryClass}"],
+  [/COM-_{3,}/g, "COM-{categoryClass}"],
+  [/Commercial-_{3,}/g, "Commercial-{categoryClass}"],
+  [/Instrument–\(airplane helicopter\)/g, "{instrumentRating}"],
+  [/Instrument–\(airplane\/helicopter\)/g, "{instrumentRating}"],
+  [/CFI – \(aircraft category  and class\)/g, "CFI – {categoryClass}"],
+  [/instrument – \(airplane  helicopter  \)/gi, "instrument – {flightInstructorInstrumentRating}"],
+  [/FIA\/FIH knowledge test/gi, "{flightInstructorKnowledgeTest} knowledge test"],
+  [/on the __+ airman knowledge test/gi, "on the {knowledgeTestName} airman knowledge test"],
+  [/\(an airplane\)/gi, "{aircraft}"],
+  [/by ________\(date 12 calendar-months after date of this endorsement\)/gi, "by {annualReviewDueDate}"],
+  [/by _________________\(date 12 calendar-months after this endorsement\)/gi, "by {annualReviewDueDate}"],
+  [/\(make  and model\) aircraft on \(date\)/gi, "{aircraft} aircraft on {eventDate}"],
+  [/in a \(make\s+and model\) aircraft on \(date\)/gi, "in a {aircraft} aircraft on {eventDate}"],
+  [/the required practical test for the issuance of PVT-_{3,} certificate/gi, "the required practical test for the issuance of {practicalTestCertificate} certificate"],
+  [/the required practical test for the issuance of Commercial-_{3,} certificate/gi, "the required practical test for the issuance of {practicalTestCertificate} certificate"],
+  [/in a __________ aircraft/gi, "in a {trainingAircraft} aircraft"],
+  [/solo that __________ aircraft/gi, "solo that {trainingAircraft} aircraft"],
+  [/in a __________ complex airplane/gi, "in a {aircraft} complex airplane"],
+  [/in a __________ high performance\s+airplane/gi, "in a {aircraft} high performance airplane"],
+  [/in a __________ pressurized\s+aircraft/gi, "in a {aircraft} pressurized aircraft"],
+  [/operate an __________\(Category and class\)/gi, "operate an {categoryClass}"],
+  [/in a\s+of tailwheel airplane/gi, "in a {tailwheelAircraftType} tailwheel airplane"],
+  [/\[basic, advanced, instrument\]/gi, "{groundInstructorType}"],
+  [/the_{3,}knowledge/gi, "the {knowledgeTestName} knowledge"],
+  [/the_{3,}practical test/gi, "the {practicalTestType} practical test"],
+];
+
+function titleCaseFromKey(key) {
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/_/g, " ")
+    .replace(/^\w/, (char) => char.toUpperCase())
+    .trim();
+}
+
+function fallbackField(key) {
+  return {
+    key,
+    label: titleCaseFromKey(key),
+    type: key.toLowerCase().includes("date") ? "date" : "text",
+    required: true,
+    placeholder: "Required to complete the selected endorsement wording.",
+  };
+}
+
+const TEMPLATE_FIELD_OVERRIDES = {
+  "PIC Solo Outside Rating": {
+    categoryClass: {
+      label: "Authorized category and class",
+      placeholder: "Select the category and class the student is being endorsed to solo as PIC.",
+    },
+  },
+  "PVT Practical Test": {
+    categoryClass: {
+      label: "Private pilot category and class",
+      placeholder: "Select the category and class for the private pilot practical test.",
+    },
+  },
+  "PVT 2-Month Review": {
+    categoryClass: {
+      label: "Private pilot category and class",
+      placeholder: "Select the category and class for the private pilot practical test review.",
+    },
+  },
+  "COM Practical Test": {
+    categoryClass: {
+      label: "Commercial pilot category and class",
+      placeholder: "Select the category and class for the commercial pilot practical test.",
+    },
+  },
+  "COM 2-Month Review": {
+    categoryClass: {
+      label: "Commercial pilot category and class",
+      placeholder: "Select the category and class for the commercial pilot practical test review.",
+    },
+  },
+  "CFI required training": {
+    categoryClass: {
+      label: "Flight instructor category and class",
+      placeholder: "Select the category and class for the flight instructor practical test.",
+    },
+  },
+  "Night Vision Goggles": {
+    categoryClass: {
+      label: "NVG aircraft category and class",
+      placeholder: "Select the category and class the pilot is approved to operate with night vision goggles.",
+    },
+  },
+};
+
+function applyFieldOverrides(templateTitle, fields) {
+  const overrides = TEMPLATE_FIELD_OVERRIDES[templateTitle];
+  if (!overrides) {
+    return fields;
+  }
+
+  return fields.map((field) => ({
+    ...field,
+    ...(overrides[field.key] ?? {}),
+  }));
+}
+
+function replaceLegacyBlanks(text) {
+  let nextText = text.trim();
+  let extraFieldIndex = 1;
+
+  REPLACEMENTS.forEach(([pattern, replacement]) => {
+    nextText = nextText.replace(pattern, replacement);
+  });
+
+  nextText = nextText
+    .replace(/planning of\s+\./i, "planning of {routeStudentName}.")
+    .replace(/from ______ to _______ via_______ \(route of flight\)/i, "from {routeFrom} to {routeTo} via {routeDescription}")
+    .replace(/with landings at \(names of the airports\)/i, "with landings at {routeLandings}")
+    .replace(/in a__________\(make & model\)/i, "in a {aircraft}")
+    .replace(/between ______and ______at both \(airport names\)/i, "between {routeFrom} and {routeTo} at both {airportPair}")
+    .replace(/on ______\(date\)/i, "on {eventDate}")
+    .replace(/_{3,}/g, () => `{extraDetail${extraFieldIndex++}}`)
+    .replace(/\(fill here\)/gi, "{extraDetail}");
+
+  return nextText;
+}
+
+function inferFields(text) {
+  const placeholders = Array.from(new Set(text.match(/\{([^}]+)\}/g) ?? []))
+    .map((token) => token.slice(1, -1))
+    .filter((key) => !BASE_FIELD_KEYS.has(key));
+
+  return placeholders.map((key) => ({
+    key,
+    ...(FIELD_LIBRARY[key] ?? fallbackField(key)),
+  }));
+}
+
+const templates = Object.fromEntries(
+  Object.entries(rawTemplates).map(([title, text]) => {
+    const normalizedText = replaceLegacyBlanks(text);
+    return [
+      title,
+      {
+        text: normalizedText,
+        fields: applyFieldOverrides(title, inferFields(normalizedText)),
+      },
+    ];
+  })
+);
+
+delete templates["CFI Written Deficiencies"];
+templates["CFI Knowledge Test Deficiencies"] = {
+  text: `I certify that {studentName} {studentCertNumber} has demonstrated satisfactory knowledge of the subject areas in which {studentName} was deficient on the {cfiKnowledgeTests}.
+Date: {date}           *
+{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  fields: [{ key: "cfiKnowledgeTests", ...FIELD_LIBRARY.cfiKnowledgeTests }],
+};
+
+export default templates;

@@ -26,6 +26,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [displayName, setDisplayName] = useState("");
   const [defaultCfiName, setDefaultCfiName] = useState("");
   const [greeting, setGreeting] = useState("");
+  const [profileRole, setProfileRole] = useState("");
 
   useEffect(() => {
     if (!loading && !session?.user) {
@@ -53,12 +54,13 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         if (!cancelled) {
           setDisplayName(profile?.display_name ?? "");
           setDefaultCfiName(defaultCfi?.display_name ?? "");
+          setProfileRole(profile?.role ?? "");
         }
       } catch (error) {
-        console.error(error);
         if (!cancelled) {
           setDisplayName("");
           setDefaultCfiName("");
+          setProfileRole("");
         }
       }
     }
@@ -84,6 +86,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     defaultCfiName,
     email: session?.user?.email,
   });
+  const visibleDashboardLinks =
+    profileRole === "admin"
+      ? [...dashboardLinks, { href: "/dashboard/admin/aircraft", label: "Aircraft" }]
+      : dashboardLinks;
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -96,7 +102,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         throw error;
       }
     } catch (error) {
-      console.error(error);
     } finally {
       setSigningOut(false);
     }
@@ -108,7 +113,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <div className="saas-dashboard-grid">
           <aside className="saas-sidebar saas-sidebar-desktop">
             <nav className="saas-sidebar-nav">
-              {dashboardLinks.map((item) => {
+              {visibleDashboardLinks.map((item) => {
                 const active =
                   item.href === "/dashboard"
                     ? pathname === "/dashboard"
@@ -162,7 +167,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               </div>
 
               <nav className="saas-mobile-nav" aria-label="Dashboard navigation">
-                {dashboardLinks.map((item) => {
+                {visibleDashboardLinks.map((item) => {
                   const active =
                     item.href === "/dashboard"
                       ? pathname === "/dashboard"

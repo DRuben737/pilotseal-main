@@ -54,7 +54,6 @@ export default function SiteNav() {
           setDefaultCfiName(defaultCfi?.display_name ?? "");
         }
       } catch (error) {
-        console.error(error);
         if (!cancelled) {
           setDisplayName("");
           setDefaultCfiName("");

@@ -20,21 +20,30 @@ type ToolValue =
   | Record<string, unknown>;
 
 type ToolSlice = Record<string, ToolValue>;
+type SelectedAircraft = Record<string, unknown> | null;
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 
 type ToolState = {
   brief: ToolSlice;
   wb: ToolSlice;
+  briefWb: ToolSlice;
   decoder: ToolSlice;
+  selectedAircraft: SelectedAircraft;
+  briefSelectedAircraft: SelectedAircraft;
   setBrief: Setter<ToolSlice>;
   setWb: Setter<ToolSlice>;
+  setBriefWb: Setter<ToolSlice>;
   setDecoder: Setter<ToolSlice>;
+  setSelectedAircraft: Setter<SelectedAircraft>;
+  setBriefSelectedAircraft: Setter<SelectedAircraft>;
 };
 
 const DEFAULT_BRIEF = {
   studentName: "",
   instructorName: "",
+  selectedStudentId: "",
+  selectedInstructorId: "",
   flightRules: "VFR",
   flightDate: "",
   etd: "",
@@ -62,6 +71,7 @@ const DEFAULT_BRIEF = {
   notamAirportOpen: {},
   notamCategoryOpen: {},
   grossWeight: "",
+  wbCg: "",
   withinLimitsConfirmed: false,
   mxNow: "",
   mxDue: "",
@@ -95,15 +105,15 @@ const DEFAULT_BRIEF = {
 
 const DEFAULT_WB = {
   selectedTail: "",
+  selectedPersonId: "",
   inputs: {
-    left_seat: "",
-    right_seat: "",
-    rear_seat: "",
-    baggage_1: "",
-    baggage_2: "",
-    fuel: "",
+    pilot_weight: "",
+    passenger_weight: "",
+    bag_weight: "",
+    fuel_gallons: "",
   },
   result: null,
+  status: "",
 };
 
 const DEFAULT_DECODER = {
@@ -135,37 +145,103 @@ function loadSlice<T extends ToolSlice>(key: string, fallback: T) {
   }
 }
 
+function loadPersistedValue<T>(key: string, fallback: T) {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
+    }
+
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export function ToolProvider({ children }: { children: ReactNode }) {
-  const [brief, setBrief] = useState<ToolSlice>(() =>
-    loadSlice("tool_brief", DEFAULT_BRIEF)
-  );
-  const [wb, setWb] = useState<ToolSlice>(() => loadSlice("tool_wb", DEFAULT_WB));
-  const [decoder, setDecoder] = useState<ToolSlice>(() =>
-    loadSlice("tool_decoder", DEFAULT_DECODER)
-  );
+  const [brief, setBrief] = useState<ToolSlice>(DEFAULT_BRIEF);
+  const [wb, setWb] = useState<ToolSlice>(DEFAULT_WB);
+  const [briefWb, setBriefWb] = useState<ToolSlice>(DEFAULT_WB);
+  const [decoder, setDecoder] = useState<ToolSlice>(DEFAULT_DECODER);
+  const [selectedAircraft, setSelectedAircraft] = useState<SelectedAircraft>(null);
+  const [briefSelectedAircraft, setBriefSelectedAircraft] = useState<SelectedAircraft>(null);
+  const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
+    setBrief(loadSlice("tool_brief", DEFAULT_BRIEF));
+    setWb(loadSlice("tool_wb", DEFAULT_WB));
+    setBriefWb(loadSlice("tool_brief_wb", DEFAULT_WB));
+    setDecoder(loadSlice("tool_decoder", DEFAULT_DECODER));
+    setSelectedAircraft(loadPersistedValue("selected_aircraft", null));
+    setBriefSelectedAircraft(loadPersistedValue("selected_brief_aircraft", null));
+    setHasHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
     window.localStorage.setItem("tool_brief", JSON.stringify(brief));
-  }, [brief]);
+  }, [brief, hasHydrated]);
 
   useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
     window.localStorage.setItem("tool_wb", JSON.stringify(wb));
-  }, [wb]);
+  }, [wb, hasHydrated]);
 
   useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+    window.localStorage.setItem("tool_brief_wb", JSON.stringify(briefWb));
+  }, [briefWb, hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
     window.localStorage.setItem("tool_decoder", JSON.stringify(decoder));
-  }, [decoder]);
+  }, [decoder, hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+    window.localStorage.setItem("selected_aircraft", JSON.stringify(selectedAircraft));
+  }, [selectedAircraft, hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+    window.localStorage.setItem(
+      "selected_brief_aircraft",
+      JSON.stringify(briefSelectedAircraft)
+    );
+  }, [briefSelectedAircraft, hasHydrated]);
 
   const value = useMemo(
     () => ({
       brief,
       wb,
+      briefWb,
       decoder,
+      selectedAircraft,
+      briefSelectedAircraft,
       setBrief,
       setWb,
+      setBriefWb,
       setDecoder,
+      setSelectedAircraft,
+      setBriefSelectedAircraft,
     }),
-    [brief, wb, decoder]
+    [brief, wb, briefWb, decoder, selectedAircraft, briefSelectedAircraft]
   );
 
   return <ToolStateContext.Provider value={value}>{children}</ToolStateContext.Provider>;
