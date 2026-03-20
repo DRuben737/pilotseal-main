@@ -186,6 +186,73 @@ function formatTemplateFieldValue(key, value) {
   return BASE_FIELD_KEYS.has(key) ? value : formatDateForPdf(String(value ?? '').trim());
 }
 
+function getTrimmedSignatureDataUrl(canvas) {
+  if (!canvas) {
+    return null;
+  }
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return null;
+  }
+
+  const { width, height } = canvas;
+  const imageData = context.getImageData(0, 0, width, height);
+  const { data } = imageData;
+
+  let top = height;
+  let left = width;
+  let right = -1;
+  let bottom = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const alpha = data[(y * width + x) * 4 + 3];
+      if (alpha === 0) {
+        continue;
+      }
+
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+    }
+  }
+
+  if (right < left || bottom < top) {
+    return null;
+  }
+
+  const padding = Math.max(4, Math.round(width * 0.01));
+  const cropX = Math.max(0, left - padding);
+  const cropY = Math.max(0, top - padding);
+  const cropWidth = Math.min(width - cropX, right - left + padding * 2);
+  const cropHeight = Math.min(height - cropY, bottom - top + padding * 2);
+
+  const trimmedCanvas = document.createElement('canvas');
+  trimmedCanvas.width = cropWidth;
+  trimmedCanvas.height = cropHeight;
+
+  const trimmedContext = trimmedCanvas.getContext('2d');
+  if (!trimmedContext) {
+    return null;
+  }
+
+  trimmedContext.drawImage(
+    canvas,
+    cropX,
+    cropY,
+    cropWidth,
+    cropHeight,
+    0,
+    0,
+    cropWidth,
+    cropHeight
+  );
+
+  return trimmedCanvas.toDataURL('image/png');
+}
+
 function EndorsementGenerator() {
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [errors, setErrors] = useState({});
@@ -607,7 +674,10 @@ function EndorsementGenerator() {
       let signatureImage;
 
       if (signatureDirtyRef.current) {
-        const dataUrl = canvasRef.current.toDataURL('image/png');
+        const dataUrl = getTrimmedSignatureDataUrl(canvasRef.current);
+        if (!dataUrl) {
+          throw new Error('Unable to capture the signature image.');
+        }
         const signatureImageBytes = await fetch(dataUrl).then((response) => response.arrayBuffer());
         signatureImage = await doc.embedPng(signatureImageBytes);
       }
@@ -701,11 +771,22 @@ function EndorsementGenerator() {
             });
 
             if (signatureImage) {
+              const signatureTargetWidth = 72;
+              const signatureTargetHeight = 24;
+              const imageRatio = signatureImage.width / signatureImage.height;
+              const targetRatio = signatureTargetWidth / signatureTargetHeight;
+              const drawWidth = imageRatio > targetRatio
+                ? signatureTargetWidth
+                : signatureTargetHeight * imageRatio;
+              const drawHeight = imageRatio > targetRatio
+                ? signatureTargetWidth / imageRatio
+                : signatureTargetHeight;
+
               page.drawImage(signatureImage, {
                 x: x + 56,
-                y: signatureLabelY - 8,
-                width: 72,
-                height: 30,
+                y: signatureLabelY - 4,
+                width: drawWidth,
+                height: drawHeight,
               });
             } else {
               page.drawLine({
