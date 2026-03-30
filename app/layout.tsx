@@ -1,10 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import SiteNav from "@/components/ui/SiteNav";
 import SiteNotificationBanner from "@/components/notifications/SiteNotificationBanner";
 import logoImage from "@/images/logo.png";
+import { getSiteUrl } from "@/lib/seo";
 import { ToolProvider } from "@/stores/toolState";
 import "./globals.css";
 import "@/components/tools-native/styles/Nighttime.css";
@@ -16,10 +18,31 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-export const metadata = {
-  title: "PilotSeal | FAA Pilot Tools for CFIs and Student Pilots",
+export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
+  title: {
+    default: "PilotSeal | FAA Pilot Tools for CFIs and Student Pilots",
+    template: "%s | PilotSeal",
+  },
   description:
     "FAA-oriented pilot tools built around FAR 61 regulations. Endorsement generator and training utilities for CFIs and student pilots.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "PilotSeal | FAA Pilot Tools for CFIs and Student Pilots",
+    description:
+      "FAA-oriented pilot tools built around FAR 61 regulations. Endorsement generator and training utilities for CFIs and student pilots.",
+    url: "/",
+    siteName: "PilotSeal",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PilotSeal | FAA Pilot Tools for CFIs and Student Pilots",
+    description:
+      "FAA-oriented pilot tools built around FAR 61 regulations. Endorsement generator and training utilities for CFIs and student pilots.",
+  },
 };
 
 export default function RootLayout({

@@ -1,5 +1,10 @@
 import Link from "next/link";
 import EndorsementDisclaimer from "@/components/legal/EndorsementDisclaimer";
+import {
+  buildArticleSchema,
+  buildBreadcrumbSchema,
+  buildFaqSchema,
+} from "@/lib/seo";
 
 import {
   defaultGuideReferences,
@@ -135,9 +140,40 @@ export default function EndorsementGuidePage({
 }) {
   const relatedGuides = (guide.relatedGuideSlugs ?? []).map((slug) => guideCards[slug]);
   const references = guide.references ?? defaultGuideReferences;
+  const breadcrumbSchema = buildBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Endorsements", path: "/endorsements" },
+    { name: guide.breadcrumb, path: `/endorsements/${guide.slug}` },
+  ]);
+  const articleSchema = buildArticleSchema({
+    title: guide.title,
+    description: guide.heroDescription,
+    path: `/endorsements/${guide.slug}`,
+  });
+  const faqSchema = buildFaqSchema(guide.faqs);
 
   return (
     <main className="page-shell page-guide px-3">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbSchema),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(articleSchema),
+        }}
+      />
+      {faqSchema ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(faqSchema),
+          }}
+        />
+      ) : null}
       <div className="site-shell page-stack space-y-8">
         <section className="hero-panel hero-guide hero-compact overflow-hidden px-6 py-7 sm:px-8 sm:py-9">
           <div className="reading-rail">

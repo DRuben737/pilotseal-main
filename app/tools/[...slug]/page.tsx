@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getToolEmbedConfig } from "@/app/tools/tool-config";
 import { nativeToolRegistry } from "@/components/tools-native/tool-registry";
 import { features } from "@/lib/features";
+import { buildPageMetadata } from "@/lib/seo";
 
 type ToolPageProps = {
   params: Promise<{ slug: string[] }>;
@@ -40,10 +41,14 @@ export async function generateMetadata({
     return {};
   }
 
-  return {
-    title: `${tool.title} | PilotSeal`,
+  const slugPath = `/${["tools", ...slug].join("/")}`;
+
+  return buildPageMetadata({
+    title: tool.title,
     description: tool.description,
-  };
+    path: slugPath,
+    keywords: ["pilot tools", "FAA", "CFI", tool.title, "PilotSeal"],
+  });
 }
 
 export default async function EmbeddedToolPage({ params }: ToolPageProps) {

@@ -1,13 +1,23 @@
 import Link from "next/link";
 import EndorsementDisclaimer from "@/components/legal/EndorsementDisclaimer";
+import { buildPageMetadata } from "@/lib/seo";
 
 import { defaultGuideReferences, guideCards } from "./guide-content";
 
-export const metadata = {
-  title: "FAA Logbook Endorsements Guide (FAR 61) | PilotSeal",
+export const metadata = buildPageMetadata({
+  title: "FAA Logbook Endorsements Guide (FAR 61)",
   description:
     "A practical guide to FAA logbook endorsements for CFIs and student pilots. Understand FAR 61 structure, common endorsement types, and typical pitfalls.",
-};
+  path: "/endorsements",
+  type: "article",
+  keywords: [
+    "FAA endorsements",
+    "logbook endorsements",
+    "AC 61-65",
+    "CFI endorsements",
+    "student pilot endorsements",
+  ],
+});
 
 const featuredGuides = [
   guideCards["student-solo"],

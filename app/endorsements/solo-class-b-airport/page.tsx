@@ -2,12 +2,12 @@ import Link from 'next/link';
 import CopyTemplateButton from '@/components/endorsements/CopyTemplateButton';
 
 export const metadata = {
-  title: 'Practical Test Endorsement | Checkride Prep | FAA § 61.39 | PilotSeal',
-  description: 'Practical test endorsement template. Certify pilot completion of training and readiness for checkride. FAA § 61.39 wording.',
+  title: 'Solo Class B Airport Endorsement | FAA § 61.95(b)(1) | PilotSeal',
+  description: 'Solo operations at Class B airport endorsement template. FAA § 61.95(b)(1) wording for student pilot authorization.',
 };
 
-export default function PracticalTestPage() {
-  const endorsementText = `I certify that [Pilot Name] [Pilot Cert Number] has received the required training in accordance with § 61.39(a)(5). I have determined that [Pilot Name] is prepared for the [Certificate Type]-[Category] practical test.
+export default function SoloClassBAirportPage() {
+  const endorsementText = `I certify that [Student Name] [Student Cert Number] has received the required training of § 61.95(b)(1). I have determined that [Student Name] is proficient to conduct solo flight operations at [Name of Airport]. [List any applicable conditions or limitations.]
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -18,12 +18,12 @@ Date: [Date]
         {/* Hero Section */}
         <section className="hero-panel hero-endorsement overflow-hidden px-6 py-7 sm:px-8 sm:py-9">
           <div className="reading-rail">
-            <p className="eyebrow">Practical test endorsement</p>
+            <p className="eyebrow">Solo Class B airport endorsement</p>
             <h1 className="display-title mt-4 max-w-3xl text-3xl font-semibold leading-tight text-[var(--foreground)] sm:text-4xl">
-              Practical Test (Checkride) Endorsement
+              Solo Operations at Class B Airport Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.39(a)(5) that certifies a pilot has completed training and is ready for their practical test (checkride).
+              This is the FAA required logbook endorsement under FAR § 61.95(b)(1) that authorizes a student pilot to conduct solo flight operations at a specific Class B airport.
             </p>
           </div>
         </section>
@@ -32,7 +32,7 @@ Date: [Date]
         <section className="template-section section-panel px-6 py-8 sm:px-8 sm:py-10">
           <div className="reading-rail max-w-2xl">
             <h2 className="section-title text-2xl font-semibold mb-6">
-              FAA Practical Test Endorsement
+              FAA Solo Class B Airport Endorsement
             </h2>
 
             <div className="template-wrapper mb-6 p-6 bg-[var(--surface-secondary)] rounded-lg border border-[var(--border)]">
@@ -44,7 +44,7 @@ Date: [Date]
             <div className="action-group flex flex-col gap-3 sm:flex-row">
               <CopyTemplateButton text={endorsementText} className="primary-button flex-1 sm:flex-none" />
               <Link
-                href="/tools/endorsement-generator?type=practical-test"
+                href="/tools/endorsement-generator?type=solo-class-b-airport"
                 className="secondary-button flex-1 sm:flex-none text-center"
               >
                 Generate with PilotSeal →
@@ -59,10 +59,10 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                The practical test endorsement documents that the pilot has received the required ground and flight training and is prepared for their checkride. This must be issued within 2 calendar months of the scheduled practical test and placed in the pilot's logbook.
+                This endorsement authorizes a student pilot to conduct solo operations at a specific Class B airport after receiving the required training. Name the airport (e.g., "Los Angeles International") and include any limitations or special procedures.
               </p>
               <p className="copy-muted leading-7">
-                Specify the certificate type (Private, Commercial, Airline Transport) and aircraft category/class. Verify all prerequisite training is logged and the pilot meets all experience requirements before endorsing.
+                Verify the student has received training on Class B airport operations, tower communications, and demonstrated proficiency at the specific airport.
               </p>
             </div>
           </div>
@@ -74,12 +74,12 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.39(a)(5)</p>
-                <p className="copy-muted text-sm mt-1">Practical test eligibility and endorsement requirements.</p>
+                <p className="font-semibold text-[var(--foreground)]">FAR § 61.95(b)(1)</p>
+                <p className="copy-muted text-sm mt-1">Solo flight operations at Class B airport training and endorsement requirements.</p>
               </li>
               <li className="reference-item">
                 <p className="font-semibold text-[var(--foreground)]">AC 61-65K</p>
-                <p className="copy-muted text-sm mt-1">Advisory Circular with practical test endorsement templates and CFI guidance.</p>
+                <p className="copy-muted text-sm mt-1">Advisory Circular with Class B airport operations guidance.</p>
               </li>
             </ul>
           </div>
@@ -91,13 +91,13 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">Related Endorsements</h2>
             <ul className="space-y-3">
               <li>
-                <Link href="/endorsements/knowledge-test" className="link-accent font-semibold hover:underline">
-                  Knowledge Test Endorsement →
+                <Link href="/endorsements/solo-class-b" className="link-accent font-semibold hover:underline">
+                  Solo Class B Airspace Endorsement →
                 </Link>
               </li>
               <li>
-                <Link href="/endorsements/instrument-knowledge-test" className="link-accent font-semibold hover:underline">
-                  Instrument Knowledge Test Endorsement →
+                <Link href="/endorsements/solo-flight-initial" className="link-accent font-semibold hover:underline">
+                  Solo Flight Endorsement →
                 </Link>
               </li>
               <li>
@@ -116,10 +116,10 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal verifies 2-calendar-month recency, confirms all prerequisites are met, and ensures FAA-compliant wording.
+              PilotSeal captures airport details, verifies § 61.95(b) compliance, and ensures all procedural limitations are documented.
             </p>
             <Link
-              href="/tools/endorsement-generator?type=practical-test"
+              href="/tools/endorsement-generator?type=solo-class-b-airport"
               className="primary-button inline-block"
             >
               Open Endorsement Generator →
