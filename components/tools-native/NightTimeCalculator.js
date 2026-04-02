@@ -3,9 +3,6 @@
 import React, { useState } from "react";
 import { DateTime } from "luxon";
 
-import { geocodeLocation } from "./lib/geocodeLocation";
-import { getSunTimes } from "./lib/getSunTimes";
-
 const NightTimeCalculator = () => {
   const [location, setLocation] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -27,29 +24,27 @@ const NightTimeCalculator = () => {
 
     setLoading(true);
     try {
-      const geocodeResult = await geocodeLocation(location);
-      const { lat, lon } = geocodeResult;
+      const response = await fetch("/api/night", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          location,
+          date,
+        }),
+      });
 
-      const nextDate = new Date(parsedDate);
-      nextDate.setDate(nextDate.getDate() + 1);
+      const data = await response.json();
 
-      const timezonePromise = fetch(
-        `https://timeapi.io/api/TimeZone/coordinate?latitude=${lat}&longitude=${lon}`
-      )
-        .then((res) => res.json())
-        .catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to fetch night data.");
+      }
 
-      const [timezoneData, sunTodayData, sunNextData] = await Promise.all([
-        timezonePromise,
-        getSunTimes(lat, lon, parsedDate),
-        getSunTimes(lat, lon, nextDate),
-      ]);
-
-      setZone(timezoneData?.timeZone ?? null);
-      setSunToday(sunTodayData);
-      setSunNext(sunNextData);
-    } catch (error) {
-      console.error("Failed to fetch sun times:", error);
+      setZone(data?.zone ?? null);
+      setSunToday(data?.sunToday ?? null);
+      setSunNext(data?.sunNext ?? null);
+    } catch {
       setSunToday(null);
       setSunNext(null);
       setZone(null);
@@ -127,37 +122,37 @@ const NightTimeCalculator = () => {
             <div className="night-tool-card-grid">
               <article className="night-tool-card">
                 <span>Sunset</span>
-                <strong>{formatLocalTime(sunToday.raw.sunset, zone)}</strong>
+                <strong>{formatLocalTime(new Date(sunToday.raw.sunset), zone)}</strong>
               </article>
               <article className="night-tool-card">
                 <span>Civil dusk</span>
-                <strong>{formatLocalTime(sunToday.raw.civilDusk, zone)}</strong>
+                <strong>{formatLocalTime(new Date(sunToday.raw.civilDusk), zone)}</strong>
               </article>
               <article className="night-tool-card">
                 <span>Night currency starts</span>
-                <strong>{formatLocalTime(addHours(sunToday.raw.sunset, 1), zone)}</strong>
+                <strong>{formatLocalTime(addHours(new Date(sunToday.raw.sunset), 1), zone)}</strong>
               </article>
               <article className="night-tool-card">
                 <span>Night currency ends</span>
-                <strong>{formatLocalTime(addHours(sunNext.raw.sunrise, -1), zone)}</strong>
+                <strong>{formatLocalTime(addHours(new Date(sunNext.raw.sunrise), -1), zone)}</strong>
               </article>
             </div>
 
             <div className="night-tool-copy">
               <p>
                 Under 14 CFR 91.209, position lights are required from sunset{" "}
-                {formatLocalTime(sunToday.raw.sunset, zone)} to sunrise{" "}
-                {formatLocalTime(sunNext.raw.sunrise, zone)}.
+                {formatLocalTime(new Date(sunToday.raw.sunset), zone)} to sunrise{" "}
+                {formatLocalTime(new Date(sunNext.raw.sunrise), zone)}.
               </p>
               <p>
                 Under 14 CFR 1.1, night begins after evening civil twilight{" "}
-                {formatLocalTime(sunToday.raw.civilDusk, zone)} and ends before morning civil twilight{" "}
-                {formatLocalTime(sunNext.raw.civilDawn, zone)}.
+                {formatLocalTime(new Date(sunToday.raw.civilDusk), zone)} and ends before morning civil twilight{" "}
+                {formatLocalTime(new Date(sunNext.raw.civilDawn), zone)}.
               </p>
               <p>
                 For 14 CFR 61.57(b) passenger currency, use the window between one hour after sunset{" "}
-                {formatLocalTime(addHours(sunToday.raw.sunset, 1), zone)} and one hour before sunrise{" "}
-                {formatLocalTime(addHours(sunNext.raw.sunrise, -1), zone)}.
+                {formatLocalTime(addHours(new Date(sunToday.raw.sunset), 1), zone)} and one hour before sunrise{" "}
+                {formatLocalTime(addHours(new Date(sunNext.raw.sunrise), -1), zone)}.
               </p>
             </div>
           </>

@@ -11,7 +11,6 @@ import {
   updateFlightHistories,
 } from "@/lib/fids/traffic";
 import { getSupabaseClient } from "@/lib/supabase";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 const REFRESH_INTERVAL_MS = 30_000;
 const airportOpsConfig = getAirportOpsConfig();
@@ -52,18 +51,6 @@ function formatUpdatedAtWithSeconds(value: Date | null) {
     second: "2-digit",
     hour12: false,
   }).format(value);
-}
-
-async function syncFlights(supabase: SupabaseClient) {
-  const { data, error } = await supabase.functions.invoke("sync-flights", {
-    body: {},
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
 }
 
 function getStatusClasses(status: string | null) {
@@ -308,18 +295,7 @@ export default function FlightInformationDisplaySystem() {
   const clearHighlightTimeoutRef = useRef<number | null>(null);
   const syncInFlightRef = useRef(false);
 
-  const fetchFlights = useCallback(async (supabase: SupabaseClient) => {
-    const { data, error: nextError } = await supabase
-      .from("flights")
-      .select(
-        "id, callsign, type, status, altitude, velocity, updated_at, distance_km, heading, phase, sequence, last_seen, latitude, longitude"
-      );
-
-    if (nextError) {
-      throw nextError;
-    }
-
-    const nextFlights = (data ?? []) as RawFlightRecord[];
+  const applyFlights = useCallback(async (nextFlights: RawFlightRecord[]) => {
     const nextBoard = buildTrafficBoard(nextFlights, airportOpsConfig, historiesRef.current);
     const nextSignatures: Record<string, string> = {};
     const changed = new Set<string>();
@@ -363,33 +339,34 @@ export default function FlightInformationDisplaySystem() {
   }, []);
 
   const refreshBoard = useCallback(
-    async (options?: { skipSync?: boolean }) => {
+    async () => {
       if (syncInFlightRef.current) {
         return;
       }
 
       syncInFlightRef.current = true;
-      const supabase = getSupabaseClient();
 
       try {
         setIsSyncing(true);
         setError("");
 
-        if (!options?.skipSync) {
-          await syncFlights(supabase);
+        const supabase = getSupabaseClient();
+        const { data, error: nextError } = await supabase.from("flights").select("*");
+
+        if (nextError) {
+          throw nextError;
         }
 
-        await fetchFlights(supabase);
+        await applyFlights(Array.isArray(data) ? (data as RawFlightRecord[]) : []);
       } catch {
         setError("Data sync failed — retrying");
-        await fetchFlights(supabase).catch(() => {});
       } finally {
         syncInFlightRef.current = false;
         setIsSyncing(false);
         setLoading(false);
       }
     },
-    [fetchFlights]
+    [applyFlights]
   );
 
   useEffect(() => {

@@ -1,13 +1,11 @@
 export async function getLatLongFromLocation(query) {
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&format=json&limit=1`
-  );
+  const response = await fetch(`/api/geocode?query=${encodeURIComponent(query)}`);
+  if (!response.ok) return null;
   const data = await response.json();
-  if (!data || data.length === 0) return null;
-  const { lat, lon, display_name } = data[0];
+  if (!data) return null;
   return {
-    lat: parseFloat(lat),
-    lon: parseFloat(lon),
-    displayName: display_name || query,
+    lat: parseFloat(data.lat),
+    lon: parseFloat(data.lon),
+    displayName: data.displayName || query,
   };
 }

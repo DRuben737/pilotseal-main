@@ -9,8 +9,6 @@ import { parseAircraftStations } from "@/lib/aircraft";
 import WeightBalanceCalculator from "./WeightBalanceCalculator";
 
 /** ------------------ constants ------------------ */
-const API_BASE = "https://brief.r1978244759.workers.dev";
-
 /** ------------------ utils (pure functions) ------------------ */
 function normalizeICAO(s) {
   return (s || "").trim().toUpperCase();
@@ -212,21 +210,23 @@ async function fetchJson(url, signal) {
   return await res.json();
 }
 
-function avwxMetarUrl(icao) {
-  return `${API_BASE}/?url=${encodeURIComponent(`https://avwx.rest/api/metar/${icao}?format=json`)}`;
-}
+async function postJson(url, body, signal) {
+  const response = await fetch(url, {
+    method: "POST",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 
-function avwxTafUrl(icao) {
-  return `${API_BASE}/?url=${encodeURIComponent(`https://avwx.rest/api/taf/${icao}?format=json`)}`;
-}
+  const data = await response.json();
 
-function avwxAirsigmetUrl() {
-  return `${API_BASE}/?url=${encodeURIComponent(`https://avwx.rest/api/airsigmet?format=json`)}`;
-}
+  if (!response.ok) {
+    throw new Error(data?.error || `HTTP ${response.status}`);
+  }
 
-function nmsNotamsUrl(airports) {
-  const qs = encodeURIComponent(airports.join(","));
-  return `${API_BASE}/notams?airports=${qs}`;
+  return data;
 }
 
 /** ------------------ Component ------------------ */
@@ -647,30 +647,18 @@ export default function FlightBrief() {
       setOutsideTemp("");
       setDaResult("");
 
-      // fetch METAR+TAF per airport in parallel
-      const results = await Promise.all(
-        icaos.map(async (icao) => {
-          const [metar, taf] = await Promise.allSettled([
-            fetchJson(avwxMetarUrl(icao), controller.signal),
-            fetchJson(avwxTafUrl(icao), controller.signal),
-          ]);
-
-          const metarData = metar.status === "fulfilled" ? metar.value : null;
-          const tafData = taf.status === "fulfilled" ? taf.value : null;
-
-          return {
-            icao,
-            metarRaw: metarData?.raw || "Unavailable",
-            flight_rules: metarData?.flight_rules || "",
-            alt: metarData?.altimeter?.value,
-            temp: metarData?.temperature?.value,
-            tafRaw: tafData?.raw || "Unavailable",
-          };
-        })
+      const depICAO = normalizeICAO(departure);
+      const weatherPayload = await postJson(
+        "/api/brief/weather",
+        {
+          airports: icaos,
+          departure: depICAO,
+        },
+        controller.signal
       );
+      const results = Array.isArray(weatherPayload?.results) ? weatherPayload.results : [];
 
       // prefer dep for alt/temp if possible
-      const depICAO = normalizeICAO(departure);
       const pick = (pred) => results.find(pred) || null;
 
       const altPick =
@@ -696,16 +684,7 @@ export default function FlightBrief() {
       setTafByIcao(tafMap);
 
       // AIRMET/SIGMET once
-      try {
-        const airsigmetData = await fetchJson(avwxAirsigmetUrl(), controller.signal);
-        const summary =
-          Array.isArray(airsigmetData) && airsigmetData.length
-            ? `${airsigmetData.length} active AIRMET/SIGMETs in U.S. FIRs`
-            : "No active AIRMET/SIGMETs";
-        setAirsigmetSummary(summary);
-      } catch {
-        setAirsigmetSummary("AIRMET/SIGMET unavailable");
-      }
+      setAirsigmetSummary(weatherPayload?.airsigmetSummary || "AIRMET/SIGMET unavailable");
     } catch (e) {
       if (e?.name !== "AbortError") setWeatherError("Weather fetch failed. Please try again.");
     } finally {
@@ -725,12 +704,12 @@ export default function FlightBrief() {
         return;
       }
 
-      const res = await fetch(nmsNotamsUrl(icaos));
-      const data = await res.json();
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
+      const data = await postJson(
+        "/api/brief/notams",
+        {
+          airports: icaos,
+        }
+      );
 
       const list = Array.isArray(data?.notams) ? data.notams : [];
       const grouped = {};
