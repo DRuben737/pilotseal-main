@@ -15,6 +15,10 @@ export type RawFlightRecord = {
   last_seen?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  airport_id?: string | null;
+  airport_code?: string | null;
+  airport_icao?: string | null;
+  airport_name?: string | null;
 };
 
 export type FlightHistory = {
@@ -24,6 +28,10 @@ export type FlightHistory = {
 };
 
 export type AirportOpsConfig = {
+  id?: string;
+  code?: string;
+  label?: string;
+  isDefault?: boolean;
   airportName: string;
   runwayName: string;
   runwayHeadingDeg: number;
@@ -54,6 +62,37 @@ function parseOptionalNumber(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseUnknownNumber(value: unknown) {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function pickString(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function pickNumber(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = parseUnknownNumber(record[key]);
+    if (value != null) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 export function getAirportOpsConfig(): AirportOpsConfig {
   return {
     airportName: process.env.NEXT_PUBLIC_FIDS_AIRPORT_NAME ?? "Primary Airport",
@@ -63,6 +102,54 @@ export function getAirportOpsConfig(): AirportOpsConfig {
     latitude: parseOptionalNumber(process.env.NEXT_PUBLIC_FIDS_AIRPORT_LAT),
     longitude: parseOptionalNumber(process.env.NEXT_PUBLIC_FIDS_AIRPORT_LON),
   };
+}
+
+export function normalizeAirportConfig(record: Record<string, unknown>): AirportOpsConfig {
+  const airportName =
+    pickString(record, ["airport_name", "name", "display_name", "title"]) || "Unnamed Airport";
+  const code = pickString(record, ["icao", "airport_code", "code", "iata"]).toUpperCase();
+  const label = code ? `${airportName} (${code})` : airportName;
+
+  return {
+    id: pickString(record, ["id", "airport_id"]) || label,
+    code,
+    label,
+    isDefault: Boolean(record.is_default ?? record.default ?? false),
+    airportName,
+    runwayName: pickString(record, ["runway_name", "active_runway", "runway"]) || "25",
+    runwayHeadingDeg:
+      pickNumber(record, ["runway_heading_deg", "runway_heading", "runway_bearing"]) ?? 250,
+    latitude: pickNumber(record, ["latitude", "lat"]),
+    longitude: pickNumber(record, ["longitude", "lon", "lng"]),
+  };
+}
+
+export function filterFlightsForAirport(
+  flights: RawFlightRecord[],
+  airport: AirportOpsConfig
+) {
+  if (!airport.id && !airport.code && !airport.airportName) {
+    return flights;
+  }
+
+  const airportId = airport.id?.toLowerCase() ?? "";
+  const airportCode = airport.code?.toLowerCase() ?? "";
+  const airportName = airport.airportName.toLowerCase();
+
+  const filtered = flights.filter((flight) => {
+    const flightAirportId = String(flight.airport_id ?? "").trim().toLowerCase();
+    const flightAirportCode =
+      String(flight.airport_code ?? flight.airport_icao ?? "").trim().toLowerCase();
+    const flightAirportName = String(flight.airport_name ?? "").trim().toLowerCase();
+
+    return (
+      (airportId && flightAirportId && airportId === flightAirportId) ||
+      (airportCode && flightAirportCode && airportCode === flightAirportCode) ||
+      (airportName && flightAirportName && airportName === flightAirportName)
+    );
+  });
+
+  return filtered.length ? filtered : flights;
 }
 
 function normalizeAngle(value: number) {
