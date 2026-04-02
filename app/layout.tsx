@@ -104,6 +104,8 @@ export default function RootLayout({
                     <div className="mt-3 grid gap-2">
                       <Link href="/">Home</Link>
                       <Link href="/tools">Tools</Link>
+                      <Link href="/tools/fids">Flight Display</Link>
+                      <Link href="/endorsements">Endorsements</Link>
                       <Link href="/intro">Articles</Link>
                       <Link href="/disclaimer">Disclaimer</Link>
                     </div>

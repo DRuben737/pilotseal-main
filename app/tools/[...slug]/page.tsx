@@ -20,6 +20,8 @@ function renderNativeTool(slug: string) {
       return createElement(nativeToolRegistry.decoder);
     case "endorsement-generator":
       return createElement(nativeToolRegistry["endorsement-generator"]);
+    case "fids":
+      return createElement(nativeToolRegistry.fids);
     case "flight-brief":
       return createElement(nativeToolRegistry["flight-brief"]);
     case "nighttime":
@@ -57,6 +59,7 @@ export default async function EmbeddedToolPage({ params }: ToolPageProps) {
   const toolLinks = [
     ["aoa-simulator", "AOA"],
     ["endorsement-generator", "Endorsements"],
+    ["fids", "FIDS"],
     ["flight-brief", "Brief"],
     ["wb", "W&B"],
     ["nighttime", "Night"],

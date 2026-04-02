@@ -19,6 +19,12 @@ export const toolEmbedConfig: Record<string, ToolEmbedConfig> = {
       "Generate FAA-style endorsement draft packets with searchable templates, signatures, and PDF export.",
     eyebrow: "Most used",
   },
+  fids: {
+    title: "Flight Display",
+    description:
+      "Monitor arrivals and departures on a live airport-style flight information display.",
+    eyebrow: "Operations",
+  },
   "flight-brief": {
     title: "Flight Brief",
     description:
@@ -52,6 +58,7 @@ export function getToolEmbedConfig(slug: string[]) {
 
 const allPrimaryToolKeys = [
   "endorsement-generator",
+  "fids",
   "flight-brief",
   "wb",
   "nighttime",
