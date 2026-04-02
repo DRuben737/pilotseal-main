@@ -15,11 +15,14 @@ function getServerSupabase() {
 export async function GET(request: NextRequest) {
   try {
     const supabase = getServerSupabase();
-    void request;
+    const airportId = request.nextUrl.searchParams.get("airportId")?.trim();
+    let query = supabase.from("flights").select("*");
 
-    const { data, error } = await supabase
-      .from("flights")
-      .select("*");
+    if (airportId) {
+      query = query.eq("airport_id", airportId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: "Unable to fetch flights." }, { status: 500 });
