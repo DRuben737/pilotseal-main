@@ -127,11 +127,12 @@ function splitTextIntoLines(text, font, fontSize, maxWidth) {
 }
 
 function getTemplateCategory(title) {
+  const normalizedTitle = String(title || '').trim().replace(/\s+/g, ' ');
   const explicitCategoryMap = {
     'TSA U.S. Citizenship': null,
     'Pre-Solo Written': 'Solo Endorsements',
     'Pre-Solo Flight Training': 'Solo Endorsements',
-    'Pre-Solo Night Training': 'Solo Endorsements',
+    'Pre-Solo Night Training': 'Other Solo',
     'Solo Flight Initial 90 Days': 'Solo Endorsements',
     'Solo Flight Additional 90 Days': 'Solo Endorsements',
     'Solo in other airport': 'Other Solo',
@@ -190,15 +191,24 @@ function getTemplateCategory(title) {
     'NVG PIC': 'Other PIC',
   };
 
-  if (explicitCategoryMap[title]) {
-    return explicitCategoryMap[title];
+  if (
+    /pre-solo night training/i.test(normalizedTitle) ||
+    /solo airport inside class b/i.test(normalizedTitle) ||
+    /solo in class b/i.test(normalizedTitle) ||
+    /solo in other airport/i.test(normalizedTitle)
+  ) {
+    return 'Other Solo';
   }
 
-  if (title in explicitCategoryMap && explicitCategoryMap[title] === null) {
+  if (explicitCategoryMap[normalizedTitle]) {
+    return explicitCategoryMap[normalizedTitle];
+  }
+
+  if (normalizedTitle in explicitCategoryMap && explicitCategoryMap[normalizedTitle] === null) {
     return null;
   }
 
-  if (/additional category|additional class|category\/class|category and class/i.test(title)) {
+  if (/additional category|additional class|category\/class|category and class/i.test(normalizedTitle)) {
     return 'Additional Category / Class';
   }
 
