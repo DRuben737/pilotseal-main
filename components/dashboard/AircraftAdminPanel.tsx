@@ -106,6 +106,21 @@ function toNumber(value: string) {
   return Number.parseFloat(value);
 }
 
+function scrollEditorIntoView(targetId: string) {
+  window.setTimeout(() => {
+    const element = document.getElementById(targetId);
+    if (!element) {
+      return;
+    }
+
+    const scrollContainer = element.closest(".tools-child-shell");
+    if (scrollContainer instanceof HTMLElement) {
+      const top = element.offsetTop - 24;
+      scrollContainer.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }
+  }, 40);
+}
+
 export default function AircraftAdminPanel() {
   const { session } = useAuthSession();
   const [profileRole, setProfileRole] = useState("");
@@ -122,6 +137,34 @@ export default function AircraftAdminPanel() {
   const [showAircraftForm, setShowAircraftForm] = useState(false);
 
   const isAdmin = profileRole === "admin";
+
+  useEffect(() => {
+    if (!showModelsModal && !showAircraftModal) {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo({ top: scrollY, behavior: "auto" });
+    };
+  }, [showModelsModal, showAircraftModal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,12 +264,18 @@ export default function AircraftAdminPanel() {
     setModelForm(nextForm);
     setShowModelForm(true);
     setShowModelsModal(true);
+    if (!nextForm.id) {
+      scrollEditorIntoView("model-editor-new");
+    }
   }
 
   function openAircraftEditor(nextForm = emptyAircraftForm) {
     setAircraftForm(nextForm);
     setShowAircraftForm(true);
     setShowAircraftModal(true);
+    if (!nextForm.id) {
+      scrollEditorIntoView("aircraft-editor-new");
+    }
   }
 
   function updateModelField<K extends keyof ModelFormState>(key: K, value: ModelFormState[K]) {
@@ -382,6 +431,13 @@ export default function AircraftAdminPanel() {
   }
 
   async function handleDeleteModel(id: string) {
+    const confirmed = window.confirm(
+      "Delete this aircraft model? This will remove the saved model information."
+    );
+    if (!confirmed) {
+      return;
+    }
+
     setSaving(true);
     try {
       await deleteAircraftModel(id);
@@ -395,6 +451,13 @@ export default function AircraftAdminPanel() {
   }
 
   async function handleDeleteAircraft(id: string) {
+    const confirmed = window.confirm(
+      "Delete this aircraft? This will remove the saved aircraft information."
+    );
+    if (!confirmed) {
+      return;
+    }
+
     setSaving(true);
     try {
       await deleteAircraft(id);
@@ -414,6 +477,265 @@ export default function AircraftAdminPanel() {
   if (!isAdmin) {
     return <div className="saas-panel">Admin access required.</div>;
   }
+
+  const renderModelForm = () => (
+    <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-slate-900">
+          {modelForm.id ? "Edit model" : "Add model"}
+        </h3>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => {
+            setModelForm(emptyModelForm);
+            setShowModelForm(false);
+          }}
+        >
+          Close
+        </button>
+      </div>
+
+      <p className="saas-meta-text mt-3">
+        Changes here update saved aircraft model data after you save.
+      </p>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm">
+          <span>Name</span>
+          <input
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            value={modelForm.name}
+            onChange={(event) => updateModelField("name", event.target.value)}
+          />
+        </label>
+        <label className="grid gap-2 text-sm">
+          <span>Category</span>
+          <select
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            value={modelForm.category}
+            onChange={(event) =>
+              updateModelField("category", event.target.value as "airplane" | "helicopter")
+            }
+          >
+            <option value="airplane">Airplane</option>
+            <option value="helicopter">Helicopter</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-900">Stations</h4>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() =>
+              updateModelField("stations", [
+                ...modelForm.stations,
+                { id: "", name: "", arm: "" },
+              ])
+            }
+          >
+            Add station
+          </button>
+        </div>
+        <div className="grid gap-3">
+          {modelForm.stations.map((station, index) => (
+            <div
+              key={`${station.id}-${index}`}
+              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+            >
+              <label className="grid gap-2 text-sm">
+                <span>Key</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  value={station.id}
+                  onChange={(event) => updateStation(index, "id", event.target.value)}
+                />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Name</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  value={station.name}
+                  onChange={(event) => updateStation(index, "name", event.target.value)}
+                />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Arm</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  type="number"
+                  value={station.arm}
+                  onChange={(event) => updateStation(index, "arm", event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="danger-button-compact self-end"
+                onClick={() =>
+                  updateModelField(
+                    "stations",
+                    modelForm.stations.filter((_, stationIndex) => stationIndex !== index)
+                  )
+                }
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-900">Envelope</h4>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() =>
+              updateModelField("envelope", [
+                ...modelForm.envelope,
+                { cg: "", weight: "" },
+              ])
+            }
+          >
+            Add point
+          </button>
+        </div>
+        <div className="grid gap-3">
+          {modelForm.envelope.map((point, index) => (
+            <div
+              key={`${point.cg}-${point.weight}-${index}`}
+              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+            >
+              <label className="grid gap-2 text-sm">
+                <span>CG</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  type="number"
+                  value={point.cg}
+                  onChange={(event) => updateEnvelope(index, "cg", event.target.value)}
+                />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Weight</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  type="number"
+                  value={point.weight}
+                  onChange={(event) => updateEnvelope(index, "weight", event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="danger-button-compact self-end"
+                onClick={() =>
+                  updateModelField(
+                    "envelope",
+                    modelForm.envelope.filter((_, pointIndex) => pointIndex !== index)
+                  )
+                }
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          className="primary-button"
+          disabled={saving}
+          onClick={() => void handleSaveModel()}
+        >
+          {saving ? "Saving..." : modelForm.id ? "Save model" : "Create model"}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderAircraftForm = () => (
+    <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-slate-900">
+          {aircraftForm.id ? "Edit aircraft" : "Add aircraft"}
+        </h3>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => {
+            setAircraftForm(emptyAircraftForm);
+            setShowAircraftForm(false);
+          }}
+        >
+          Close
+        </button>
+      </div>
+
+      <p className="saas-meta-text mt-3">
+        Changes here update saved aircraft data after you save.
+      </p>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm md:col-span-2">
+          <span>Model</span>
+          <select
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            value={aircraftForm.model_id}
+            onChange={(event) => updateAircraftField("model_id", event.target.value)}
+          >
+            <option value="">Select a model</option>
+            {models.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm md:col-span-2">
+          <span>Tail number</span>
+          <input
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            value={aircraftForm.name}
+            onChange={(event) => updateAircraftField("name", event.target.value)}
+          />
+        </label>
+        <label className="grid gap-2 text-sm">
+          <span>Empty weight</span>
+          <input
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            type="number"
+            value={aircraftForm.empty_weight}
+            onChange={(event) => updateAircraftField("empty_weight", event.target.value)}
+          />
+        </label>
+        <label className="grid gap-2 text-sm">
+          <span>Empty arm</span>
+          <input
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            type="number"
+            value={aircraftForm.empty_arm}
+            onChange={(event) => updateAircraftField("empty_arm", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="mt-6 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          className="primary-button"
+          disabled={saving}
+          onClick={() => void handleSaveAircraft()}
+        >
+          {saving ? "Saving..." : aircraftForm.id ? "Save aircraft" : "Create aircraft"}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -478,211 +800,40 @@ export default function AircraftAdminPanel() {
 
               <div className="mt-5 grid gap-3">
                 {models.map((model) => (
-                  <div
-                    key={model.id}
-                    className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{model.name}</p>
-                        <p className="saas-meta-text">{model.category ?? "Aircraft"} model</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => openModelEditor(normalizeModelForm(model))}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="danger-button-compact"
-                          disabled={saving}
-                          onClick={() => void handleDeleteModel(model.id)}
-                        >
-                          Delete
-                        </button>
+                  <div key={model.id} id={`model-editor-${model.id}`}>
+                    <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{model.name}</p>
+                          <p className="saas-meta-text">{model.category ?? "Aircraft"} model</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => openModelEditor(normalizeModelForm(model))}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-button-compact"
+                            disabled={saving}
+                            onClick={() => void handleDeleteModel(model.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
+
+                    {showModelForm && modelForm.id === model.id ? renderModelForm() : null}
                   </div>
                 ))}
               </div>
 
-              {showModelForm ? (
-                <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-slate-900">
-                      {modelForm.id ? "Edit model" : "Add model"}
-                    </h3>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => {
-                        setModelForm(emptyModelForm);
-                        setShowModelForm(false);
-                      }}
-                    >
-                      Close
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <label className="grid gap-2 text-sm">
-                      <span>Name</span>
-                      <input
-                        className="rounded-xl border border-slate-300 px-3 py-2"
-                        value={modelForm.name}
-                        onChange={(event) => updateModelField("name", event.target.value)}
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm">
-                      <span>Category</span>
-                      <select
-                        className="rounded-xl border border-slate-300 px-3 py-2"
-                        value={modelForm.category}
-                        onChange={(event) =>
-                          updateModelField("category", event.target.value as "airplane" | "helicopter")
-                        }
-                      >
-                        <option value="airplane">Airplane</option>
-                        <option value="helicopter">Helicopter</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="mt-6">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h4 className="text-sm font-semibold text-slate-900">Stations</h4>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          updateModelField("stations", [
-                            ...modelForm.stations,
-                            { id: "", name: "", arm: "" },
-                          ])
-                        }
-                      >
-                        Add station
-                      </button>
-                    </div>
-                    <div className="grid gap-3">
-                      {modelForm.stations.map((station, index) => (
-                        <div
-                          key={`${station.id}-${index}`}
-                          className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
-                        >
-                          <label className="grid gap-2 text-sm">
-                            <span>Key</span>
-                            <input
-                              className="rounded-xl border border-slate-300 px-3 py-2"
-                              value={station.id}
-                              onChange={(event) => updateStation(index, "id", event.target.value)}
-                            />
-                          </label>
-                          <label className="grid gap-2 text-sm">
-                            <span>Name</span>
-                            <input
-                              className="rounded-xl border border-slate-300 px-3 py-2"
-                              value={station.name}
-                              onChange={(event) => updateStation(index, "name", event.target.value)}
-                            />
-                          </label>
-                          <label className="grid gap-2 text-sm">
-                            <span>Arm</span>
-                            <input
-                              className="rounded-xl border border-slate-300 px-3 py-2"
-                              type="number"
-                              value={station.arm}
-                              onChange={(event) => updateStation(index, "arm", event.target.value)}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="danger-button-compact self-end"
-                            onClick={() =>
-                              updateModelField(
-                                "stations",
-                                modelForm.stations.filter((_, stationIndex) => stationIndex !== index)
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h4 className="text-sm font-semibold text-slate-900">Envelope</h4>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          updateModelField("envelope", [
-                            ...modelForm.envelope,
-                            { cg: "", weight: "" },
-                          ])
-                        }
-                      >
-                        Add point
-                      </button>
-                    </div>
-                    <div className="grid gap-3">
-                      {modelForm.envelope.map((point, index) => (
-                        <div
-                          key={`${point.cg}-${point.weight}-${index}`}
-                          className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                        >
-                          <label className="grid gap-2 text-sm">
-                            <span>CG</span>
-                            <input
-                              className="rounded-xl border border-slate-300 px-3 py-2"
-                              type="number"
-                              value={point.cg}
-                              onChange={(event) => updateEnvelope(index, "cg", event.target.value)}
-                            />
-                          </label>
-                          <label className="grid gap-2 text-sm">
-                            <span>Weight</span>
-                            <input
-                              className="rounded-xl border border-slate-300 px-3 py-2"
-                              type="number"
-                              value={point.weight}
-                              onChange={(event) => updateEnvelope(index, "weight", event.target.value)}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="danger-button-compact self-end"
-                            onClick={() =>
-                              updateModelField(
-                                "envelope",
-                                modelForm.envelope.filter((_, pointIndex) => pointIndex !== index)
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={saving}
-                      onClick={() => void handleSaveModel()}
-                    >
-                      {saving ? "Saving..." : modelForm.id ? "Save model" : "Create model"}
-                    </button>
-                  </div>
-                </div>
+              {showModelForm && !modelForm.id ? (
+                <div id="model-editor-new">{renderModelForm()}</div>
               ) : null}
             </div>
           </div>
@@ -714,113 +865,43 @@ export default function AircraftAdminPanel() {
 
               <div className="mt-5 grid gap-3">
                 {aircraft.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{item.name}</p>
-                        <p className="saas-meta-text">
-                          {modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Model"} · Empty{" "}
-                          {item.empty_weight ?? "--"} lbs
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => openAircraftEditor(normalizeAircraftForm(item))}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="danger-button-compact"
-                          disabled={saving}
-                          onClick={() => void handleDeleteAircraft(item.id)}
-                        >
-                          Delete
-                        </button>
+                  <div key={item.id} id={`aircraft-editor-${item.id}`}>
+                    <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{item.name}</p>
+                          <p className="saas-meta-text">
+                            {modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Model"} · Empty{" "}
+                            {item.empty_weight ?? "--"} lbs
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => openAircraftEditor(normalizeAircraftForm(item))}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-button-compact"
+                            disabled={saving}
+                            onClick={() => void handleDeleteAircraft(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
+
+                    {showAircraftForm && aircraftForm.id === item.id ? renderAircraftForm() : null}
                   </div>
                 ))}
               </div>
 
-              {showAircraftForm ? (
-                <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-slate-900">
-                      {aircraftForm.id ? "Edit aircraft" : "Add aircraft"}
-                    </h3>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => {
-                        setAircraftForm(emptyAircraftForm);
-                        setShowAircraftForm(false);
-                      }}
-                    >
-                      Close
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <label className="grid gap-2 text-sm md:col-span-2">
-                      <span>Model</span>
-                      <select
-                        className="rounded-xl border border-slate-300 px-3 py-2"
-                        value={aircraftForm.model_id}
-                        onChange={(event) => updateAircraftField("model_id", event.target.value)}
-                      >
-                        <option value="">Select a model</option>
-                        {models.map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-2 text-sm md:col-span-2">
-                      <span>Tail number</span>
-                      <input
-                        className="rounded-xl border border-slate-300 px-3 py-2"
-                        value={aircraftForm.name}
-                        onChange={(event) => updateAircraftField("name", event.target.value)}
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm">
-                      <span>Empty weight</span>
-                      <input
-                        className="rounded-xl border border-slate-300 px-3 py-2"
-                        type="number"
-                        value={aircraftForm.empty_weight}
-                        onChange={(event) => updateAircraftField("empty_weight", event.target.value)}
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm">
-                      <span>Empty arm</span>
-                      <input
-                        className="rounded-xl border border-slate-300 px-3 py-2"
-                        type="number"
-                        value={aircraftForm.empty_arm}
-                        onChange={(event) => updateAircraftField("empty_arm", event.target.value)}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="mt-6 flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={saving}
-                      onClick={() => void handleSaveAircraft()}
-                    >
-                      {saving ? "Saving..." : aircraftForm.id ? "Save aircraft" : "Create aircraft"}
-                    </button>
-                  </div>
-                </div>
+              {showAircraftForm && !aircraftForm.id ? (
+                <div id="aircraft-editor-new">{renderAircraftForm()}</div>
               ) : null}
             </div>
           </div>

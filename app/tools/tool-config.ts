@@ -58,7 +58,6 @@ export function getToolEmbedConfig(slug: string[]) {
 
 const allPrimaryToolKeys = [
   "endorsement-generator",
-  "fids",
   "flight-brief",
   "wb",
   "nighttime",

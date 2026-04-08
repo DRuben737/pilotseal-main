@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import EndorsementDisclaimer from '@/components/legal/EndorsementDisclaimer';
 import templates from './templates';
 import styles from './EndorsementGenerator.module.css';
 import { fetchSavedPeople, fetchDefaultCfi, formatStoredDateForDisplay } from '@/lib/saved-people';
@@ -13,9 +12,9 @@ import { getSupabaseClient } from '@/lib/supabase';
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
   { key: 'instructorCertNumber', label: 'Instructor certificate number', type: 'text', required: true, autoComplete: 'off' },
-  { key: 'instructorCertExpDate', label: 'Instructor certificate expiration *', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
+  { key: 'instructorCertExpDate', label: 'Instructor certificate expiration', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
   { key: 'studentName', label: 'Student name', type: 'text', required: true, autoComplete: 'name' },
-  { key: 'studentCertNumber', label: 'Student certificate number', type: 'text', required: false, autoComplete: 'off' },
+  { key: 'studentCertNumber', label: 'Student certificate number', type: 'text', required: false, autoComplete: 'off', hideOptionalTag: true },
   { key: 'date', label: 'Endorsement date', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
 ];
 
@@ -29,6 +28,22 @@ const INITIAL_FORM_DATA = {
 };
 
 const BASE_FIELD_KEYS = new Set(FIELD_CONFIG.map((field) => field.key));
+const TEMPLATE_CATEGORY_ORDER = [
+  'Solo Endorsements',
+  'Other Solo',
+  'Solo Cross-Country',
+  'Private Pilot',
+  'Instrument Rating',
+  'Commercial Pilot',
+  'CFI',
+  'CFII',
+  'Sport Pilot',
+  'Add Category / Class',
+  'Additional Category / Class',
+  'Retest / Recurrent / IPC',
+  'Aircraft & Operating Endorsements',
+  'Other PIC',
+];
 
 const templateEntries = Object.entries(templates);
 
@@ -112,22 +127,82 @@ function splitTextIntoLines(text, font, fontSize, maxWidth) {
 }
 
 function getTemplateCategory(title) {
-  if (/cross-country/i.test(title)) {
-    return 'Cross-country';
+  const explicitCategoryMap = {
+    'TSA U.S. Citizenship': null,
+    'Pre-Solo Written': 'Solo Endorsements',
+    'Pre-Solo Flight Training': 'Solo Endorsements',
+    'Pre-Solo Night Training': 'Solo Endorsements',
+    'Solo Flight Initial 90 Days': 'Solo Endorsements',
+    'Solo Flight Additional 90 Days': 'Solo Endorsements',
+    'Solo in other airport': 'Other Solo',
+    'Solo airport inside Class B': 'Other Solo',
+    'Solo in Class B': 'Other Solo',
+    'Solo cross-country training': 'Solo Cross-Country',
+    'Solo cross-country plan review': 'Solo Cross-Country',
+    'Solo cross-country day': 'Solo Cross-Country',
+    'Repeated Solo XC Within 50 NM': 'Solo Cross-Country',
+    'PIC Solo Outside Rating': 'Add Category / Class',
+    'PVT addon- deficiency': 'Add Category / Class',
+    'PVT addon-checkride': 'Add Category / Class',
+    'IR addon': 'Add Category / Class',
+    'COM addon': 'Add Category / Class',
+    'Sport Pilot Proficiency Check': 'Sport Pilot',
+    'Sport Pilot Practical Test': 'Sport Pilot',
+    'LSA PIC VH <= 87 KCAS': 'Sport Pilot',
+    'LSA PIC VH > 87 KCAS': 'Sport Pilot',
+    'PVT knowledge test': 'Private Pilot',
+    'PVT Written Deficiencies': 'Private Pilot',
+    'PVT Practical Test': 'Private Pilot',
+    'PVT 2-Month Review': 'Private Pilot',
+    'COM knowledge test': 'Commercial Pilot',
+    'COM Written Deficiencies': 'Commercial Pilot',
+    'COM Practical Test': 'Commercial Pilot',
+    'COM 2-Month Review': 'Commercial Pilot',
+    'IR knowledge test': 'Instrument Rating',
+    'IR Written Deficiencies': 'Instrument Rating',
+    'IR Practical Test': 'Instrument Rating',
+    'IR 2-Month Review': 'Instrument Rating',
+    'FOI knowledge test': 'CFI',
+    'CFI Knowledge Test': 'CFI',
+    'CFI Knowledge Test Deficiencies': 'CFI',
+    'CFII Written Deficiency': 'CFII',
+    'CFI required training': 'CFI',
+    'Spin training': 'CFI',
+    'Helicopter Touchdown Autorotation': 'CFI',
+    'CFII Practical Test': 'CFII',
+    'Flight review': 'Retest / Recurrent / IPC',
+    'Instrument proficiency check': 'Retest / Recurrent / IPC',
+    'Ground Instructor Recency': 'Retest / Recurrent / IPC',
+    'Written Retest': 'Retest / Recurrent / IPC',
+    'Practical Test Retest': 'Retest / Recurrent / IPC',
+    'R-22/R-44 Awareness': 'Solo Endorsements',
+    'R-22 solo endorsement': 'Solo Endorsements',
+    'R-22 PIC': 'Other PIC',
+    'R-22 Flight Review': 'Retest / Recurrent / IPC',
+    'R-44 solo endorsement': 'Solo Endorsements',
+    'R-44 PIC': 'Other PIC',
+    'R-44 Flight Review': 'Retest / Recurrent / IPC',
+    'Complex Airplane PIC': 'Other PIC',
+    'High-Performance Airplane PIC': 'Other PIC',
+    'High-Altitude Pressurized PIC': 'Other PIC',
+    'Tailwheel Airplane PIC': 'Other PIC',
+    'NVG ground training': 'Other PIC',
+    'NVG PIC': 'Other PIC',
+  };
+
+  if (explicitCategoryMap[title]) {
+    return explicitCategoryMap[title];
   }
-  if (/solo/i.test(title)) {
-    return 'Solo';
+
+  if (title in explicitCategoryMap && explicitCategoryMap[title] === null) {
+    return null;
   }
-  if (/CFI|flight instructor|spin|FOI|CFII/i.test(title)) {
-    return 'Instructor';
+
+  if (/additional category|additional class|category\/class|category and class/i.test(title)) {
+    return 'Additional Category / Class';
   }
-  if (/helicopter|R-22|R-44|autorotation/i.test(title)) {
-    return 'Rotorcraft';
-  }
-  if (/review|check|proficiency|practical test|written|knowledge/i.test(title)) {
-    return 'Review/Test';
-  }
-  return 'General';
+
+  return 'Aircraft & Operating Endorsements';
 }
 
 function buildPreviewText(body) {
@@ -268,6 +343,7 @@ function EndorsementGenerator() {
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedCfiId, setSelectedCfiId] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
 
   const canvasRef = useRef(null);
   const signatureDirtyRef = useRef(false);
@@ -444,6 +520,23 @@ function EndorsementGenerator() {
       return left.title.localeCompare(right.title);
     });
 
+  const standaloneTemplates = visibleTemplates.filter((template) => template.category === null);
+
+  const groupedVisibleTemplates = visibleTemplates
+    .filter((template) => template.category !== null)
+    .reduce((accumulator, template) => {
+    if (!accumulator[template.category]) {
+      accumulator[template.category] = [];
+    }
+
+    accumulator[template.category].push(template);
+    return accumulator;
+  }, {});
+
+  const orderedTemplateGroups = TEMPLATE_CATEGORY_ORDER
+    .map((category) => [category, groupedVisibleTemplates[category] || []])
+    .filter(([, templatesForCategory]) => templatesForCategory.length > 0);
+
   const selectedTemplateDetails = selectedTemplates.map((title) => {
     return {
       title,
@@ -551,6 +644,26 @@ function EndorsementGenerator() {
         setStatusMessage('Complete the template details required for the endorsement wording.');
       }
     }
+  };
+
+  const toggleTemplateCategory = (category) => {
+    setTemplateCategoryOpen((prev) => ({
+      ...prev,
+      [category]: !prev[category],
+    }));
+  };
+
+  const handleTemplateCategorySelectAll = (category) => {
+    const categoryTitles = (groupedVisibleTemplates[category] || []).map((template) => template.title);
+    setSelectedTemplates((prev) => Array.from(new Set([...prev, ...categoryTitles])));
+    setErrors((prev) => ({ ...prev, selectedTemplates: undefined }));
+  };
+
+  const handleTemplateCategoryClear = (category) => {
+    const categoryTitles = new Set(
+      (groupedVisibleTemplates[category] || []).map((template) => template.title)
+    );
+    setSelectedTemplates((prev) => prev.filter((template) => !categoryTitles.has(template)));
   };
 
   const handleSelectCfi = (event) => {
@@ -873,17 +986,12 @@ function EndorsementGenerator() {
   return (
     <>
       <div className={styles.page}>
-        <section className={styles.utilityBar}>
-          <h1 className={styles.utilityTitle}>Endorsement Generator</h1>
-          <p className={styles.utilityNote}>{selectedTemplates.length} selected</p>
-        </section>
-
         <div className={styles.workspace}>
           <section className={styles.mainPanel}>
             <div className={styles.card}>
               <div className={styles.sectionHeader}>
                 <div>
-                  <h2>Certificate details</h2>
+                  <h2>Information details(* required)</h2>
                 </div>
               </div>
 
@@ -918,26 +1026,76 @@ function EndorsementGenerator() {
                 </div>
               ) : null}
 
-              <div className={styles.inputGrid}>
-                {FIELD_CONFIG.map((field) => (
-                  <label key={field.key} className={styles.field}>
+              <div className={styles.formRows}>
+                <div className={styles.formRowThree}>
+                  {FIELD_CONFIG.slice(0, 3).map((field) => (
+                    <label key={field.key} className={styles.field}>
+                      <span>
+                        {field.label}
+                        {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
+                      </span>
+                      <input
+                        type={field.type}
+                        value={formData[field.key]}
+                        onChange={handleChange(field.key)}
+                        autoComplete={field.autoComplete}
+                        placeholder={field.placeholder}
+                        inputMode={field.inputMode}
+                        maxLength={field.maxLength}
+                        className={errors[field.key] ? styles.fieldError : ''}
+                      />
+                      {errors[field.key] ? <small>{errors[field.key]}</small> : null}
+                    </label>
+                  ))}
+                </div>
+
+                <div className={styles.formRowTwo}>
+                  {FIELD_CONFIG.slice(3, 5).map((field) => (
+                    <label key={field.key} className={styles.field}>
+                      <span>
+                        {field.label}
+                        {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
+                      </span>
+                      <input
+                        type={field.type}
+                        value={formData[field.key]}
+                        onChange={handleChange(field.key)}
+                        autoComplete={field.autoComplete}
+                        placeholder={field.placeholder}
+                        inputMode={field.inputMode}
+                        maxLength={field.maxLength}
+                        className={errors[field.key] ? styles.fieldError : ''}
+                      />
+                      {errors[field.key] ? <small>{errors[field.key]}</small> : null}
+                    </label>
+                  ))}
+                </div>
+
+                <div className={styles.formRowDateAction}>
+                  <label className={styles.field}>
                     <span>
-                      {field.label}
-                      {field.required ? ' *' : ' (optional)'}
+                      {FIELD_CONFIG[5].label}
+                      {FIELD_CONFIG[5].required ? ' *' : ' (optional)'}
                     </span>
                     <input
-                      type={field.type}
-                      value={formData[field.key]}
-                      onChange={handleChange(field.key)}
-                      autoComplete={field.autoComplete}
-                      placeholder={field.placeholder}
-                      inputMode={field.inputMode}
-                      maxLength={field.maxLength}
-                      className={errors[field.key] ? styles.fieldError : ''}
+                      type={FIELD_CONFIG[5].type}
+                      value={formData[FIELD_CONFIG[5].key]}
+                      onChange={handleChange(FIELD_CONFIG[5].key)}
+                      autoComplete={FIELD_CONFIG[5].autoComplete}
+                      placeholder={FIELD_CONFIG[5].placeholder}
+                      inputMode={FIELD_CONFIG[5].inputMode}
+                      maxLength={FIELD_CONFIG[5].maxLength}
+                      className={errors[FIELD_CONFIG[5].key] ? styles.fieldError : ''}
                     />
-                    {errors[field.key] ? <small>{errors[field.key]}</small> : null}
+                    {errors[FIELD_CONFIG[5].key] ? <small>{errors[FIELD_CONFIG[5].key]}</small> : null}
                   </label>
-                ))}
+
+                  <div className={styles.inlineActionBlock}>
+                    <button className={styles.primaryButton} onClick={openModal} type="button">
+                      Select endorsement
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -986,19 +1144,8 @@ function EndorsementGenerator() {
               <div className={styles.signatureFrame}>
                 <canvas ref={canvasRef} className={styles.signatureCanvas} />
               </div>
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.sectionHeader}>
-                <div>
-                  <h2>Export</h2>
-                </div>
-              </div>
 
               <div className={styles.actionRow}>
-                <button className={styles.primaryButton} onClick={openModal} type="button">
-                  Select endorsements ({selectedTemplates.length})
-                </button>
                 <button className={styles.secondaryButton} onClick={handlePreview} type="button">
                   Preview
                 </button>
@@ -1007,56 +1154,9 @@ function EndorsementGenerator() {
                 </button>
               </div>
 
-              <p className={styles.status}>{statusMessage}</p>
               {errors.selectedTemplates ? <p className={styles.inlineError}>{errors.selectedTemplates}</p> : null}
-              <EndorsementDisclaimer className="mt-5" />
             </div>
           </section>
-
-          <aside className={styles.sidePanel}>
-            <div className={styles.card}>
-              <div className={styles.sectionHeader}>
-                <div>
-                  <h2>Selection summary</h2>
-                </div>
-              </div>
-
-              {selectedTemplateDetails.length > 0 ? (
-                <div className={styles.selectedList}>
-                  {selectedTemplateDetails.map((template) => (
-                    <div key={template.title} className={styles.selectedCard}>
-                      <div className={styles.selectedMeta}>
-                        <h3>{template.title}</h3>
-                        <button type="button" onClick={() => handleTemplateSelection(template.title)}>
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={styles.emptyState}>
-                  <p>No templates selected yet.</p>
-                  <button className={styles.ghostButton} onClick={openModal} type="button">
-                    Browse templates
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.sectionHeader}>
-                <div>
-                  <h2>Workflow notes</h2>
-                </div>
-              </div>
-              <ul className={styles.noteList}>
-                <li>Use template search to narrow by solo, review, or instructor endorsements.</li>
-                <li>Preview now confirms instructor, student, and date before generating the PDF packet.</li>
-                <li>Blank signature mode keeps the signature line but omits the image.</li>
-              </ul>
-            </div>
-          </aside>
         </div>
       </div>
 
@@ -1112,7 +1212,7 @@ function EndorsementGenerator() {
                   <label key={field.key} className={`${styles.field} ${styles.templateDetailsField}`}>
                     <span>
                       {field.label}
-                      {field.required ? ' *' : ' (optional)'}
+                      {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
                     </span>
                     <p className={styles.templateDetailsFieldHint}>{getFieldHelperText(field)}</p>
                     {field.type === 'select' ? (
@@ -1211,23 +1311,93 @@ function EndorsementGenerator() {
           ) : null}
 
           <div className="endorsementTemplateScroller">
-            <div className="endorsementTemplateGrid">
-              {visibleTemplates.map((template) => (
-                <button
-                  key={template.title}
-                  type="button"
-                  className={`endorsementTemplateCard ${template.selected ? 'endorsementTemplateCardSelected' : ''}`}
-                  onClick={() => handleTemplateSelection(template.title)}
-                  aria-pressed={template.selected}
-                >
-                  <div className="endorsementTemplateTop">
-                    <span className="endorsementTemplateCategory">{template.category}</span>
-                    <span className="endorsementTemplateToggle">{template.selected ? 'Selected' : 'Add'}</span>
-                  </div>
-                  <h3>{template.title}</h3>
-                  <p className="endorsementTemplatePreview">{template.preview.slice(0, 220)}...</p>
-                </button>
-              ))}
+            {standaloneTemplates.length > 0 ? (
+              <div className="endorsementTemplateGrid">
+                {standaloneTemplates.map((template) => (
+                  <button
+                    key={template.title}
+                    type="button"
+                    className={`endorsementTemplateCard ${template.selected ? 'endorsementTemplateCardSelected' : ''}`}
+                    onClick={() => handleTemplateSelection(template.title)}
+                    aria-pressed={template.selected}
+                  >
+                    <div className="endorsementTemplateTop">
+                      <span className="endorsementTemplateCategory">Priority</span>
+                      <span className="endorsementTemplateToggle">{template.selected ? 'Selected' : 'Add'}</span>
+                    </div>
+                    <h3>{template.title}</h3>
+                    <p className="endorsementTemplatePreview">{template.preview.slice(0, 220)}...</p>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className={styles.templateCategoryStack}>
+              {orderedTemplateGroups.map(([category, categoryTemplates]) => {
+                const selectedCount = categoryTemplates.filter((template) => template.selected).length;
+                const isOpen = templateCategoryOpen[category] ?? false;
+
+                return (
+                  <section key={category} className={styles.templateCategorySection}>
+                    <div className={styles.templateCategoryHeader}>
+                      <button
+                        type="button"
+                        className={styles.templateCategoryToggle}
+                        onClick={() => toggleTemplateCategory(category)}
+                        aria-expanded={isOpen}
+                      >
+                        <div>
+                          <h3>{category}</h3>
+                          <p>
+                            {selectedCount} of {categoryTemplates.length} selected
+                          </p>
+                        </div>
+                        <span className={`${styles.templateCategoryChevron} ${isOpen ? styles.templateCategoryChevronOpen : ''}`}>
+                          ˅
+                        </span>
+                      </button>
+
+                      <div className={styles.templateCategoryActions}>
+                        <button
+                          type="button"
+                          className={styles.templateCategoryAction}
+                          onClick={() => handleTemplateCategorySelectAll(category)}
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.templateCategoryAction}
+                          onClick={() => handleTemplateCategoryClear(category)}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+
+                    {isOpen ? (
+                      <div className="endorsementTemplateGrid">
+                        {categoryTemplates.map((template) => (
+                          <button
+                            key={template.title}
+                            type="button"
+                            className={`endorsementTemplateCard ${template.selected ? 'endorsementTemplateCardSelected' : ''}`}
+                            onClick={() => handleTemplateSelection(template.title)}
+                            aria-pressed={template.selected}
+                          >
+                            <div className="endorsementTemplateTop">
+                              <span className="endorsementTemplateCategory">{template.category}</span>
+                              <span className="endorsementTemplateToggle">{template.selected ? 'Selected' : 'Add'}</span>
+                            </div>
+                            <h3>{template.title}</h3>
+                            <p className="endorsementTemplatePreview">{template.preview.slice(0, 220)}...</p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
             </div>
           </div>
         </div>

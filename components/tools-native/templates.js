@@ -38,7 +38,7 @@ I certify that {studentName} {studentCertNumber} has received the required train
 Date: {date}           *
 {instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
 
-"Solo T/O & Landing Within 25 NM": `
+"Solo in other airport": `
 I certify that {studentName} {studentCertNumber} has received the required training of § 61.93(b)(1). I have determined that {studentName} is proficient to practice solo takeoffs and landings at (airport name). The takeoffs and landings at (airport name) are subject to the following conditions: (List any applicable conditions or limitations.)  
 Date: {date}           *
 {instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
@@ -58,12 +58,12 @@ I certify that {studentName} {studentCertNumber} has received the required train
 Date: {date}           *
 {instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
 
-"Solo flight in Class B airspace": `
+"Solo in Class B": `
 I certify that {studentName} {studentCertNumber} has received the required training of §61.95(a). I have determined {studentName} is proficient to conduct solo flights in (name of Class B) airspace. (List any applicable conditions or limitations.)  
 Date: {date}           *
 {instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
 
-"Solo Ops at Class B Airport":` 
+"Solo airport inside Class B":` 
 I certify that {studentName} {studentCertNumber} has received the required training of § 61.95(b)(1). I have determined that {studentName} is proficient to conduct solo flight operations at (name of airport). (List any applicable conditions or limitations.)  
 Date: {date}           *
 {instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
@@ -380,7 +380,7 @@ const FIELD_LIBRARY = {
     label: "CFII category",
     type: "select",
     required: true,
-    options: ["Airplane", "Helicopter"],
+    options: ["Airplane", "Helicopter", "Powered-Lift"],
     placeholder: "Select the aircraft category for the CFII practical test.",
   },
   classCategory: { label: "Category and class", type: "text", required: true },
@@ -449,6 +449,20 @@ const FIELD_LIBRARY = {
       "Flight Instructor Instrument practical test",
     ],
     placeholder: "Select the exact practical test referenced in the endorsement.",
+  },
+  pilotCertificateGrade: {
+    label: "Grade of pilot certificate",
+    type: "select",
+    required: true,
+    options: ["Student", "Private", "Commercial", "ATP"],
+    placeholder: "Select the pilot certificate grade named in the endorsement.",
+  },
+  pronounSubject: {
+    label: "Pronoun",
+    type: "select",
+    required: true,
+    options: ["he", "she", "they"],
+    placeholder: "Select the pronoun used in the endorsement wording.",
   },
   proficiencyCheckName: {
     label: "Proficiency check",
@@ -602,10 +616,10 @@ const TEMPLATE_FIELD_OVERRIDES = {
       placeholder: "Select the category and class for the flight instructor practical test.",
     },
   },
-  "Night Vision Goggles": {
-    categoryClass: {
-      label: "NVG aircraft category and class",
-      placeholder: "Select the category and class the pilot is approved to operate with night vision goggles.",
+  "CFII Practical Test": {
+    flightInstructorInstrumentRating: {
+      label: "CFII category",
+      placeholder: "Select the aircraft category for the CFII practical test.",
     },
   },
 };
@@ -668,11 +682,76 @@ const templates = Object.fromEntries(
 );
 
 delete templates["CFI Written Deficiencies"];
+delete templates["Practical Test Prereqs"];
+delete templates["Solo Ops at Towered/Class B/C/D Airport"];
+delete templates["Solo Flight in Class B/C/D"];
+delete templates["Night Vision Goggles"];
+
 templates["CFI Knowledge Test Deficiencies"] = {
   text: `I certify that {studentName} {studentCertNumber} has demonstrated satisfactory knowledge of the subject areas in which {studentName} was deficient on the {cfiKnowledgeTests}.
 Date: {date}           *
 {instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
   fields: [{ key: "cfiKnowledgeTests", ...FIELD_LIBRARY.cfiKnowledgeTests }],
+};
+
+templates["CFII Written Deficiency"] = {
+  ...templates["CFI Knowledge Test Deficiencies"],
+};
+
+templates["CFII Practical Test"] = {
+  text: `I certify that {studentName} {studentCertNumber} has received the required certificated flight instructor – instrument training of § 61.187(b)(7). I have determined {studentName} is prepared for the certificated flight instructor – instrument – {flightInstructorInstrumentRating} practical test.
+Date: {date}           *
+{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  fields: [
+    {
+      key: "flightInstructorInstrumentRating",
+      ...FIELD_LIBRARY.flightInstructorInstrumentRating,
+    },
+  ],
+};
+
+templates["PVT addon- deficiency"] = {
+  ...templates["PVT Written Deficiencies"],
+};
+
+templates["PVT addon-checkride"] = {
+  ...templates["PVT Practical Test"],
+};
+
+templates["IR addon"] = {
+  ...templates["IR Practical Test"],
+};
+
+templates["COM addon"] = {
+  ...templates["COM Practical Test"],
+};
+
+templates["NVG ground training"] = {
+  text: `I certify that {studentName}, {pilotCertificateGrade} [certificate number {studentCertNumber}], has received the flight training on night vision goggle operations required by 14 CFR § 61.31(k)(2), (i) through (iv). I find {studentName} proficient in the use of night vision goggles.
+Date: {date}           *
+{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  fields: [
+    {
+      key: "pilotCertificateGrade",
+      ...FIELD_LIBRARY.pilotCertificateGrade,
+    },
+  ],
+};
+
+templates["NVG PIC"] = {
+  text: `I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the flight training on night vision goggle operations required by 14 CFR § 61.31(k)(2), (i) through (iv). I find {pronounSubject} proficient in the use of night vision goggles.
+Date: {date}           *
+{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  fields: [
+    {
+      key: "pilotCertificateGrade",
+      ...FIELD_LIBRARY.pilotCertificateGrade,
+    },
+    {
+      key: "pronounSubject",
+      ...FIELD_LIBRARY.pronounSubject,
+    },
+  ],
 };
 
 export default templates;
