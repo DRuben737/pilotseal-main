@@ -76,7 +76,7 @@ export default function CGEnvelopeChart({
 
       <ResponsiveContainer>
         <ComposedChart margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" />
+          <CartesianGrid stroke="#cbd5e1" strokeOpacity={0.48} strokeDasharray="2 4" />
 
           <XAxis
             dataKey="x"

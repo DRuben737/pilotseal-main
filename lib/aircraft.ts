@@ -17,6 +17,8 @@ export type AircraftEnvelopeSet = {
   sideView: AircraftPolygonPoint[];
 };
 
+export type AircraftChartType = "1d1p" | "2d1p" | "2d2p";
+
 export type AircraftStation = {
   id: string;
   name: string;
@@ -31,6 +33,7 @@ export type AircraftModelRecord = {
   id: string;
   name: string;
   category: string | null;
+  chart_type?: AircraftChartType | string | null;
   stations: unknown;
   envelope: unknown;
 };
@@ -47,7 +50,7 @@ export type AircraftRecord = {
   model?: AircraftModelRecord | null;
 };
 
-const AIRCRAFT_MODEL_SELECT = "id, name, category, stations, envelope";
+const AIRCRAFT_MODEL_SELECT = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
   "id, model_id, name, empty_weight, empty_arm, empty_lat_arm, max_weight",
   "id, model_id, name, empty_weight, empty_arm, max_weight",
@@ -165,6 +168,7 @@ export async function createAircraft(input: {
   name: string;
   empty_weight: number;
   empty_arm: number;
+  empty_lat_arm?: number | null;
 }) {
   const supabase = getSupabaseClient();
   const attempts = [
@@ -174,6 +178,7 @@ export async function createAircraft(input: {
         name: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[0],
     },
@@ -183,6 +188,7 @@ export async function createAircraft(input: {
         name: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[1],
     },
@@ -192,6 +198,7 @@ export async function createAircraft(input: {
         tail_number: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[2],
     },
@@ -201,6 +208,7 @@ export async function createAircraft(input: {
         tail_number: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[3],
     },
@@ -232,6 +240,7 @@ export async function updateAircraft(
     name: string;
     empty_weight: number;
     empty_arm: number;
+    empty_lat_arm?: number | null;
   }
 ) {
   const supabase = getSupabaseClient();
@@ -242,6 +251,7 @@ export async function updateAircraft(
         name: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[0],
     },
@@ -251,6 +261,7 @@ export async function updateAircraft(
         name: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[1],
     },
@@ -260,6 +271,7 @@ export async function updateAircraft(
         tail_number: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[2],
     },
@@ -269,6 +281,7 @@ export async function updateAircraft(
         tail_number: input.name,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[3],
     },
@@ -345,28 +358,48 @@ export function parseAircraftEnvelopeSet(envelope: unknown): AircraftEnvelopeSet
     const set = rawValue as {
       normal?: unknown[];
       utility?: unknown[];
+      polygon?: unknown[];
       top_view?: unknown[];
       side_view?: unknown[];
       topView?: unknown[];
       sideView?: unknown[];
     };
+    const normalPoints = Array.isArray(set.normal)
+      ? (set.normal.map(normalizeEnvelopePoint).filter(Boolean) as AircraftEnvelopePoint[])
+      : [];
+    const utilityPoints = Array.isArray(set.utility)
+      ? (set.utility.map(normalizeEnvelopePoint).filter(Boolean) as AircraftEnvelopePoint[])
+      : [];
+    const topViewPoints = Array.isArray(set.top_view)
+      ? (set.top_view.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
+      : Array.isArray(set.topView)
+        ? (set.topView.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
+        : [];
+    const sideViewPoints = Array.isArray(set.side_view)
+      ? (set.side_view.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
+      : Array.isArray(set.sideView)
+        ? (set.sideView.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
+        : [];
+    const polygonPoints = Array.isArray(set.polygon)
+      ? (set.polygon.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
+      : [];
+    const fallbackNormalPolygon = Array.isArray(set.normal)
+      ? (set.normal.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
+      : [];
+    const fallbackUtilityPolygon = Array.isArray(set.utility)
+      ? (set.utility.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
+      : [];
+
     return {
-      normal: Array.isArray(set.normal)
-        ? (set.normal.map(normalizeEnvelopePoint).filter(Boolean) as AircraftEnvelopePoint[])
-        : [],
-      utility: Array.isArray(set.utility)
-        ? (set.utility.map(normalizeEnvelopePoint).filter(Boolean) as AircraftEnvelopePoint[])
-        : [],
-      topView: Array.isArray(set.top_view)
-        ? (set.top_view.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
-        : Array.isArray(set.topView)
-          ? (set.topView.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
-          : [],
-      sideView: Array.isArray(set.side_view)
-        ? (set.side_view.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
-        : Array.isArray(set.sideView)
-          ? (set.sideView.map(normalizePolygonPoint).filter(Boolean) as AircraftPolygonPoint[])
-          : [],
+      normal: normalPoints,
+      utility: utilityPoints,
+      topView:
+        topViewPoints.length > 0
+          ? topViewPoints
+          : polygonPoints.length > 0
+            ? polygonPoints
+            : fallbackNormalPolygon,
+      sideView: sideViewPoints.length > 0 ? sideViewPoints : fallbackUtilityPolygon,
     };
   }
 
@@ -397,6 +430,10 @@ function normalizeAircraftRecord(value: unknown) {
           category:
             typeof (rawModel as Record<string, unknown>).category === "string"
               ? String((rawModel as Record<string, unknown>).category)
+              : null,
+          chart_type:
+            typeof (rawModel as Record<string, unknown>).chart_type === "string"
+              ? String((rawModel as Record<string, unknown>).chart_type)
               : null,
           stations: (rawModel as Record<string, unknown>).stations ?? [],
           envelope: (rawModel as Record<string, unknown>).envelope ?? [],
@@ -456,7 +493,7 @@ function normalizeEnvelopePoint(value: unknown) {
   }
 
   const point = value as Record<string, unknown>;
-  const cg = toNumber(point.cg) ?? toNumber(point.x);
+  const cg = toNumber(point.cg) ?? toNumber(point.x) ?? toNumber(point.arm);
   const weight = toNumber(point.weight) ?? toNumber(point.y);
 
   if (cg === null || weight === null) {
@@ -472,11 +509,17 @@ function normalizePolygonPoint(value: unknown) {
   }
 
   const point = value as Record<string, unknown>;
-  const x = toNumber(point.x) ?? toNumber(point.cg) ?? toNumber(point.long);
+  const x =
+    toNumber(point.x) ??
+    toNumber(point.cg) ??
+    toNumber(point.long) ??
+    toNumber(point.arm);
   const y =
     toNumber(point.y) ??
     toNumber(point.weight) ??
-    toNumber(point.lat);
+    toNumber(point.lat) ??
+    toNumber(point.latArm) ??
+    toNumber(point.lat_arm);
 
   if (x === null || y === null) {
     return null;

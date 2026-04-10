@@ -63,6 +63,232 @@ function getFlightCategoryMeta(rule) {
   return meta[rule] || { color: "#7f8c8d", bg: "#f4f6f7", label: rule || "UNK", desc: "Unknown" };
 }
 
+function parseMetarVisibility(raw) {
+  const text = String(raw || "").toUpperCase();
+  const fractionMatch = text.match(/\b(\d+)\s+(\d+)\/(\d+)SM\b/);
+  if (fractionMatch) {
+    return Number(fractionMatch[1]) + Number(fractionMatch[2]) / Number(fractionMatch[3]);
+  }
+
+  const simpleFractionMatch = text.match(/\b(\d+)\/(\d+)SM\b/);
+  if (simpleFractionMatch) {
+    return Number(simpleFractionMatch[1]) / Number(simpleFractionMatch[2]);
+  }
+
+  const integerMatch = text.match(/\b(P?\d+)SM\b/);
+  if (integerMatch) {
+    return Number(String(integerMatch[1]).replace("P", ""));
+  }
+
+  return null;
+}
+
+function parseMetarCeiling(raw) {
+  const text = String(raw || "").toUpperCase();
+  const layers = [...text.matchAll(/\b(BKN|OVC|VV)(\d{3})\b/g)]
+    .map((match) => Number(match[2]) * 100)
+    .filter(Number.isFinite);
+
+  if (!layers.length) {
+    return null;
+  }
+
+  return Math.min(...layers);
+}
+
+function getFlightRulesFromMetar(raw) {
+  const visibility = parseMetarVisibility(raw);
+  const ceiling = parseMetarCeiling(raw);
+
+  const safeVisibility = visibility ?? 99;
+  const safeCeiling = ceiling ?? 9999;
+
+  if (safeVisibility >= 5 && safeCeiling >= 3000) return "VFR";
+  if (safeVisibility >= 3 && safeCeiling >= 1000) return "MVFR";
+  if (safeVisibility >= 1 && safeCeiling >= 500) return "IFR";
+  return "LIFR";
+}
+
+const AIRMET_REGION_LABELS = {
+  BOS: "Boston",
+  MIA: "Miami",
+  DFW: "Dallas-Fort Worth",
+  CHI: "Chicago",
+  SLC: "Salt Lake City",
+  SFO: "San Francisco",
+  JNU: "Juneau",
+  ANC: "Anchorage",
+  FAI: "Fairbanks",
+  HNL: "Honolulu",
+  WA: "Western U.S.",
+  WC: "West Coast",
+  SIERRA: "Sierra",
+  TANGO: "Tango",
+  ZULU: "Zulu",
+};
+
+function decodeAirmetRegion(value) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (!normalized) {
+    return "";
+  }
+
+  return AIRMET_REGION_LABELS[normalized] ?? normalized;
+}
+
+function formatWeatherHazardLabel(value) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase();
+
+  const labels = {
+    IFR: "IFR",
+    "MT-OBSC": "Mountain obscuration",
+    TURB: "Turbulence",
+    ICE: "Icing",
+    "SFC-WIND": "Surface wind",
+    LLWS: "Low-level wind shear",
+    CONVECTIVE: "Convective",
+  };
+
+  return labels[normalized] ?? (normalized.replaceAll("_", " ") || "Unknown");
+}
+
+function toTitleCase(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getHazardExplanation(value, kind = "advisory") {
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase();
+
+  const explanations = {
+    IFR: "Widespread instrument conditions are expected in this area.",
+    "MT-OBSC": "Terrain may be obscured by clouds, precipitation, or haze.",
+    TURB: "Moderate turbulence may affect this route segment.",
+    ICE: "Icing conditions are possible in the advisory area.",
+    "SFC-WIND": "Strong surface wind may affect takeoff and landing.",
+    LLWS: "Low-level wind shear may be present near the surface.",
+    CONVECTIVE: "Thunderstorm activity may affect the route and nearby airspace.",
+    "CONVECTIVE SIGMET": "Thunderstorm activity may affect the route and nearby airspace.",
+  };
+
+  return (
+    explanations[normalized] ??
+    (kind === "sigmet"
+      ? "Significant en route weather advisory."
+      : "Active weather advisory for part of the route.")
+  );
+}
+
+function getAdvisoryDisplay(item, kind = "airmet") {
+  const hazardSource =
+    item?.hazard ??
+    item?.severity ??
+    item?.text?.replace(/\s+SIGMET$/i, "") ??
+    item?.text;
+  const normalized = String(hazardSource ?? "")
+    .trim()
+    .toUpperCase();
+
+  const title =
+    normalized === "CONVECTIVE" || normalized === "CONVECTIVE SIGMET"
+      ? "Convective SIGMET"
+      : kind === "sigmet" && normalized
+        ? `${formatWeatherHazardLabel(normalized)} SIGMET`
+        : formatWeatherHazardLabel(normalized);
+
+  return {
+    title: title || (kind === "sigmet" ? "SIGMET" : "AIRMET"),
+    detail: getHazardExplanation(normalized, kind),
+    raw: String(item?.text ?? "").trim(),
+    region: String(item?.region ?? "").trim(),
+    severity: String(item?.severity ?? item?.qualifier ?? "").trim(),
+    base: item?.base ?? null,
+    top: item?.top ?? null,
+    validFrom: String(item?.validFrom ?? "").trim(),
+    validTo: String(item?.validTo ?? "").trim(),
+    issuedAt: String(item?.issued ?? item?.issuedAt ?? item?.issueTime ?? "").trim(),
+    dueTo: String(item?.dueTo ?? item?.cause ?? item?.hazard ?? "").trim(),
+  };
+}
+
+function WeatherSection({
+  title,
+  count,
+  accent,
+  children,
+  defaultOpen = true,
+}) {
+  return (
+    <details className="flightbrief-weatherCard" open={defaultOpen}>
+      <summary
+        className="flightbrief-weatherHeader"
+        style={{
+          borderColor: accent.border,
+          background: accent.background,
+        }}
+      >
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <span style={{ fontWeight: 800, color: "#1f2937" }}>{title}</span>
+          {count != null ? (
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                background: accent.badgeBg,
+                color: accent.badgeText,
+                padding: "2px 8px",
+                borderRadius: 999,
+              }}
+            >
+              {count}
+            </span>
+          ) : null}
+        </div>
+        <span className="flightbrief-weatherChevron">▼</span>
+      </summary>
+      <div className="flightbrief-weatherBody">{children}</div>
+    </details>
+  );
+}
+
+function groupAdvisories(items, keyResolver) {
+  const counts = new Map();
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const label = keyResolver(item);
+    if (!label) continue;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function formatAltitudeBand(base, top) {
+  const start = base == null || base === "" ? null : String(base);
+  const end = top == null || top === "" ? null : String(top);
+  if (!start && !end) return "";
+  if (start && end) return `${start} to ${end}`;
+  return start ? `Base ${start}` : `Top ${end}`;
+}
+
+function formatAdvisoryAltitude(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (/surface/i.test(text)) return "surface";
+  if (/^\d[\d,]*$/.test(text)) return `${text}`;
+  return text;
+}
+
 // NOTAM 智能过滤与分类（按你给的方案，稍微改成返回 notam 对象，方便显示 start/end）
 function categorizeNotams(notams) {
   if (!Array.isArray(notams)) return { closures: [], nav: [], general: [] };
@@ -301,6 +527,14 @@ export default function FlightBrief() {
   const setTafByIcao = useCallback((value) => setBriefField("tafByIcao", value), [setBriefField]);
   const airsigmetSummary = brief.airsigmetSummary ?? "";
   const setAirsigmetSummary = useCallback((value) => setBriefField("airsigmetSummary", value), [setBriefField]);
+  const airmets = brief.airmets ?? [];
+  const setAirmets = useCallback((value) => setBriefField("airmets", value), [setBriefField]);
+  const sigmets = brief.sigmets ?? [];
+  const setSigmets = useCallback((value) => setBriefField("sigmets", value), [setBriefField]);
+  const pireps = brief.pireps ?? [];
+  const setPireps = useCallback((value) => setBriefField("pireps", value), [setBriefField]);
+  const weatherResults = brief.weatherResults ?? [];
+  const setWeatherResults = useCallback((value) => setBriefField("weatherResults", value), [setBriefField]);
 
   const latestAltimeterRef = useRef(null); // inHg number
   const latestTemperatureCRef = useRef(null); // C number
@@ -366,6 +600,54 @@ export default function FlightBrief() {
     if (Number.isNaN(now) || Number.isNaN(due)) return "0.0";
     return (due - now).toFixed(1);
   }, [mxNow, mxDue]);
+
+  const airmetGroups = useMemo(
+    () => groupAdvisories(airmets, (item) => formatWeatherHazardLabel(item?.hazard ?? item?.text)),
+    [airmets]
+  );
+  const sigmetGroups = useMemo(
+    () => groupAdvisories(
+      sigmets,
+      (item) =>
+        formatWeatherHazardLabel(
+          item?.hazard ?? item?.severity ?? item?.text?.replace(/\s+SIGMET$/i, "")
+        )
+    ),
+    [sigmets]
+  );
+  const dedupedPireps = useMemo(() => {
+    const seen = new Set();
+    return (Array.isArray(pireps) ? pireps : []).filter((item) => {
+      const text = String(item?.text ?? "").trim();
+      if (!text || seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    });
+  }, [pireps]);
+
+  const daSourceResult = useMemo(() => {
+    if (!Array.isArray(weatherResults) || !weatherResults.length) {
+      return null;
+    }
+
+    const depICAO = normalizeICAO(departure);
+    const pick = (pred) => weatherResults.find(pred) || null;
+
+    return (
+      (depICAO &&
+        pick(
+          (result) =>
+            result?.icao === depICAO &&
+            typeof result?.alt === "number" &&
+            typeof result?.temp === "number"
+        )) ||
+      pick(
+        (result) =>
+          typeof result?.alt === "number" && typeof result?.temp === "number"
+      ) ||
+      null
+    );
+  }, [weatherResults, departure]);
 
   /** ---- risk ---- */
   const staticChecked = brief.staticChecked ?? {};
@@ -641,6 +923,10 @@ export default function FlightBrief() {
       setMetarByIcaoData({});
       setTafByIcao({});
       setAirsigmetSummary("");
+      setAirmets([]);
+      setSigmets([]);
+      setPireps([]);
+      setWeatherResults([]);
 
       latestAltimeterRef.current = null;
       latestTemperatureCRef.current = null;
@@ -651,12 +937,12 @@ export default function FlightBrief() {
       const weatherPayload = await postJson(
         "/api/brief/weather",
         {
-          airports: icaos,
-          departure: depICAO,
+          route: icaos,
         },
         controller.signal
       );
       const results = Array.isArray(weatherPayload?.results) ? weatherPayload.results : [];
+      setWeatherResults(results);
 
       // prefer dep for alt/temp if possible
       const pick = (pred) => results.find(pred) || null;
@@ -677,7 +963,10 @@ export default function FlightBrief() {
       const metarMap = {};
       const tafMap = {};
       for (const r of results) {
-        metarMap[r.icao] = { raw: r.metarRaw, flight_rules: r.flight_rules };
+        metarMap[r.icao] = {
+          raw: r.metarRaw,
+          flight_rules: getFlightRulesFromMetar(r.metarRaw),
+        };
         tafMap[r.icao] = `${r.icao}: ${r.tafRaw}`;
       }
       setMetarByIcaoData(metarMap);
@@ -685,8 +974,18 @@ export default function FlightBrief() {
 
       // AIRMET/SIGMET once
       setAirsigmetSummary(weatherPayload?.airsigmetSummary || "AIRMET/SIGMET unavailable");
+      setAirmets(Array.isArray(weatherPayload?.airmets) ? weatherPayload.airmets : []);
+      setSigmets(Array.isArray(weatherPayload?.sigmets) ? weatherPayload.sigmets : []);
+      setPireps(Array.isArray(weatherPayload?.pireps) ? weatherPayload.pireps : []);
     } catch (e) {
-      if (e?.name !== "AbortError") setWeatherError("Weather fetch failed. Please try again.");
+      if (e?.name !== "AbortError") {
+        const routeText = airportsForWxAndNotams.join(", ");
+        setWeatherError(
+          `${e?.message || "Weather fetch failed. Please try again."}${
+            routeText ? ` Route: ${routeText}` : ""
+          }`
+        );
+      }
     } finally {
       setWeatherLoading(false);
     }
@@ -755,8 +1054,14 @@ export default function FlightBrief() {
   /** ---- calculate DA ---- */
   const calculateDA = useCallback(() => {
     const elevationFt = parseFloat(fieldElevation);
-    const temperatureC = parseFloat(outsideTemp);
-    const altimeterInHg = latestAltimeterRef.current;
+    const temperatureC =
+      typeof daSourceResult?.temp === "number"
+        ? daSourceResult.temp
+        : parseFloat(outsideTemp);
+    const altimeterInHg =
+      typeof daSourceResult?.alt === "number"
+        ? daSourceResult.alt
+        : latestAltimeterRef.current;
 
     if (Number.isNaN(elevationFt)) {
       setDaResult("Please enter field elevation.");
@@ -769,9 +1074,9 @@ export default function FlightBrief() {
 
     const da = calcDensityAltitudeFt({ elevationFt, temperatureC, altimeterInHg });
     setDaResult(
-      `Estimated Density Altitude: ${da.toLocaleString()} ft (using Altimeter ${altimeterInHg} inHg)`
+      `Estimated Density Altitude: ${da.toLocaleString()} ft using ${daSourceResult?.icao || "latest METAR"} (${altimeterInHg} inHg / ${temperatureC}°C)`
     );
-  }, [fieldElevation, outsideTemp]);
+  }, [fieldElevation, outsideTemp, daSourceResult]);
 
   /** ---- report ---- */
   const generateReport = useCallback(() => {
@@ -1238,51 +1543,38 @@ ${riskComments}
             <section className="flightbrief-panel">
               <h2 className="text-xl font-bold mb-4">Aircraft</h2>
 
-              <WeightBalanceCalculator stateKey="briefWb" embedded />
-
-              <div className="flightbrief-compact-grid flightbrief-aircraft-summary">
-                {!aircraftId && !grossWeight ? (
-                  <div className="copy-muted">
-                    No aircraft loading data yet. Complete the aircraft section above.
-                  </div>
-                ) : null}
-                <div className="inline-label-input inline-label-input-compact">
-                  <label className="label" htmlFor="grossWeight">Total Gross Weight (lbs):</label>
-                  <input type="number" id="grossWeight" className="input-field" value={grossWeight} readOnly placeholder="Calculated in W&B" />
+              {!aircraftId && !grossWeight ? (
+                <div className="copy-muted mb-3">
+                  No aircraft loading data yet. Complete the aircraft section.
                 </div>
+              ) : null}
 
-                <div className="inline-label-input inline-label-input-compact">
-                  <label className="label" htmlFor="wbCg">Center of Gravity (in):</label>
-                  <input type="text" id="wbCg" className="input-field" value={wbCg} readOnly placeholder="Calculated in W&B" />
+              <div className="flightbrief-aircraft-summaryBar">
+                <div className="flightbrief-kpi">
+                  <span>Total Gross Weight (lbs)</span>
+                  <strong>{grossWeight || "--"}</strong>
                 </div>
-
-                <div className="inline-label-input inline-label-input-compact">
-                  <label className="label" htmlFor="withinLimitsConfirmed">
-                    Confirm weight & CG <strong>within limits</strong>:
-                  </label>
-                  <input
-                    id="withinLimitsConfirmed"
-                    type="checkbox"
-                    checked={withinLimitsConfirmed}
-                    readOnly
-                    disabled
-                    style={{ transform: "scale(1.2)" }}
-                  />
-                  <span className={`text-sm ml-2 ${withinLimitsConfirmed ? "text-green-600" : "text-red-600"}`}>
+                <div className="flightbrief-kpi">
+                  <span>Center of Gravity (in)</span>
+                  <strong>{wbCg || "--"}</strong>
+                </div>
+                <div className="flightbrief-kpi">
+                  <span>Weight & CG within limits</span>
+                  <strong className={withinLimitsConfirmed ? "is-ok" : "is-alert"}>
                     {withinLimitsConfirmed ? "Confirmed" : "Not Confirmed"}
-                  </span>
+                  </strong>
                 </div>
-
-                <div className="inline-label-input inline-label-input-compact">
+                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="mx-now">Mx Time Now:</label>
                   <input type="number" id="mx-now" className="input-field" value={mxNow} onChange={(e) => setMxNow(e.target.value)} placeholder="Check Aircraft" />
                 </div>
-
-                <div className="inline-label-input inline-label-input-compact">
+                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="mx-due">Next Mx Due:</label>
-                  <input type="number" id="mx-due" className="input-field" value={mxDue} onChange={(e) => setMxDue(e.target.value)} placeholder="Next 100 hr/annual eg." />
+                  <input type="number" id="mx-due" className="input-field" value={mxDue} onChange={(e) => setMxDue(e.target.value)} placeholder="" />
                 </div>
               </div>
+
+              <WeightBalanceCalculator stateKey="briefWb" embedded />
             </section>
           )}
 
@@ -1370,8 +1662,16 @@ ${riskComments}
             <div className="bg-red-50 border border-red-200 p-3 rounded text-red-700">{notamError}</div>
           )}
 
-          <div>
-            <h3>🟢 METAR</h3>
+          <WeatherSection
+            title="METAR"
+            count={Object.keys(metarByIcaoData).length}
+            accent={{
+              border: "#d1fae5",
+              background: "#f0fdf4",
+              badgeBg: "#dcfce7",
+              badgeText: "#166534",
+            }}
+          >
             <div className="space-y-2">
               {Object.keys(metarByIcaoData).length === 0 ? (
                 <div className="text-sm text-gray-500">No METAR yet.</div>
@@ -1386,7 +1686,7 @@ ${riskComments}
                       title={meta.desc}
                     >
                       <div className="flex justify-between items-center mb-1">
-                        <strong className="text-lg">{icao}</strong>
+                        <strong className="text-base">{icao}</strong>
                         <span
                           style={{
                             backgroundColor: meta.color,
@@ -1408,31 +1708,198 @@ ${riskComments}
                 })
               )}
             </div>
-          </div>
+          </WeatherSection>
 
-          <div>
-            <h3>🟡 TAF</h3>
+          <WeatherSection
+            title="TAF"
+            count={Object.keys(tafByIcao).length}
+            accent={{
+              border: "#fde68a",
+              background: "#fffbeb",
+              badgeBg: "#fef3c7",
+              badgeText: "#92400e",
+            }}
+          >
             <div className="space-y-2">
               {Object.keys(tafByIcao).length === 0 ? (
                 <div className="text-sm text-gray-500">No TAF yet.</div>
               ) : (
                 Object.entries(tafByIcao).map(([icao, text]) => (
-                  <div key={icao} className="bg-gray-100 p-3 rounded border mb-2" style={{ whiteSpace: "pre-wrap" }}>
-                    {text}
+                  <div
+                    key={icao}
+                    className="p-3 rounded border mb-3"
+                    style={{ borderLeft: "6px solid #f59e0b", backgroundColor: "#fffbeb" }}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <strong className="text-base">{icao}</strong>
+                      <span
+                        style={{
+                          backgroundColor: "#f59e0b",
+                          color: "white",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        TAF
+                      </span>
+                    </div>
+                    <code className="text-sm block" style={{ whiteSpace: "pre-wrap" }}>
+                      {String(text).replace(new RegExp(`^${icao}:\\s*`), "")}
+                    </code>
                   </div>
                 ))
               )}
             </div>
-          </div>
+          </WeatherSection>
 
-          <div>
-            <h3>🔴 AIRMET/SIGMET</h3>
+          <WeatherSection
+            title="AIRMET / SIGMET / PIREP"
+            count={airmets.length + sigmets.length + dedupedPireps.length}
+            accent={{
+              border: "#fecaca",
+              background: "#fef2f2",
+              badgeBg: "#fee2e2",
+              badgeText: "#991b1b",
+            }}
+            defaultOpen={false}
+          >
             <div className="space-y-2">
               <div className="bg-gray-100 p-3 rounded border">
                 {airsigmetSummary || "No active AIRMET/SIGMETs (or not fetched)."}
               </div>
+              <div className="flightbrief-compact-grid">
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs uppercase tracking-wide text-gray-500">AIRMET</div>
+                  <div className="text-lg font-semibold text-gray-900">{airmets.length}</div>
+                </div>
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs uppercase tracking-wide text-gray-500">SIGMET</div>
+                  <div className="text-lg font-semibold text-gray-900">{sigmets.length}</div>
+                </div>
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs uppercase tracking-wide text-gray-500">PIREP</div>
+                  <div className="text-lg font-semibold text-gray-900">{dedupedPireps.length}</div>
+                </div>
+              </div>
+
+              {airmetGroups.length > 0 ? (
+                <div className="bg-white border rounded p-3">
+                  <h4 className="font-semibold mb-2">AIRMET summary</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {airmetGroups.map((group) => (
+                      <span
+                        key={`airmet-group-${group.label}`}
+                        className="inline-flex items-center gap-2 rounded-full border bg-amber-50 px-3 py-1 text-sm text-amber-900"
+                      >
+                        <strong>{group.label}</strong>
+                        <span>{group.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                      View AIRMET details
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {airmets.map((item, index) => {
+                        const advisory = getAdvisoryDisplay(item, "airmet");
+                        const titleText =
+                          advisory.title?.startsWith("G-AIRMET:")
+                            ? advisory.title
+                            : `G-AIRMET: ${formatWeatherHazardLabel(item?.hazard ?? advisory.title)}`;
+                        const decodedRegion = decodeAirmetRegion(advisory.region);
+                        return (
+                          <div key={`airmet-${index}`} className="flightbrief-weatherDetailCard">
+                            <div className="font-medium text-gray-900">{titleText}</div>
+                            <div className="mt-2 space-y-1 text-sm text-gray-700">
+                              {advisory.validTo ? <div><strong>Valid:</strong> {advisory.validTo}</div> : null}
+                              {advisory.issuedAt ? <div><strong>Issued:</strong> {advisory.issuedAt}</div> : null}
+                              {advisory.severity ? <div><strong>Severity:</strong> {advisory.severity}</div> : null}
+                              {advisory.top != null && advisory.top !== "" ? (
+                                <div><strong>Top:</strong> {formatAdvisoryAltitude(advisory.top)}</div>
+                              ) : null}
+                              {advisory.base != null && advisory.base !== "" ? (
+                                <div><strong>Base:</strong> {formatAdvisoryAltitude(advisory.base)}</div>
+                              ) : null}
+                              {advisory.dueTo ? <div><strong>Due to:</strong> {advisory.dueTo}</div> : null}
+                              {decodedRegion ? <div><strong>Region:</strong> {decodedRegion}</div> : null}
+                            </div>
+                            {advisory.raw ? <div className="mt-2 text-xs text-gray-500">{advisory.raw}</div> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </div>
+              ) : null}
+
+              {sigmetGroups.length > 0 ? (
+                <div className="bg-white border rounded p-3">
+                  <h4 className="font-semibold mb-2">SIGMET summary</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {sigmetGroups.map((group) => (
+                      <span
+                        key={`sigmet-group-${group.label}`}
+                        className="inline-flex items-center gap-2 rounded-full border bg-red-50 px-3 py-1 text-sm text-red-900"
+                      >
+                        <strong>{group.label}</strong>
+                        <span>{group.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                      View SIGMET details
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {sigmets.map((item, index) => {
+                        const advisory = getAdvisoryDisplay(item, "sigmet");
+                        return (
+                          <div key={`sigmet-${index}`} className="flightbrief-weatherDetailCard">
+                            <div className="font-medium text-gray-900">{advisory.title}</div>
+                            <div className="mt-2 space-y-1 text-sm text-gray-700">
+                              {advisory.validTo ? <div><strong>Valid:</strong> {advisory.validTo}</div> : null}
+                              {advisory.issuedAt ? <div><strong>Issued:</strong> {advisory.issuedAt}</div> : null}
+                              {advisory.severity ? <div><strong>Severity:</strong> {advisory.severity}</div> : null}
+                              {advisory.dueTo ? <div><strong>Due to:</strong> {advisory.dueTo}</div> : null}
+                            </div>
+                            {advisory.raw ? <div className="mt-2 text-xs text-gray-500">{advisory.raw}</div> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </div>
+              ) : null}
+
+              <div className="bg-white border rounded p-3">
+                <h4 className="font-semibold mb-2">PIREP</h4>
+                {dedupedPireps.length > 0 ? (
+                  <details>
+                    <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                      View {dedupedPireps.length} pilot report{dedupedPireps.length === 1 ? "" : "s"}
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {dedupedPireps.slice(0, 12).map((item, index) => (
+                        <div key={`pirep-${index}`} className="flightbrief-weatherDetailCard" style={{ whiteSpace: "pre-wrap" }}>
+                          {item?.text || "Unavailable"}
+                        </div>
+                      ))}
+                      {dedupedPireps.length > 12 ? (
+                        <div className="text-xs text-gray-500">
+                          Showing first 12 reports to keep this readable.
+                        </div>
+                      ) : null}
+                    </div>
+                  </details>
+                ) : (
+                  <div className="text-sm text-gray-500">No pilot reports returned.</div>
+                )}
+              </div>
             </div>
-          </div>
+          </WeatherSection>
 
           <div>
             <h3 className="section-subtitle">📏 Density Altitude (DA)</h3>

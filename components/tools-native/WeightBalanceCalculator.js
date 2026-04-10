@@ -100,6 +100,7 @@ function resolveAircraftProfile(selectedAircraft) {
     id: selectedAircraft.id,
     name: selectedAircraft.name,
     category: selectedAircraft.model.category ?? selectedAircraft.category ?? null,
+    chartType: resolveChartType(selectedAircraft.model.chart_type, envelopeSet, selectedAircraft.model.category),
     emptyWeight: toNumber(selectedAircraft.empty_weight),
     emptyArm: toNumber(selectedAircraft.empty_arm),
     emptyLatArm: toNumber(selectedAircraft.empty_lat_arm),
@@ -109,12 +110,32 @@ function resolveAircraftProfile(selectedAircraft) {
   };
 }
 
+function resolveChartType(chartType, envelopeSet, category) {
+  const normalized = String(chartType || "").trim().toLowerCase();
+  if (normalized === "1d1p" || normalized === "2d1p" || normalized === "2d2p") {
+    return normalized;
+  }
+
+  if (category === "helicopter") {
+    if (envelopeSet.topView.length > 0 && envelopeSet.sideView.length > 0) {
+      return "2d2p";
+    }
+
+    if (envelopeSet.topView.length > 0 || envelopeSet.sideView.length > 0) {
+      return "2d1p";
+    }
+  }
+
+  return "1d1p";
+}
+
 function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
   if (!profile) {
     return null;
   }
 
   const isHelicopter = profile.category === "helicopter";
+  const chartType = profile.chartType ?? "1d1p";
   const activeEnvelope =
     envelopeMode === "utility" && profile.envelopeSet.utility.length > 0
       ? profile.envelopeSet.utility
@@ -124,12 +145,16 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
 
   const stationBreakdown = profile.stations.map((station) => {
     const input = toNumber(inputs[station.id]);
+    const usesEditableDefaultWeight =
+      typeof station.fixedWeight === "number" && isEditableDefaultWeightStation(station);
     const weight =
-      typeof station.fixedWeight === "number"
+      typeof station.fixedWeight === "number" && !usesEditableDefaultWeight
         ? station.fixedWeight
         : typeof station.weightPerGallon === "number" && station.weightPerGallon > 0
           ? input * station.weightPerGallon
-          : input;
+          : usesEditableDefaultWeight && String(inputs[station.id] ?? "").trim() === ""
+            ? station.fixedWeight
+            : input;
 
     return {
       ...station,
@@ -142,7 +167,7 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
           : null,
       isFuelStation:
         typeof station.weightPerGallon === "number" && station.weightPerGallon > 0,
-      isFixedWeight: typeof station.fixedWeight === "number",
+      isFixedWeight: typeof station.fixedWeight === "number" && !usesEditableDefaultWeight,
     };
   });
 
@@ -187,8 +212,9 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
   let status = "within";
   let insideTop = null;
   let insideSide = null;
+  let insidePrimary2d = null;
 
-  if (isHelicopter) {
+  if (chartType === "2d2p") {
     insideTop =
       topView.length >= 3 && Number.isFinite(cgLat)
         ? isInsidePolygon({ x: cg, y: cgLat }, topView)
@@ -202,6 +228,27 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
       (insideTop === null || insideTop) && (insideSide === null || insideSide)
         ? "within"
         : "outside";
+  } else if (chartType === "2d1p") {
+    const hasTopView = topView.length >= 3;
+    const hasSideView = sideView.length >= 3;
+    const hasNormalAs2d = profile.envelopeSet.normal.length >= 3;
+    const primaryTwoDimensionalEnvelope = hasTopView
+      ? topView
+      : hasSideView
+        ? sideView
+        : [];
+    const primaryPoint = hasTopView
+      ? { x: cg, y: cgLat }
+      : { x: cg, y: totalWeight };
+
+    insidePrimary2d =
+      primaryTwoDimensionalEnvelope.length >= 3 &&
+      Number.isFinite(primaryPoint.x) &&
+      Number.isFinite(primaryPoint.y)
+        ? isInsidePolygon(primaryPoint, primaryTwoDimensionalEnvelope)
+        : null;
+
+    status = insidePrimary2d === null || insidePrimary2d ? "within" : "outside";
   } else if (maxEnvelopeWeight > 0 && totalWeight > maxEnvelopeWeight) {
     status = "overweight";
   } else if (bounds && cg < bounds.min) {
@@ -213,6 +260,10 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
   return {
     aircraft_name: profile.name,
     category: profile.category,
+    chart_type: chartType,
+    empty_weight: profile.emptyWeight,
+    empty_arm: profile.emptyArm,
+    empty_lat_arm: profile.emptyLatArm,
     total_weight: totalWeight,
     total_moment: totalLongMoment,
     cg,
@@ -231,6 +282,7 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
     side_view_envelope: sideView,
     inside_top_view: insideTop,
     inside_side_view: insideSide,
+    inside_primary_2d: insidePrimary2d,
     envelope: activeEnvelope,
     envelopeMode,
     hasUtilityEnvelope: profile.envelopeSet.utility.length > 0,
@@ -287,14 +339,16 @@ function getAircraftType(profile) {
 }
 
 function shouldRenderStation(station, aircraftType) {
-  if (
-    aircraftType === "helicopter" &&
-    (/door/i.test(station.id) || /door/i.test(station.name))
-  ) {
-    return false;
-  }
-
   return true;
+}
+
+function isEditableDefaultWeightStation(station) {
+  return (
+    /door/i.test(station.id) ||
+    /door/i.test(station.name) ||
+    /glove/i.test(station.id) ||
+    /glove/i.test(station.name)
+  );
 }
 
 export default function WeightBalanceCalculator({
@@ -413,6 +467,7 @@ export default function WeightBalanceCalculator({
   }, [aircraftProfile, envelopeMode, inputs, setActiveWb]);
 
   const result = activeWb.result;
+  const chartType = result?.chart_type ?? aircraftProfile?.chartType ?? "1d1p";
   const renderedStations = useMemo(
     () => (aircraftProfile?.stations ?? []).filter((station) => shouldRenderStation(station, aircraftType)),
     [aircraftProfile?.stations, aircraftType]
@@ -519,7 +574,7 @@ export default function WeightBalanceCalculator({
 
           {error ? <p className="copy-muted mt-2">{error}</p> : null}
 
-          {aircraftType === "airplane" && result?.hasUtilityEnvelope ? (
+          {chartType === "1d1p" && aircraftType === "airplane" && result?.hasUtilityEnvelope ? (
             <div className="wb-top-fields">
               <label className="wb-field">
                 <span>Envelope</span>
@@ -539,8 +594,10 @@ export default function WeightBalanceCalculator({
               <label key={station.id} className="wb-field">
                 <span>{station.name}</span>
                 <small>
-                  {typeof station.fixedWeight === "number"
+                  {typeof station.fixedWeight === "number" && !isEditableDefaultWeightStation(station)
                     ? "Fixed weight"
+                    : typeof station.fixedWeight === "number" && isEditableDefaultWeightStation(station)
+                    ? "lbs"
                     : typeof station.weightPerGallon === "number" && station.weightPerGallon > 0
                     ? `Gallons (${station.weightPerGallon} lbs/gal)`
                     : "lbs"}
@@ -549,12 +606,19 @@ export default function WeightBalanceCalculator({
                   className="wb-number-input"
                   type="number"
                   value={
-                    typeof station.fixedWeight === "number"
+                    typeof station.fixedWeight === "number" && !isEditableDefaultWeightStation(station)
                       ? station.fixedWeight
+                      : typeof station.fixedWeight === "number" &&
+                          isEditableDefaultWeightStation(station) &&
+                          String(inputs[station.id] ?? "").trim() === ""
+                        ? station.fixedWeight
                       : inputs[station.id] ?? ""
                   }
                   onChange={(event) => handleInputChange(station.id, event.target.value)}
-                  readOnly={typeof station.fixedWeight === "number"}
+                  readOnly={
+                    typeof station.fixedWeight === "number" &&
+                    !isEditableDefaultWeightStation(station)
+                  }
                 />
               </label>
             ))}
@@ -581,8 +645,18 @@ export default function WeightBalanceCalculator({
           </div>
 
           <div className="wb-stat-grid">
+            {aircraftType === "helicopter" ? (
+              <div className="wb-stat-card">
+                <span>Total empty fuel</span>
+                <strong>
+                  {typeof result?.zero_fuel_weight === "number"
+                    ? `${result.zero_fuel_weight.toFixed(1)} lbs`
+                    : "--"}
+                </strong>
+              </div>
+            ) : null}
             <div className="wb-stat-card">
-              <span>Total weight</span>
+              <span>{aircraftType === "helicopter" ? "Total with fuel" : "Total weight"}</span>
               <strong>
                 {typeof result?.total_weight === "number"
                   ? `${result.total_weight.toFixed(1)} lbs`
@@ -612,13 +686,33 @@ export default function WeightBalanceCalculator({
                 </strong>
               </div>
             )}
+            {aircraftType === "helicopter" ? (
+              <>
+                <div className="wb-stat-card">
+                  <span>Empty fuel CG Long</span>
+                  <strong>
+                    {typeof result?.zero_fuel_cg === "number"
+                      ? `${result.zero_fuel_cg.toFixed(2)} in`
+                      : "--"}
+                  </strong>
+                </div>
+                <div className="wb-stat-card">
+                  <span>Empty fuel CG Lat</span>
+                  <strong>
+                    {typeof result?.zero_fuel_cg_lat === "number"
+                      ? `${result.zero_fuel_cg_lat.toFixed(2)} in`
+                      : "--"}
+                  </strong>
+                </div>
+              </>
+            ) : null}
             <div className="wb-stat-card">
               <span>Status</span>
               <strong>{result ? getStatusLabel(result.status) : "--"}</strong>
             </div>
           </div>
 
-          {aircraftType === "airplane" &&
+          {chartType === "1d1p" &&
           Array.isArray(result?.normal_envelope) &&
           result.normal_envelope.length > 0 ? (
             <div className="wb-chart-wrap">
@@ -635,7 +729,7 @@ export default function WeightBalanceCalculator({
             </div>
           ) : null}
 
-          {aircraftType === "helicopter" ? (
+          {chartType === "2d2p" ? (
             <div className="wb-chart-wrap">
               <CGEnvelopeChart
                 title="Top View Envelope"
@@ -654,6 +748,90 @@ export default function WeightBalanceCalculator({
                 referencePoint={{ x: result?.zero_fuel_cg, y: result?.zero_fuel_weight }}
               />
               <p className="wb-chart-note">Black dot is current CG. Red dot is zero-fuel CG.</p>
+            </div>
+          ) : null}
+
+          {chartType === "2d1p" ? (
+            <div className="wb-chart-wrap">
+              {(() => {
+                const hasTopView =
+                  Array.isArray(result?.top_view_envelope) && result.top_view_envelope.length > 0;
+                const polygon = hasTopView
+                  ? result?.top_view_envelope
+                  : result?.side_view_envelope;
+                const isLatChart = hasTopView;
+
+                return (
+              <CGEnvelopeChart
+                title={isLatChart ? "Top View Envelope" : "Side View Envelope"}
+                xLabel="CG Long"
+                yLabel={isLatChart ? "CG Lat" : "Weight"}
+                primaryPolygon={polygon}
+                currentPoint={isLatChart
+                  ? { x: result?.cg_long, y: result?.cg_lat }
+                  : { x: result?.cg_long, y: result?.total_weight }}
+                referencePoint={isLatChart
+                  ? { x: result?.zero_fuel_cg, y: result?.zero_fuel_cg_lat }
+                  : { x: result?.zero_fuel_cg, y: result?.zero_fuel_weight }}
+              />
+                );
+              })()}
+              <p className="wb-chart-note">Black dot is current CG. Red dot is zero-fuel CG.</p>
+            </div>
+          ) : null}
+
+          {aircraftType === "helicopter" && result && !embedded ? (
+            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/70 bg-white/70">
+              <table className="min-w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-50/80 text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Item</th>
+                    <th className="px-3 py-2 font-medium">Weight</th>
+                    <th className="px-3 py-2 font-medium">Long arm</th>
+                    <th className="px-3 py-2 font-medium">Lat arm</th>
+                    <th className="px-3 py-2 font-medium">Long moment</th>
+                    <th className="px-3 py-2 font-medium">Lat moment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-slate-100">
+                    <td className="px-3 py-2">Empty</td>
+                    <td className="px-3 py-2">
+                      {typeof result.empty_weight === "number" ? result.empty_weight.toFixed(1) : "--"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {typeof result.empty_arm === "number" ? result.empty_arm.toFixed(2) : "--"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {typeof result.empty_lat_arm === "number" ? result.empty_lat_arm.toFixed(2) : "--"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {typeof result.empty_weight === "number" && typeof result.empty_arm === "number"
+                        ? (result.empty_weight * result.empty_arm).toFixed(1)
+                        : "--"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {typeof result.empty_weight === "number" && typeof result.empty_lat_arm === "number"
+                        ? (result.empty_weight * result.empty_lat_arm).toFixed(1)
+                        : "--"}
+                    </td>
+                  </tr>
+                  {result.stationBreakdown.map((station) => (
+                    <tr key={station.id} className="border-b border-slate-100 last:border-b-0">
+                      <td className="px-3 py-2">{station.name}</td>
+                      <td className="px-3 py-2">{station.weight.toFixed(1)}</td>
+                      <td className="px-3 py-2">{station.arm.toFixed(2)}</td>
+                      <td className="px-3 py-2">
+                        {typeof station.latArm === "number" ? station.latArm.toFixed(2) : "--"}
+                      </td>
+                      <td className="px-3 py-2">{station.longMoment.toFixed(1)}</td>
+                      <td className="px-3 py-2">
+                        {typeof station.latMoment === "number" ? station.latMoment.toFixed(1) : "--"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : null}
         </section>

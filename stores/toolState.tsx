@@ -3,7 +3,6 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -123,45 +122,6 @@ const DEFAULT_DECODER = {
 
 const ToolStateContext = createContext<ToolState | null>(null);
 
-function loadSlice<T extends ToolSlice>(key: string, fallback: T) {
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      return fallback;
-    }
-
-    const parsed = JSON.parse(raw) as T;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return { ...fallback, ...parsed };
-    }
-
-    return parsed ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function loadPersistedValue<T>(key: string, fallback: T) {
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      return fallback;
-    }
-
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 export function ToolProvider({ children }: { children: ReactNode }) {
   const [brief, setBrief] = useState<ToolSlice>(DEFAULT_BRIEF);
   const [wb, setWb] = useState<ToolSlice>(DEFAULT_WB);
@@ -169,62 +129,6 @@ export function ToolProvider({ children }: { children: ReactNode }) {
   const [decoder, setDecoder] = useState<ToolSlice>(DEFAULT_DECODER);
   const [selectedAircraft, setSelectedAircraft] = useState<SelectedAircraft>(null);
   const [briefSelectedAircraft, setBriefSelectedAircraft] = useState<SelectedAircraft>(null);
-  const [hasHydrated, setHasHydrated] = useState(false);
-
-  useEffect(() => {
-    setBrief(loadSlice("tool_brief", DEFAULT_BRIEF));
-    setWb(loadSlice("tool_wb", DEFAULT_WB));
-    setBriefWb(loadSlice("tool_brief_wb", DEFAULT_WB));
-    setDecoder(loadSlice("tool_decoder", DEFAULT_DECODER));
-    setSelectedAircraft(loadPersistedValue("selected_aircraft", null));
-    setBriefSelectedAircraft(loadPersistedValue("selected_brief_aircraft", null));
-    setHasHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hasHydrated) {
-      return;
-    }
-    window.localStorage.setItem("tool_brief", JSON.stringify(brief));
-  }, [brief, hasHydrated]);
-
-  useEffect(() => {
-    if (!hasHydrated) {
-      return;
-    }
-    window.localStorage.setItem("tool_wb", JSON.stringify(wb));
-  }, [wb, hasHydrated]);
-
-  useEffect(() => {
-    if (!hasHydrated) {
-      return;
-    }
-    window.localStorage.setItem("tool_brief_wb", JSON.stringify(briefWb));
-  }, [briefWb, hasHydrated]);
-
-  useEffect(() => {
-    if (!hasHydrated) {
-      return;
-    }
-    window.localStorage.setItem("tool_decoder", JSON.stringify(decoder));
-  }, [decoder, hasHydrated]);
-
-  useEffect(() => {
-    if (!hasHydrated) {
-      return;
-    }
-    window.localStorage.setItem("selected_aircraft", JSON.stringify(selectedAircraft));
-  }, [selectedAircraft, hasHydrated]);
-
-  useEffect(() => {
-    if (!hasHydrated) {
-      return;
-    }
-    window.localStorage.setItem(
-      "selected_brief_aircraft",
-      JSON.stringify(briefSelectedAircraft)
-    );
-  }, [briefSelectedAircraft, hasHydrated]);
 
   const value = useMemo(
     () => ({

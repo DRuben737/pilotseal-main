@@ -1,78 +1,238 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BRIEF_API_BASE = "https://brief.r1978244759.workers.dev";
+const AVWX_FUNCTION_URL =
+  "https://dyewqcrqbhnbsseigcoa.supabase.co/functions/v1/AVWX";
 
-async function fetchJson(url: string) {
-  const response = await fetch(url, {
-    cache: "no-store",
-  });
+type WeatherResult = {
+  icao: string;
+  metarRaw: string;
+  flight_rules: string;
+  alt?: number | null;
+  temp?: number | null;
+  tafRaw: string;
+};
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+function getAnonKey() {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!anonKey) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY.");
   }
 
-  return response.json();
+  return anonKey;
 }
 
-function avwxMetarUrl(icao: string) {
-  return `${BRIEF_API_BASE}/?url=${encodeURIComponent(`https://avwx.rest/api/metar/${icao}?format=json`)}`;
+function normalizeIcao(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
 }
 
-function avwxTafUrl(icao: string) {
-  return `${BRIEF_API_BASE}/?url=${encodeURIComponent(`https://avwx.rest/api/taf/${icao}?format=json`)}`;
+function toNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))
+      ? Number(value)
+      : null;
 }
 
-function avwxAirsigmetUrl() {
-  return `${BRIEF_API_BASE}/?url=${encodeURIComponent("https://avwx.rest/api/airsigmet?format=json")}`;
+function extractRawText(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return (
+      String(
+        record.raw ??
+          record.text ??
+          record.raw_text ??
+          record.report ??
+          record.message ??
+          "Unavailable"
+      ) || "Unavailable"
+    );
+  }
+
+  return "Unavailable";
+}
+
+function normalizeWeatherResults(payload: Record<string, unknown>, requestedIcaos: string[]) {
+  const rawResults = Array.isArray(payload.results)
+    ? payload.results
+    : Array.isArray(payload.airports)
+      ? payload.airports
+      : Array.isArray(payload.weather)
+        ? payload.weather
+        : [];
+
+  const normalized = rawResults
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const record = entry as Record<string, unknown>;
+      const icao = normalizeIcao(
+        record.icao ?? record.station ?? record.airport ?? record.ident
+      );
+
+      if (!icao) {
+        return null;
+      }
+
+      const metarSource =
+        record.metar ??
+        record.metarRaw ??
+        record.metar_raw ??
+        record.raw_metar;
+      const tafSource =
+        record.taf ??
+        record.tafRaw ??
+        record.taf_raw ??
+        record.raw_taf;
+      const metarRecord =
+        metarSource && typeof metarSource === "object"
+          ? (metarSource as Record<string, unknown>)
+          : null;
+
+      return {
+        icao,
+        metarRaw: extractRawText(metarSource),
+        flight_rules: String(
+          record.flight_rules ??
+            metarRecord?.flight_rules ??
+            record.flightRules ??
+            ""
+        ),
+        alt:
+          toNumber(record.alt) ??
+          toNumber(record.altimeter) ??
+          toNumber((record.altimeter as Record<string, unknown> | undefined)?.value),
+        temp:
+          toNumber(record.temp) ??
+          toNumber(record.temperature) ??
+          toNumber((record.temperature as Record<string, unknown> | undefined)?.value),
+        tafRaw: extractRawText(tafSource),
+      } satisfies WeatherResult;
+    })
+    .filter(Boolean) as WeatherResult[];
+
+  const byIcao = new Map(normalized.map((item) => [item.icao, item]));
+
+  return requestedIcaos.map((icao) => {
+    const existing = byIcao.get(icao);
+    return (
+      existing ?? {
+        icao,
+        metarRaw: "Unavailable",
+        flight_rules: "",
+        alt: null,
+        temp: null,
+        tafRaw: "Unavailable",
+      }
+    );
+  });
+}
+
+function normalizeAdvisoryItems(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return { text: entry.trim() };
+      }
+
+      if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        const text = String(
+          record.raw ??
+            record.text ??
+            record.message ??
+            record.report ??
+            record.body ??
+            ""
+        ).trim();
+        return {
+          ...record,
+          text,
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { airports } = (await request.json()) as {
-      airports?: string[];
+    const { route } = (await request.json()) as {
+      route?: string[];
     };
 
-    const icaos = Array.isArray(airports)
-      ? airports.map((value) => String(value).trim().toUpperCase()).filter(Boolean)
+    const requestedIcaos = Array.isArray(route)
+      ? route.map(normalizeIcao).filter(Boolean)
       : [];
 
-    if (!icaos.length) {
+    if (!requestedIcaos.length) {
       return NextResponse.json({ error: "No airports provided." }, { status: 400 });
     }
 
-    const results = await Promise.all(
-      icaos.map(async (icao) => {
-        const [metar, taf] = await Promise.allSettled([
-          fetchJson(avwxMetarUrl(icao)),
-          fetchJson(avwxTafUrl(icao)),
-        ]);
+    const response = await fetch(AVWX_FUNCTION_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getAnonKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        route: requestedIcaos,
+      }),
+      cache: "no-store",
+    });
 
-        const metarData = metar.status === "fulfilled" ? metar.value : null;
-        const tafData = taf.status === "fulfilled" ? taf.value : null;
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
-        return {
-          icao,
-          metarRaw: metarData?.raw || "Unavailable",
-          flight_rules: metarData?.flight_rules || "",
-          alt: metarData?.altimeter?.value,
-          temp: metarData?.temperature?.value,
-          tafRaw: tafData?.raw || "Unavailable",
-        };
-      })
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          error: String(payload.error ?? "Weather fetch failed."),
+          upstreamStatus: response.status,
+          route: requestedIcaos,
+        },
+        { status: response.status }
+      );
+    }
+
+    const results = normalizeWeatherResults(payload, requestedIcaos);
+    const airmets = normalizeAdvisoryItems(payload.airmets ?? payload.airmet);
+    const sigmets = normalizeAdvisoryItems(payload.sigmets ?? payload.sigmet);
+    const pireps = normalizeAdvisoryItems(payload.pireps ?? payload.pirep);
+    const combinedSummary =
+      typeof payload.airsigmetSummary === "string"
+        ? payload.airsigmetSummary
+        : typeof payload.summary === "string"
+          ? payload.summary
+          : airmets.length || sigmets.length
+            ? `${airmets.length} AIRMET${airmets.length === 1 ? "" : "s"}, ${sigmets.length} SIGMET${sigmets.length === 1 ? "" : "s"}`
+            : "No active AIRMET/SIGMETs";
+
+    return NextResponse.json({
+      results,
+      airmets,
+      sigmets,
+      pireps,
+      airsigmetSummary: combinedSummary,
+      route: requestedIcaos,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Weather fetch failed.",
+      },
+      { status: 500 }
     );
-
-    let airsigmetSummary = "AIRMET/SIGMET unavailable";
-
-    try {
-      const airsigmetData = await fetchJson(avwxAirsigmetUrl());
-      airsigmetSummary =
-        Array.isArray(airsigmetData) && airsigmetData.length
-          ? `${airsigmetData.length} active AIRMET/SIGMETs in U.S. FIRs`
-          : "No active AIRMET/SIGMETs";
-    } catch {}
-
-    return NextResponse.json({ results, airsigmetSummary });
-  } catch {
-    return NextResponse.json({ error: "Weather fetch failed." }, { status: 500 });
   }
 }

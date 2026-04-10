@@ -44,6 +44,7 @@ type AircraftFormState = {
   name: string;
   empty_weight: string;
   empty_arm: string;
+  empty_lat_arm: string;
 };
 
 const emptyModelForm: ModelFormState = {
@@ -64,6 +65,7 @@ const emptyAircraftForm: AircraftFormState = {
   name: "",
   empty_weight: "",
   empty_arm: "",
+  empty_lat_arm: "",
 };
 
 function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
@@ -99,6 +101,7 @@ function normalizeAircraftForm(aircraft: AircraftRecord): AircraftFormState {
     name: aircraft.name ?? "",
     empty_weight: aircraft.empty_weight != null ? String(aircraft.empty_weight) : "",
     empty_arm: aircraft.empty_arm != null ? String(aircraft.empty_arm) : "",
+    empty_lat_arm: aircraft.empty_lat_arm != null ? String(aircraft.empty_lat_arm) : "",
   };
 }
 
@@ -400,6 +403,8 @@ export default function AircraftAdminPanel() {
         name: aircraftForm.name.trim(),
         empty_weight: toNumber(aircraftForm.empty_weight),
         empty_arm: toNumber(aircraftForm.empty_arm),
+        empty_lat_arm:
+          aircraftForm.empty_lat_arm.trim() === "" ? null : toNumber(aircraftForm.empty_lat_arm),
       };
       let savedAircraft: AircraftRecord;
 
@@ -720,6 +725,15 @@ export default function AircraftAdminPanel() {
             type="number"
             value={aircraftForm.empty_arm}
             onChange={(event) => updateAircraftField("empty_arm", event.target.value)}
+          />
+        </label>
+        <label className="grid gap-2 text-sm">
+          <span>Empty lat arm</span>
+          <input
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            type="number"
+            value={aircraftForm.empty_lat_arm}
+            onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)}
           />
         </label>
       </div>
