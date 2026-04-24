@@ -6,7 +6,7 @@
   min-height: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(79, 70, 229, 0.05), transparent 24%),
+    radial-gradient(circle at top right, rgba(42, 168, 255, 0.05), transparent 24%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.98));
 }
 
@@ -61,9 +61,9 @@
 }
 
 .modalPrimaryButton {
-  background: linear-gradient(135deg, #0f766e, #0f4c81);
+  background: linear-gradient(135deg, #49b9ff, #123a75);
   color: #fff;
-  box-shadow: 0 12px 28px rgba(15, 92, 129, 0.18);
+  box-shadow: 0 12px 28px rgba(42, 168, 255, 0.18);
 }
 
 .modalGhostButton:hover,
@@ -111,7 +111,7 @@
   border-radius: 999px;
   background: #ecfeff;
   color: #155e75;
-  border: 1px solid rgba(8, 145, 178, 0.16);
+  border: 1px solid rgba(42, 168, 255, 0.16);
   white-space: nowrap;
 }
 
@@ -154,9 +154,9 @@
 }
 
 .endorsementTemplateCardSelected {
-  border-color: rgba(15, 118, 110, 0.35);
-  background: linear-gradient(180deg, rgba(240, 253, 250, 0.95), rgba(247, 250, 252, 0.98));
-  box-shadow: 0 16px 34px rgba(15, 118, 110, 0.08);
+  border-color: rgba(42, 168, 255, 0.3);
+  background: linear-gradient(180deg, rgba(238, 248, 255, 0.95), rgba(247, 250, 252, 0.98));
+  box-shadow: 0 16px 34px rgba(42, 168, 255, 0.08);
 }
 
 .endorsementTemplateTop {
@@ -171,15 +171,15 @@
   display: inline-flex;
   padding: 0.28rem 0.58rem;
   border-radius: 999px;
-  background: rgba(79, 70, 229, 0.08);
-  color: #4338ca;
+  background: rgba(42, 168, 255, 0.08);
+  color: #123a75;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .endorsementTemplateToggle {
-  color: #0f766e;
+  color: #123a75;
   font-weight: 700;
 }
 

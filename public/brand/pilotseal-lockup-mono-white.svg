@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="480" viewBox="0 0 1800 480" role="img" aria-labelledby="title desc">
+  <title id="title">PilotSeal Monochrome White Lockup</title>
+  <desc id="desc">PilotSeal transparent monochrome white lockup.</desc>
+  <g fill="#ffffff" stroke="#ffffff">
+    <path d="M128 265c0-72 68-129 147-137 38-4 72 1 103 6" fill="none" stroke-linecap="round" stroke-width="16"/>
+    <path d="M382 104l36-4c6-1 11 4 11 10 0 4-2 7-5 9l-30 18-18 3 8-14-20-1-14 10-8-4 12-15-17-7 5-5 21 2 10-8 9 6z"/>
+    <path d="M181 332V157h82c36 0 61 25 61 62 0 39-25 63-61 63h-39v50h-43zm43-87h31c17 0 27-10 27-25 0-17-10-26-27-26h-31v51z"/>
+    <path d="M407 201c-10-9-22-14-40-14-28 0-48 14-48 36 0 18 13 29 44 37 23 6 31 12 31 21 0 12-12 20-32 20-18 0-34-7-47-20l-28 33c18 17 45 28 75 28 48 0 82-24 82-64 0-30-18-48-58-59-21-5-28-11-28-20 0-11 10-18 26-18 14 0 28 5 40 15l27-29z"/>
+    <path d="M389 344l18 19 39-41" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="12"/>
+  </g>
+  <text x="514" y="232" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="172" font-weight="700" letter-spacing="-7">PilotSeal</text>
+</svg>

@@ -62,7 +62,7 @@ export default function RootLayout({
                     <span className="site-brand-logo-wrap">
                       <Image
                         src={logoImage}
-                        alt="PilotSeal Tools logo"
+                        alt="PilotSeal logo"
                         className="site-brand-logo"
                         width={56}
                         height={56}

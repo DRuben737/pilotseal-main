@@ -1642,7 +1642,7 @@ ${riskComments}
 
             <button
               type="button"
-              className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700"
+              className="bg-sky-500 text-white px-6 py-2 rounded hover:bg-[#123a75]"
               onClick={fetchNotams}
               disabled={notamLoading}
               title="Fetch NOTAMs from FAA NMS via your Worker"

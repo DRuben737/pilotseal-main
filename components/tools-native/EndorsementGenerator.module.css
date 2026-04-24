@@ -154,13 +154,13 @@
 }
 
 .field input:focus {
-  outline: 2px solid rgba(15, 118, 110, 0.2);
-  border-color: #0f766e;
+  outline: 2px solid rgba(42, 168, 255, 0.2);
+  border-color: #123a75;
 }
 
 .field select:focus {
-  outline: 2px solid rgba(15, 118, 110, 0.2);
-  border-color: #0f766e;
+  outline: 2px solid rgba(42, 168, 255, 0.2);
+  border-color: #123a75;
 }
 
 .field small {
@@ -194,7 +194,7 @@
   display: block;
   border-radius: 16px;
   background: #fff;
-  border: 2px dashed rgba(15, 118, 110, 0.26);
+  border: 2px dashed rgba(42, 168, 255, 0.26);
   touch-action: none;
 }
 
@@ -222,9 +222,9 @@
 }
 
 .primaryButton {
-  border: 1px solid rgba(15, 118, 110, 0.18);
-  background: rgba(15, 118, 110, 0.08);
-  color: #0f766e;
+  border: 1px solid rgba(42, 168, 255, 0.18);
+  background: rgba(42, 168, 255, 0.08);
+  color: #123a75;
   width: 240px;
   justify-content: center;
   display: inline-flex;
@@ -239,8 +239,8 @@
 
 .ghostButton {
   background: transparent;
-  color: #0f766e;
-  border: 1px solid rgba(15, 118, 110, 0.2);
+  color: #123a75;
+  border: 1px solid rgba(42, 168, 255, 0.2);
 }
 
 .secondaryButton:disabled {
@@ -302,8 +302,8 @@
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: rgba(15, 118, 110, 0.08);
-  color: #0f4c81;
+  background: rgba(42, 168, 255, 0.08);
+  color: #123a75;
   padding: 0.3rem 0.7rem;
   font-size: 0.76rem;
 }
@@ -313,7 +313,7 @@
   gap: 0.75rem;
   margin: 0 1.25rem 1rem;
   padding: 1rem 1.05rem;
-  border: 1px solid rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(42, 168, 255, 0.08);
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.96));
   color: #475569;
@@ -390,13 +390,13 @@
 
 .templateOptionPill:hover {
   transform: translateY(-1px);
-  border-color: rgba(79, 70, 229, 0.24);
+  border-color: rgba(42, 168, 255, 0.24);
 }
 
 .templateOptionPillActive {
-  border-color: rgba(79, 70, 229, 0.26);
-  background: rgba(79, 70, 229, 0.08);
-  color: #4338ca;
+  border-color: rgba(42, 168, 255, 0.26);
+  background: rgba(42, 168, 255, 0.08);
+  color: #123a75;
 }
 
 .selectedMeta {
