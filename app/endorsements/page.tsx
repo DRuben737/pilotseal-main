@@ -1,6 +1,7 @@
 import Link from "next/link";
 import EndorsementDisclaimer from "@/components/legal/EndorsementDisclaimer";
 import { buildPageMetadata } from "@/lib/seo";
+import endorsementsHeroImage from "@/images/endorsements-hero-illustration.png";
 
 import { defaultGuideReferences, guideCards } from "./guide-content";
 
@@ -90,7 +91,10 @@ export default function EndorsementsPage() {
   return (
     <main className="page-shell page-endorsements px-3">
       <div className="site-shell page-stack space-y-8">
-        <section className="hero-panel hero-endorsements hero-compact overflow-hidden px-6 py-7 sm:px-8 sm:py-9">
+        <section
+          className="hero-panel hero-endorsements hero-compact section-bg-image overflow-hidden px-6 py-7 sm:px-8 sm:py-9"
+          style={{ ["--panel-image" as string]: `url(${endorsementsHeroImage.src})` }}
+        >
           <div className="reading-rail">
             <div>
               <p className="eyebrow">FAA endorsement guide</p>

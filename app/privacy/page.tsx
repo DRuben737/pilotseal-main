@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import privacyHeroImage from "@/images/privacy-hero-illustration.png";
 
 export const metadata: Metadata = {
   title: "Privacy | PilotSeal",
@@ -11,7 +12,10 @@ export default function PrivacyPage() {
   return (
     <main className="page-shell page-policy px-3">
       <div className="site-shell page-stack space-y-8">
-        <section className="hero-panel privacy-atmosphere-surface privacy-atmosphere-hero overflow-hidden px-6 py-10 sm:px-10 sm:py-14">
+        <section
+          className="hero-panel privacy-atmosphere-surface privacy-atmosphere-hero section-bg-image overflow-hidden px-6 py-10 sm:px-10 sm:py-14"
+          style={{ ["--panel-image" as string]: `url(${privacyHeroImage.src})` }}
+        >
           <div className="max-w-3xl">
             <p className="eyebrow">Privacy</p>
             <h1 className="display-title mt-4 text-3xl font-semibold leading-[0.95] text-[var(--foreground)] sm:text-4xl">

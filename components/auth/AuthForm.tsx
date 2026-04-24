@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import authWorkspaceImage from "@/images/auth-workspace-illustration.png";
 import { getSupabaseClient } from "@/lib/supabase";
 
 type AuthMode = "login" | "register";
@@ -114,6 +116,15 @@ export default function AuthForm({
             <p className="eyebrow">{copy.eyebrow}</p>
             <h1 className="saas-auth-title">{copy.title}</h1>
             <p className="saas-auth-copy">{copy.description}</p>
+
+            <div className="saas-auth-illustration-frame">
+              <Image
+                src={authWorkspaceImage}
+                alt="PilotSeal workspace illustration"
+                className="saas-auth-illustration-image"
+                priority={mode === "login"}
+              />
+            </div>
 
             <div className="saas-metric-grid">
               <article className="saas-metric-card">

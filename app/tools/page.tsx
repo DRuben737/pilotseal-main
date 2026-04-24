@@ -4,6 +4,7 @@ import Link from "next/link";
 import feature1Image from "@/images/feature1.png";
 import feature2Image from "@/images/feature2.png";
 import feature4Image from "@/images/feature4.png";
+import utilityToolsImage from "@/images/utility-tools-illustration.png";
 import { primaryToolKeys, toolEmbedConfig } from "@/app/tools/tool-config";
 
 export default function ToolsPage() {
@@ -35,7 +36,10 @@ export default function ToolsPage() {
   );
 
   return (
-    <main className="page-shell page-tools px-3">
+    <main
+      className="page-shell page-tools px-3"
+      style={{ ["--tools-bg-image" as string]: `url(${utilityToolsImage.src})` }}
+    >
       <div className="site-shell page-stack space-y-6">
         <section className="tools-priority-grid">
           {priorityTools.map((tool) => {
