@@ -4,10 +4,8 @@ import FlightInformationDisplay from "@/components/tools-native/FlightInformatio
 import FlightBrief from "@/components/tools-native/FlightBrief";
 import NightTimeCalculator from "@/components/tools-native/NightTimeCalculator";
 import WeightBalanceCalculator from "@/components/tools-native/WeightBalanceCalculator";
-import AoaSimulator from "@/src/aoa-simulator/components/AoaSimulator";
 
 export const nativeToolRegistry = {
-  "aoa-simulator": AoaSimulator,
   decoder: Decoder,
   "endorsement-generator": EndorsementGenerator,
   fids: FlightInformationDisplay,

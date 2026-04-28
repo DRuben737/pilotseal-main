@@ -125,21 +125,6 @@ export default function AuthForm({
                 priority={mode === "login"}
               />
             </div>
-
-            <div className="saas-metric-grid">
-              <article className="saas-metric-card">
-                <p className="saas-metric-value">1</p>
-                <p className="saas-metric-label">Unified session source</p>
-              </article>
-              <article className="saas-metric-card">
-                <p className="saas-metric-value">3</p>
-                <p className="saas-metric-label">Dashboard workspaces</p>
-              </article>
-              <article className="saas-metric-card">
-                <p className="saas-metric-value">4</p>
-                <p className="saas-metric-label">Notification priorities</p>
-              </article>
-            </div>
           </div>
 
           <div className="saas-auth-card">

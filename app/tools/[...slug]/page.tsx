@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 
 import { getToolEmbedConfig } from "@/app/tools/tool-config";
 import { nativeToolRegistry } from "@/components/tools-native/tool-registry";
-import { features } from "@/lib/features";
 import { buildPageMetadata } from "@/lib/seo";
 
 type ToolPageProps = {
@@ -14,8 +13,6 @@ type ToolPageProps = {
 
 function renderNativeTool(slug: string) {
   switch (slug) {
-    case "aoa-simulator":
-      return createElement(nativeToolRegistry["aoa-simulator"]);
     case "decoder":
       return createElement(nativeToolRegistry.decoder);
     case "endorsement-generator":
@@ -75,23 +72,12 @@ export default async function EmbeddedToolPage({ params }: ToolPageProps) {
   const { slug } = await params;
   const tool = getToolEmbedConfig(slug);
   const toolLinks = [
-    ["aoa-simulator", "AOA"],
     ["endorsement-generator", "Endorsements"],
     ["flight-brief", "Brief"],
     ["wb", "W&B"],
     ["nighttime", "Night"],
     ["decoder", "Decoder"],
-  ].filter(([key]) => {
-    if (key === slug.join("/")) {
-      return false;
-    }
-
-    if (key === "aoa-simulator" && !features.aoaSimulator) {
-      return false;
-    }
-
-    return true;
-  });
+  ].filter(([key]) => key !== slug.join("/"));
 
   if (!tool) {
     notFound();

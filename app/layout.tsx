@@ -81,7 +81,7 @@ export default function RootLayout({
               </div>
             </header>
 
-            <div className="pb-12 pt-4 sm:pt-8">
+            <div id="main-content" className="pb-12 pt-4 sm:pt-8">
               <SiteNotificationBanner />
               {children}
             </div>

@@ -1,3 +1,1 @@
-export const features = {
-  aoaSimulator: false,
-} as const;
+export const features = {} as const;

@@ -14,6 +14,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 const publicNavItems = [
   { href: "/", label: "Home" },
   { href: "/tools", label: "Tools" },
+  { href: "/endorsements", label: "Endorsements" },
   { href: "/intro", label: "Articles" },
 ];
 
@@ -53,7 +54,7 @@ export default function SiteNav() {
           setDisplayName(profile?.display_name ?? "");
           setDefaultCfiName(defaultCfi?.display_name ?? "");
         }
-      } catch (error) {
+      } catch {
         if (!cancelled) {
           setDisplayName("");
           setDefaultCfiName("");

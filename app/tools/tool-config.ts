@@ -1,5 +1,3 @@
-import { features } from "@/lib/features";
-
 export type ToolEmbedConfig = {
   title: string;
   description: string;
@@ -7,12 +5,6 @@ export type ToolEmbedConfig = {
 };
 
 export const toolEmbedConfig: Record<string, ToolEmbedConfig> = {
-  "aoa-simulator": {
-    title: "AOA Simulator",
-    description:
-      "Explore a modular angle-of-attack teaching sandbox with placeholder scene, HUD, controls, and simulation layers.",
-    eyebrow: "Simulator",
-  },
   "endorsement-generator": {
     title: "Endorsement Generator",
     description:
@@ -62,9 +54,6 @@ const allPrimaryToolKeys = [
   "wb",
   "nighttime",
   "decoder",
-  "aoa-simulator",
 ] as const;
 
-export const primaryToolKeys = allPrimaryToolKeys.filter(
-  (key) => key !== "aoa-simulator" || features.aoaSimulator
-);
+export const primaryToolKeys = allPrimaryToolKeys;
