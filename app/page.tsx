@@ -1,155 +1,107 @@
+import Image from "next/image";
 import Link from "next/link";
 
-import home1Image from "@/images/home1.png";
-import home2Image from "@/images/home2.png";
-import home3Image from "@/images/home3.png";
 import { guideCards } from "@/app/endorsements/guide-content";
+import authWorkspaceIllustration from "@/images/auth-workspace-illustration.png";
+import endorsementsHeroIllustration from "@/images/endorsements-hero-illustration.png";
+import homeHeroAviation from "@/images/home-hero-aviation.png";
+import utilityToolsIllustration from "@/images/utility-tools-illustration.png";
 
 export default function Home() {
-  const trustSignals = [
-    "FAA reference aligned",
-    "Built for CFI workflows",
-    "PDF-ready outputs",
-  ];
-  const featuredTools = [
-    {
-      title: "Endorsement Generator",
-      desc: "Build structured endorsement packets with template search, signature capture, and PDF export.",
-      href: "/tools/endorsement-generator",
-      eyebrow: "Most used",
-    },
-    {
-      title: "Flight Brief",
-      desc: "Prepare weather, risk, NOTAMs, and planning details in one briefing workflow.",
-      href: "/tools/flight-brief",
-      eyebrow: "Preflight",
-    },
-  ];
-  const workflowSteps = [
-    {
-      label: "Find",
-      text: "Open the FAA-oriented workflow for the task in front of you.",
-    },
-    {
-      label: "Complete",
-      text: "Use saved CFI and student details to reduce repeated entry.",
-    },
-    {
-      label: "Export",
-      text: "Produce a clear result for review, records, or handoff.",
-    },
-  ];
-  const articleEntrances = [
-    { ...guideCards["student-solo"], short: "Solo basics" },
-    { ...guideCards["solo-cross-country"], short: "Route clarity" },
-    { ...guideCards["knowledge-test"], short: "Test signoff" },
+  const guideLinks = [
+    guideCards["student-solo"],
+    guideCards["solo-cross-country"],
+    guideCards["knowledge-test"],
   ];
 
   return (
     <main className="page-shell page-home px-3">
-      <div className="site-shell page-stack space-y-8">
-        <section className="hero-panel hero-home home-panel-with-bg overflow-hidden px-6 py-7 sm:px-8 sm:py-8">
-          <div className="home-panel-bg" style={{ ["--panel-image" as string]: `url(${home1Image.src})` }} aria-hidden="true" />
-          <div className="home-hero-grid">
-            <div className="home-hero-copy">
-              <p className="eyebrow">FAA-oriented workflow support</p>
-              <h1 className="display-title mt-4 max-w-3xl text-4xl font-semibold leading-[0.94] text-[var(--foreground)] sm:text-5xl">
-                Pilot tools for CFIs and students that keep training paperwork moving.
-              </h1>
-              <p className="copy-muted mt-4 max-w-2xl leading-7">
-                PilotSeal puts the most-used training workflows first so CFIs
-                and students can open the right tool immediately and move
-                faster through planning, endorsement, and review tasks.
-              </p>
-              <div className="home-hero-actions">
-                <Link href="/tools/endorsement-generator" className="primary-button home-primary-cta">
-                  Open Endorsement Generator
-                </Link>
-                <Link href="/tools" className="secondary-button">
-                  Browse FAA tools
-                </Link>
-              </div>
-              <div className="home-trust-strip" aria-label="PilotSeal trust signals">
-                {trustSignals.map((signal) => (
-                  <span key={signal} className="home-trust-badge">
-                    {signal}
-                  </span>
-                ))}
-              </div>
+      <div className="site-shell page-stack space-y-6">
+        <section className="overflow-hidden border-b border-slate-200/75 pb-6">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
+            <div className="relative min-h-[260px] overflow-hidden bg-slate-900 lg:min-h-[460px]">
+              <Image
+                src={homeHeroAviation}
+                alt="PilotSeal aviation hero illustration"
+                className="absolute inset-0 h-full w-full object-cover"
+                priority
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.08),rgba(15,23,42,0.48))]" />
             </div>
 
-            <aside className="home-authority-card" aria-label="PilotSeal workflow summary">
-              <p className="muted-kicker">Workflow path</p>
-              <div className="home-workflow-list">
-                {workflowSteps.map((step) => (
-                  <div key={step.label} className="home-workflow-step">
-                    <span className="home-workflow-index">{step.label}</span>
-                    <p>{step.text}</p>
-                  </div>
-                ))}
-              </div>
-              <Link href="/endorsements" className="reference-chip">
-                View endorsement references
-              </Link>
-            </aside>
-          </div>
-        </section>
-
-        <section className="section-panel-tools home-panel-with-bg overflow-hidden px-6 py-8 sm:px-8">
-          <div className="home-panel-bg home-panel-bg-soft" style={{ ["--panel-image" as string]: `url(${home2Image.src})` }} aria-hidden="true" />
-          <div className="home-section-heading">
-            <div>
-              <p className="muted-kicker">Featured tools</p>
-              <h2 className="section-title mt-2 text-3xl font-semibold">
-                Start with the workflow you need now
-              </h2>
-            </div>
-            <Link href="/tools" className="secondary-button">
-              Explore more
-            </Link>
-          </div>
-
-          <div className="home-featured-grid mt-6">
-            <div className="home-featured-list">
-              {featuredTools.map((tool) => (
-                <article key={tool.title} className="content-card card-link home-tool-card p-5">
-                  <p className="muted-kicker">{tool.eyebrow}</p>
-                  <h3 className="mt-2 text-xl font-semibold">{tool.title}</h3>
-                  <p className="copy-muted mt-3 leading-7">{tool.desc}</p>
-                  <Link className="reference-chip mt-4 inline-flex" href={tool.href}>
-                    Open tool
+            <div className="bg-[#143247] px-6 py-6 text-white lg:px-8">
+              <div className="space-y-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-sky-200/75">
+                  PilotSeal
+                </p>
+                <p className="max-w-md text-xl font-semibold leading-tight text-white">
+                  For instructors and students, find the right tools here to smooth your training path.
+                </p>
+                <p className="max-w-md text-sm leading-7 text-slate-200/86">
+                  We offer FAA endorsement generator, W&amp;B, quick preflight brief, and more.
+                </p>
+                <div className="flex flex-wrap gap-4 pt-2 text-sm font-medium text-sky-200/90">
+                  <Link href="/tools" className="hover:text-white">
+                    Tools
                   </Link>
-                </article>
-              ))}
+                  <Link href="/intro" className="hover:text-white">
+                    Articles
+                  </Link>
+                  <Link href="/login" className="hover:text-white">
+                    Login
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="home-bottom-grid">
-          <section className="content-card home-balanced-panel home-panel-with-bg overflow-hidden p-6 md:col-span-2">
-            <div className="home-panel-bg" style={{ ["--panel-image" as string]: `url(${home3Image.src})` }} aria-hidden="true" />
-            <p className="muted-kicker">Articles</p>
-            <h2 className="section-title mt-2 text-2xl font-semibold">
-              Articles
-            </h2>
-            <p className="copy-muted mt-3 leading-7">
-              Short references for common student pilot and instructor endorsement scenarios.
-            </p>
-            <div className="mt-6 grid gap-3 md:grid-cols-3">
-              {articleEntrances.map((article) => (
-                <Link key={article.href} href={article.href} className="content-card card-link p-5">
-                  <p className="muted-kicker">{article.short}</p>
-                  <h3 className="mt-2 text-lg font-semibold">{article.title}</h3>
-                  <span className="reference-chip mt-4 inline-flex">Read article</span>
-                </Link>
-              ))}
+        <section className="grid gap-4 md:grid-cols-3">
+          <Link href="/tools" className="group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
+            <div className="relative h-40 overflow-hidden">
+              <Image
+                src={utilityToolsIllustration}
+                alt="PilotSeal tools section preview"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              />
             </div>
-            <div className="mt-5">
-              <Link href="/intro" className="secondary-button">
-                Explore articles
-              </Link>
+          </Link>
+
+          <Link href={guideLinks[0].href} className="group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
+            <div className="relative h-40 overflow-hidden">
+              <Image
+                src={endorsementsHeroIllustration}
+                alt="PilotSeal guide preview"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              />
             </div>
-          </section>
+          </Link>
+
+          <Link href="/login" className="group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
+            <div className="relative h-40 overflow-hidden">
+              <Image
+                src={authWorkspaceIllustration}
+                alt="PilotSeal account workspace preview"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              />
+            </div>
+          </Link>
+        </section>
+
+        <section className="divide-y divide-slate-200/75 border-t border-slate-200/75">
+          {guideLinks.map((guide) => (
+            <Link
+              key={guide.href}
+              href={guide.href}
+              className="grid gap-2 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+            >
+              <div className="min-w-0">
+                <h2 className="text-[1.05rem] font-semibold text-slate-950">{guide.title}</h2>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{guide.desc}</p>
+              </div>
+              <span className="text-sm font-semibold text-[var(--accent-strong)]">Open</span>
+            </Link>
+          ))}
         </section>
       </div>
     </main>

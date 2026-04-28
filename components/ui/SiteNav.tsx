@@ -14,7 +14,6 @@ import { getSupabaseClient } from "@/lib/supabase";
 const publicNavItems = [
   { href: "/", label: "Home" },
   { href: "/tools", label: "Tools" },
-  { href: "/endorsements", label: "Endorsements" },
   { href: "/intro", label: "Articles" },
 ];
 
@@ -82,14 +81,6 @@ export default function SiteNav() {
               {item.label}
             </Link>
           ))}
-          {isAuthenticated ? (
-            <Link
-              href="/dashboard"
-              className={`site-nav-inline-link ${pathname.startsWith("/dashboard") ? "site-nav-inline-link-active" : ""}`}
-            >
-              Dashboard
-            </Link>
-          ) : null}
         </nav>
 
         {!isAuthenticated ? (
@@ -99,8 +90,15 @@ export default function SiteNav() {
           >
             {loading ? "Loading..." : "Login"}
           </Link>
-        ) : (
+        ) : pathname.startsWith("/dashboard") ? (
           <UserMenu email={userEmail} displayName={identityLabel} />
+        ) : (
+          <Link
+            href="/dashboard"
+            className={`site-nav-inline-link ${pathname.startsWith("/dashboard") ? "site-nav-inline-link-active" : ""}`}
+          >
+            Dashboard
+          </Link>
         )}
       </div>
 
@@ -139,23 +137,13 @@ export default function SiteNav() {
             </Link>
           ) : (
             <div className="site-nav-mobile-account">
-              <p className="site-user-dropdown-label">Signed in as</p>
-              <p className="site-user-dropdown-email">{identityLabel}</p>
-
-              {[
-                { href: "/dashboard", label: "Dashboard" },
-                { href: "/dashboard/saved-people", label: "Saved People" },
-                { href: "/dashboard/account-settings", label: "Profile" },
-              ].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="site-nav-link"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              <Link
+                href="/dashboard"
+                className="site-nav-link"
+                onClick={() => setMobileOpen(false)}
+              >
+                Dashboard
+              </Link>
 
               <button
                 type="button"

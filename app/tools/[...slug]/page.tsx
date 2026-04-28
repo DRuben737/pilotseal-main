@@ -1,15 +1,56 @@
-import { createElement } from "react";
-import type { Metadata } from "next";
 import Link from "next/link";
+import { createElement, type CSSProperties } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { getToolEmbedConfig } from "@/app/tools/tool-config";
+import { getToolEmbedConfig, primaryToolKeys, toolEmbedConfig } from "@/app/tools/tool-config";
 import { nativeToolRegistry } from "@/components/tools-native/tool-registry";
+import endorsementPageImage from "@/images/endorsementpage.png";
+import endorsementSampleImage from "@/images/endorsementsample.png";
+import feature1Image from "@/images/feature1.png";
+import feature2Image from "@/images/feature2.png";
+import feature3Image from "@/images/feature3.png";
+import feature4Image from "@/images/feature4.png";
+import toolHubImage from "@/images/toolhub.png";
+import utilityToolsImage from "@/images/utility-tools-illustration.png";
 import { buildPageMetadata } from "@/lib/seo";
 
 type ToolPageProps = {
   params: Promise<{ slug: string[] }>;
 };
+
+const toolVisuals = {
+  "endorsement-generator": {
+    image: endorsementPageImage,
+    pageImage: endorsementSampleImage,
+    alt: "FAA endorsement workflow preview",
+  },
+  "flight-brief": {
+    image: feature2Image,
+    pageImage: utilityToolsImage,
+    alt: "Flight brief planning preview",
+  },
+  wb: {
+    image: feature4Image,
+    pageImage: feature4Image,
+    alt: "Weight and balance workflow preview",
+  },
+  nighttime: {
+    image: feature3Image,
+    pageImage: feature3Image,
+    alt: "Night time calculator preview",
+  },
+  decoder: {
+    image: feature1Image,
+    pageImage: feature1Image,
+    alt: "Weather decoder preview",
+  },
+  fids: {
+    image: toolHubImage,
+    pageImage: toolHubImage,
+    alt: "Flight information display preview",
+  },
+} as const;
 
 function renderNativeTool(slug: string) {
   switch (slug) {
@@ -71,19 +112,24 @@ export async function generateMetadata({
 export default async function EmbeddedToolPage({ params }: ToolPageProps) {
   const { slug } = await params;
   const tool = getToolEmbedConfig(slug);
-  const toolLinks = [
-    ["endorsement-generator", "Endorsements"],
-    ["flight-brief", "Brief"],
-    ["wb", "W&B"],
-    ["nighttime", "Night"],
-    ["decoder", "Decoder"],
-  ].filter(([key]) => key !== slug.join("/"));
 
   if (!tool) {
     notFound();
   }
   const slugKey = slug.join("/");
   const toolContent = renderNativeTool(slugKey);
+  const toolNavItems = primaryToolKeys.map((key) => ({
+    key,
+    href: `/tools/${key}`,
+    title: toolEmbedConfig[key].title,
+    active: key === slugKey,
+  }));
+  const toolVisual = toolVisuals[slugKey as keyof typeof toolVisuals];
+  const pageStyle = toolVisual
+    ? ({
+        "--tool-page-image": `url(${toolVisual.pageImage.src})`,
+      } as CSSProperties)
+    : undefined;
 
   if (!toolContent) {
     notFound();
@@ -91,20 +137,27 @@ export default async function EmbeddedToolPage({ params }: ToolPageProps) {
 
   if (slugKey === "endorsement-generator") {
     return (
-      <main className="page-shell page-tool-child px-3">
+      <main
+        className="page-shell page-tool-child tool-theme-endorsement-generator px-3"
+        style={pageStyle}
+      >
         <div className="site-shell mx-auto max-w-7xl space-y-8">
-          <section className="rounded-[24px] border border-slate-200 bg-white/92 px-5 py-4 shadow-[0_14px_36px_rgba(15,23,42,0.06)] sm:px-6 sm:py-5">
-            <div className="max-w-3xl space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                FAA Endorsement Generator
-              </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-[2rem]">
-                FAA Endorsement Generator
-              </h1>
-              <p className="max-w-2xl text-sm text-slate-600">
-                Generate FAA endorsements instantly.
-              </p>
-            </div>
+          <section className="overflow-x-auto">
+            <nav className="flex w-max min-w-full gap-2 rounded-[18px] border border-slate-200/75 bg-white/86 p-2 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+              {toolNavItems.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className={`whitespace-nowrap rounded-[14px] px-3 py-2 text-sm font-medium transition ${
+                    item.active
+                      ? "bg-slate-950 text-white"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                  }`}
+                >
+                  {item.title}
+                </Link>
+              ))}
+            </nav>
           </section>
 
           <section className="content-card tool-stage p-3 sm:p-4">
@@ -152,27 +205,27 @@ export default async function EmbeddedToolPage({ params }: ToolPageProps) {
   }
 
   return (
-    <main className={`page-shell page-tool-child tool-theme-${slugKey} px-3`}>
+    <main
+      className={`page-shell page-tool-child tool-theme-${slugKey} px-3`}
+      style={pageStyle}
+    >
       <div className="site-shell page-stack space-y-6">
-        <section className="tools-child-shell">
-          <div className="tools-child-header">
-            <div>
-              <p className="muted-kicker">{tool.eyebrow}</p>
-              <h1 className="tools-child-title">{tool.title}</h1>
-            </div>
-            <div className="tools-child-actions">
-              <Link href="/tools" className="reference-chip">
-                All tools
-              </Link>
-            </div>
-          </div>
-          <div className="tools-child-nav">
-            {toolLinks.map(([key, label]) => (
-              <Link key={key} href={`/tools/${key}`} className="tools-child-chip">
-                {label}
+        <section className="overflow-x-auto">
+          <nav className="flex w-max min-w-full gap-2 rounded-[18px] border border-slate-200/75 bg-white/86 p-2 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            {toolNavItems.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className={`whitespace-nowrap rounded-[14px] px-3 py-2 text-sm font-medium transition ${
+                  item.active
+                    ? "bg-slate-950 text-white"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                }`}
+              >
+                {item.title}
               </Link>
             ))}
-          </div>
+          </nav>
         </section>
 
         <section className="content-card tool-stage p-3 sm:p-4">

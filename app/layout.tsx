@@ -55,42 +55,40 @@ export default function RootLayout({
       <body className={`${inter.variable} ${inter.className} app-body text-black`}>
         <ToolProvider>
           <AuthSessionProvider>
-            <header className="relative z-80 px-3 pt-3">
-              <div className="site-shell app-header-shell glass-panel rounded-[20px] px-4 py-3 sm:rounded-[24px] sm:px-6 sm:py-4">
-                <div className="flex items-center justify-between gap-4">
-                  <Link href="/" className="site-brand-link">
-                    <span className="site-brand-logo-wrap">
-                      <Image
-                        src={logoImage}
-                        alt="PilotSeal logo"
-                        className="site-brand-logo"
-                        width={56}
-                        height={56}
-                        priority
-                      />
+            <header className="sticky top-0 z-80 border-b border-slate-200/70 bg-white/78 backdrop-blur-xl">
+              <div className="site-shell flex items-center justify-between gap-6 px-1 py-4">
+                <Link href="/" className="site-brand-link">
+                  <span className="site-brand-logo-wrap">
+                    <Image
+                      src={logoImage}
+                      alt="PilotSeal logo"
+                      className="site-brand-logo"
+                      width={56}
+                      height={56}
+                      priority
+                    />
+                  </span>
+                  <span className="site-brand-title">
+                    <span className="site-brand-wordmark text-[var(--foreground)]">
+                      PilotSeal
                     </span>
-                    <span className="site-brand-title">
-                      <span className="site-brand-wordmark text-[var(--foreground)]">
-                        PilotSeal
-                      </span>
-                    </span>
-                  </Link>
+                  </span>
+                </Link>
 
-                  <SiteNav />
-                </div>
+                <SiteNav />
               </div>
             </header>
 
-            <div id="main-content" className="pb-12 pt-4 sm:pt-8">
+            <div className="pb-16 pt-6 sm:pt-10">
               <SiteNotificationBanner />
               {children}
             </div>
 
-            <footer className="px-3 pb-8">
-              <div className="site-shell app-footer-shell section-panel px-6 py-8">
-                <div className="grid gap-8 md:grid-cols-[1.4fr_0.8fr_0.8fr]">
+            <footer className="border-t border-slate-200/70 px-3 pb-10 pt-10">
+              <div className="site-shell">
+                <div className="grid gap-10 md:grid-cols-[1.35fr_0.8fr_0.8fr]">
                   <div>
-                    <p className="eyebrow">FAA-oriented workflow support</p>
+                    <p className="muted-kicker">FAA-oriented workflow support</p>
                     <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
                       PilotSeal tools reference FAA guidance such as Advisory
                       Circular AC 61-65. They are intended to assist instructors
@@ -100,8 +98,8 @@ export default function RootLayout({
                   </div>
 
                   <div className="text-sm text-[var(--muted)]">
-                    <p className="text-[var(--foreground)] font-semibold">Site</p>
-                    <div className="mt-3 grid gap-2">
+                    <p className="font-semibold text-[var(--foreground)]">Site</p>
+                    <div className="mt-4 grid gap-3">
                       <Link href="/">Home</Link>
                       <Link href="/tools">Tools</Link>
                       <Link href="/endorsements">Endorsements</Link>
@@ -111,8 +109,8 @@ export default function RootLayout({
                   </div>
 
                   <div className="text-sm text-[var(--muted)]">
-                    <p className="text-[var(--foreground)] font-semibold">Company</p>
-                    <div className="mt-3 grid gap-2">
+                    <p className="font-semibold text-[var(--foreground)]">Company</p>
+                    <div className="mt-4 grid gap-3">
                       <Link href="/privacy">Privacy</Link>
                       <a href="mailto:admin@pilotseal.com">Contact</a>
                       <a
@@ -123,7 +121,7 @@ export default function RootLayout({
                         Blog
                       </a>
                     </div>
-                    <p className="mt-5">© {new Date().getFullYear()} PilotSeal</p>
+                    <p className="mt-6">© {new Date().getFullYear()} PilotSeal</p>
                   </div>
                 </div>
               </div>

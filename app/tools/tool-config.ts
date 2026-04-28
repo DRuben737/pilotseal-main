@@ -54,6 +54,7 @@ const allPrimaryToolKeys = [
   "wb",
   "nighttime",
   "decoder",
+  "fids",
 ] as const;
 
 export const primaryToolKeys = allPrimaryToolKeys;
