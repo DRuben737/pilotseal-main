@@ -11,7 +11,6 @@ import feature1Image from "@/images/feature1.png";
 import feature2Image from "@/images/feature2.png";
 import feature3Image from "@/images/feature3.png";
 import feature4Image from "@/images/feature4.png";
-import toolHubImage from "@/images/toolhub.png";
 import utilityToolsImage from "@/images/utility-tools-illustration.png";
 import { buildPageMetadata } from "@/lib/seo";
 
@@ -30,6 +29,11 @@ const toolVisuals = {
     pageImage: utilityToolsImage,
     alt: "Flight brief planning preview",
   },
+  "flight-computer": {
+    image: feature1Image,
+    pageImage: feature1Image,
+    alt: "Flight computer planning preview",
+  },
   wb: {
     image: feature4Image,
     pageImage: feature4Image,
@@ -45,11 +49,6 @@ const toolVisuals = {
     pageImage: feature1Image,
     alt: "Weather decoder preview",
   },
-  fids: {
-    image: toolHubImage,
-    pageImage: toolHubImage,
-    alt: "Flight information display preview",
-  },
 } as const;
 
 function renderNativeTool(slug: string) {
@@ -58,10 +57,10 @@ function renderNativeTool(slug: string) {
       return createElement(nativeToolRegistry.decoder);
     case "endorsement-generator":
       return createElement(nativeToolRegistry["endorsement-generator"]);
-    case "fids":
-      return createElement(nativeToolRegistry.fids);
     case "flight-brief":
       return createElement(nativeToolRegistry["flight-brief"]);
+    case "flight-computer":
+      return createElement(nativeToolRegistry["flight-computer"]);
     case "nighttime":
       return createElement(nativeToolRegistry.nighttime);
     case "wb":

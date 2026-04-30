@@ -4,7 +4,6 @@ import { primaryToolKeys, toolEmbedConfig } from "@/app/tools/tool-config";
 import feature1Image from "@/images/feature1.png";
 import toolEndorsementBannerImage from "@/images/tool-endorsement-banner-v2.png";
 import toolFlightBriefBannerImage from "@/images/tool-flight-brief-banner-v2.png";
-import toolFlightDisplayImage from "@/images/tool-flight-display.png";
 import toolNighttimeHeroImage from "@/images/tool-nighttime-hero.png";
 import toolWeatherDecoderImage from "@/images/tool-weather-decoder.png";
 import toolWbBannerImage from "@/images/tool-wb-banner-v2.png";
@@ -25,6 +24,10 @@ export default function ToolsPage() {
       src: toolFlightBriefBannerImage,
       alt: "Flight Brief preview",
     },
+    "flight-computer": {
+      src: feature1Image,
+      alt: "Flight Computer preview",
+    },
     wb: {
       src: toolWbBannerImage,
       alt: "Weight and Balance preview",
@@ -36,10 +39,6 @@ export default function ToolsPage() {
     decoder: {
       src: toolWeatherDecoderImage,
       alt: "Weather Decoder preview",
-    },
-    fids: {
-      src: toolFlightDisplayImage,
-      alt: "Flight Display preview",
     },
   };
 
