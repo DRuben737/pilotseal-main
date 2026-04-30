@@ -36,9 +36,9 @@ export const toolEmbedConfig: Record<string, ToolEmbedConfig> = {
     eyebrow: "Reference",
   },
   decoder: {
-    title: "Weather Decoder",
+    title: "Aviation Decoder",
     description:
-      "Decode common aviation weather strings when you need a faster read on briefing inputs.",
+      "Decode METARs, TAFs, NOTAMs, and common aviation shorthand into a faster operational read.",
     eyebrow: "Weather",
   },
 };

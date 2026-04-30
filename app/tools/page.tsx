@@ -38,7 +38,7 @@ export default function ToolsPage() {
     },
     decoder: {
       src: toolWeatherDecoderImage,
-      alt: "Weather Decoder preview",
+      alt: "Aviation Decoder preview",
     },
   };
 

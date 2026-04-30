@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import {
@@ -138,8 +139,13 @@ export default function AircraftAdminPanel() {
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [showModelForm, setShowModelForm] = useState(false);
   const [showAircraftForm, setShowAircraftForm] = useState(false);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
 
   const isAdmin = profileRole === "admin";
+
+  useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
 
   useEffect(() => {
     if (!showModelsModal && !showAircraftModal) {
@@ -789,142 +795,148 @@ export default function AircraftAdminPanel() {
 
       {status ? <p className="saas-meta-text">{status}</p> : null}
 
-      {showModelsModal ? (
-        <div className="Overlay" onClick={() => setShowModelsModal(false)}>
-          <div className="Modal" onClick={(event) => event.stopPropagation()}>
-            <div className="tools-child-shell flex h-full min-h-0 flex-col">
-              <div className="tools-child-header">
-                <div>
-                  <p className="saas-kicker">Admin</p>
-                  <h2 className="tools-child-title">Aircraft Models</h2>
-                </div>
-                <div className="tools-child-actions">
-                  <button type="button" className="ghost-button" onClick={() => openModelEditor()}>
-                    Add model
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => setShowModelsModal(false)}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
-                <div className="grid gap-3">
-                  {models.map((model) => (
-                    <div key={model.id} id={`model-editor-${model.id}`}>
-                      <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{model.name}</p>
-                            <p className="saas-meta-text">{model.category ?? "Aircraft"} model</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => openModelEditor(normalizeModelForm(model))}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="danger-button-compact"
-                              disabled={saving}
-                              onClick={() => void handleDeleteModel(model.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {showModelForm && modelForm.id === model.id ? renderModelForm() : null}
+      {showModelsModal && portalRoot
+        ? createPortal(
+            <div className="Overlay" onClick={() => setShowModelsModal(false)}>
+              <div className="Modal" onClick={(event) => event.stopPropagation()}>
+                <div className="tools-child-shell flex h-full min-h-0 flex-col">
+                  <div className="tools-child-header">
+                    <div>
+                      <p className="saas-kicker">Admin</p>
+                      <h2 className="tools-child-title">Aircraft Models</h2>
                     </div>
-                  ))}
-
-                  {showModelForm && !modelForm.id ? (
-                    <div id="model-editor-new">{renderModelForm()}</div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showAircraftModal ? (
-        <div className="Overlay" onClick={() => setShowAircraftModal(false)}>
-          <div className="Modal" onClick={(event) => event.stopPropagation()}>
-            <div className="tools-child-shell flex h-full min-h-0 flex-col">
-              <div className="tools-child-header">
-                <div>
-                  <p className="saas-kicker">Admin</p>
-                  <h2 className="tools-child-title">Aircraft</h2>
-                </div>
-                <div className="tools-child-actions">
-                  <button type="button" className="ghost-button" onClick={() => openAircraftEditor()}>
-                    Add aircraft
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => setShowAircraftModal(false)}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
-                <div className="grid gap-3">
-                  {aircraft.map((item) => (
-                    <div key={item.id} id={`aircraft-editor-${item.id}`}>
-                      <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{item.name}</p>
-                            <p className="saas-meta-text">
-                              {modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Model"} · Empty{" "}
-                              {item.empty_weight ?? "--"} lbs
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => openAircraftEditor(normalizeAircraftForm(item))}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="danger-button-compact"
-                              disabled={saving}
-                              onClick={() => void handleDeleteAircraft(item.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {showAircraftForm && aircraftForm.id === item.id ? renderAircraftForm() : null}
+                    <div className="tools-child-actions">
+                      <button type="button" className="ghost-button" onClick={() => openModelEditor()}>
+                        Add model
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setShowModelsModal(false)}
+                      >
+                        Close
+                      </button>
                     </div>
-                  ))}
+                  </div>
 
-                  {showAircraftForm && !aircraftForm.id ? (
-                    <div id="aircraft-editor-new">{renderAircraftForm()}</div>
-                  ) : null}
+                  <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
+                    <div className="grid gap-3">
+                      {models.map((model) => (
+                        <div key={model.id} id={`model-editor-${model.id}`}>
+                          <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{model.name}</p>
+                                <p className="saas-meta-text">{model.category ?? "Aircraft"} model</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  onClick={() => openModelEditor(normalizeModelForm(model))}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger-button-compact"
+                                  disabled={saving}
+                                  onClick={() => void handleDeleteModel(model.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {showModelForm && modelForm.id === model.id ? renderModelForm() : null}
+                        </div>
+                      ))}
+
+                      {showModelForm && !modelForm.id ? (
+                        <div id="model-editor-new">{renderModelForm()}</div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            portalRoot
+          )
+        : null}
+
+      {showAircraftModal && portalRoot
+        ? createPortal(
+            <div className="Overlay" onClick={() => setShowAircraftModal(false)}>
+              <div className="Modal" onClick={(event) => event.stopPropagation()}>
+                <div className="tools-child-shell flex h-full min-h-0 flex-col">
+                  <div className="tools-child-header">
+                    <div>
+                      <p className="saas-kicker">Admin</p>
+                      <h2 className="tools-child-title">Aircraft</h2>
+                    </div>
+                    <div className="tools-child-actions">
+                      <button type="button" className="ghost-button" onClick={() => openAircraftEditor()}>
+                        Add aircraft
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setShowAircraftModal(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
+                    <div className="grid gap-3">
+                      {aircraft.map((item) => (
+                        <div key={item.id} id={`aircraft-editor-${item.id}`}>
+                          <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{item.name}</p>
+                                <p className="saas-meta-text">
+                                  {modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Model"} · Empty{" "}
+                                  {item.empty_weight ?? "--"} lbs
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  onClick={() => openAircraftEditor(normalizeAircraftForm(item))}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger-button-compact"
+                                  disabled={saving}
+                                  onClick={() => void handleDeleteAircraft(item.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {showAircraftForm && aircraftForm.id === item.id ? renderAircraftForm() : null}
+                        </div>
+                      ))}
+
+                      {showAircraftForm && !aircraftForm.id ? (
+                        <div id="aircraft-editor-new">{renderAircraftForm()}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            portalRoot
+          )
+        : null}
     </>
   );
 }

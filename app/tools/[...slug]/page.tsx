@@ -47,7 +47,7 @@ const toolVisuals = {
   decoder: {
     image: feature1Image,
     pageImage: feature1Image,
-    alt: "Weather decoder preview",
+    alt: "Aviation decoder preview",
   },
 } as const;
 

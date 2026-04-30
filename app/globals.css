@@ -1321,6 +1321,13 @@ summary:focus-visible {
   padding: 1rem;
 }
 
+.saas-inline-form-plain {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
 .saas-danger-panel {
   border-color: rgba(185, 28, 28, 0.12);
   background:
@@ -2360,7 +2367,7 @@ summary:focus-visible {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 28px;
   box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
-  overflow-y: auto;
+  overflow: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -2371,6 +2378,26 @@ summary:focus-visible {
   padding: 0.85rem 0.95rem;
   overflow: hidden;
   position: relative;
+}
+
+.saved-people-modal-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.saved-people-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-right: 0.15rem;
+}
+
+.saved-people-panel {
+  display: grid;
+  gap: 1rem;
 }
 
 .tools-child-header {
@@ -2742,6 +2769,7 @@ summary:focus-visible {
 .night-tool-shell {
   display: grid;
   gap: 1rem;
+  align-items: start;
 }
 
 .decoder-pane,
@@ -2779,6 +2807,33 @@ summary:focus-visible {
   background: white;
   padding: 1rem;
   resize: vertical;
+}
+
+.decoder-shell input:focus,
+.decoder-shell select:focus,
+.decoder-shell textarea:focus,
+.decoder-shell button:focus,
+.decoder-shell input:focus-visible,
+.decoder-shell select:focus-visible,
+.decoder-shell textarea:focus-visible,
+.decoder-shell button:focus-visible,
+.flight-computer-shell input:focus,
+.flight-computer-shell select:focus,
+.flight-computer-shell textarea:focus,
+.flight-computer-shell button:focus,
+.flight-computer-shell input:focus-visible,
+.flight-computer-shell select:focus-visible,
+.flight-computer-shell textarea:focus-visible,
+.flight-computer-shell button:focus-visible {
+  outline: none;
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+.decoder-input:focus,
+.decoder-input:focus-visible {
+  border-color: rgba(42, 168, 255, 0.28);
+  box-shadow: none;
 }
 
 .decoder-chip-group {
@@ -2842,6 +2897,162 @@ summary:focus-visible {
   margin: 0.65rem 0 0;
   color: var(--muted);
   line-height: 1.7;
+}
+
+.decoder-output-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.decoder-block {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.decoder-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.decoder-summary-card {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 45, 68, 0.08);
+  background: #fbfcfe;
+}
+
+.decoder-summary-card span,
+.decoder-field-row span {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.decoder-summary-card strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.decoder-badge-vfr {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.18);
+  color: #166534;
+}
+
+.decoder-badge-mvfr {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.16);
+  color: #1d4ed8;
+}
+
+.decoder-badge-ifr {
+  background: rgba(249, 115, 22, 0.11);
+  border-color: rgba(249, 115, 22, 0.16);
+  color: #c2410c;
+}
+
+.decoder-badge-lifr {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.16);
+  color: #b91c1c;
+}
+
+.decoder-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.7rem 1rem;
+}
+
+.decoder-field-grid-tight {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.decoder-field-row {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(18, 45, 68, 0.07);
+}
+
+.decoder-field-row strong {
+  color: #0f172a;
+  line-height: 1.55;
+}
+
+.decoder-flag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.decoder-flag {
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(18, 45, 68, 0.06);
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.decoder-timeline {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.decoder-timeline-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 45, 68, 0.08);
+  background: #fff;
+}
+
+.decoder-timeline-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.decoder-timeline-head h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+}
+
+.decoder-details {
+  border-top: 1px solid rgba(18, 45, 68, 0.08);
+  padding-top: 0.9rem;
+}
+
+.decoder-detailsSummary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.decoder-detailsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.decoder-detailsBody {
+  margin-top: 0.9rem;
+}
+
+.decoder-badge {
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(18, 45, 68, 0.08);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .night-tool-fields,
@@ -3133,6 +3344,11 @@ summary:focus-visible {
   background: #fff;
 }
 
+.flight-computer-inputWrap:focus-within {
+  border-color: rgba(42, 168, 255, 0.28);
+  box-shadow: none;
+}
+
 .flight-computer-inputWrapVariation {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.4rem;
@@ -3294,6 +3510,7 @@ summary:focus-visible {
   .night-tool-shell,
   .flight-computer-converters {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    align-items: start;
   }
 
   .night-tool-fields,

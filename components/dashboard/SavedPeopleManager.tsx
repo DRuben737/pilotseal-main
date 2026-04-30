@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import Badge from "@/components/ui/Badge";
@@ -80,6 +81,11 @@ export default function SavedPeopleManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftState>>({});
   const [activeModalRole, setActiveModalRole] = useState<SavedPersonRole | null>(null);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -345,30 +351,31 @@ export default function SavedPeopleManager() {
         </section>
       </div>
 
-      {activeModalRole ? (
-        <div className="Overlay" onClick={closeModal}>
-          <div className="Modal" onClick={(event) => event.stopPropagation()}>
-            <div className="tools-child-shell h-full overflow-y-auto">
-              <div className="tools-child-header">
-                <h2 className="tools-child-title">{modalTitle}</h2>
-                <div className="tools-child-actions">
-                  <button type="button" className="ghost-button" onClick={closeModal}>
-                    Close
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-5">
-                {loading ? <p className="saas-meta-text">Loading saved people...</p> : null}
-                {!loading && status ? <p className="saas-meta-text mb-4">{status}</p> : null}
-
-                <article className="saas-panel">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="saas-subsection-title">
-                      {isCfiModal ? "Saved CFIs" : "Saved students"}
-                    </h3>
-                    <span className="saas-pill">{activeItems.length}</span>
+      {activeModalRole && portalRoot
+        ? createPortal(
+            <div className="Overlay" onClick={closeModal}>
+              <div className="Modal" onClick={(event) => event.stopPropagation()}>
+                <div className="tools-child-shell saved-people-modal-shell h-full">
+                  <div className="tools-child-header">
+                    <h2 className="tools-child-title">{modalTitle}</h2>
+                    <div className="tools-child-actions">
+                      <button type="button" className="ghost-button" onClick={closeModal}>
+                        Close
+                      </button>
+                    </div>
                   </div>
+
+                  <div className="saved-people-modal-body mt-5">
+                    {loading ? <p className="saas-meta-text">Loading saved people...</p> : null}
+                    {!loading && status ? <p className="saas-meta-text mb-4">{status}</p> : null}
+
+                    <section className="saved-people-panel">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="saas-subsection-title">
+                          {isCfiModal ? "Saved CFIs" : "Saved students"}
+                        </h3>
+                        <span className="saas-pill">{activeItems.length}</span>
+                      </div>
 
                   <div className="mt-5 grid gap-3">
                     {activeItems.length === 0 ? (
@@ -383,7 +390,7 @@ export default function SavedPeopleManager() {
                         return (
                           <article key={person.id} className="saas-list-item saas-list-item-stack">
                             {isEditing ? (
-                              <div className="saas-inline-form w-full">
+                              <div className="saas-inline-form saas-inline-form-plain w-full">
                                 <label className="saas-field">
                                   <span>Name</span>
                                   <input
@@ -530,7 +537,7 @@ export default function SavedPeopleManager() {
                     </button>
 
                     {isCfiModal && showCfiForm ? (
-                      <div className="saas-inline-form">
+                      <div className="saas-inline-form saas-inline-form-plain">
                         <label className="saas-field">
                           <span>Name</span>
                           <input
@@ -606,7 +613,7 @@ export default function SavedPeopleManager() {
                     ) : null}
 
                     {activeModalRole === "student" && showStudentForm ? (
-                      <div className="saas-inline-form">
+                      <div className="saas-inline-form saas-inline-form-plain">
                         <label className="saas-field">
                           <span>Name</span>
                           <input
@@ -655,12 +662,14 @@ export default function SavedPeopleManager() {
                       </div>
                     ) : null}
                   </div>
-                </article>
+                    </section>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            portalRoot
+          )
+        : null}
     </>
   );
 }

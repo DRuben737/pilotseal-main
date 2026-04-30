@@ -117,6 +117,7 @@ const DEFAULT_WB = {
 
 const DEFAULT_DECODER = {
   input: "",
+  mode: "auto",
   activeCategory: "All",
 };
 
