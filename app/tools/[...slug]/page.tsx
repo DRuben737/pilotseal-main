@@ -7,7 +7,7 @@ import { getToolEmbedConfig, primaryToolKeys, toolEmbedConfig } from "@/app/tool
 import { nativeToolRegistry } from "@/components/tools-native/tool-registry";
 import endorsementPageImage from "@/images/endorsementpage.png";
 import endorsementSampleImage from "@/images/endorsementsample.png";
-import feature1Image from "@/images/feature1.png";
+import feature1Image from "@/images/toolFlightcomputer.png";
 import feature2Image from "@/images/feature2.png";
 import feature3Image from "@/images/feature3.png";
 import feature4Image from "@/images/feature4.png";
