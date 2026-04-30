@@ -3133,6 +3133,36 @@ summary:focus-visible {
   background: #fff;
 }
 
+.flight-computer-inputWrapVariation {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+}
+
+.flight-computer-inlineToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  padding-left: 0.1rem;
+}
+
+.flight-computer-inlineToggleButton {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.flight-computer-inlineToggleButton.is-active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
+}
+
 .flight-computer-field input,
 .flight-computer-field select {
   width: 100%;
@@ -3349,6 +3379,10 @@ summary:focus-visible {
 
   .flight-computer-inputWrap {
     justify-self: end;
+  }
+
+  .flight-computer-inputWrapVariation {
+    width: 138px;
   }
 
   .flight-computer-resultsGrid {

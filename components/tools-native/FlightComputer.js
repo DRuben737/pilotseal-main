@@ -32,6 +32,11 @@ function formatMinutes(totalMinutes) {
   return `${hh}:${String(mm).padStart(2, "0")}`;
 }
 
+function signedVariation(value, direction) {
+  if (!Number.isFinite(value)) return 0;
+  return direction === "W" ? -Math.abs(value) : Math.abs(value);
+}
+
 function computeWindCourse({
   trueCourse,
   trueAirspeed,
@@ -121,6 +126,42 @@ function computeFuelPlan({
     tripFuel,
     reserveFuel,
     totalFuel: tripFuel + reserveFuel,
+  };
+}
+
+function computeFuelRemaining({
+  fuelOnBoard,
+  distanceNm,
+  groundspeed,
+  burnRate,
+  reserveMinutes,
+}) {
+  if (
+    [fuelOnBoard, distanceNm, groundspeed, burnRate].some(
+      (value) => !Number.isFinite(value)
+    ) ||
+    fuelOnBoard < 0 ||
+    distanceNm < 0 ||
+    groundspeed <= 0 ||
+    burnRate <= 0
+  ) {
+    return null;
+  }
+
+  const enrouteHours = distanceNm / groundspeed;
+  const tripFuel = enrouteHours * burnRate;
+  const fuelRemaining = fuelOnBoard - tripFuel;
+  const reserveFuel = ((reserveMinutes || 0) / 60) * burnRate;
+  const fuelAfterReserve = fuelRemaining - reserveFuel;
+  const enduranceHours = fuelRemaining > 0 ? fuelRemaining / burnRate : 0;
+
+  return {
+    enrouteHours,
+    tripFuel,
+    fuelRemaining,
+    reserveFuel,
+    fuelAfterReserve,
+    enduranceHours,
   };
 }
 
@@ -408,6 +449,7 @@ function createNavlogLeg() {
     windDir: "",
     windSpeed: "",
     variation: "",
+    variationDir: "E",
     burnRate: "",
   };
 }
@@ -417,7 +459,7 @@ function computeNavlogLeg(leg) {
   const tas = toNumber(leg.tas);
   const windDirection = toNumber(leg.windDir);
   const windSpeed = toNumber(leg.windSpeed);
-  const variation = toNumber(leg.variation) ?? 0;
+  const variation = signedVariation(toNumber(leg.variation), leg.variationDir);
   const course = toNumber(leg.course);
   const burnRate = toNumber(leg.burnRate);
 
@@ -507,6 +549,45 @@ function Field({
   );
 }
 
+function VariationField({
+  label,
+  value,
+  setValue,
+  direction,
+  setDirection,
+  placeholder = "",
+}) {
+  return (
+    <label className="flight-computer-field">
+      <span>{label}</span>
+      <div className="flight-computer-inputWrap flight-computer-inputWrapVariation">
+        <input
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          inputMode="decimal"
+          placeholder={placeholder}
+        />
+        <div className="flight-computer-inlineToggle" role="group" aria-label={`${label} direction`}>
+          <button
+            type="button"
+            className={`flight-computer-inlineToggleButton ${direction === "E" ? "is-active" : ""}`}
+            onClick={() => setDirection("E")}
+          >
+            E
+          </button>
+          <button
+            type="button"
+            className={`flight-computer-inlineToggleButton ${direction === "W" ? "is-active" : ""}`}
+            onClick={() => setDirection("W")}
+          >
+            W
+          </button>
+        </div>
+      </div>
+    </label>
+  );
+}
+
 function Result({ label, value }) {
   return (
     <div className="flight-computer-resultCard">
@@ -591,6 +672,7 @@ export default function FlightComputer() {
     windDirection: "",
     windSpeed: "",
     variation: "",
+    variationDir: "E",
   });
   const [runway, setRunway] = useState({
     runwayHeading: "",
@@ -599,6 +681,13 @@ export default function FlightComputer() {
     gustSpeed: "",
   });
   const [fuelPlan, setFuelPlan] = useState({
+    distanceNm: "",
+    groundspeed: "",
+    burnRate: "",
+    reserveMinutes: "45",
+  });
+  const [fuelRemaining, setFuelRemaining] = useState({
+    fuelOnBoard: "",
     distanceNm: "",
     groundspeed: "",
     burnRate: "",
@@ -671,7 +760,7 @@ export default function FlightComputer() {
         trueAirspeed: toNumber(nav.trueAirspeed),
         windDirection: toNumber(nav.windDirection),
         windSpeed: toNumber(nav.windSpeed),
-        variation: toNumber(nav.variation) ?? 0,
+        variation: signedVariation(toNumber(nav.variation), nav.variationDir),
       }),
     [nav]
   );
@@ -706,6 +795,18 @@ export default function FlightComputer() {
         oat: toNumber(altitude.oat),
       }),
     [altitude]
+  );
+
+  const fuelRemainingResult = useMemo(
+    () =>
+      computeFuelRemaining({
+        fuelOnBoard: toNumber(fuelRemaining.fuelOnBoard),
+        distanceNm: toNumber(fuelRemaining.distanceNm),
+        groundspeed: toNumber(fuelRemaining.groundspeed),
+        burnRate: toNumber(fuelRemaining.burnRate),
+        reserveMinutes: toNumber(fuelRemaining.reserveMinutes) ?? 0,
+      }),
+    [fuelRemaining]
   );
 
   const climbResult = useMemo(
@@ -848,7 +949,14 @@ export default function FlightComputer() {
             <Field label="True airspeed" value={nav.trueAirspeed} setValue={(v) => setNav((c) => ({ ...c, trueAirspeed: v }))} suffix="kt" placeholder="110" />
             <Field label="Wind direction" value={nav.windDirection} setValue={(v) => setNav((c) => ({ ...c, windDirection: v }))} suffix="°" placeholder="240" />
             <Field label="Wind speed" value={nav.windSpeed} setValue={(v) => setNav((c) => ({ ...c, windSpeed: v }))} suffix="kt" placeholder="18" />
-            <Field label="Variation" value={nav.variation} setValue={(v) => setNav((c) => ({ ...c, variation: v }))} suffix="°" placeholder="13" />
+            <VariationField
+              label="Variation"
+              value={nav.variation}
+              setValue={(v) => setNav((c) => ({ ...c, variation: v }))}
+              direction={nav.variationDir}
+              setDirection={(v) => setNav((c) => ({ ...c, variationDir: v }))}
+              placeholder="13"
+            />
           </div>
           <div className="flight-computer-resultsGrid">
             <Result label="Wind correction" value={navResult ? `${formatNumber(navResult.wca, 1)}°` : "--"} />
@@ -927,6 +1035,33 @@ export default function FlightComputer() {
             <Result label="Trip fuel" value={fuelResult ? `${formatNumber(fuelResult.tripFuel, 1)} gal` : "--"} />
             <Result label="Reserve fuel" value={fuelResult ? `${formatNumber(fuelResult.reserveFuel, 1)} gal` : "--"} />
             <Result label="Total fuel" value={fuelResult ? `${formatNumber(fuelResult.totalFuel, 1)} gal` : "--"} />
+          </div>
+        </article>
+      ),
+    },
+    fuelRemaining: {
+      title: "Fuel remaining",
+      hint: "Enter onboard fuel, distance, GS, burn.",
+      content: (
+        <article className="flight-computer-card flight-computer-cardCompact">
+          <div className="flight-computer-cardHead">
+            <h3>Fuel remaining</h3>
+            <p>Enter onboard fuel, distance, GS, burn.</p>
+          </div>
+          <div className="flight-computer-fieldGrid">
+            <Field label="Fuel on board" value={fuelRemaining.fuelOnBoard} setValue={(v) => setFuelRemaining((c) => ({ ...c, fuelOnBoard: v }))} suffix="gal" placeholder="42" />
+            <Field label="Distance remaining" value={fuelRemaining.distanceNm} setValue={(v) => setFuelRemaining((c) => ({ ...c, distanceNm: v }))} suffix="nm" placeholder="120" />
+            <Field label="Groundspeed" value={fuelRemaining.groundspeed} setValue={(v) => setFuelRemaining((c) => ({ ...c, groundspeed: v }))} suffix="kt" placeholder="115" />
+            <Field label="Fuel burn" value={fuelRemaining.burnRate} setValue={(v) => setFuelRemaining((c) => ({ ...c, burnRate: v }))} suffix="gph" placeholder="9.5" />
+            <Field label="Reserve" value={fuelRemaining.reserveMinutes} setValue={(v) => setFuelRemaining((c) => ({ ...c, reserveMinutes: v }))} suffix="min" placeholder="45" />
+          </div>
+          <div className="flight-computer-resultsGrid">
+            <Result label="Trip fuel" value={fuelRemainingResult ? `${formatNumber(fuelRemainingResult.tripFuel, 1)} gal` : "--"} />
+            <Result label="Fuel on landing" value={fuelRemainingResult ? `${formatNumber(fuelRemainingResult.fuelRemaining, 1)} gal` : "--"} />
+            <Result label="After reserve" value={fuelRemainingResult ? `${formatNumber(fuelRemainingResult.fuelAfterReserve, 1)} gal` : "--"} />
+            <Result label="Reserve fuel" value={fuelRemainingResult ? `${formatNumber(fuelRemainingResult.reserveFuel, 1)} gal` : "--"} />
+            <Result label="Endurance left" value={fuelRemainingResult ? formatClock(fuelRemainingResult.enduranceHours) : "--"} />
+            <Result label="ETE" value={fuelRemainingResult ? formatClock(fuelRemainingResult.enrouteHours) : "--"} />
           </div>
         </article>
       ),
@@ -1199,7 +1334,14 @@ export default function FlightComputer() {
                   <Field label="TAS" value={leg.tas} setValue={(v) => setNavlogLegs((current) => current.map((item) => item.id === leg.id ? { ...item, tas: v } : item))} suffix="kt" placeholder="110" />
                   <Field label="Wind dir" value={leg.windDir} setValue={(v) => setNavlogLegs((current) => current.map((item) => item.id === leg.id ? { ...item, windDir: v } : item))} suffix="°" placeholder="240" />
                   <Field label="Wind speed" value={leg.windSpeed} setValue={(v) => setNavlogLegs((current) => current.map((item) => item.id === leg.id ? { ...item, windSpeed: v } : item))} suffix="kt" placeholder="18" />
-                  <Field label="Variation" value={leg.variation} setValue={(v) => setNavlogLegs((current) => current.map((item) => item.id === leg.id ? { ...item, variation: v } : item))} suffix="°" placeholder="13" />
+                  <VariationField
+                    label="Variation"
+                    value={leg.variation}
+                    setValue={(v) => setNavlogLegs((current) => current.map((item) => item.id === leg.id ? { ...item, variation: v } : item))}
+                    direction={leg.variationDir}
+                    setDirection={(v) => setNavlogLegs((current) => current.map((item) => item.id === leg.id ? { ...item, variationDir: v } : item))}
+                    placeholder="13"
+                  />
                   <Field label="Burn" value={leg.burnRate} setValue={(v) => setNavlogLegs((current) => current.map((item) => item.id === leg.id ? { ...item, burnRate: v } : item))} suffix="gph" placeholder="9.5" />
                 </div>
 
@@ -1242,8 +1384,8 @@ export default function FlightComputer() {
     {
       label: "Wind",
       items: [
-        { id: "wind", title: "WIND", name: "Wind correction" },
-        { id: "runway", title: "RWY WIND", name: "Runway wind" },
+        { id: "wind", title: "WIND" },
+        { id: "runway", title: "RWY WIND" },
         { id: "rule60", title: "RULE 60" },
       ],
     },
@@ -1261,6 +1403,7 @@ export default function FlightComputer() {
       label: "Planning",
       items: [
         { id: "fuel", title: "TIME/FUEL" },
+        { id: "fuelRemaining", title: "FUEL REM" },
         { id: "sdt", title: "SPD/DIST/T" },
         { id: "requiredGs", title: "REQ GS" },
         { id: "endurance", title: "ENDURANCE" },

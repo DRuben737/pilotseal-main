@@ -1,11 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
-import SiteNav from "@/components/ui/SiteNav";
+import SiteHeader from "@/components/ui/SiteHeader";
 import SiteNotificationBanner from "@/components/notifications/SiteNotificationBanner";
-import logoImage from "@/images/logo.png";
 import { getSiteUrl } from "@/lib/seo";
 import { ToolProvider } from "@/stores/toolState";
 import "./globals.css";
@@ -55,29 +53,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${inter.className} app-body text-black`}>
         <ToolProvider>
           <AuthSessionProvider>
-            <header className="sticky top-0 z-80 border-b border-slate-200/70 bg-white/78 backdrop-blur-xl">
-              <div className="site-shell flex items-center justify-between gap-6 px-1 py-4">
-                <Link href="/" className="site-brand-link">
-                  <span className="site-brand-logo-wrap">
-                    <Image
-                      src={logoImage}
-                      alt="PilotSeal logo"
-                      className="site-brand-logo"
-                      width={56}
-                      height={56}
-                      priority
-                    />
-                  </span>
-                  <span className="site-brand-title">
-                    <span className="site-brand-wordmark text-[var(--foreground)]">
-                      PilotSeal
-                    </span>
-                  </span>
-                </Link>
-
-                <SiteNav />
-              </div>
-            </header>
+            <SiteHeader />
 
             <div className="pb-16 pt-6 sm:pt-10">
               <SiteNotificationBanner />
