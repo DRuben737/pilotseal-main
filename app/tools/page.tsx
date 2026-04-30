@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { primaryToolKeys, toolEmbedConfig } from "@/app/tools/tool-config";
-import feature1Image from "@/images/feature1.png";
+import feature1Image from "@/images/toolFlightcomputer.png";
 import toolEndorsementBannerImage from "@/images/tool-endorsement-banner-v2.png";
 import toolFlightBriefBannerImage from "@/images/tool-flight-brief-banner-v2.png";
 import toolNighttimeHeroImage from "@/images/tool-nighttime-hero.png";
