@@ -3108,6 +3108,158 @@ summary:focus-visible {
   font-size: 1.05rem;
 }
 
+.night-tool-timeline {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(18, 45, 68, 0.08);
+  background: linear-gradient(180deg, #fbfdff 0%, #f7fafc 100%);
+}
+
+.night-tool-timelineScale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.night-tool-timelineScale span:last-child {
+  text-align: right;
+}
+
+.night-tool-track {
+  position: relative;
+  min-height: 2.8rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.night-tool-trackMeta {
+  position: absolute;
+  right: 0;
+  top: -2.25rem;
+  display: grid;
+  gap: 0.12rem;
+  min-width: 240px;
+  max-width: min(320px, 45vw);
+  padding: 0.6rem 0.75rem;
+  border-radius: 14px;
+  border: 1px solid rgba(18, 45, 68, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 2;
+}
+
+.night-tool-track:hover .night-tool-trackMeta,
+.night-tool-track:focus-within .night-tool-trackMeta {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.night-tool-trackMeta strong {
+  font-size: 0.8rem;
+}
+
+.night-tool-trackMeta span {
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.night-tool-trackLabel {
+  position: absolute;
+  left: 0;
+  top: -0.72rem;
+  padding-right: 0.4rem;
+  background: #fbfdff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.night-tool-segment {
+  position: absolute;
+  top: 0.95rem;
+  height: 0.48rem;
+  border-radius: 999px;
+}
+
+.night-tool-segment.is-lights {
+  background: rgba(245, 158, 11, 0.62);
+}
+
+.night-tool-segment.is-day {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+.night-tool-segment.is-night {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.night-tool-segment.is-currency {
+  background: rgba(59, 130, 246, 0.72);
+}
+
+.night-tool-timeline:has(.night-tool-track-lights:hover) .night-tool-marker-sunrise .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-lights:hover) .night-tool-marker-sunset .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-lights:focus-within) .night-tool-marker-sunrise .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-lights:focus-within) .night-tool-marker-sunset .night-tool-markerDot {
+  background: rgba(245, 158, 11, 1);
+  transform: scale(1.18);
+}
+
+.night-tool-timeline:has(.night-tool-track-night:hover) .night-tool-marker-civil-dawn .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-night:hover) .night-tool-marker-civil-dusk .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-night:focus-within) .night-tool-marker-civil-dawn .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-night:focus-within) .night-tool-marker-civil-dusk .night-tool-markerDot {
+  background: rgba(15, 23, 42, 1);
+  transform: scale(1.18);
+}
+
+.night-tool-timeline:has(.night-tool-track-currency:hover) .night-tool-marker-night-end .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-currency:hover) .night-tool-marker-night-begin .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-currency:focus-within) .night-tool-marker-night-end .night-tool-markerDot,
+.night-tool-timeline:has(.night-tool-track-currency:focus-within) .night-tool-marker-night-begin .night-tool-markerDot {
+  background: rgba(37, 99, 235, 1);
+  transform: scale(1.18);
+}
+
+.night-tool-axis {
+  position: relative;
+  min-height: 1.8rem;
+  border-top: 2px solid rgba(18, 45, 68, 0.12);
+}
+
+.night-tool-marker {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  width: 10px;
+}
+
+.night-tool-markerLine {
+  display: block;
+  width: 1px;
+  height: 1.35rem;
+  margin: 0 auto;
+  background: rgba(18, 45, 68, 0.24);
+}
+
+.night-tool-markerDot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: -0.18rem auto 0;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.8);
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+
 .night-tool-copy {
   display: grid;
   gap: 0.8rem;
@@ -3518,6 +3670,10 @@ summary:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .night-tool-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .flight-computer-fieldGrid {
     grid-template-columns: repeat(3, max-content);
   }
@@ -3610,6 +3766,38 @@ summary:focus-visible {
     margin-top: 0.4rem;
     padding-top: 0.55rem;
     border-top: 1px solid rgba(148, 163, 184, 0.14);
+  }
+
+  .night-tool-timeline {
+    padding: 0.85rem;
+  }
+
+  .night-tool-trackMeta {
+    position: static;
+    min-width: 0;
+    max-width: none;
+    margin-bottom: 0.45rem;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    box-shadow: none;
+  }
+
+  .night-tool-timeline {
+    padding: 0.85rem;
+  }
+
+  .night-tool-axis {
+    min-height: 10.5rem;
+  }
+
+  .night-tool-marker {
+    width: min(112px, 28vw);
+  }
+
+  .night-tool-markerLabel,
+  .night-tool-markerTime {
+    font-size: 0.66rem;
   }
 
   .flight-computer-resultCard {

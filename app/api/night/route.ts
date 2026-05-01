@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import SunCalc from "suncalc";
+import { DateTime } from "luxon";
 
 function toUtcTime(date: Date) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -71,6 +72,15 @@ function getSunTimes(lat: number, lon: number, date: Date) {
   };
 }
 
+function buildLocalNoon(date: string, zone: string) {
+  const localDate = DateTime.fromISO(date, { zone });
+  if (!localDate.isValid) {
+    throw new Error("Invalid date.");
+  }
+
+  return localDate.set({ hour: 12, minute: 0, second: 0, millisecond: 0 }).toJSDate();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { location, date } = (await request.json()) as {
@@ -82,23 +92,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Location and date are required." }, { status: 400 });
     }
 
-    const parsedDate = new Date(date);
-    if (Number.isNaN(parsedDate.getTime())) {
+    const parsedDate = DateTime.fromISO(date);
+    if (!parsedDate.isValid) {
       return NextResponse.json({ error: "Invalid date." }, { status: 400 });
     }
 
     const coords = await geocodeLocation(location);
-    const nextDate = new Date(parsedDate);
-    nextDate.setDate(nextDate.getDate() + 1);
+    const timezoneData = await getTimezone(coords.lat, coords.lon);
+    const zone = timezoneData?.timeZone ?? null;
 
-    const [timezoneData, sunToday, sunNext] = await Promise.all([
-      getTimezone(coords.lat, coords.lon),
-      Promise.resolve(getSunTimes(coords.lat, coords.lon, parsedDate)),
-      Promise.resolve(getSunTimes(coords.lat, coords.lon, nextDate)),
+    if (!zone) {
+      return NextResponse.json({ error: "Timezone lookup failed." }, { status: 500 });
+    }
+
+    const localDate = DateTime.fromISO(date, { zone });
+    const nextLocalDate = localDate.plus({ days: 1 });
+    const sunTodayDate = buildLocalNoon(localDate.toISODate(), zone);
+    const sunNextDate = buildLocalNoon(nextLocalDate.toISODate(), zone);
+
+    const [sunToday, sunNext] = await Promise.all([
+      Promise.resolve(getSunTimes(coords.lat, coords.lon, sunTodayDate)),
+      Promise.resolve(getSunTimes(coords.lat, coords.lon, sunNextDate)),
     ]);
 
     return NextResponse.json({
-      zone: timezoneData?.timeZone ?? null,
+      zone,
       displayName: coords.displayName,
       sunToday,
       sunNext,

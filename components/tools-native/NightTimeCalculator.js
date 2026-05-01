@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { DateTime } from "luxon";
 
 const NightTimeCalculator = () => {
@@ -8,6 +8,8 @@ const NightTimeCalculator = () => {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(false);
   const [zone, setZone] = useState(null);
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState("");
   const [sunToday, setSunToday] = useState(null);
   const [sunNext, setSunNext] = useState(null);
 
@@ -19,10 +21,13 @@ const NightTimeCalculator = () => {
       setSunToday(null);
       setSunNext(null);
       setZone(null);
+      setDisplayName("");
+      setError("Invalid date.");
       return;
     }
 
     setLoading(true);
+    setError("");
     try {
       const response = await fetch("/api/night", {
         method: "POST",
@@ -42,12 +47,15 @@ const NightTimeCalculator = () => {
       }
 
       setZone(data?.zone ?? null);
+      setDisplayName(data?.displayName ?? location);
       setSunToday(data?.sunToday ?? null);
       setSunNext(data?.sunNext ?? null);
-    } catch {
+    } catch (err) {
       setSunToday(null);
       setSunNext(null);
       setZone(null);
+      setDisplayName("");
+      setError(err instanceof Error ? err.message : "Failed to fetch night data.");
     } finally {
       setLoading(false);
     }
@@ -71,7 +79,59 @@ const NightTimeCalculator = () => {
     return `${dtLux.toFormat("hh:mm a")} ${tzAbbr} (${utc.toFormat("HH:mm")}Z)`;
   };
 
-  const addHours = (value, hours) => new Date(value.getTime() + hours * 3600 * 1000);
+  const nightReference = useMemo(() => {
+    if (!sunToday || !zone) return null;
+
+    const localStart = DateTime.fromISO(date, { zone }).startOf("day");
+    if (!localStart.isValid) return null;
+
+    const localEnd = localStart.plus({ days: 1 });
+    const dayMinutes = localEnd.diff(localStart, "minutes").minutes;
+    const toLocal = (iso) => DateTime.fromISO(iso, { zone: "utc" }).setZone(zone);
+    const toPercent = (dt) => {
+      const minutes = dt.diff(localStart, "minutes").minutes;
+      const clamped = Math.min(Math.max(minutes, 0), dayMinutes);
+      return (clamped / dayMinutes) * 100;
+    };
+
+    const sunrise = toLocal(sunToday.raw.sunrise);
+    const sunset = toLocal(sunToday.raw.sunset);
+    const civilDawn = toLocal(sunToday.raw.civilDawn);
+    const civilDusk = toLocal(sunToday.raw.civilDusk);
+    const nightCurrencyEnd = sunrise.minus({ hours: 1 });
+    const nightCurrencyBegin = sunset.plus({ hours: 1 });
+
+    const markers = [
+      { key: "night-end", label: "Night currency ends", dt: nightCurrencyEnd },
+      { key: "civil-dawn", label: "Civil dawn", dt: civilDawn },
+      { key: "sunrise", label: "Sunrise", dt: sunrise },
+      { key: "sunset", label: "Sunset", dt: sunset },
+      { key: "civil-dusk", label: "Civil dusk", dt: civilDusk },
+      { key: "night-begin", label: "Night currency begins", dt: nightCurrencyBegin },
+    ].map((marker) => ({
+      ...marker,
+      percent: toPercent(marker.dt),
+    }));
+
+    return {
+      sunrise,
+      sunset,
+      civilDawn,
+      civilDusk,
+      nightCurrencyBegin,
+      nightCurrencyEnd,
+      markers,
+      segments: {
+        day: { start: toPercent(sunrise), end: toPercent(sunset) },
+        lightsMorning: { start: 0, end: toPercent(sunrise) },
+        lightsEvening: { start: toPercent(sunset), end: 100 },
+        nightMorning: { start: 0, end: toPercent(civilDawn) },
+        nightEvening: { start: toPercent(civilDusk), end: 100 },
+        currencyMorning: { start: 0, end: toPercent(nightCurrencyEnd) },
+        currencyEvening: { start: toPercent(nightCurrencyBegin), end: 100 },
+      },
+    };
+  }, [date, sunToday, zone]);
 
   return (
     <div className="night-tool-shell">
@@ -109,58 +169,170 @@ const NightTimeCalculator = () => {
 
       <section className="night-tool-panel night-tool-results">
         <div className="night-tool-head">
-          <h2>Night window</h2>
+          <h2>Night references</h2>
           <p>
-            {sunToday && sunNext && zone
-              ? `Times shown for ${location.toUpperCase()}`
-              : "Run the calculation to see sunset, civil twilight, and night currency references"}
+            {nightReference && zone
+              ? `Times shown for ${displayName || location} on ${DateTime.fromISO(date, { zone }).toFormat("DDD")}`
+              : "Run the calculation to see sunset, civil twilight, and passenger-currency boundaries"}
           </p>
         </div>
 
-        {sunToday && sunNext && zone ? (
+        {error ? <div className="night-tool-empty">{error}</div> : null}
+
+        {nightReference && zone ? (
           <>
+            <div className="night-tool-timeline">
+              <div className="night-tool-timelineScale">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>24:00</span>
+              </div>
+
+              <div className="night-tool-track night-tool-track-lights">
+                <div className="night-tool-trackMeta">
+                  <strong>Position lights</strong>
+                  <span>
+                    Ends at {formatLocalTime(nightReference.sunrise.toJSDate(), zone).split(" (")[0]}
+                    {" · "}
+                    Begins at {formatLocalTime(nightReference.sunset.toJSDate(), zone).split(" (")[0]}
+                  </span>
+                </div>
+                <span
+                  className="night-tool-segment is-lights"
+                  style={{
+                    left: `${nightReference.segments.lightsMorning.start}%`,
+                    width: `${nightReference.segments.lightsMorning.end - nightReference.segments.lightsMorning.start}%`,
+                  }}
+                />
+                <span
+                  className="night-tool-segment is-lights"
+                  style={{
+                    left: `${nightReference.segments.lightsEvening.start}%`,
+                    width: `${nightReference.segments.lightsEvening.end - nightReference.segments.lightsEvening.start}%`,
+                  }}
+                />
+                <span className="night-tool-trackLabel">Position lights</span>
+              </div>
+
+              <div className="night-tool-track night-tool-track-night">
+                <div className="night-tool-trackMeta">
+                  <strong>Loggable night</strong>
+                  <span>
+                    Ends at {formatLocalTime(nightReference.civilDawn.toJSDate(), zone).split(" (")[0]}
+                    {" · "}
+                    Begins at {formatLocalTime(nightReference.civilDusk.toJSDate(), zone).split(" (")[0]}
+                  </span>
+                </div>
+                <span
+                  className="night-tool-segment is-night"
+                  style={{
+                    left: `${nightReference.segments.nightMorning.start}%`,
+                    width: `${nightReference.segments.nightMorning.end - nightReference.segments.nightMorning.start}%`,
+                  }}
+                />
+                <span
+                  className="night-tool-segment is-night"
+                  style={{
+                    left: `${nightReference.segments.nightEvening.start}%`,
+                    width: `${nightReference.segments.nightEvening.end - nightReference.segments.nightEvening.start}%`,
+                  }}
+                />
+                <span
+                  className="night-tool-segment is-day"
+                  style={{
+                    left: `${nightReference.segments.day.start}%`,
+                    width: `${nightReference.segments.day.end - nightReference.segments.day.start}%`,
+                  }}
+                />
+                <span className="night-tool-trackLabel">Day / loggable night</span>
+              </div>
+
+              <div className="night-tool-track night-tool-track-currency">
+                <div className="night-tool-trackMeta">
+                  <strong>61.57(b) night currency</strong>
+                  <span>
+                    Ends at {formatLocalTime(nightReference.nightCurrencyEnd.toJSDate(), zone).split(" (")[0]}
+                    {" · "}
+                    Begins at {formatLocalTime(nightReference.nightCurrencyBegin.toJSDate(), zone).split(" (")[0]}
+                  </span>
+                </div>
+                <span
+                  className="night-tool-segment is-currency"
+                  style={{
+                    left: `${nightReference.segments.currencyMorning.start}%`,
+                    width: `${nightReference.segments.currencyMorning.end - nightReference.segments.currencyMorning.start}%`,
+                  }}
+                />
+                <span
+                  className="night-tool-segment is-currency"
+                  style={{
+                    left: `${nightReference.segments.currencyEvening.start}%`,
+                    width: `${nightReference.segments.currencyEvening.end - nightReference.segments.currencyEvening.start}%`,
+                  }}
+                />
+                <span className="night-tool-trackLabel">61.57(b) night currency</span>
+              </div>
+
+              <div className="night-tool-axis">
+                {nightReference.markers.map((marker) => (
+                  <div
+                    key={marker.key}
+                    className={`night-tool-marker night-tool-marker-${marker.key}`}
+                    style={{ left: `${marker.percent}%` }}
+                  >
+                    <span className="night-tool-markerLine" />
+                    <span className="night-tool-markerDot" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="night-tool-card-grid">
               <article className="night-tool-card">
+                <span>Sunrise</span>
+                <strong>{formatLocalTime(nightReference.sunrise.toJSDate(), zone)}</strong>
+              </article>
+              <article className="night-tool-card">
+                <span>Civil dawn</span>
+                <strong>{formatLocalTime(nightReference.civilDawn.toJSDate(), zone)}</strong>
+              </article>
+              <article className="night-tool-card">
                 <span>Sunset</span>
-                <strong>{formatLocalTime(new Date(sunToday.raw.sunset), zone)}</strong>
+                <strong>{formatLocalTime(nightReference.sunset.toJSDate(), zone)}</strong>
               </article>
               <article className="night-tool-card">
                 <span>Civil dusk</span>
-                <strong>{formatLocalTime(new Date(sunToday.raw.civilDusk), zone)}</strong>
+                <strong>{formatLocalTime(nightReference.civilDusk.toJSDate(), zone)}</strong>
               </article>
               <article className="night-tool-card">
-                <span>Night currency starts</span>
-                <strong>{formatLocalTime(addHours(new Date(sunToday.raw.sunset), 1), zone)}</strong>
+                <span>Night currency begins</span>
+                <strong>{formatLocalTime(nightReference.nightCurrencyBegin.toJSDate(), zone)}</strong>
               </article>
               <article className="night-tool-card">
                 <span>Night currency ends</span>
-                <strong>{formatLocalTime(addHours(new Date(sunNext.raw.sunrise), -1), zone)}</strong>
+                <strong>{formatLocalTime(nightReference.nightCurrencyEnd.toJSDate(), zone)}</strong>
               </article>
             </div>
 
             <div className="night-tool-copy">
               <p>
-                Under 14 CFR 91.209, position lights are required from sunset{" "}
-                {formatLocalTime(new Date(sunToday.raw.sunset), zone)} to sunrise{" "}
-                {formatLocalTime(new Date(sunNext.raw.sunrise), zone)}.
+                Position lights: sunset {formatLocalTime(nightReference.sunset.toJSDate(), zone)} to the next sunrise.
               </p>
               <p>
-                Under 14 CFR 1.1, night begins after evening civil twilight{" "}
-                {formatLocalTime(new Date(sunToday.raw.civilDusk), zone)} and ends before morning civil twilight{" "}
-                {formatLocalTime(new Date(sunNext.raw.civilDawn), zone)}.
+                Loggable night: end of evening civil twilight {formatLocalTime(nightReference.civilDusk.toJSDate(), zone)} to beginning of morning civil twilight {formatLocalTime(nightReference.civilDawn.toJSDate(), zone)}.
               </p>
               <p>
-                For 14 CFR 61.57(b) passenger currency, use the window between one hour after sunset{" "}
-                {formatLocalTime(addHours(new Date(sunToday.raw.sunset), 1), zone)} and one hour before sunrise{" "}
-                {formatLocalTime(addHours(new Date(sunNext.raw.sunrise), -1), zone)}.
+                Passenger-carrying night currency: one hour after sunset {formatLocalTime(nightReference.nightCurrencyBegin.toJSDate(), zone)} to one hour before sunrise {formatLocalTime(nightReference.nightCurrencyEnd.toJSDate(), zone)}.
               </p>
             </div>
           </>
-        ) : (
+        ) : !error ? (
           <div className="night-tool-empty">
             Enter a location and date in the input panel, then calculate to populate the night references.
           </div>
-        )}
+        ) : null}
       </section>
     </div>
   );
