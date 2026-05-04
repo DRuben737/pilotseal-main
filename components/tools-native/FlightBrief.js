@@ -1293,6 +1293,25 @@ ${riskComments}
               <div className="flightbrief-mobile-settings">
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">People</h3>
+                  {session?.user?.id ? (
+                    <div className="inline-label-input">
+                      <label className="label" htmlFor="savedStudentMobile">Saved Student:</label>
+                      <select
+                        id="savedStudentMobile"
+                        className="input-field"
+                        value={selectedStudentId}
+                        onChange={(e) => setSelectedStudentId(e.target.value)}
+                        title="Select a saved student"
+                      >
+                        <option value="">Select saved student</option>
+                        {savedStudents.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   <EditableInfoRow
                     label="Student"
                     value={formatDisplayValue(studentName)}
@@ -1309,6 +1328,25 @@ ${riskComments}
                       />
                     )}
                   />
+                  {session?.user?.id ? (
+                    <div className="inline-label-input">
+                      <label className="label" htmlFor="savedInstructorMobile">Saved Instructor:</label>
+                      <select
+                        id="savedInstructorMobile"
+                        className="input-field"
+                        value={selectedInstructorId}
+                        onChange={(e) => setSelectedInstructorId(e.target.value)}
+                        title="Select a saved instructor"
+                      >
+                        <option value="">Select saved instructor</option>
+                        {savedCfis.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   <EditableInfoRow
                     label="Instructor"
                     value={formatDisplayValue(instructorName)}
