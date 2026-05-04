@@ -28,7 +28,7 @@ For an instrument rating:
 - 40 hours → total instrument time  
 - 15 hours → instrument training with CFII  
 
-👉 These are not interchangeable  [oai_citation:0‡pvttimetoir.pdf](sediment://file_00000000670871f59c49bebf958a2904)
+👉 These are not interchangeable  
 
 ---
 
@@ -37,7 +37,7 @@ The 3 hours under §61.109(a)(3):
 
 - “Control and maneuvering by reference to instruments”  
 
-👉 Can be applied toward the **40-hour instrument time requirement**  [oai_citation:1‡pvttimetoir.pdf](sediment://file_00000000670871f59c49bebf958a2904)
+👉 Can be applied toward the **40-hour instrument time requirement**  
 
 ---
 
@@ -46,7 +46,7 @@ To count toward the 15-hour requirement:
 
 - Must be given by a CFII  
 
-👉 If the instructor is not instrument-rated, it does not qualify  [oai_citation:2‡pvttimetoir.pdf](sediment://file_00000000670871f59c49bebf958a2904)
+👉 If the instructor is not instrument-rated, it does not qualify 
 
 ---
 

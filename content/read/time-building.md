@@ -27,7 +27,7 @@ During simulated instrument flight:
 
 - A safety pilot is required by regulation  
 
-👉 This makes the safety pilot a **required crewmember**  [oai_citation:0‡pvtpay.pdf](sediment://file_000000008ef471f7aba70e898bd0f0e3)
+👉 This makes the safety pilot a **required crewmember**  
 
 ---
 
@@ -39,7 +39,7 @@ If Pilot A:
 
 Then Pilot B (safety pilot):
 
-👉 Can log **SIC only**, not PIC  [oai_citation:1‡pvtpay.pdf](sediment://file_000000008ef471f7aba70e898bd0f0e3)
+👉 Can log **SIC only**, not PIC 
 
 ---
 
@@ -53,7 +53,7 @@ Then:
 - Pilot B can log **PIC**  
 - Pilot A can also log **PIC** as sole manipulator  
 
-👉 Both can log PIC under different provisions  [oai_citation:2‡pvtpay.pdf](sediment://file_000000008ef471f7aba70e898bd0f0e3)
+👉 Both can log PIC under different provisions  
 
 ---
 
@@ -67,7 +67,7 @@ However:
 - During simulated instrument flight  
 - Both pilots are required crewmembers  
 
-👉 No passengers → no cost-sharing requirement  [oai_citation:3‡pvtpay.pdf](sediment://file_000000008ef471f7aba70e898bd0f0e3)
+👉 No passengers → no cost-sharing requirement  
 
 ---
 

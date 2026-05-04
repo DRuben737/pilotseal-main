@@ -27,7 +27,7 @@ For initial CFI applicants:
 
 - Training must be provided by an instructor meeting §61.195(h) requirements  
 
-👉 This includes experience and instructional thresholds  [oai_citation:0‡法律信息研究所](https://www.law.cornell.edu/cfr/text/14/61.195?utm_source=chatgpt.com)
+👉 This includes experience and instructional thresholds  
 
 ---
 
@@ -47,7 +47,7 @@ Before formal training, an applicant may:
 - Train with a less experienced (“junior”) CFI  
 - Practice right-seat skills or instructional techniques  
 
-👉 This is considered preparation, not required training  [oai_citation:1‡Initial CFI training.pdf](sediment://file_00000000213471f7b142b7472cf71ec1)
+👉 This is considered preparation, not required training  
 
 ---
 
@@ -57,7 +57,7 @@ FAA explicitly states:
 - Pre-training cannot reduce or replace required training  
 - Required training must still be completed under §61.195(h)  
 
-👉 No shortcut or credit is allowed  [oai_citation:2‡Initial CFI training.pdf](sediment://file_00000000213471f7b142b7472cf71ec1)
+👉 No shortcut or credit is allowed  
 
 ---
 

@@ -30,7 +30,7 @@ A ground instructor may not perform duties unless, within the past 12 months:
 - Has served at least 3 months as a ground instructor, **or**  
 - Has received an endorsement confirming proficiency  
 
-👉 This requirement applies to **all** ground instructors  [oai_citation:0‡bgirecencies.pdf](sediment://file_00000000e35c71f5bdd583f61c9ec897)
+👉 This requirement applies to **all** ground instructors
 
 ---
 
@@ -41,7 +41,7 @@ The key question:
 
 FAA answer:
 
-👉 **No** — certification is not a substitute for recent experience  [oai_citation:1‡bgirecencies.pdf](sediment://file_00000000e35c71f5bdd583f61c9ec897)
+👉 **No** — certification is not a substitute for recent experience 
 
 ---
 
@@ -51,7 +51,7 @@ Even for a newly issued certificate:
 - The instructor still does not meet §61.217(a)  
 - Therefore must meet §61.217(b) before instructing  
 
-👉 There is no “grace period” for new instructors  [oai_citation:2‡bgirecencies.pdf](sediment://file_00000000e35c71f5bdd583f61c9ec897)
+👉 There is no “grace period” for new instructors  
 
 ---
 
@@ -60,7 +60,7 @@ The FAA clarifies:
 
 - The requirement ensures **current proficiency**, not just past knowledge  
 
-👉 Recency is a separate standard from qualification  [oai_citation:3‡bgirecencies.pdf](sediment://file_00000000e35c71f5bdd583f61c9ec897)
+👉 Recency is a separate standard from qualification  
 
 ---
 
