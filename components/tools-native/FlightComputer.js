@@ -2,6 +2,45 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+const MACH_ONE_KT = 661.47;
+const LITERS_PER_US_GALLON = 3.78541;
+const LITERS_PER_IMP_GALLON = 4.54609;
+const FEET_PER_NM = 6076.12;
+const KG_PER_LITER_PER_LB_PER_GALLON = 0.119826427;
+const CLIMB_DESCENT_ANGLES = [2.0, 2.5, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4];
+
+const DISTANCE_UNITS = [
+  { id: "nauticalMiles", label: "Nautical miles", toBase: (v) => v, fromBase: (v) => v },
+  { id: "statuteMiles", label: "Statute miles", toBase: (v) => v / 1.15078, fromBase: (v) => v * 1.15078 },
+  { id: "kilometers", label: "Kilometers", toBase: (v) => v / 1.852, fromBase: (v) => v * 1.852 },
+  { id: "meters", label: "Meters", toBase: (v) => v / 1852, fromBase: (v) => v * 1852 },
+  { id: "feet", label: "Feet", toBase: (v) => v / FEET_PER_NM, fromBase: (v) => v * FEET_PER_NM },
+  { id: "yards", label: "Yards", toBase: (v) => v / 2025.3718, fromBase: (v) => v * 2025.3718 },
+];
+
+const SPEED_UNITS = [
+  { id: "knots", label: "Knots", toBase: (v) => v, fromBase: (v) => v },
+  { id: "mach", label: "Mach number at SL", toBase: (v) => v * MACH_ONE_KT, fromBase: (v) => v / MACH_ONE_KT },
+  { id: "mph", label: "Miles per hour", toBase: (v) => v / 1.15078, fromBase: (v) => v * 1.15078 },
+  { id: "kph", label: "Kilometers per hour", toBase: (v) => v / 1.852, fromBase: (v) => v * 1.852 },
+  { id: "feetPerMinute", label: "Feet per minute", toBase: (v) => v / FEET_PER_NM * 60, fromBase: (v) => (v / 60) * FEET_PER_NM },
+  { id: "metersPerSecond", label: "Meters per second", toBase: (v) => (v * 1.94384), fromBase: (v) => v / 1.94384 },
+];
+
+const TEMPERATURE_UNITS = [
+  { id: "fahrenheit", label: "Fahrenheit", toBase: (v) => (v - 32) * (5 / 9), fromBase: (v) => v * (9 / 5) + 32 },
+  { id: "celsius", label: "Celsius", toBase: (v) => v, fromBase: (v) => v },
+  { id: "kelvin", label: "Kelvin", toBase: (v) => v - 273.15, fromBase: (v) => v + 273.15 },
+];
+
+const FUEL_TYPES = [
+  { id: "avgas", label: "Avgas (6 lbs/US Gal)", densityLbPerGal: 6 },
+  { id: "jetA", label: "Jet A (6.7 lbs/US Gal)", densityLbPerGal: 6.7 },
+  { id: "mogas", label: "Mogas (6.01 lbs/US Gal)", densityLbPerGal: 6.01 },
+  { id: "diesel", label: "Diesel (7.1 lbs/US Gal)", densityLbPerGal: 7.1 },
+  { id: "custom", label: "Custom density", densityLbPerGal: 6 },
+];
+
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -14,6 +53,11 @@ function normalizeAngle(angle) {
 
 function formatNumber(value, digits = 1) {
   return Number.isFinite(value) ? value.toFixed(digits) : "--";
+}
+
+function formatCompact(value, digits = 2) {
+  if (!Number.isFinite(value)) return "";
+  return value.toFixed(digits).replace(/\.?0+$/, "");
 }
 
 function formatClock(hours) {
@@ -37,6 +81,10 @@ function signedVariation(value, direction) {
   return direction === "W" ? -Math.abs(value) : Math.abs(value);
 }
 
+function clampRatio(value) {
+  return Math.max(-1, Math.min(1, value));
+}
+
 function computeWindCourse({
   trueCourse,
   trueAirspeed,
@@ -56,7 +104,7 @@ function computeWindCourse({
   const relativeRadians = ((windDirection - trueCourse) * Math.PI) / 180;
   const crosswind = windSpeed * Math.sin(relativeRadians);
   const headwind = windSpeed * Math.cos(relativeRadians);
-  const ratio = Math.max(-1, Math.min(1, crosswind / trueAirspeed));
+  const ratio = clampRatio(crosswind / trueAirspeed);
   const wca = (Math.asin(ratio) * 180) / Math.PI;
   const headingTrue = normalizeAngle(trueCourse + wca);
   const headingMagnetic = normalizeAngle(headingTrue - (variation || 0));
@@ -201,21 +249,6 @@ function computeClimbDescent({ altitudeChange, groundspeed, verticalSpeed }) {
   };
 }
 
-function computeEndurance({ usableFuel, burnRate }) {
-  if (
-    [usableFuel, burnRate].some((value) => !Number.isFinite(value)) ||
-    usableFuel < 0 ||
-    burnRate <= 0
-  ) {
-    return null;
-  }
-
-  const hours = usableFuel / burnRate;
-  return {
-    hours,
-  };
-}
-
 function computeTopOfDescent({
   altitudeToLose,
   descentRate,
@@ -311,7 +344,8 @@ function computeFuelByWeight({
   fuelWeight,
   weightPerGallon,
 }) {
-  const factor = Number.isFinite(weightPerGallon) && weightPerGallon > 0 ? weightPerGallon : 6;
+  const factor =
+    Number.isFinite(weightPerGallon) && weightPerGallon > 0 ? weightPerGallon : 6;
   const hasGallons = Number.isFinite(fuelGallons) && fuelGallons >= 0;
   const hasWeight = Number.isFinite(fuelWeight) && fuelWeight >= 0;
   const provided = [hasGallons, hasWeight].filter(Boolean).length;
@@ -359,39 +393,6 @@ function computeRequiredDescentRate({
   };
 }
 
-function computeEta({
-  currentHours,
-  enrouteMinutes,
-}) {
-  if (
-    !Number.isFinite(currentHours) ||
-    !Number.isFinite(enrouteMinutes) ||
-    currentHours < 0 ||
-    enrouteMinutes < 0
-  ) {
-    return null;
-  }
-
-  const departureMinutes = currentHours * 60;
-  const etaMinutes = departureMinutes + enrouteMinutes;
-
-  return {
-    departureMinutes,
-    etaMinutes,
-  };
-}
-
-function computeNmPerMinute({ groundspeed }) {
-  if (!Number.isFinite(groundspeed) || groundspeed <= 0) {
-    return null;
-  }
-
-  return {
-    nmPerMinute: groundspeed / 60,
-    secondsPerNm: 3600 / groundspeed,
-  };
-}
-
 function computeVerticalSpeedFromGradient({
   groundspeed,
   gradientFtPerNm,
@@ -435,6 +436,171 @@ function computeRuleOf60({
     interceptDeg,
     correctionDeg:
       Number.isFinite(interceptDeg) ? trackErrorDeg + interceptDeg : trackErrorDeg,
+  };
+}
+
+function computeGradientForAngle(angle) {
+  if (!Number.isFinite(angle) || angle <= 0) return null;
+  return Math.tan((angle * Math.PI) / 180) * FEET_PER_NM;
+}
+
+function computeClimbDescentTable(groundspeed) {
+  if (!Number.isFinite(groundspeed) || groundspeed <= 0) return [];
+  return CLIMB_DESCENT_ANGLES.map((angle) => {
+    const ftPerNm = computeGradientForAngle(angle);
+    return {
+      angle,
+      ftPerNm,
+      fpm: (groundspeed / 60) * ftPerNm,
+    };
+  });
+}
+
+function estimateDrift(course, tas, windDirection, windSpeed) {
+  if (
+    [course, tas, windDirection, windSpeed].some((value) => !Number.isFinite(value)) ||
+    tas <= 0
+  ) {
+    return null;
+  }
+
+  const relativeRadians = ((windDirection - course) * Math.PI) / 180;
+  const crosswind = windSpeed * Math.sin(relativeRadians);
+  return (Math.asin(clampRatio(crosswind / tas)) * 180) / Math.PI;
+}
+
+function classifyHoldingEntry(relativeFromInbound, turnDirection) {
+  if (turnDirection === "L") {
+    if (relativeFromInbound >= 70 && relativeFromInbound <= 250) return "Direct";
+    if (relativeFromInbound > 250 && relativeFromInbound < 360) return "Parallel";
+    return "Teardrop";
+  }
+
+  if (relativeFromInbound >= 110 && relativeFromInbound <= 290) return "Direct";
+  if (relativeFromInbound > 290 && relativeFromInbound < 360) return "Teardrop";
+  return "Parallel";
+}
+
+function computeHoldingGroundspeed(course, trueAirspeed, windDirection, windSpeed) {
+  if (
+    [course, trueAirspeed, windDirection, windSpeed].some(
+      (value) => !Number.isFinite(value)
+    ) ||
+    trueAirspeed <= 0
+  ) {
+    return null;
+  }
+
+  const wind = computeWindCourse({
+    trueCourse: course,
+    trueAirspeed,
+    windDirection,
+    windSpeed,
+    variation: 0,
+  });
+
+  return wind && Number.isFinite(wind.groundspeed) && wind.groundspeed > 0
+    ? wind.groundspeed
+    : null;
+}
+
+function computeHoldingTrainer({
+  inboundCourse,
+  aircraftHeading,
+  turnDirection,
+  windDirection,
+  windSpeed,
+  trueAirspeed,
+}) {
+  if (
+    !Number.isFinite(inboundCourse) ||
+    !Number.isFinite(aircraftHeading)
+  ) {
+    return null;
+  }
+
+  const outboundCourse = normalizeAngle(inboundCourse + 180);
+  const relativeFromInbound = normalizeAngle(aircraftHeading - inboundCourse);
+  const entry = classifyHoldingEntry(relativeFromInbound, turnDirection);
+  const inboundDrift = estimateDrift(
+    inboundCourse,
+    trueAirspeed,
+    windDirection,
+    windSpeed
+  );
+  const outboundDrift =
+    Number.isFinite(inboundDrift) ? inboundDrift * 3 : null;
+  const teardropHeading = normalizeAngle(
+    outboundCourse + (turnDirection === "R" ? -30 : 30)
+  );
+  const crossFixHeading =
+    entry === "Direct"
+      ? outboundCourse
+      : entry === "Teardrop"
+        ? teardropHeading
+        : outboundCourse;
+  const crossFixAction =
+    entry === "Direct"
+      ? `Turn to ${formatNumber(outboundCourse, 0)}° and fly the outbound leg.`
+      : entry === "Teardrop"
+        ? `Turn to ${formatNumber(teardropHeading, 0)}° for the teardrop entry.`
+        : `Turn to ${formatNumber(outboundCourse, 0)}° and fly the inbound leg.`;
+  const inboundGroundspeed = computeHoldingGroundspeed(
+    inboundCourse,
+    trueAirspeed,
+    windDirection,
+    windSpeed
+  );
+  const outboundGroundspeed = computeHoldingGroundspeed(
+    outboundCourse,
+    trueAirspeed,
+    windDirection,
+    windSpeed
+  );
+  const outboundTimeSeconds =
+    Number.isFinite(inboundGroundspeed) && Number.isFinite(outboundGroundspeed)
+      ? (60 * inboundGroundspeed) / outboundGroundspeed
+      : null;
+  const timeCorrectionSeconds = Number.isFinite(outboundTimeSeconds)
+    ? outboundTimeSeconds - 60
+    : null;
+
+  const procedure =
+    entry === "Direct"
+      ? "Cross the fix, turn onto the holding side, time outbound, then turn inbound."
+      : entry === "Parallel"
+        ? "Cross the fix, fly the outbound course on the non-holding side for one minute, then turn back toward the protected side to intercept inbound."
+        : "Cross the fix, fly a 30° offset outbound toward the holding side for one minute, then turn inbound.";
+
+  return {
+    entry,
+    inboundCourse: normalizeAngle(inboundCourse),
+    outboundCourse,
+    teardropHeading,
+    crossFixHeading,
+    crossFixAction,
+    inboundCorrection: Number.isFinite(inboundDrift)
+      ? normalizeAngle(inboundCourse + inboundDrift)
+      : null,
+    outboundCorrection: Number.isFinite(outboundDrift)
+      ? normalizeAngle(outboundCourse + outboundDrift)
+      : null,
+    inboundDrift,
+    outboundDrift,
+    inboundGroundspeed,
+    outboundGroundspeed,
+    outboundTimeSeconds,
+    timeCorrectionSeconds,
+    procedure,
+    relativeFromInbound,
+    directVariant:
+      entry === "Direct"
+        ? relativeFromInbound <= 170
+          ? "arc"
+          : relativeFromInbound <= 230
+            ? "tangent"
+            : "offset"
+        : null,
   };
 }
 
@@ -488,42 +654,81 @@ function computeNavlogLeg(leg) {
   };
 }
 
-const CONVERTERS = [
-  {
-    id: "distance",
-    label: "Distance",
-    units: [
-      { id: "nm", label: "NM", toBase: (v) => v, fromBase: (v) => v },
-      { id: "sm", label: "SM", toBase: (v) => v / 1.15078, fromBase: (v) => v * 1.15078 },
-      { id: "km", label: "KM", toBase: (v) => v / 1.852, fromBase: (v) => v * 1.852 },
-    ],
-  },
-  {
-    id: "fuel",
-    label: "Fuel",
-    units: [
-      { id: "gal", label: "GAL", toBase: (v) => v, fromBase: (v) => v },
-      { id: "l", label: "L", toBase: (v) => v / 3.78541, fromBase: (v) => v * 3.78541 },
-      { id: "qt", label: "QT", toBase: (v) => v / 4, fromBase: (v) => v * 4 },
-    ],
-  },
-  {
-    id: "weight",
-    label: "Weight",
-    units: [
-      { id: "lb", label: "LB", toBase: (v) => v, fromBase: (v) => v },
-      { id: "kg", label: "KG", toBase: (v) => v * 2.20462, fromBase: (v) => v / 2.20462 },
-    ],
-  },
-  {
-    id: "altitude",
-    label: "Altitude",
-    units: [
-      { id: "ft", label: "FT", toBase: (v) => v, fromBase: (v) => v },
-      { id: "m", label: "M", toBase: (v) => v * 3.28084, fromBase: (v) => v / 3.28084 },
-    ],
-  },
-];
+function convertByUnits(units, sourceId, sourceValue) {
+  const parsed = toNumber(sourceValue);
+  if (parsed == null) {
+    return units.reduce((acc, unit) => {
+      acc[unit.id] = "";
+      return acc;
+    }, {});
+  }
+
+  const sourceUnit = units.find((unit) => unit.id === sourceId);
+  if (!sourceUnit) return {};
+
+  const baseValue = sourceUnit.toBase(parsed);
+  return units.reduce((acc, unit) => {
+    acc[unit.id] = unit.id === sourceId ? sourceValue : formatCompact(unit.fromBase(baseValue), 4);
+    return acc;
+  }, {});
+}
+
+function densityLbToKgPerLiter(value) {
+  return value * KG_PER_LITER_PER_LB_PER_GALLON;
+}
+
+function densityKgPerLiterToLb(value) {
+  return value / KG_PER_LITER_PER_LB_PER_GALLON;
+}
+
+function computeFuelFields(sourceId, sourceValue, densityKgPerLiter) {
+  const parsed = toNumber(sourceValue);
+  const empty = {
+    liters: "",
+    usGallons: "",
+    imperialGallons: "",
+    pounds: "",
+    kilograms: "",
+    metricTons: "",
+  };
+
+  if (parsed == null || !Number.isFinite(densityKgPerLiter) || densityKgPerLiter <= 0) {
+    return empty;
+  }
+
+  let liters = null;
+  let kilograms = null;
+
+  if (sourceId === "liters") liters = parsed;
+  if (sourceId === "usGallons") liters = parsed * LITERS_PER_US_GALLON;
+  if (sourceId === "imperialGallons") liters = parsed * LITERS_PER_IMP_GALLON;
+  if (sourceId === "kilograms") kilograms = parsed;
+  if (sourceId === "pounds") kilograms = parsed * 0.45359237;
+  if (sourceId === "metricTons") kilograms = parsed * 1000;
+
+  if (liters == null && kilograms != null) liters = kilograms / densityKgPerLiter;
+  if (kilograms == null && liters != null) kilograms = liters * densityKgPerLiter;
+
+  if (!Number.isFinite(liters) || !Number.isFinite(kilograms)) {
+    return empty;
+  }
+
+  return {
+    liters: sourceId === "liters" ? sourceValue : formatCompact(liters, 3),
+    usGallons:
+      sourceId === "usGallons" ? sourceValue : formatCompact(liters / LITERS_PER_US_GALLON, 3),
+    imperialGallons:
+      sourceId === "imperialGallons"
+        ? sourceValue
+        : formatCompact(liters / LITERS_PER_IMP_GALLON, 3),
+    pounds:
+      sourceId === "pounds" ? sourceValue : formatCompact(kilograms / 0.45359237, 3),
+    kilograms:
+      sourceId === "kilograms" ? sourceValue : formatCompact(kilograms, 3),
+    metricTons:
+      sourceId === "metricTons" ? sourceValue : formatCompact(kilograms / 1000, 5),
+  };
+}
 
 function Field({
   label,
@@ -544,6 +749,23 @@ function Field({
           placeholder={placeholder}
         />
         {suffix ? <small>{suffix}</small> : null}
+      </div>
+    </label>
+  );
+}
+
+function SelectField({ label, value, setValue, options }) {
+  return (
+    <label className="flight-computer-field">
+      <span>{label}</span>
+      <div className="flight-computer-inputWrap">
+        <select value={value} onChange={(event) => setValue(event.target.value)}>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
     </label>
   );
@@ -588,6 +810,45 @@ function VariationField({
   );
 }
 
+function HoldingCourseField({
+  mode,
+  value,
+  setValue,
+  setMode,
+}) {
+  const isRadial = mode === "radial";
+
+  return (
+    <label className="flight-computer-field flight-computer-fieldWide">
+      <span>{isRadial ? "Inbound radial" : "Inbound course"}</span>
+      <div className="flight-computer-inputWrap flight-computer-inputWrapVariation">
+        <input
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          inputMode="decimal"
+          placeholder={isRadial ? "180" : "360"}
+        />
+        <div className="flight-computer-inlineToggle" role="group" aria-label="Holding inbound reference">
+          <button
+            type="button"
+            className={`flight-computer-inlineToggleButton ${!isRadial ? "is-active" : ""}`}
+            onClick={() => setMode("course")}
+          >
+            CRS
+          </button>
+          <button
+            type="button"
+            className={`flight-computer-inlineToggleButton ${isRadial ? "is-active" : ""}`}
+            onClick={() => setMode("radial")}
+          >
+            RAD
+          </button>
+        </div>
+      </div>
+    </label>
+  );
+}
+
 function Result({ label, value }) {
   return (
     <div className="flight-computer-resultCard">
@@ -597,67 +858,303 @@ function Result({ label, value }) {
   );
 }
 
-function ConverterPanel() {
-  const [value, setValue] = useState("");
-  const [converterId, setConverterId] = useState(CONVERTERS[0].id);
-  const [fromUnit, setFromUnit] = useState(CONVERTERS[0].units[0].id);
+function ConverterInput({ label, value, onChange, placeholder = "" }) {
+  return (
+    <label className="flight-computer-converterRow">
+      <span>{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        inputMode="decimal"
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}
 
-  const converter = CONVERTERS.find((item) => item.id === converterId) ?? CONVERTERS[0];
-  const parsed = toNumber(value);
-  const fromConfig = converter.units.find((unit) => unit.id === fromUnit) ?? converter.units[0];
-  const baseValue = parsed == null ? null : fromConfig.toBase(parsed);
+function ConverterPanel() {
+  const converterSections = [
+    { id: "distance", label: "Distance" },
+    { id: "speed", label: "Speed" },
+    { id: "temperature", label: "Temperature" },
+    { id: "fuel", label: "Fuel" },
+  ];
+  const [activeConverter, setActiveConverter] = useState("distance");
+  const [distance, setDistance] = useState(() =>
+    convertByUnits(DISTANCE_UNITS, "nauticalMiles", "1")
+  );
+  const [speed, setSpeed] = useState({
+    knots: "",
+    mach: "",
+    mph: "",
+    kph: "",
+    feetPerMinute: "",
+    metersPerSecond: "",
+  });
+  const [fuel, setFuel] = useState({
+    type: "avgas",
+    densityUnit: "lbpg",
+    density: "6",
+    lastEdited: "usGallons",
+    liters: "",
+    usGallons: "",
+    imperialGallons: "",
+    pounds: "",
+    kilograms: "",
+    metricTons: "",
+  });
+  const [temperature, setTemperature] = useState({
+    fahrenheit: "",
+    celsius: "",
+    kelvin: "",
+  });
+
+  function updateDistance(sourceId, value) {
+    setDistance(convertByUnits(DISTANCE_UNITS, sourceId, value));
+  }
+
+  function updateSpeed(sourceId, value) {
+    setSpeed(convertByUnits(SPEED_UNITS, sourceId, value));
+  }
+
+  function updateTemperature(sourceId, value) {
+    setTemperature(convertByUnits(TEMPERATURE_UNITS, sourceId, value));
+  }
+
+  function fuelDensityKgPerLiter(currentFuel = fuel) {
+    const densityValue = toNumber(currentFuel.density);
+    if (!Number.isFinite(densityValue) || densityValue <= 0) return null;
+    return currentFuel.densityUnit === "kgpl"
+      ? densityValue
+      : densityLbToKgPerLiter(densityValue);
+  }
+
+  function updateFuelField(sourceId, value, draft = fuel) {
+    const densityKgPerLiter = fuelDensityKgPerLiter(draft);
+    const nextFields = computeFuelFields(sourceId, value, densityKgPerLiter);
+    setFuel((current) => ({
+      ...current,
+      ...nextFields,
+      lastEdited: sourceId,
+      type: draft.type,
+      densityUnit: draft.densityUnit,
+      density: draft.density,
+    }));
+  }
+
+  function updateFuelType(nextTypeId) {
+    const selected = FUEL_TYPES.find((item) => item.id === nextTypeId) ?? FUEL_TYPES[0];
+    const nextDensity =
+      fuel.densityUnit === "kgpl"
+        ? formatCompact(densityLbToKgPerLiter(selected.densityLbPerGal), 3)
+        : formatCompact(selected.densityLbPerGal, 2);
+
+    const draft = {
+      ...fuel,
+      type: nextTypeId,
+      density: nextDensity,
+    };
+
+    const anchorValue = draft[draft.lastEdited];
+    const nextFields = computeFuelFields(
+      draft.lastEdited,
+      anchorValue,
+      fuelDensityKgPerLiter(draft)
+    );
+
+    setFuel({
+      ...draft,
+      ...nextFields,
+    });
+  }
+
+  function updateFuelDensityUnit(nextUnit) {
+    const densityValue = toNumber(fuel.density);
+    const convertedDensity =
+      densityValue == null
+        ? ""
+        : nextUnit === "kgpl"
+          ? formatCompact(
+              fuel.densityUnit === "kgpl"
+                ? densityValue
+                : densityLbToKgPerLiter(densityValue),
+              3
+            )
+          : formatCompact(
+              fuel.densityUnit === "lbpg"
+                ? densityValue
+                : densityKgPerLiterToLb(densityValue),
+              2
+            );
+
+    const draft = {
+      ...fuel,
+      densityUnit: nextUnit,
+      density: convertedDensity,
+    };
+    const nextFields = computeFuelFields(
+      draft.lastEdited,
+      draft[draft.lastEdited],
+      fuelDensityKgPerLiter(draft)
+    );
+
+    setFuel({
+      ...draft,
+      ...nextFields,
+    });
+  }
+
+  function updateFuelDensity(value) {
+    const draft = { ...fuel, density: value };
+    const nextFields = computeFuelFields(
+      draft.lastEdited,
+      draft[draft.lastEdited],
+      fuelDensityKgPerLiter(draft)
+    );
+
+    setFuel({
+      ...draft,
+      ...nextFields,
+    });
+  }
 
   return (
-    <article className="flight-computer-card flight-computer-cardCompact">
+    <article className="flight-computer-card flight-computer-cardCompact flight-computer-converterPanel">
       <div className="flight-computer-cardHead">
-        <h3>{converter.label}</h3>
-        <p>Select units, then enter a value.</p>
+        <h3>Converters</h3>
+        <p>Select a converter, then work in one panel.</p>
       </div>
 
       <div className="flight-computer-segmented">
-        {CONVERTERS.map((item) => (
+        {converterSections.map((section) => (
           <button
-            key={item.id}
+            key={section.id}
             type="button"
-            className={`flight-computer-chip ${item.id === converterId ? "is-active" : ""}`}
-            onClick={() => {
-              setConverterId(item.id);
-              setFromUnit(item.units[0].id);
-            }}
+            className={`flight-computer-chip ${activeConverter === section.id ? "is-active" : ""}`}
+            onClick={() => setActiveConverter(section.id)}
           >
-            {item.label}
+            {section.label}
           </button>
         ))}
       </div>
 
-      <div className="flight-computer-segmented">
-        {converter.units.map((unit) => (
-          <button
-            key={unit.id}
-            type="button"
-            className={`flight-computer-chip ${unit.id === fromUnit ? "is-active" : ""}`}
-            onClick={() => setFromUnit(unit.id)}
-          >
-            {unit.label}
-          </button>
-        ))}
-      </div>
-
-      <Field
-        label="Input"
-        value={value}
-        setValue={setValue}
-        placeholder="Enter value"
-      />
-
-      <div className="flight-computer-resultsList">
-        {converter.units.map((unit) => (
-          <div className="flight-computer-resultRow" key={unit.id}>
-            <span>{unit.label}</span>
-            <strong>{baseValue == null ? "--" : formatNumber(unit.fromBase(baseValue), 2)}</strong>
+      {activeConverter === "distance" ? (
+        <div className="flight-computer-converterCard">
+          <div className="flight-computer-cardHead">
+            <h3>Distance converter</h3>
+            <p>NM, SM, KM, meters, feet, yards.</p>
           </div>
-        ))}
-      </div>
+          <div className="flight-computer-converterGrid">
+            {DISTANCE_UNITS.map((unit) => (
+              <ConverterInput
+                key={unit.id}
+                label={unit.label}
+                value={distance[unit.id] ?? ""}
+                onChange={(value) => updateDistance(unit.id, value)}
+                placeholder="0"
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeConverter === "speed" ? (
+        <div className="flight-computer-converterCard">
+          <div className="flight-computer-cardHead">
+            <h3>Speed converter</h3>
+            <p>Knots, Mach at sea level, MPH, KPH, FPM, M/S.</p>
+          </div>
+          <div className="flight-computer-converterGrid">
+            {SPEED_UNITS.map((unit) => (
+              <ConverterInput
+                key={unit.id}
+                label={unit.label}
+                value={speed[unit.id] ?? ""}
+                onChange={(value) => updateSpeed(unit.id, value)}
+                placeholder="0"
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeConverter === "temperature" ? (
+        <div className="flight-computer-converterCard">
+          <div className="flight-computer-cardHead">
+            <h3>Temperature converter</h3>
+            <p>Fahrenheit, Celsius, Kelvin.</p>
+          </div>
+          <div className="flight-computer-converterGrid flight-computer-converterGridTight">
+            {TEMPERATURE_UNITS.map((unit) => (
+              <ConverterInput
+                key={unit.id}
+                label={unit.label}
+                value={temperature[unit.id] ?? ""}
+                onChange={(value) => updateTemperature(unit.id, value)}
+                placeholder="0"
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeConverter === "fuel" ? (
+        <div className="flight-computer-converterCard">
+          <div className="flight-computer-cardHead">
+            <h3>Fuel converter</h3>
+            <p>Volume and mass with selectable fuel density.</p>
+          </div>
+
+          <div className="flight-computer-converterMeta">
+            <label className="flight-computer-converterRow">
+              <span>Type</span>
+              <select value={fuel.type} onChange={(event) => updateFuelType(event.target.value)}>
+                {FUEL_TYPES.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flight-computer-densityBlock">
+              <span>Density</span>
+              <div className="flight-computer-inlineToggle" role="group" aria-label="Fuel density units">
+                <button
+                  type="button"
+                  className={`flight-computer-inlineToggleButton ${fuel.densityUnit === "kgpl" ? "is-active" : ""}`}
+                  onClick={() => updateFuelDensityUnit("kgpl")}
+                >
+                  kg/L
+                </button>
+                <button
+                  type="button"
+                  className={`flight-computer-inlineToggleButton ${fuel.densityUnit === "lbpg" ? "is-active" : ""}`}
+                  onClick={() => updateFuelDensityUnit("lbpg")}
+                >
+                  lb/gal
+                </button>
+              </div>
+              <input
+                className="flight-computer-densityInput"
+                value={fuel.density}
+                onChange={(event) => updateFuelDensity(event.target.value)}
+                inputMode="decimal"
+                placeholder="6"
+              />
+            </div>
+          </div>
+
+          <div className="flight-computer-converterGrid">
+            <ConverterInput label="Liters" value={fuel.liters} onChange={(value) => updateFuelField("liters", value)} placeholder="0" />
+            <ConverterInput label="(US) Gallons" value={fuel.usGallons} onChange={(value) => updateFuelField("usGallons", value)} placeholder="0" />
+            <ConverterInput label="(Imperial) Gallons" value={fuel.imperialGallons} onChange={(value) => updateFuelField("imperialGallons", value)} placeholder="0" />
+            <ConverterInput label="Pounds (lb)" value={fuel.pounds} onChange={(value) => updateFuelField("pounds", value)} placeholder="0" />
+            <ConverterInput label="Kilograms (kg)" value={fuel.kilograms} onChange={(value) => updateFuelField("kilograms", value)} placeholder="0" />
+            <ConverterInput label="Metric tons" value={fuel.metricTons} onChange={(value) => updateFuelField("metricTons", value)} placeholder="0" />
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -713,10 +1210,6 @@ export default function FlightComputer() {
     groundspeed: "",
     verticalSpeed: "",
   });
-  const [endurance, setEndurance] = useState({
-    usableFuel: "",
-    burnRate: "",
-  });
   const [tod, setTod] = useState({
     altitudeToLose: "",
     descentRate: "",
@@ -732,9 +1225,6 @@ export default function FlightComputer() {
     distanceNm: "",
     groundspeed: "",
   });
-  const [nmMinute, setNmMinute] = useState({
-    groundspeed: "",
-  });
   const [gradientVs, setGradientVs] = useState({
     groundspeed: "",
     gradientFtPerNm: "",
@@ -744,14 +1234,24 @@ export default function FlightComputer() {
     distanceFlownNm: "",
     distanceRemainingNm: "",
   });
-  const [eta, setEta] = useState({
-    currentHours: "",
-    enrouteMinutes: "",
+  const [holding, setHolding] = useState({
+    inboundReference: "",
+    inboundReferenceMode: "course",
+    aircraftHeading: "",
+    turnDirection: "R",
+    windDirection: "",
+    windSpeed: "",
+    trueAirspeed: "",
+  });
+  const [climbTable, setClimbTable] = useState({
+    groundspeed: "",
+    verticalPathAngle: "3.0",
   });
   const [navlogLegs, setNavlogLegs] = useState([
     createNavlogLeg(),
     createNavlogLeg(),
   ]);
+  const [openGroups, setOpenGroups] = useState(["Wind"]);
 
   const navResult = useMemo(
     () =>
@@ -819,15 +1319,6 @@ export default function FlightComputer() {
     [climb]
   );
 
-  const enduranceResult = useMemo(
-    () =>
-      computeEndurance({
-        usableFuel: toNumber(endurance.usableFuel),
-        burnRate: toNumber(endurance.burnRate),
-      }),
-    [endurance]
-  );
-
   const todResult = useMemo(
     () =>
       computeTopOfDescent({
@@ -878,23 +1369,6 @@ export default function FlightComputer() {
     [requiredDescent]
   );
 
-  const etaResult = useMemo(
-    () =>
-      computeEta({
-        currentHours: toNumber(eta.currentHours),
-        enrouteMinutes: toNumber(eta.enrouteMinutes),
-      }),
-    [eta]
-  );
-
-  const nmMinuteResult = useMemo(
-    () =>
-      computeNmPerMinute({
-        groundspeed: toNumber(nmMinute.groundspeed),
-      }),
-    [nmMinute]
-  );
-
   const gradientVsResult = useMemo(
     () =>
       computeVerticalSpeedFromGradient({
@@ -913,6 +1387,42 @@ export default function FlightComputer() {
       }),
     [rule60]
   );
+
+  const holdingResult = useMemo(
+    () => {
+      const inboundReference = toNumber(holding.inboundReference);
+      const inboundCourse =
+        Number.isFinite(inboundReference)
+          ? holding.inboundReferenceMode === "radial"
+            ? normalizeAngle(inboundReference + 180)
+            : normalizeAngle(inboundReference)
+          : null;
+
+      return computeHoldingTrainer({
+        inboundCourse,
+        aircraftHeading: toNumber(holding.aircraftHeading),
+        turnDirection: holding.turnDirection,
+        windDirection: toNumber(holding.windDirection),
+        windSpeed: toNumber(holding.windSpeed),
+        trueAirspeed: toNumber(holding.trueAirspeed),
+      });
+    },
+    [holding]
+  );
+
+  const climbTableRows = useMemo(
+    () => computeClimbDescentTable(toNumber(climbTable.groundspeed)),
+    [climbTable.groundspeed]
+  );
+
+  const selectedClimbTableRow = useMemo(() => {
+    const requestedAngle = toNumber(climbTable.verticalPathAngle);
+    if (!Number.isFinite(requestedAngle)) return null;
+    return (
+      climbTableRows.find((row) => Math.abs(row.angle - requestedAngle) < 0.001) ??
+      null
+    );
+  }, [climbTable.verticalPathAngle, climbTableRows]);
 
   const navlogResults = useMemo(
     () => navlogLegs.map((leg) => ({ ...leg, calc: computeNavlogLeg(leg) })),
@@ -937,12 +1447,11 @@ export default function FlightComputer() {
   const toolPanels = {
     wind: {
       title: "Wind correction",
-      hint: "Enter course, TAS, and wind.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Wind correction</h3>
-            <p>Enter course, TAS, wind.</p>
+            <p>Course, TAS, wind.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="True course" value={nav.trueCourse} setValue={(v) => setNav((c) => ({ ...c, trueCourse: v }))} suffix="°" placeholder="090" />
@@ -971,12 +1480,11 @@ export default function FlightComputer() {
     },
     runway: {
       title: "Runway wind",
-      hint: "Enter runway and wind.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Runway wind</h3>
-            <p>Enter runway and wind.</p>
+            <p>Runway and wind.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Runway heading" value={runway.runwayHeading} setValue={(v) => setRunway((c) => ({ ...c, runwayHeading: v }))} suffix="°" placeholder="250" />
@@ -995,12 +1503,11 @@ export default function FlightComputer() {
     },
     rule60: {
       title: "Rule of 60",
-      hint: "Enter off-course and distance flown.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
-            <h3>Rule of 60 / off-course correction</h3>
-            <p>Enter off-course and distance.</p>
+            <h3>Rule of 60</h3>
+            <p>Track error and intercept.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Off course" value={rule60.offCourseNm} setValue={(v) => setRule60((c) => ({ ...c, offCourseNm: v }))} suffix="nm" placeholder="2" />
@@ -1017,12 +1524,11 @@ export default function FlightComputer() {
     },
     fuel: {
       title: "Time and fuel",
-      hint: "Enter distance, groundspeed, and burn.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Time and fuel</h3>
-            <p>Enter distance, GS, burn.</p>
+            <p>Distance, GS, burn.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Distance" value={fuelPlan.distanceNm} setValue={(v) => setFuelPlan((c) => ({ ...c, distanceNm: v }))} suffix="nm" placeholder="245" />
@@ -1041,12 +1547,11 @@ export default function FlightComputer() {
     },
     fuelRemaining: {
       title: "Fuel remaining",
-      hint: "Enter onboard fuel, distance, GS, burn.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Fuel remaining</h3>
-            <p>Enter onboard fuel, distance, GS, burn.</p>
+            <p>Onboard fuel, distance, GS, burn.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Fuel on board" value={fuelRemaining.fuelOnBoard} setValue={(v) => setFuelRemaining((c) => ({ ...c, fuelOnBoard: v }))} suffix="gal" placeholder="42" />
@@ -1068,7 +1573,6 @@ export default function FlightComputer() {
     },
     sdt: {
       title: "Speed / distance / time",
-      hint: "Enter any two values.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
@@ -1090,12 +1594,11 @@ export default function FlightComputer() {
     },
     altitude: {
       title: "Altitude",
-      hint: "Enter field elevation, altimeter, and OAT.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Altitude</h3>
-            <p>Enter elevation, altimeter, OAT.</p>
+            <p>Elevation, altimeter, OAT.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Field elevation" value={altitude.fieldElevation} setValue={(v) => setAltitude((c) => ({ ...c, fieldElevation: v }))} suffix="ft" placeholder="500" />
@@ -1112,12 +1615,11 @@ export default function FlightComputer() {
     },
     fuelWeight: {
       title: "Fuel by weight",
-      hint: "Convert gallons and weight.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Fuel by weight</h3>
-            <p>Enter gallons or weight.</p>
+            <p>Gallons and pounds.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Fuel gallons" value={fuelWeightCalc.fuelGallons} setValue={(v) => setFuelWeightCalc((c) => ({ ...c, fuelGallons: v }))} suffix="gal" placeholder="32.5" />
@@ -1134,12 +1636,11 @@ export default function FlightComputer() {
     },
     climb: {
       title: "Climb / descent",
-      hint: "Enter altitude change, GS, and VSI.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Climb / descent</h3>
-            <p>Enter altitude, GS, VSI.</p>
+            <p>Altitude, GS, vertical speed.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Altitude change" value={climb.altitudeChange} setValue={(v) => setClimb((c) => ({ ...c, altitudeChange: v }))} suffix="ft" placeholder="3000" />
@@ -1154,14 +1655,59 @@ export default function FlightComputer() {
         </article>
       ),
     },
+    climbTable: {
+      title: "Rate of climb / descent",
+      content: (
+        <article className="flight-computer-card flight-computer-cardCompact">
+          <div className="flight-computer-cardHead">
+            <h3>Rate of climb / descent table</h3>
+            <p>Quick FPM reference from groundspeed and path angle.</p>
+          </div>
+          <div className="flight-computer-fieldGrid">
+            <Field label="Groundspeed" value={climbTable.groundspeed} setValue={(v) => setClimbTable((c) => ({ ...c, groundspeed: v }))} suffix="kt" placeholder="120" />
+            <Field label="Vertical path angle" value={climbTable.verticalPathAngle} setValue={(v) => setClimbTable((c) => ({ ...c, verticalPathAngle: v }))} suffix="°" placeholder="3.0" />
+          </div>
+          <div className="flight-computer-resultsGrid">
+            <Result label="Selected angle" value={selectedClimbTableRow ? `${selectedClimbTableRow.angle.toFixed(1)}°` : "--"} />
+            <Result label="Gradient" value={selectedClimbTableRow ? `${formatNumber(selectedClimbTableRow.ftPerNm, 0)} ft/nm` : "--"} />
+            <Result label="Target rate" value={selectedClimbTableRow ? `${formatNumber(selectedClimbTableRow.fpm, 0)} fpm` : "--"} />
+          </div>
+          <div className="flight-computer-tableWrap">
+            <table className="flight-computer-miniTable">
+              <thead>
+                <tr>
+                  <th>Angle</th>
+                  <th>FT/NM</th>
+                  <th>FPM @ GS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {climbTableRows.length ? (
+                  climbTableRows.map((row) => (
+                    <tr key={row.angle} className={selectedClimbTableRow?.angle === row.angle ? "is-active" : ""}>
+                      <td>{row.angle.toFixed(1)}°</td>
+                      <td>{formatNumber(row.ftPerNm, 0)}</td>
+                      <td>{formatNumber(row.fpm, 0)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={3}>Enter groundspeed to build the quick table.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      ),
+    },
     requiredDescent: {
       title: "Required descent rate",
-      hint: "Enter altitude, distance, and GS.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Required descent rate</h3>
-            <p>Enter altitude, distance, GS.</p>
+            <p>Altitude, distance, GS.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Altitude to lose" value={requiredDescent.altitudeToLose} setValue={(v) => setRequiredDescent((c) => ({ ...c, altitudeToLose: v }))} suffix="ft" placeholder="4500" />
@@ -1178,12 +1724,11 @@ export default function FlightComputer() {
     },
     gradientVs: {
       title: "Vertical speed from gradient",
-      hint: "Enter GS and gradient.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Vertical speed from gradient</h3>
-            <p>Enter GS and ft per NM.</p>
+            <p>GS and ft per NM.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Groundspeed" value={gradientVs.groundspeed} setValue={(v) => setGradientVs((c) => ({ ...c, groundspeed: v }))} suffix="kt" placeholder="120" />
@@ -1195,33 +1740,13 @@ export default function FlightComputer() {
         </article>
       ),
     },
-    endurance: {
-      title: "Endurance",
-      hint: "Enter usable fuel and burn rate.",
-      content: (
-        <article className="flight-computer-card flight-computer-cardCompact">
-          <div className="flight-computer-cardHead">
-            <h3>Endurance</h3>
-            <p>Enter fuel and burn.</p>
-          </div>
-          <div className="flight-computer-fieldGrid">
-            <Field label="Usable fuel" value={endurance.usableFuel} setValue={(v) => setEndurance((c) => ({ ...c, usableFuel: v }))} suffix="gal" placeholder="38" />
-            <Field label="Fuel burn" value={endurance.burnRate} setValue={(v) => setEndurance((c) => ({ ...c, burnRate: v }))} suffix="gph" placeholder="9.5" />
-          </div>
-          <div className="flight-computer-resultsGrid">
-            <Result label="Endurance" value={enduranceResult ? formatClock(enduranceResult.hours) : "--"} />
-          </div>
-        </article>
-      ),
-    },
     tod: {
       title: "Top of descent",
-      hint: "Enter altitude to lose, descent rate, and GS.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Top of descent</h3>
-            <p>Enter altitude, rate, GS.</p>
+            <p>Altitude, rate, GS.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Altitude to lose" value={tod.altitudeToLose} setValue={(v) => setTod((c) => ({ ...c, altitudeToLose: v }))} suffix="ft" placeholder="6000" />
@@ -1237,12 +1762,11 @@ export default function FlightComputer() {
     },
     requiredGs: {
       title: "Required groundspeed",
-      hint: "Enter remaining distance and time.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Required groundspeed</h3>
-            <p>Enter distance and time.</p>
+            <p>Distance and time remaining.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Distance remaining" value={requiredGs.distanceNm} setValue={(v) => setRequiredGs((c) => ({ ...c, distanceNm: v }))} suffix="nm" placeholder="84" />
@@ -1257,53 +1781,74 @@ export default function FlightComputer() {
         </article>
       ),
     },
-    eta: {
-      title: "ETA / clock time",
-      hint: "Enter current clock and enroute time.",
+    holding: {
+      title: "Holding trainer",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
-            <h3>ETA / clock time</h3>
-            <p>Enter clock and enroute time.</p>
+            <h3>Holding trainer</h3>
+            <p>Entry type, drift, and outbound setup.</p>
           </div>
           <div className="flight-computer-fieldGrid">
-            <Field label="Current time" value={eta.currentHours} setValue={(v) => setEta((c) => ({ ...c, currentHours: v }))} suffix="hr" placeholder="14.5" />
-            <Field label="Enroute time" value={eta.enrouteMinutes} setValue={(v) => setEta((c) => ({ ...c, enrouteMinutes: v }))} suffix="min" placeholder="68" />
+            <HoldingCourseField
+              mode={holding.inboundReferenceMode}
+              value={holding.inboundReference}
+              setValue={(v) => setHolding((c) => ({ ...c, inboundReference: v }))}
+              setMode={(v) => setHolding((c) => ({ ...c, inboundReferenceMode: v }))}
+            />
+            <Field label="Current heading" value={holding.aircraftHeading} setValue={(v) => setHolding((c) => ({ ...c, aircraftHeading: v }))} suffix="°" placeholder="210" />
+            <SelectField
+              label="Turns"
+              value={holding.turnDirection}
+              setValue={(v) => setHolding((c) => ({ ...c, turnDirection: v }))}
+              options={[
+                { value: "R", label: "Right turns" },
+                { value: "L", label: "Left turns" },
+              ]}
+            />
+            <Field label="Wind direction" value={holding.windDirection} setValue={(v) => setHolding((c) => ({ ...c, windDirection: v }))} suffix="°" placeholder="290" />
+            <Field label="Wind speed" value={holding.windSpeed} setValue={(v) => setHolding((c) => ({ ...c, windSpeed: v }))} suffix="kt" placeholder="18" />
+            <Field label="True airspeed" value={holding.trueAirspeed} setValue={(v) => setHolding((c) => ({ ...c, trueAirspeed: v }))} suffix="kt" placeholder="110" />
           </div>
           <div className="flight-computer-resultsGrid">
-            <Result label="Depart" value={etaResult ? formatMinutes(etaResult.departureMinutes) : "--"} />
-            <Result label="ETA" value={etaResult ? formatMinutes(etaResult.etaMinutes) : "--"} />
+            <Result label="Entry" value={holdingResult ? holdingResult.entry : "--"} />
+            <Result label="Outbound course" value={holdingResult ? `${formatNumber(holdingResult.outboundCourse, 0)}°` : "--"} />
+            <Result label="Cross-fix action" value={holdingResult ? holdingResult.crossFixAction : "--"} />
+            <Result label="Inbound correction" value={holdingResult && Number.isFinite(holdingResult.inboundCorrection) ? `${formatNumber(holdingResult.inboundCorrection, 0)}°` : "--"} />
+            <Result label="Outbound correction" value={holdingResult && Number.isFinite(holdingResult.outboundCorrection) ? `${formatNumber(holdingResult.outboundCorrection, 0)}°` : "--"} />
+            <Result
+              label="Time correction"
+              value={
+                holdingResult && Number.isFinite(holdingResult.timeCorrectionSeconds)
+                  ? `${holdingResult.timeCorrectionSeconds >= 0 ? "+" : ""}${formatNumber(holdingResult.timeCorrectionSeconds, 0)} sec`
+                  : "--"
+              }
+            />
           </div>
-        </article>
-      ),
-    },
-    nmMinute: {
-      title: "NM per minute",
-      hint: "Enter groundspeed.",
-      content: (
-        <article className="flight-computer-card flight-computer-cardCompact">
-          <div className="flight-computer-cardHead">
-            <h3>NM per minute</h3>
-            <p>Enter groundspeed.</p>
-          </div>
-          <div className="flight-computer-fieldGrid">
-            <Field label="Groundspeed" value={nmMinute.groundspeed} setValue={(v) => setNmMinute({ groundspeed: v })} suffix="kt" placeholder="120" />
-          </div>
-          <div className="flight-computer-resultsGrid">
-            <Result label="NM / min" value={nmMinuteResult ? formatNumber(nmMinuteResult.nmPerMinute, 2) : "--"} />
-            <Result label="Sec / NM" value={nmMinuteResult ? `${formatNumber(nmMinuteResult.secondsPerNm, 1)} s` : "--"} />
+          <div className="flight-computer-holdingSummary">
+            <div className="flight-computer-callout">
+              <strong>Recommended entry</strong>
+              <span>{holdingResult ? holdingResult.procedure : "Enter inbound course and current heading to classify the hold."}</span>
+            </div>
+            <div className="flight-computer-callout">
+              <strong>Wind note</strong>
+              <span>
+                {holdingResult && Number.isFinite(holdingResult.inboundDrift)
+                  ? `Use about ${formatNumber(Math.abs(holdingResult.inboundDrift), 1)}° inbound drift and ${formatNumber(Math.abs(holdingResult.outboundDrift), 1)}° outbound drift.`
+                  : "Add wind to the trainer if you want a quick inbound / outbound drift correction."}
+              </span>
+            </div>
           </div>
         </article>
       ),
     },
     navlog: {
       title: "Nav log",
-      hint: "Build route legs and totals.",
       content: (
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Nav log</h3>
-            <p>Enter each leg and review totals.</p>
+            <p>Build route legs and totals.</p>
           </div>
 
           <div className="flight-computer-navlogList">
@@ -1375,7 +1920,6 @@ export default function FlightComputer() {
     },
     converters: {
       title: "Converters",
-      hint: "Convert distance, fuel, weight, or altitude.",
       content: <ConverterPanel />,
     },
   };
@@ -1393,6 +1937,7 @@ export default function FlightComputer() {
       label: "Performance",
       items: [
         { id: "climb", title: "CLIMB/DESC" },
+        { id: "climbTable", title: "ROC/ROD" },
         { id: "altitude", title: "ALTITUDE" },
         { id: "requiredDescent", title: "REQ DESC" },
         { id: "gradientVs", title: "VS/GRAD" },
@@ -1406,10 +1951,8 @@ export default function FlightComputer() {
         { id: "fuelRemaining", title: "FUEL REM" },
         { id: "sdt", title: "SPD/DIST/T" },
         { id: "requiredGs", title: "REQ GS" },
-        { id: "endurance", title: "ENDURANCE" },
         { id: "tod", title: "TOD" },
-        { id: "eta", title: "ETA" },
-        { id: "nmMinute", title: "NM/MIN" },
+        { id: "holding", title: "HOLD" },
         { id: "navlog", title: "NAV LOG" },
       ],
     },
@@ -1418,6 +1961,17 @@ export default function FlightComputer() {
       items: [{ id: "converters", title: "CONVERT" }],
     },
   ];
+
+  useEffect(() => {
+    const activeGroup = toolGroups.find((group) =>
+      group.items.some((item) => item.id === activeToolId)
+    );
+
+    if (!activeGroup) return;
+    setOpenGroups((current) =>
+      current.includes(activeGroup.label) ? current : [activeGroup.label]
+    );
+  }, [activeToolId]);
 
   const activeTool = toolPanels[activeToolId];
 
@@ -1447,7 +2001,7 @@ export default function FlightComputer() {
       <section className="flight-computer-hero">
         <div className="flight-computer-heroCopy">
           <h2>Flight computer</h2>
-          <p>Select a calculation and work in one place.</p>
+          <p>Operational calculations in one panel.</p>
         </div>
       </section>
 
@@ -1455,22 +2009,35 @@ export default function FlightComputer() {
         <aside className="flight-computer-sidebar" aria-label="Flight computer tools">
           {toolGroups.map((group) => (
             <div key={group.label} className="flight-computer-toolGroup">
-              <div className="flight-computer-toolGroupLabel">{group.label}</div>
-              <div className="flight-computer-toolList">
-                {group.items.map((tool) => {
-                  const isActive = activeToolId === tool.id;
-                  return (
-                    <button
-                      key={tool.id}
-                      type="button"
-                      className={`flight-computer-toolButton ${isActive ? "is-active" : ""}`}
-                      onClick={() => setActiveToolId(tool.id)}
-                    >
-                      <span className="flight-computer-toolCode">{tool.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                className={`flight-computer-toolGroupLabel ${openGroups.includes(group.label) ? "is-open" : ""}`}
+                onClick={() =>
+                  setOpenGroups((current) =>
+                    current.includes(group.label) ? [] : [group.label]
+                  )
+                }
+              >
+                <span>{group.label}</span>
+                <span className="flight-computer-toolGroupCaret">+</span>
+              </button>
+              {openGroups.includes(group.label) ? (
+                <div className="flight-computer-toolList">
+                  {group.items.map((tool) => {
+                    const isActive = activeToolId === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        className={`flight-computer-toolButton ${isActive ? "is-active" : ""}`}
+                        onClick={() => setActiveToolId(tool.id)}
+                      >
+                        <span className="flight-computer-toolCode">{tool.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           ))}
         </aside>
