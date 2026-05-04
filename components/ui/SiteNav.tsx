@@ -14,7 +14,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 const publicNavItems = [
   { href: "/", label: "Home" },
   { href: "/tools", label: "Tools" },
-  { href: "/intro", label: "Articles" },
+  { href: "/read", label: "Read" },
 ];
 
 export default function SiteNav() {
@@ -76,7 +76,11 @@ export default function SiteNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`site-nav-inline-link ${pathname === item.href ? "site-nav-inline-link-active" : ""}`}
+              className={`site-nav-inline-link ${
+                pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  ? "site-nav-inline-link-active"
+                  : ""
+              }`}
             >
               {item.label}
             </Link>
@@ -119,7 +123,11 @@ export default function SiteNav() {
           {publicNavItems.map((item) => (
             <Link
               key={item.href}
-              className={`site-nav-link ${pathname === item.href ? "site-nav-link-active" : ""}`}
+              className={`site-nav-link ${
+                pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  ? "site-nav-link-active"
+                  : ""
+              }`}
               href={item.href}
               onClick={() => setMobileOpen(false)}
             >

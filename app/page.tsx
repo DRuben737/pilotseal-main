@@ -44,8 +44,8 @@ export default function Home() {
                   <Link href="/tools" className="hover:text-white">
                     Tools
                   </Link>
-                  <Link href="/intro" className="hover:text-white">
-                    Articles
+                  <Link href="/read" className="hover:text-white">
+                    Read
                   </Link>
                   <Link href="/login" className="hover:text-white">
                     Login

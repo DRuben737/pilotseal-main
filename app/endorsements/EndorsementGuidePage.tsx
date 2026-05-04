@@ -135,20 +135,35 @@ function renderSection(section: GuideSection) {
 
 export default function EndorsementGuidePage({
   guide,
+  basePath = "/endorsements",
+  parentLabel = "Endorsements",
+  browseHref = "/endorsements",
+  browseLabel = "Browse all guides",
+  eyebrowLabel = "Endorsement guide",
+  backLabel = "Back to Endorsements",
 }: {
   guide: EndorsementGuide;
+  basePath?: string;
+  parentLabel?: string;
+  browseHref?: string;
+  browseLabel?: string;
+  eyebrowLabel?: string;
+  backLabel?: string;
 }) {
-  const relatedGuides = (guide.relatedGuideSlugs ?? []).map((slug) => guideCards[slug]);
+  const relatedGuides = (guide.relatedGuideSlugs ?? []).map((slug) => ({
+    ...guideCards[slug],
+    href: `${basePath}/${slug}`,
+  }));
   const references = guide.references ?? defaultGuideReferences;
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: "Home", path: "/" },
-    { name: "Endorsements", path: "/endorsements" },
-    { name: guide.breadcrumb, path: `/endorsements/${guide.slug}` },
+    { name: parentLabel, path: basePath },
+    { name: guide.breadcrumb, path: `${basePath}/${guide.slug}` },
   ]);
   const articleSchema = buildArticleSchema({
     title: guide.title,
     description: guide.heroDescription,
-    path: `/endorsements/${guide.slug}`,
+    path: `${basePath}/${guide.slug}`,
   });
   const faqSchema = buildFaqSchema(guide.faqs);
 
@@ -178,10 +193,10 @@ export default function EndorsementGuidePage({
         <section className="hero-panel hero-guide hero-compact overflow-hidden px-6 py-7 sm:px-8 sm:py-9">
           <div className="reading-rail">
             <div>
-              <p className="eyebrow">Endorsement guide</p>
+              <p className="eyebrow">{eyebrowLabel}</p>
               <p className="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--ink-soft)]">
-                <Link className="hover:text-[var(--accent)]" href="/endorsements">
-                  Endorsements
+                <Link className="hover:text-[var(--accent)]" href={browseHref}>
+                  {parentLabel}
                 </Link>{" "}
                 / {guide.breadcrumb}
               </p>
@@ -205,8 +220,8 @@ export default function EndorsementGuidePage({
                 >
                   Open Endorsement Generator
                 </Link>
-                <Link href="/endorsements" className="secondary-button">
-                  Browse all guides
+                <Link href={browseHref} className="secondary-button">
+                  {browseLabel}
                 </Link>
               </div>
             </div>
@@ -291,8 +306,8 @@ export default function EndorsementGuidePage({
                   Related guides
                 </h2>
               </div>
-              <Link className="secondary-button" href="/endorsements">
-                All endorsement guides
+              <Link className="secondary-button" href={browseHref}>
+                {browseLabel}
               </Link>
             </div>
             <div className="guide-grid mt-6">
@@ -314,8 +329,8 @@ export default function EndorsementGuidePage({
         ) : null}
 
         <div className="pb-2 text-sm text-[var(--muted)]">
-          <Link className="font-semibold text-[var(--accent)]" href="/endorsements">
-            ← Back to Endorsements
+          <Link className="font-semibold text-[var(--accent)]" href={browseHref}>
+            ← {backLabel}
           </Link>
         </div>
       </div>

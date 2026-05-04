@@ -12,6 +12,7 @@ const NightTimeCalculator = () => {
   const [error, setError] = useState("");
   const [sunToday, setSunToday] = useState(null);
   const [sunNext, setSunNext] = useState(null);
+  const [activeTrack, setActiveTrack] = useState("");
 
   const handleCalculate = async () => {
     if (!location || !date) return;
@@ -181,7 +182,7 @@ const NightTimeCalculator = () => {
 
         {nightReference && zone ? (
           <>
-            <div className="night-tool-timeline">
+            <div className={`night-tool-timeline ${activeTrack ? `is-active-${activeTrack}` : ""}`.trim()}>
               <div className="night-tool-timelineScale">
                 <span>00:00</span>
                 <span>06:00</span>
@@ -190,7 +191,13 @@ const NightTimeCalculator = () => {
                 <span>24:00</span>
               </div>
 
-              <div className="night-tool-track night-tool-track-lights">
+              <div
+                className="night-tool-track night-tool-track-lights"
+                onMouseEnter={() => setActiveTrack("lights")}
+                onMouseLeave={() => setActiveTrack("")}
+                onFocus={() => setActiveTrack("lights")}
+                onBlur={() => setActiveTrack("")}
+              >
                 <div className="night-tool-trackMeta">
                   <strong>Position lights</strong>
                   <span>
@@ -216,7 +223,13 @@ const NightTimeCalculator = () => {
                 <span className="night-tool-trackLabel">Position lights</span>
               </div>
 
-              <div className="night-tool-track night-tool-track-night">
+              <div
+                className="night-tool-track night-tool-track-night"
+                onMouseEnter={() => setActiveTrack("night")}
+                onMouseLeave={() => setActiveTrack("")}
+                onFocus={() => setActiveTrack("night")}
+                onBlur={() => setActiveTrack("")}
+              >
                 <div className="night-tool-trackMeta">
                   <strong>Loggable night</strong>
                   <span>
@@ -249,7 +262,13 @@ const NightTimeCalculator = () => {
                 <span className="night-tool-trackLabel">Day / loggable night</span>
               </div>
 
-              <div className="night-tool-track night-tool-track-currency">
+              <div
+                className="night-tool-track night-tool-track-currency"
+                onMouseEnter={() => setActiveTrack("currency")}
+                onMouseLeave={() => setActiveTrack("")}
+                onFocus={() => setActiveTrack("currency")}
+                onBlur={() => setActiveTrack("")}
+              >
                 <div className="night-tool-trackMeta">
                   <strong>61.57(b) night currency</strong>
                   <span>

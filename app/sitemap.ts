@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { getAllArticles } from "@/lib/articles";
 
 export const dynamic = "force-static";
 
@@ -8,9 +9,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     process.env.URL || // Netlify production/branch URL
     "https://pilotseal.com";
 
+  const articles = getAllArticles();
+
   return [
     { url: `${baseUrl}/`, lastModified: new Date() },
-    { url: `${baseUrl}/intro`, lastModified: new Date() },
+    { url: `${baseUrl}/read`, lastModified: new Date() },
+    ...articles.map((article) => ({
+      url: `${baseUrl}/read/${article.slug}`,
+      lastModified: new Date(article.date),
+    })),
     { url: `${baseUrl}/tools`, lastModified: new Date() },
     {
       url: `${baseUrl}/tools/endorsement-generator`,
