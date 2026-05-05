@@ -2,7 +2,7 @@
 title: "Murphy 2008 Key Clarifications"
 date: "2026-05-03"
 summary: "A structured reading of FAA Murphy (2008) addressing multiple independent regulatory questions without collapsing them into a single rule."
-tags: ["CFI", "Medical", "FAA Interpretation"]
+tags: ["CFI", "Medical","student pilot","solo student", "FAA Interpretation"]
 ---
 
 ## Key Conclusion
@@ -79,7 +79,7 @@ This LOI addresses **multiple independent issues**. Each conclusion **applies on
 - If a flight involves **no instruction (e.g., sightseeing intent)**  
   → it may be treated as **carriage of persons for compensation or hire**  
 
-→ Classification depends on **purpose and conduct of the flight**, not labeling  
+→ Classification depends on **purpose and conduct of the flight**, not labeling. If flight insruction involved, then the CFI on board requires a 3rd medical, if no, then 2nd medical is required.
 
 ---
 
