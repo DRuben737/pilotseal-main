@@ -1414,6 +1414,13 @@ summary:focus-visible {
   font-size: 0.82rem;
 }
 
+.icon-button {
+  width: 2.35rem;
+  min-width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+}
+
 .saas-auth-grid,
 .saas-dashboard-grid {
   display: grid;
@@ -1964,6 +1971,355 @@ summary:focus-visible {
   background: rgba(247, 250, 251, 0.9);
 }
 
+.dashboard-shell,
+.dashboard-shell .saas-panel,
+.dashboard-shell .Modal,
+.dashboard-shell .tools-child-shell {
+  font-size: 0.875rem;
+}
+
+.dashboard-shell .saas-panel {
+  border-radius: 10px;
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+  padding: 0.9rem;
+}
+
+.dashboard-shell :is(
+  .saas-section-title,
+  .saas-subsection-title,
+  .saas-card-title,
+  .saas-stat,
+  .saas-value,
+  .saas-metric-value,
+  .saas-sidebar-title,
+  .saas-sidebar-email,
+  .tools-child-title,
+  .tools-child-description,
+  .saas-meta-text,
+  .saas-empty-state,
+  .saas-list-meta,
+  .saas-feedback,
+  .primary-button,
+  .secondary-button,
+  .ghost-button,
+  .danger-button,
+  .saas-field input,
+  .saas-field select,
+  .saas-field textarea
+) {
+  font-size: 0.875rem;
+}
+
+.dashboard-shell :is(.text-base, .text-lg, .text-xl, .text-2xl, .text-3xl) {
+  font-size: 0.875rem;
+}
+
+.dashboard-shell .saas-field span,
+.dashboard-shell .saas-label,
+.dashboard-shell .saas-pill {
+  font-size: 0.72rem;
+}
+
+.dashboard-shell .tools-child-title {
+  margin-top: 0;
+}
+
+.dashboard-settings-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dashboard-setting-row {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dashboard-setting-form {
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  align-items: end;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding-top: 0.75rem;
+}
+
+.dashboard-setting-subgrid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.dashboard-shell .saas-quick-link,
+.dashboard-shell .saas-list-item,
+.dashboard-shell .saas-metric-card {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.dashboard-shell .saas-inline-form {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.rating-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.55rem;
+}
+
+.rating-picker-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.9);
+  color: var(--muted);
+  padding: 0.38rem 0.62rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.rating-picker-option-active {
+  border-color: rgba(42, 168, 255, 0.28);
+  background: rgba(42, 168, 255, 0.12);
+  color: var(--accent-strong);
+}
+
+.dashboard-shell .rating-picker-option {
+  font-size: 0.78rem;
+}
+
+.people-list-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.people-toolbar {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(12rem, 22rem) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.people-search {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.86);
+  padding: 0.45rem 0.6rem;
+  color: var(--muted);
+}
+
+.people-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.people-table {
+  display: grid;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.people-table-head,
+.people-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(12rem, 1.2fr) minmax(13rem, 1fr) minmax(5rem, 0.42fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.people-table-head {
+  padding: 0.65rem 0.45rem;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.people-table-head span:first-child {
+  grid-column: 2;
+}
+
+.people-row-group {
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.people-row {
+  min-height: 3.4rem;
+  padding: 0.55rem 0.45rem;
+}
+
+.people-row:hover {
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.people-expand-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.86);
+  color: var(--muted);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.people-expand-button-open {
+  color: var(--foreground);
+}
+
+.people-expand-button-open svg {
+  transform: rotate(90deg);
+}
+
+.people-name-cell,
+.people-cert-main {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.people-cert-summary,
+.people-cert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.people-row-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.people-edit-row,
+.people-certificate-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  align-items: end;
+  gap: 0.65rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding-top: 0.75rem;
+}
+
+.people-detail-row {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0 0.45rem 0.75rem 2.95rem;
+}
+
+.people-cert-list {
+  display: grid;
+}
+
+.people-cert-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 0.65rem 0;
+}
+
+.people-ratings-field,
+.people-notes-field {
+  grid-column: span 2;
+}
+
+.people-default-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.people-form-actions {
+  align-self: end;
+}
+
+.records-student-list {
+  display: grid;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.records-student-group {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.records-student-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1.8rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 0;
+  background: transparent;
+  padding: 0.75rem 0.45rem;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.records-student-row:hover {
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.records-expand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.records-expand-icon-open {
+  transform: rotate(90deg);
+}
+
+.records-detail-list {
+  display: grid;
+  padding: 0 0.45rem 0.75rem 2.55rem;
+}
+
+.records-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 0.65rem 0;
+}
+
+.records-pdf-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
 @media (max-width: 1024px) {
   .saas-dashboard-grid {
     grid-template-columns: 1fr;
@@ -2006,6 +2362,66 @@ summary:focus-visible {
   .saas-inline-actions .secondary-button,
   .saas-inline-actions .danger-button {
     width: 100%;
+  }
+
+  .dashboard-shell .saas-section-title,
+  .dashboard-shell .saas-value,
+  .dashboard-shell .saas-sidebar-email {
+    font-size: 0.875rem;
+  }
+
+  .dashboard-shell .saas-inline-actions .icon-button {
+    width: 2.35rem;
+  }
+
+  .people-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .people-search {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .people-table-head {
+    display: none;
+  }
+
+  .people-row {
+    grid-template-columns: 1.8rem minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .people-row > .saas-field,
+  .people-row > .people-cert-summary,
+  .people-row > .saas-meta-text {
+    grid-column: 2 / -1;
+  }
+
+  .people-row-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .people-cert-summary {
+    margin-top: 0.2rem;
+  }
+
+  .people-detail-row {
+    padding-left: 2.25rem;
+  }
+
+  .people-cert-row {
+    grid-template-columns: 1fr;
+  }
+
+  .people-ratings-field,
+  .people-notes-field {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-setting-form {
+    grid-template-columns: 1fr;
   }
 }
 

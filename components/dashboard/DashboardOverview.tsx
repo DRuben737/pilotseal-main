@@ -14,6 +14,10 @@ import {
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
 import {
+  fetchEndorsementRecords,
+  type EndorsementRecord,
+} from "@/lib/endorsement-records";
+import {
   fetchDefaultCfi,
   fetchSavedPeople,
   formatStoredDateForDisplay,
@@ -23,6 +27,7 @@ import {
 type OverviewState = {
   cfis: SavedPerson[];
   students: SavedPerson[];
+  records: EndorsementRecord[];
   notifications: NotificationRecord[];
   role: string;
   displayName: string;
@@ -34,6 +39,7 @@ type OverviewState = {
 const emptyState: OverviewState = {
   cfis: [],
   students: [],
+  records: [],
   notifications: [],
   role: "",
   displayName: "",
@@ -88,6 +94,16 @@ export default function DashboardOverview() {
           fetchDefaultCfi(session.user.id),
         ]);
 
+        let records: EndorsementRecord[] = [];
+        try {
+          records = await fetchEndorsementRecords(session.user.id);
+        } catch (error) {
+          console.error("Unable to load endorsement records:", error);
+          if (!cancelled) {
+            setStatusNote("Endorsement records are temporarily unavailable.");
+          }
+        }
+
         const notifications =
           profile?.role === "admin" ? await fetchNotificationHistory() : [];
 
@@ -95,6 +111,7 @@ export default function DashboardOverview() {
           setOverview({
             cfis,
             students,
+            records,
             notifications,
             role: profile?.role ?? "",
             displayName: profile?.display_name ?? "",
@@ -130,71 +147,14 @@ export default function DashboardOverview() {
 
   const metricItems = [
     {
-      label: "Saved Pilots",
-      value: loading ? "..." : String(overview.cfis.length + overview.students.length),
+      label: "Records",
+      value: loading ? "..." : String(overview.records.length),
     },
     {
       label: "Notifications",
       value: loading ? "..." : String(overview.notifications.length),
     },
   ];
-
-  const activityItems = useMemo(() => {
-    const items = [...overview.students, ...overview.cfis]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 4)
-      .map((person) => ({
-        id: person.id,
-        title: person.display_name,
-        detail: person.role === "cfi" ? "Instructor record added" : "Student profile added",
-        meta: formatRelativeDate(person.created_at),
-        href: "/dashboard/saved-people",
-      }));
-
-    if (items.length > 0) {
-      return items;
-    }
-
-    return [
-      {
-        id: "empty-activity",
-        title: "No recent activity",
-        detail: "Saved people and workflow actions will appear here.",
-        meta: "",
-        href: "/dashboard/saved-people",
-      },
-    ];
-  }, [overview.cfis, overview.students]);
-
-  const savedPeopleItems = useMemo(() => {
-    const people = [...overview.students, ...overview.cfis]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 3)
-      .map((person) => ({
-        id: person.id,
-        title: person.display_name,
-        detail: person.role === "cfi" ? "Instructor" : "Student pilot",
-        meta:
-          person.cert_exp_date
-            ? `Exp. ${formatStoredDateForDisplay(person.cert_exp_date)}`
-            : "",
-        href: "/dashboard/saved-people",
-      }));
-
-    if (people.length > 0) {
-      return people;
-    }
-
-      return [
-      {
-        id: "empty-people",
-        title: "No saved pilots yet",
-        detail: "Add a CFI or student record to reuse details in your workflows.",
-        meta: "",
-        href: "/dashboard/saved-people",
-      },
-    ];
-  }, [overview.cfis, overview.students]);
 
   const notificationItems = useMemo(() => {
     const items: Array<{
@@ -263,11 +223,11 @@ export default function DashboardOverview() {
         </section>
       ) : null}
 
-      <section className="rounded-[20px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(247,250,254,0.98),rgba(255,255,255,0.96))] p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)] sm:p-5">
+      <section className="saas-panel">
         <div className="flex items-start justify-between gap-6">
           <div>
             <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-slate-400">Overview</p>
-            <h1 className="mt-1 text-[1.4rem] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[1.6rem]">
+            <h1 className="mt-1 text-sm font-semibold text-slate-950">
               {loading ? "Loading..." : identityLabel}
             </h1>
           </div>
@@ -287,40 +247,13 @@ export default function DashboardOverview() {
                 <p className="text-xs font-medium text-slate-500">{item.label}</p>
                 <span className="h-2 w-2 rounded-full bg-sky-500" />
               </div>
-              <p className="mt-3 text-[1.75rem] font-semibold tracking-[-0.04em] text-slate-950">{item.value}</p>
+              <p className="mt-3 text-sm font-semibold text-slate-950">{item.value}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-        <div className="space-y-4">
-          <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Saved Pilots</h2>
-              <Link href="/dashboard/saved-people" className="text-sm font-medium text-[var(--accent-strong)]">
-                View all
-              </Link>
-            </div>
-
-            <div className="mt-4 divide-y divide-slate-200/75">
-              {savedPeopleItems.map((item) => (
-                <Link key={item.id} href={item.href} className="flex items-center justify-between gap-4 py-4 first:pt-0">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-base font-semibold text-slate-950">{item.title}</h3>
-                    <p className="mt-1 text-sm text-slate-500">{item.detail}</p>
-                  </div>
-                  {item.meta ? (
-                    <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
-                      {item.meta}
-                    </span>
-                  ) : null}
-                </Link>
-              ))}
-            </div>
-          </section>
-        </div>
-
+      <section className="grid gap-4 xl:grid-cols-2">
         <aside className="space-y-4">
           <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between gap-4">
@@ -352,7 +285,8 @@ export default function DashboardOverview() {
                 { href: "/tools/endorsement-generator", label: "New Endorsement" },
                 { href: "/tools/flight-brief", label: "Create Flight Brief" },
                 { href: "/tools/wb", label: "Weight & Balance" },
-                { href: "/dashboard/saved-people", label: "Manage Saved People" },
+                { href: "/dashboard/records", label: "View Records" },
+                { href: "/dashboard/saved-people", label: "Manage People" },
               ].map((action) => (
                 <Link
                   key={action.href}

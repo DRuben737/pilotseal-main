@@ -1,10 +1,17 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
+import { useRouter } from 'next/navigation';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import templates from './templates';
 import styles from './EndorsementGenerator.module.css';
+import { useAuthSession } from '@/components/auth/AuthSessionProvider';
+import {
+  createEndorsementRecord,
+  ENDORSEMENT_RECORDS_BUCKET,
+} from '@/lib/endorsement-records';
+import { fetchPersonCertificates } from '@/lib/person-certificates';
 import { fetchSavedPeople, fetchDefaultCfi, formatStoredDateForDisplay } from '@/lib/saved-people';
 import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -13,8 +20,8 @@ const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
   { key: 'instructorCertNumber', label: 'Instructor certificate number', type: 'text', required: true, autoComplete: 'off' },
   { key: 'instructorCertExpDate', label: 'Instructor certificate expiration', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
-  { key: 'studentName', label: 'Student name', type: 'text', required: true, autoComplete: 'name' },
-  { key: 'studentCertNumber', label: 'Student certificate number', type: 'text', required: false, autoComplete: 'off', hideOptionalTag: true },
+  { key: 'studentName', label: 'Pilot name', type: 'text', required: true, autoComplete: 'name' },
+  { key: 'studentCertNumber', label: 'Pilot certificate number', type: 'text', required: false, autoComplete: 'off', hideOptionalTag: true },
   { key: 'date', label: 'Endorsement date', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
 ];
 
@@ -251,6 +258,57 @@ function joinWithAnd(values) {
   return `${values.slice(0, -1).join(', ')}, and ${values.at(-1)}`;
 }
 
+function getSavedPeopleByName(options, value) {
+  const normalizedValue = value.trim().toLowerCase();
+  if (!normalizedValue) {
+    return [];
+  }
+
+  return options.filter((person) => person.display_name?.trim().toLowerCase() === normalizedValue);
+}
+
+function getCertificateOptionsForName(options, value) {
+  const exactMatches = getSavedPeopleByName(options, value);
+  if (exactMatches.length > 0) {
+    return exactMatches;
+  }
+
+  return options;
+}
+
+function getCertificateOptionsForExactName(options, value) {
+  const exactMatches = getSavedPeopleByName(options, value);
+  return exactMatches.length > 0 ? exactMatches : options;
+}
+
+function getUniqueSavedPeopleByName(options) {
+  const seen = new Set();
+
+  return options.filter((person) => {
+    const normalizedName = person.display_name?.trim().toLowerCase();
+    if (!normalizedName || seen.has(normalizedName)) {
+      return false;
+    }
+
+    seen.add(normalizedName);
+    return true;
+  });
+}
+
+function getUniqueSavedPeopleByCertificateNumber(options) {
+  const seen = new Set();
+
+  return options.filter((person) => {
+    const normalizedCertificateNumber = person.cert_number?.trim().toLowerCase();
+    if (!normalizedCertificateNumber || seen.has(normalizedCertificateNumber)) {
+      return false;
+    }
+
+    seen.add(normalizedCertificateNumber);
+    return true;
+  });
+}
+
 function formatTemplateFieldValue(key, value) {
   if (key === 'cfiKnowledgeTests') {
     const selected = Array.isArray(value) ? value.filter(Boolean) : [];
@@ -339,19 +397,23 @@ function getTrimmedSignatureDataUrl(canvas) {
 }
 
 function EndorsementGenerator() {
+  const router = useRouter();
+  const { session } = useAuthSession();
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [errors, setErrors] = useState({});
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [detailsModalIsOpen, setDetailsModalIsOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
+  const [latestPdfBlob, setLatestPdfBlob] = useState(null);
+  const [savingRecord, setSavingRecord] = useState(false);
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then preview to confirm and open the PDF packet.');
   const [templateFieldData, setTemplateFieldData] = useState({});
+  const [activeSuggestionField, setActiveSuggestionField] = useState('');
   const [sessionIdentity, setSessionIdentity] = useState('');
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
-  const [selectedCfiId, setSelectedCfiId] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
 
@@ -359,6 +421,15 @@ function EndorsementGenerator() {
   const signatureDirtyRef = useRef(false);
   const pdfUrlRef = useRef('');
   const defaultCfiAppliedRef = useRef(false);
+
+  const resetGeneratedPdf = useCallback(() => {
+    if (pdfUrlRef.current) {
+      URL.revokeObjectURL(pdfUrlRef.current);
+      pdfUrlRef.current = '';
+    }
+    setPdfUrl('');
+    setLatestPdfBlob(null);
+  }, []);
 
   useEffect(() => {
     Modal.setAppElement(document.body);
@@ -395,6 +466,7 @@ function EndorsementGenerator() {
 
     const handlePointerDown = (event) => {
       drawing = true;
+      resetGeneratedPdf();
       canvas.setPointerCapture?.(event.pointerId);
       const { x, y } = getPoint(event);
       context.beginPath();
@@ -432,7 +504,7 @@ function EndorsementGenerator() {
       canvas.removeEventListener('pointerup', handlePointerUp);
       canvas.removeEventListener('pointerleave', handlePointerUp);
     };
-  }, []);
+  }, [resetGeneratedPdf]);
 
   useEffect(() => {
     return () => {
@@ -460,28 +532,72 @@ function EndorsementGenerator() {
           return;
         }
 
-        const [cfis, students, defaultCfi, profile] = await Promise.all([
+        const [cfis, defaultCfi, profile] = await Promise.all([
           fetchSavedPeople(session.user.id, 'cfi'),
-          fetchSavedPeople(session.user.id, 'student'),
           fetchDefaultCfi(session.user.id),
           fetchCurrentProfile(session.user.id),
         ]);
 
-        setSavedCfis(cfis);
-        setSavedStudents(students);
+        const allPeople = await fetchSavedPeople(session.user.id);
+        const certificates = await fetchPersonCertificates(session.user.id).catch((error) => {
+          console.error('Unable to load person certificates:', error);
+          return [];
+        });
+        const peopleById = new Map(allPeople.map((person) => [person.id, person]));
+        const certificateCfis = certificates
+          .filter((certificate) => (
+            certificate.certificate_type === 'flight_instructor' ||
+            certificate.certificate_type === 'ground_instructor'
+          ))
+          .map((certificate) => {
+            const person = peopleById.get(certificate.person_id);
+            if (!person) {
+              return null;
+            }
+
+            return {
+              ...person,
+              id: certificate.id,
+              person_id: person.id,
+              cert_number: certificate.certificate_number || person.cert_number,
+              cert_exp_date: certificate.last_event_date || person.cert_exp_date,
+              is_default: certificate.is_default_for_endorsements || person.is_default,
+            };
+          })
+          .filter(Boolean)
+          .sort((left, right) => Number(right.is_default) - Number(left.is_default));
+        const certificatePilots = certificates
+          .filter((certificate) => certificate.certificate_type === 'pilot')
+          .map((certificate) => {
+            const person = peopleById.get(certificate.person_id);
+            if (!person) {
+              return null;
+            }
+
+            return {
+              ...person,
+              cert_number: certificate.certificate_number || person.cert_number,
+            };
+          })
+          .filter(Boolean);
+
+        setSavedCfis(certificateCfis.length > 0 ? certificateCfis : cfis);
+        setSavedStudents(certificatePilots);
         setSessionIdentity(profile?.display_name || session.user.email || '');
 
-        if (defaultCfi && !defaultCfiAppliedRef.current) {
-          setSelectedCfiId((current) => current || defaultCfi.id);
+        const defaultCertificateCfi = certificateCfis.find((person) => person.is_default);
+        const preferredCfi = defaultCertificateCfi || defaultCfi;
+
+        if (preferredCfi && !defaultCfiAppliedRef.current) {
           setFormData((prev) => ({
             ...prev,
-            instructorName: prev.instructorName.trim() ? prev.instructorName : defaultCfi.display_name || '',
+            instructorName: prev.instructorName.trim() ? prev.instructorName : preferredCfi.display_name || '',
             instructorCertNumber: prev.instructorCertNumber.trim()
               ? prev.instructorCertNumber
-              : defaultCfi.cert_number || '',
+              : preferredCfi.cert_number || '',
             instructorCertExpDate: prev.instructorCertExpDate.trim()
               ? prev.instructorCertExpDate
-              : formatStoredDateForDisplay(defaultCfi.cert_exp_date) || '',
+              : formatStoredDateForDisplay(preferredCfi.cert_exp_date) || '',
           }));
           defaultCfiAppliedRef.current = true;
         }
@@ -519,7 +635,7 @@ function EndorsementGenerator() {
       const query = searchTerm.trim().toLowerCase();
       return (
         template.title.toLowerCase().includes(query) ||
-        template.category.toLowerCase().includes(query) ||
+        String(template.category || '').toLowerCase().includes(query) ||
         template.preview.toLowerCase().includes(query)
       );
     })
@@ -598,6 +714,7 @@ function EndorsementGenerator() {
     const context = canvas.getContext('2d');
     context.clearRect(0, 0, canvas.width, canvas.height);
     signatureDirtyRef.current = false;
+    resetGeneratedPdf();
     setStatusMessage('Signature cleared. PDF generation will leave the signature area blank.');
   };
 
@@ -607,7 +724,124 @@ function EndorsementGenerator() {
   const closeDetailsModal = () => setDetailsModalIsOpen(false);
   const handleChange = (field) => (event) => {
     const nextValue = formatInputValue(field, event.target.value);
-    setFormData((prev) => ({ ...prev, [field]: nextValue }));
+    resetGeneratedPdf();
+    setFormData((prev) => {
+      const nextForm = { ...prev, [field]: nextValue };
+
+      if (field === 'instructorName') {
+        const matchingCertificates = getSavedPeopleByName(savedCfis, nextValue);
+        if (matchingCertificates.length === 1) {
+          const [selected] = matchingCertificates;
+          nextForm.instructorCertNumber = selected.cert_number || '';
+          nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
+        } else if (matchingCertificates.length > 1) {
+          const currentCertNumber = prev.instructorCertNumber.trim().toLowerCase();
+          const selected = matchingCertificates.find(
+            (person) => (person.cert_number || '').trim().toLowerCase() === currentCertNumber
+          );
+
+          if (selected) {
+            nextForm.instructorCertNumber = selected.cert_number || '';
+            nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
+          } else {
+            nextForm.instructorCertNumber = '';
+            nextForm.instructorCertExpDate = '';
+          }
+        }
+      }
+
+      if (field === 'instructorCertNumber') {
+        const selected = getSavedPeopleByName(savedCfis, nextForm.instructorName).find(
+          (person) => (person.cert_number || '').trim().toLowerCase() === nextValue.trim().toLowerCase()
+        );
+
+        if (selected) {
+          nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
+        }
+      }
+
+      if (field === 'studentName') {
+        const matchingCertificates = getSavedPeopleByName(savedStudents, nextValue);
+        const selected = matchingCertificates.length === 1
+          ? matchingCertificates[0]
+          : matchingCertificates.find(
+              (person) => (
+                person.cert_number || ''
+              ).trim().toLowerCase() === prev.studentCertNumber.trim().toLowerCase()
+            );
+
+        setSelectedStudentId(selected?.id || '');
+        if (selected && matchingCertificates.length === 1) {
+          nextForm.studentCertNumber = selected.cert_number || '';
+        } else if (matchingCertificates.length > 1 && !selected) {
+          nextForm.studentCertNumber = '';
+        }
+      }
+
+      if (field === 'studentCertNumber') {
+        const selected = getCertificateOptionsForName(savedStudents, nextForm.studentName).find(
+          (person) => (person.cert_number || '').trim().toLowerCase() === nextValue.trim().toLowerCase()
+        );
+
+        setSelectedStudentId(selected?.id || '');
+      }
+
+      return nextForm;
+    });
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const handleSavedPersonSuggestion = (field, person) => {
+    resetGeneratedPdf();
+    setActiveSuggestionField('');
+    setFormData((prev) => {
+      const nextForm = { ...prev };
+
+      if (field === 'instructorName') {
+        const nextName = person.display_name || '';
+        nextForm.instructorName = nextName;
+        const matchingCertificates = getSavedPeopleByName(savedCfis, nextName);
+
+        if (matchingCertificates.length === 1) {
+          const [selected] = matchingCertificates;
+          nextForm.instructorCertNumber = selected.cert_number || '';
+          nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
+        } else if (matchingCertificates.length > 1) {
+          const selected = matchingCertificates.find(
+            (certificate) => (
+              certificate.cert_number || ''
+            ).trim().toLowerCase() === prev.instructorCertNumber.trim().toLowerCase()
+          );
+
+          nextForm.instructorCertNumber = selected?.cert_number || '';
+          nextForm.instructorCertExpDate = selected ? formatStoredDateForDisplay(selected.cert_exp_date) || '' : '';
+        }
+      }
+
+      if (field === 'instructorCertNumber') {
+        nextForm.instructorName = person.display_name || nextForm.instructorName;
+        nextForm.instructorCertNumber = person.cert_number || '';
+        nextForm.instructorCertExpDate = formatStoredDateForDisplay(person.cert_exp_date) || '';
+      }
+
+      if (field === 'studentName') {
+        const nextName = person.display_name || '';
+        nextForm.studentName = nextName;
+        const matchingCertificates = getSavedPeopleByName(savedStudents, nextName);
+        const selected = matchingCertificates.length === 1 ? matchingCertificates[0] : null;
+
+        setSelectedStudentId(selected?.id || '');
+        nextForm.studentCertNumber = selected?.cert_number || '';
+      }
+
+      if (field === 'studentCertNumber') {
+        nextForm.studentName = person.display_name || nextForm.studentName;
+        nextForm.studentCertNumber = person.cert_number || '';
+        setSelectedStudentId(person.id || '');
+      }
+
+      return nextForm;
+    });
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
@@ -616,11 +850,13 @@ function EndorsementGenerator() {
       ? Array.from(event.target.selectedOptions, (option) => option.value)
       : event.target.value;
 
+    resetGeneratedPdf();
     setTemplateFieldData((prev) => ({ ...prev, [field.key]: nextValue }));
     setErrors((prev) => ({ ...prev, [field.key]: undefined }));
   };
 
   const handleMultiSelectToggle = (fieldKey, option) => {
+    resetGeneratedPdf();
     setTemplateFieldData((prev) => {
       const current = Array.isArray(prev[fieldKey]) ? prev[fieldKey] : [];
       const nextValue = current.includes(option)
@@ -638,6 +874,7 @@ function EndorsementGenerator() {
       ? selectedTemplates.filter((key) => key !== templateKey)
       : [...selectedTemplates, templateKey];
 
+    resetGeneratedPdf();
     setSelectedTemplates(nextSelected);
 
     setErrors((prev) => ({ ...prev, selectedTemplates: undefined }));
@@ -665,6 +902,7 @@ function EndorsementGenerator() {
 
   const handleTemplateCategorySelectAll = (category) => {
     const categoryTitles = (groupedVisibleTemplates[category] || []).map((template) => template.title);
+    resetGeneratedPdf();
     setSelectedTemplates((prev) => Array.from(new Set([...prev, ...categoryTitles])));
     setErrors((prev) => ({ ...prev, selectedTemplates: undefined }));
   };
@@ -673,36 +911,8 @@ function EndorsementGenerator() {
     const categoryTitles = new Set(
       (groupedVisibleTemplates[category] || []).map((template) => template.title)
     );
+    resetGeneratedPdf();
     setSelectedTemplates((prev) => prev.filter((template) => !categoryTitles.has(template)));
-  };
-
-  const handleSelectCfi = (event) => {
-    const nextId = event.target.value;
-    setSelectedCfiId(nextId);
-
-    const selected = savedCfis.find((person) => person.id === nextId);
-    if (!selected) return;
-
-    setFormData((prev) => ({
-      ...prev,
-      instructorName: selected.display_name || prev.instructorName,
-      instructorCertNumber: selected.cert_number || '',
-      instructorCertExpDate: formatStoredDateForDisplay(selected.cert_exp_date) || '',
-    }));
-  };
-
-  const handleSelectStudent = (event) => {
-    const nextId = event.target.value;
-    setSelectedStudentId(nextId);
-
-    const selected = savedStudents.find((person) => person.id === nextId);
-    if (!selected) return;
-
-    setFormData((prev) => ({
-      ...prev,
-      studentName: selected.display_name || prev.studentName,
-      studentCertNumber: selected.cert_number || '',
-    }));
   };
 
   const validateForm = () => {
@@ -935,8 +1145,9 @@ function EndorsementGenerator() {
 
       pdfUrlRef.current = nextPdfUrl;
       setPdfUrl(nextPdfUrl);
+      setLatestPdfBlob(blob);
       setStatusMessage(`PDF ready. Generated ${selectedTemplates.length} endorsement draft(s).`);
-      return nextPdfUrl;
+      return { url: nextPdfUrl, blob };
     } catch (error) {
       console.error('Error generating PDF:', error);
       setStatusMessage('Failed to generate PDF. Check the console and try again.');
@@ -967,13 +1178,66 @@ function EndorsementGenerator() {
 
     previewWindow.document.write('<title>PilotSeal PDF Preview</title><p style="font-family: sans-serif; padding: 20px;">Generating PDF preview...</p>');
 
-    const nextPdfUrl = await buildPdfUrl();
-    if (!nextPdfUrl) {
+    const nextPdf = await buildPdfUrl();
+    if (!nextPdf) {
       previewWindow.close();
       return;
     }
 
-    previewWindow.location.href = nextPdfUrl;
+    previewWindow.location.href = nextPdf.url;
+  };
+
+  const handleSaveRecord = async () => {
+    if (!latestPdfBlob) {
+      setStatusMessage('Open a preview first so the exact PDF can be saved.');
+      return;
+    }
+
+    if (!session?.user?.id) {
+      const nextPath = `${window.location.pathname}${window.location.search}`;
+      router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+      return;
+    }
+
+    setSavingRecord(true);
+
+    try {
+      const recordId = crypto.randomUUID();
+      const storagePath = `${session.user.id}/${recordId}.pdf`;
+      const supabase = getSupabaseClient();
+
+      const { error: uploadError } = await supabase.storage
+        .from(ENDORSEMENT_RECORDS_BUCKET)
+        .upload(storagePath, latestPdfBlob, {
+          contentType: 'application/pdf',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      await createEndorsementRecord({
+        id: recordId,
+        userId: session.user.id,
+        studentId: selectedStudentId || null,
+        studentName: formData.studentName.trim(),
+        studentCertNumber: formData.studentCertNumber.trim() || null,
+        instructorName: formData.instructorName.trim(),
+        instructorCertNumber: formData.instructorCertNumber.trim() || null,
+        endorsementDate: formatDateForPdf(formData.date),
+        templateTitles: selectedTemplates,
+        storagePath,
+        fileSizeBytes: latestPdfBlob.size,
+      });
+
+      setStatusMessage('Endorsement PDF saved to your dashboard records.');
+    } catch (error) {
+      console.error('Error saving endorsement record:', error);
+      setStatusMessage(error instanceof Error ? error.message : 'Failed to save endorsement record.');
+    } finally {
+      setSavingRecord(false);
+    }
   };
 
   const handlePrint = () => {
@@ -993,6 +1257,100 @@ function EndorsementGenerator() {
     };
   };
 
+  const savedInstructorNameOptions = getUniqueSavedPeopleByName(savedCfis);
+  const savedPilotNameOptions = getUniqueSavedPeopleByName(savedStudents);
+  const uniqueMatchingInstructorCertificates = getUniqueSavedPeopleByCertificateNumber(
+    getCertificateOptionsForExactName(savedCfis, formData.instructorName)
+  );
+  const uniqueMatchingPilotCertificates = getUniqueSavedPeopleByCertificateNumber(
+    getCertificateOptionsForExactName(savedStudents, formData.studentName)
+  );
+  const getSuggestionOptions = (fieldKey) => {
+    if (!sessionIdentity) {
+      return [];
+    }
+
+    if (fieldKey === 'instructorName') {
+      return savedInstructorNameOptions;
+    }
+
+    if (fieldKey === 'instructorCertNumber') {
+      return uniqueMatchingInstructorCertificates;
+    }
+
+    if (fieldKey === 'studentName') {
+      return savedPilotNameOptions;
+    }
+
+    if (fieldKey === 'studentCertNumber') {
+      return uniqueMatchingPilotCertificates;
+    }
+
+    return [];
+  };
+
+  const getSuggestionLabel = (fieldKey, person) => (
+    fieldKey === 'instructorCertNumber' || fieldKey === 'studentCertNumber'
+      ? person.cert_number
+      : person.display_name
+  );
+
+  const renderFieldInput = (field) => {
+    const suggestionOptions = getSuggestionOptions(field.key);
+    const hasSuggestions = suggestionOptions.length > 0;
+    const isSuggestionOpen = activeSuggestionField === field.key && hasSuggestions;
+
+    return (
+      <div className={hasSuggestions ? styles.comboField : undefined}>
+        <input
+          type={field.type}
+          value={formData[field.key]}
+          onChange={handleChange(field.key)}
+          onFocus={() => {
+            if (hasSuggestions) {
+              setActiveSuggestionField(field.key);
+            }
+          }}
+          onBlur={() => window.setTimeout(() => setActiveSuggestionField(''), 120)}
+          autoComplete={field.autoComplete}
+          placeholder={field.placeholder}
+          inputMode={field.inputMode}
+          maxLength={field.maxLength}
+          className={errors[field.key] ? styles.fieldError : ''}
+        />
+        {hasSuggestions ? (
+          <button
+            type="button"
+            className={styles.comboToggle}
+            aria-label={`Show ${field.label} options`}
+            title={`Show ${field.label} options`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setActiveSuggestionField((current) => (
+              current === field.key ? '' : field.key
+            ))}
+          >
+            ▾
+          </button>
+        ) : null}
+        {isSuggestionOpen ? (
+          <div className={styles.comboMenu}>
+            {suggestionOptions.map((person) => (
+              <button
+                key={`${field.key}-${person.id}`}
+                type="button"
+                className={styles.comboOption}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleSavedPersonSuggestion(field.key, person)}
+              >
+                {getSuggestionLabel(field.key, person)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <>
       <div className={styles.page}>
@@ -1005,37 +1363,6 @@ function EndorsementGenerator() {
                 </div>
               </div>
 
-              {sessionIdentity ? (
-                <div className={styles.savedProfiles}>
-                  <p className={styles.savedProfileHint}>Signed in as {sessionIdentity}. Select saved profiles to autofill the form.</p>
-                  <div className={styles.savedProfileRow}>
-                    <label className={styles.field}>
-                      <span>Saved CFI</span>
-                      <select value={selectedCfiId} onChange={handleSelectCfi}>
-                        <option value="">Select a saved CFI</option>
-                        {savedCfis.map((person) => (
-                          <option key={person.id} value={person.id}>
-                            {person.display_name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Saved Student</span>
-                      <select value={selectedStudentId} onChange={handleSelectStudent}>
-                        <option value="">Select a saved student</option>
-                        {savedStudents.map((person) => (
-                          <option key={person.id} value={person.id}>
-                            {person.display_name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-              ) : null}
-
               <div className={styles.formRows}>
                 <div className={styles.formRowThree}>
                   {FIELD_CONFIG.slice(0, 3).map((field) => (
@@ -1044,16 +1371,7 @@ function EndorsementGenerator() {
                         {field.label}
                         {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
                       </span>
-                      <input
-                        type={field.type}
-                        value={formData[field.key]}
-                        onChange={handleChange(field.key)}
-                        autoComplete={field.autoComplete}
-                        placeholder={field.placeholder}
-                        inputMode={field.inputMode}
-                        maxLength={field.maxLength}
-                        className={errors[field.key] ? styles.fieldError : ''}
-                      />
+                      {renderFieldInput(field)}
                       {errors[field.key] ? <small>{errors[field.key]}</small> : null}
                     </label>
                   ))}
@@ -1066,16 +1384,7 @@ function EndorsementGenerator() {
                         {field.label}
                         {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
                       </span>
-                      <input
-                        type={field.type}
-                        value={formData[field.key]}
-                        onChange={handleChange(field.key)}
-                        autoComplete={field.autoComplete}
-                        placeholder={field.placeholder}
-                        inputMode={field.inputMode}
-                        maxLength={field.maxLength}
-                        className={errors[field.key] ? styles.fieldError : ''}
-                      />
+                      {renderFieldInput(field)}
                       {errors[field.key] ? <small>{errors[field.key]}</small> : null}
                     </label>
                   ))}
@@ -1151,19 +1460,26 @@ function EndorsementGenerator() {
                 </div>
               </div>
 
-              <div className={styles.signatureFrame}>
-                <canvas ref={canvasRef} className={styles.signatureCanvas} />
-              </div>
+              <canvas ref={canvasRef} className={styles.signatureCanvas} />
 
               <div className={styles.actionRow}>
                 <button className={styles.secondaryButton} onClick={handlePreview} type="button">
                   Preview
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={handleSaveRecord}
+                  type="button"
+                  disabled={!latestPdfBlob || savingRecord}
+                >
+                  {savingRecord ? 'Saving...' : 'Save record'}
                 </button>
                 <button className={styles.secondaryButton} onClick={handlePrint} type="button" disabled={!pdfUrl}>
                   Print
                 </button>
               </div>
 
+              {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}
               {errors.selectedTemplates ? <p className={styles.inlineError}>{errors.selectedTemplates}</p> : null}
             </div>
           </section>

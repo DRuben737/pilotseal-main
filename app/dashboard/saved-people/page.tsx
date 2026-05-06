@@ -1,8 +1,8 @@
 import SavedPeopleManager from "@/components/dashboard/SavedPeopleManager";
 
 export const metadata = {
-  title: "Saved People | PilotSeal",
-  description: "Manage saved CFI and student profiles.",
+  title: "People | PilotSeal",
+  description: "Manage saved people, certificates, and currency dates.",
 };
 
 export default function DashboardSavedPeoplePage() {

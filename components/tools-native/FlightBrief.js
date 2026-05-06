@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { fetchSavedPeople } from "@/lib/saved-people";
+import { fetchPersonCertificates } from "@/lib/person-certificates";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import { parseAircraftStations } from "@/lib/aircraft";
@@ -16,6 +17,15 @@ function normalizeICAO(s) {
 
 function uniq(arr) {
   return Array.from(new Set(arr.filter(Boolean)));
+}
+
+function matchSavedPersonByName(options, value) {
+  const normalizedValue = value.trim().toLowerCase();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return options.find((person) => person.display_name?.trim().toLowerCase() === normalizedValue) ?? null;
 }
 
 // ETE (hours in decimal, string with 2 decimals)
@@ -700,14 +710,44 @@ export default function FlightBrief() {
           return;
         }
 
-        const [students, cfis] = await Promise.all([
-          fetchSavedPeople(session.user.id, "student"),
+        const [people, cfis, certificates] = await Promise.all([
+          fetchSavedPeople(session.user.id),
           fetchSavedPeople(session.user.id, "cfi"),
+          fetchPersonCertificates(session.user.id).catch(() => []),
         ]);
+        const peopleById = new Map(people.map((person) => [person.id, person]));
+        const certificatePilots = certificates
+          .filter((certificate) => certificate.certificate_type === "pilot")
+          .map((certificate) => {
+            const person = peopleById.get(certificate.person_id);
+            return person
+              ? {
+                  ...person,
+                  cert_number: certificate.certificate_number || person.cert_number,
+                }
+              : null;
+          })
+          .filter(Boolean);
+        const certificateInstructors = certificates
+          .filter((certificate) => (
+            certificate.certificate_type === "flight_instructor" ||
+            certificate.certificate_type === "ground_instructor"
+          ))
+          .map((certificate) => {
+            const person = peopleById.get(certificate.person_id);
+            return person
+              ? {
+                  ...person,
+                  cert_number: certificate.certificate_number || person.cert_number,
+                  cert_exp_date: certificate.last_event_date || person.cert_exp_date,
+                }
+              : null;
+          })
+          .filter(Boolean);
 
         if (!cancelled) {
-          setSavedStudents(students);
-          setSavedCfis(cfis);
+          setSavedStudents(certificatePilots);
+          setSavedCfis(certificateInstructors.length > 0 ? certificateInstructors : cfis);
         }
       } catch {
         if (!cancelled) {
@@ -745,6 +785,18 @@ export default function FlightBrief() {
       setInstructorName(selectedInstructor.display_name);
     }
   }, [savedCfis, selectedInstructorId, setInstructorName]);
+
+  const handleStudentNameChange = useCallback((value) => {
+    const selected = matchSavedPersonByName(savedStudents, value);
+    setStudentName(value);
+    setSelectedStudentId(selected?.id ?? "");
+  }, [savedStudents, setSelectedStudentId, setStudentName]);
+
+  const handleInstructorNameChange = useCallback((value) => {
+    const selected = matchSavedPersonByName(savedCfis, value);
+    setInstructorName(value);
+    setSelectedInstructorId(selected?.id ?? "");
+  }, [savedCfis, setInstructorName, setSelectedInstructorId]);
 
   useEffect(() => {
     const wbResult = briefWb?.result;
@@ -1286,6 +1338,20 @@ ${riskComments}
       </div>
 
       <form className="space-y-4 flightbrief-form" onSubmit={(e) => e.preventDefault()}>
+          {session?.user?.id ? (
+            <>
+              <datalist id="flightBriefSavedPilots">
+                {savedStudents.map((person) => (
+                  <option key={person.id} value={person.display_name} />
+                ))}
+              </datalist>
+              <datalist id="flightBriefSavedInstructors">
+                {savedCfis.map((person) => (
+                  <option key={person.id} value={person.display_name} />
+                ))}
+              </datalist>
+            </>
+          ) : null}
           {currentStep === 0 && (
             <section className="flightbrief-panel">
               <h2 className="text-xl font-bold mb-4">Flight Information</h2>
@@ -1293,25 +1359,6 @@ ${riskComments}
               <div className="flightbrief-mobile-settings">
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">People</h3>
-                  {session?.user?.id ? (
-                    <div className="inline-label-input">
-                      <label className="label" htmlFor="savedStudentMobile">Saved Student:</label>
-                      <select
-                        id="savedStudentMobile"
-                        className="input-field"
-                        value={selectedStudentId}
-                        onChange={(e) => setSelectedStudentId(e.target.value)}
-                        title="Select a saved student"
-                      >
-                        <option value="">Select saved student</option>
-                        {savedStudents.map((person) => (
-                          <option key={person.id} value={person.id}>
-                            {person.display_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
                   <EditableInfoRow
                     label="Student"
                     value={formatDisplayValue(studentName)}
@@ -1322,31 +1369,13 @@ ${riskComments}
                       <input
                         autoFocus
                         type="text"
+                        list={session?.user?.id ? "flightBriefSavedPilots" : undefined}
                         value={studentName}
-                        onChange={(e) => setStudentName(e.target.value)}
+                        onChange={(e) => handleStudentNameChange(e.target.value)}
                         onBlur={close}
                       />
                     )}
                   />
-                  {session?.user?.id ? (
-                    <div className="inline-label-input">
-                      <label className="label" htmlFor="savedInstructorMobile">Saved Instructor:</label>
-                      <select
-                        id="savedInstructorMobile"
-                        className="input-field"
-                        value={selectedInstructorId}
-                        onChange={(e) => setSelectedInstructorId(e.target.value)}
-                        title="Select a saved instructor"
-                      >
-                        <option value="">Select saved instructor</option>
-                        {savedCfis.map((person) => (
-                          <option key={person.id} value={person.id}>
-                            {person.display_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
                   <EditableInfoRow
                     label="Instructor"
                     value={formatDisplayValue(instructorName)}
@@ -1357,8 +1386,9 @@ ${riskComments}
                       <input
                         autoFocus
                         type="text"
+                        list={session?.user?.id ? "flightBriefSavedInstructors" : undefined}
                         value={instructorName}
-                        onChange={(e) => setInstructorName(e.target.value)}
+                        onChange={(e) => handleInstructorNameChange(e.target.value)}
                         onBlur={close}
                       />
                     )}
@@ -1477,54 +1507,30 @@ ${riskComments}
               </div>
 
               <div className="flightbrief-desktop-form">
-              {session?.user?.id ? (
-                <div className="inline-label-input">
-                  <label className="label" htmlFor="savedStudent">Saved Student:</label>
-                  <select
-                    id="savedStudent"
-                    className="input-field"
-                    value={selectedStudentId}
-                    onChange={(e) => setSelectedStudentId(e.target.value)}
-                    title="Select a saved student"
-                  >
-                    <option value="">Select saved student</option>
-                    {savedStudents.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.display_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-
               <div className="inline-label-input">
                 <label className="label" htmlFor="studentName">Student Name(Pilot Flying):</label>
-                <input type="text" id="studentName" className="input-field" value={studentName} onChange={(e) => setStudentName(e.target.value)} required />
+                <input
+                  type="text"
+                  id="studentName"
+                  className="input-field"
+                  list={session?.user?.id ? "flightBriefSavedPilots" : undefined}
+                  value={studentName}
+                  onChange={(e) => handleStudentNameChange(e.target.value)}
+                  required
+                />
               </div>
-
-              {session?.user?.id ? (
-                <div className="inline-label-input">
-                  <label className="label" htmlFor="savedInstructor">Saved Instructor:</label>
-                  <select
-                    id="savedInstructor"
-                    className="input-field"
-                    value={selectedInstructorId}
-                    onChange={(e) => setSelectedInstructorId(e.target.value)}
-                    title="Select a saved instructor"
-                  >
-                    <option value="">Select saved instructor</option>
-                    {savedCfis.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.display_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
 
               <div className="inline-label-input">
                 <label className="label" htmlFor="instructorName">Instructor Name(Pilot In Command):</label>
-                <input type="text" id="instructorName" className="input-field" value={instructorName} onChange={(e) => setInstructorName(e.target.value)} required />
+                <input
+                  type="text"
+                  id="instructorName"
+                  className="input-field"
+                  list={session?.user?.id ? "flightBriefSavedInstructors" : undefined}
+                  value={instructorName}
+                  onChange={(e) => handleInstructorNameChange(e.target.value)}
+                  required
+                />
               </div>
 
               <div className="flightbrief-compact-grid">

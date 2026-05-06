@@ -13,20 +13,12 @@ type AuthMode = "login" | "register";
 
 const modeCopy = {
   login: {
-    eyebrow: "PilotSeal access",
-    title: "Sign in to your control surface",
-    description:
-      "Move between endorsement drafting, saved records, and operational workflows without breaking context.",
     submitLabel: "Sign in",
     alternateHref: "/register",
     alternateLabel: "Create account",
     alternatePrompt: "Need a workspace?",
   },
   register: {
-    eyebrow: "New workspace",
-    title: "Create a PilotSeal account",
-    description:
-      "Set up a cleaner workspace for saved pilot records, preflight actions, and endorsement workflows.",
     submitLabel: "Create account",
     alternateHref: "/login",
     alternateLabel: "Back to login",
@@ -110,8 +102,8 @@ export default function AuthForm({
   return (
     <main className="page-shell px-3">
       <div className="site-shell page-stack">
-        <section className="grid min-h-[calc(100vh-11rem)] gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] lg:items-stretch">
-          <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80">
+        <section className="grid gap-8 lg:min-h-[calc(100vh-11rem)] lg:grid-cols-[minmax(260px,420px)_minmax(360px,0.9fr)] lg:items-center">
+          <div className="relative hidden min-h-[24rem] overflow-hidden rounded-[1.25rem] border border-slate-200/80 lg:block">
             <div className="absolute inset-0">
               <Image
                 src={authWorkspaceImage}
@@ -121,39 +113,11 @@ export default function AuthForm({
               />
             </div>
             <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(8,22,45,0.92),rgba(18,58,117,0.76),rgba(255,255,255,0.08))]" />
-            <div className="relative flex h-full flex-col justify-between gap-12 px-7 py-8 sm:px-10 sm:py-10">
-              <div className="space-y-4">
-                <p className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/8 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/82">
-                  {copy.eyebrow}
-                </p>
-                <div className="space-y-4">
-                  <h1 className="max-w-3xl text-4xl font-semibold leading-[0.94] tracking-[-0.06em] text-white sm:text-5xl lg:text-6xl">
-                    {copy.title}
-                  </h1>
-                  <p className="max-w-xl text-base leading-8 text-white/74">
-                    {copy.description}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-5 border-t border-white/12 pt-6 text-white/78 sm:grid-cols-3">
-                {[
-                  ["One surface", "Records, workflows, and guidance move together."],
-                  ["Lower friction", "The right action should feel one step away."],
-                  ["Operational clarity", "Less browsing, more actual training work."],
-                ].map(([title, desc]) => (
-                  <div key={title} className="space-y-2">
-                    <p className="text-sm font-semibold text-white">{title}</p>
-                    <p className="text-sm leading-7">{desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
-          <div className="flex items-center lg:pl-8 lg:border-l lg:border-slate-200/70">
-            <div className="w-full max-w-md space-y-8">
-              <div className="space-y-4">
+          <div className="flex items-start lg:items-center lg:pl-8 lg:border-l lg:border-slate-200/70">
+            <div className="w-full max-w-md space-y-6">
+              <div className="space-y-3">
                 <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
                   <Link
                     href="/login"
@@ -173,12 +137,6 @@ export default function AuthForm({
                   </Link>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="muted-kicker">Workspace access</p>
-                  <h2 className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                    {mode === "login" ? "Enter your account" : "Start a new workspace"}
-                  </h2>
-                </div>
               </div>
 
               <form className="grid gap-6" onSubmit={handleSubmit}>

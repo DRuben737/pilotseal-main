@@ -5,6 +5,11 @@ import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { getDeterministicGreeting } from "@/lib/greetings";
+import {
+  formatMedicalPrivilegeDate,
+  formatMedicalPrivilegeRemaining,
+  getMedicalPrivileges,
+} from "@/lib/medical";
 import { fetchCurrentProfile, updateCurrentProfile, type UserProfile } from "@/lib/profile";
 import { getSupabaseClient } from "@/lib/supabase";
 
@@ -45,22 +50,6 @@ function toLastDayOfMonth(mmYYYY: string) {
   const [month, year] = mmYYYY.split("/");
   const date = new Date(Number(year), Number(month), 0);
   return date.toISOString().split("T")[0];
-}
-
-function formatExpirationLabel(value: string | null | undefined) {
-  if (!value) {
-    return "Not available";
-  }
-
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    year: "numeric",
-  }).format(date);
 }
 
 function validateMonthYear(value: string, options?: { allowFutureYear?: boolean }) {
@@ -108,6 +97,41 @@ function formatMedicalClassLabel(value: UserProfile["medical_class"]) {
     return "Third class";
   }
   return "Medical certificate";
+}
+
+function ActionIcon({ kind }: { kind: "edit" | "close" | "save" | "delete" }) {
+  const common = "h-4 w-4";
+
+  switch (kind) {
+    case "edit":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
+          <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+          <path d="M13 7l4 4" />
+        </svg>
+      );
+    case "close":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
+          <path d="M6 6l12 12" />
+          <path d="M18 6L6 18" />
+        </svg>
+      );
+    case "save":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
+          <path d="M5 12.5l4 4L19 6.5" />
+        </svg>
+      );
+    case "delete":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
+          <path d="M4 7h16" />
+          <path d="M9 7V4h6v3" />
+          <path d="M7 7l1 13h8l1-13" />
+        </svg>
+      );
+  }
 }
 
 export default function AccountSettingsPanel() {
@@ -356,12 +380,13 @@ export default function AccountSettingsPanel() {
   const hasMedicalData = Boolean(
     profile?.medical_class || profile?.medical_birth_date || profile?.medical_exam_date || profile?.medical_exp_date
   );
+  const medicalPrivileges = getMedicalPrivileges(profile);
 
   return (
-    <div className="grid gap-6">
+    <div className="dashboard-settings-list">
       {greeting ? <p className="saas-greeting">{greeting}</p> : null}
 
-      <section className="saas-panel">
+      <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <p className="saas-subsection-title">Display name</p>
@@ -369,14 +394,16 @@ export default function AccountSettingsPanel() {
           </div>
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button icon-button"
+            aria-label={showDisplayName ? "Close display name editor" : "Edit display name"}
+            title={showDisplayName ? "Close" : "Edit"}
             onClick={() => setShowDisplayName((current) => !current)}
           >
-            {showDisplayName ? "Close" : "Edit"}
+            <ActionIcon kind={showDisplayName ? "close" : "edit"} />
           </button>
         </div>
         {showDisplayName ? (
-        <div className="saas-inline-form mt-4">
+        <div className="saas-inline-form saas-inline-form-plain dashboard-setting-form mt-3">
           <label className="saas-field">
             <span>Name shown in the interface</span>
             <input
@@ -389,31 +416,35 @@ export default function AccountSettingsPanel() {
           {status ? <p className="saas-meta-text">{status}</p> : null}
           <button
             type="button"
-            className="primary-button justify-center"
+            className="primary-button icon-button"
+            aria-label={savingIdentity ? "Saving display name" : "Save display name"}
+            title="Save display name"
             disabled={savingIdentity || loading}
             onClick={handleIdentitySave}
           >
-            {savingIdentity ? "Saving..." : "Save name"}
+            <ActionIcon kind="save" />
           </button>
         </div>
         ) : null}
       </section>
 
-      <section className="saas-panel">
+      <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <p className="saas-subsection-title">Password</p>
           </div>
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button icon-button"
+            aria-label={showPassword ? "Close password editor" : "Edit password"}
+            title={showPassword ? "Close" : "Edit"}
             onClick={() => setShowPassword((current) => !current)}
           >
-            {showPassword ? "Close" : "Edit"}
+            <ActionIcon kind={showPassword ? "close" : "edit"} />
           </button>
         </div>
         {showPassword ? (
-          <div className="saas-inline-form mt-4">
+          <div className="saas-inline-form saas-inline-form-plain dashboard-setting-form mt-3">
             <label className="saas-field">
               <span>New password</span>
               <input
@@ -435,17 +466,19 @@ export default function AccountSettingsPanel() {
             {passwordStatus ? <p className="saas-meta-text">{passwordStatus}</p> : null}
             <button
               type="button"
-              className="primary-button justify-center"
+              className="primary-button icon-button"
+              aria-label={savingPassword ? "Saving password" : "Save password"}
+              title="Save password"
               disabled={savingPassword || loading}
               onClick={handlePasswordSave}
             >
-              {savingPassword ? "Saving..." : "Save password"}
+              <ActionIcon kind="save" />
             </button>
           </div>
         ) : null}
       </section>
 
-      <section className="saas-panel">
+      <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <p className="saas-subsection-title">Medical</p>
@@ -454,32 +487,36 @@ export default function AccountSettingsPanel() {
           {!editingMedical ? (
             <button
               type="button"
-              className="ghost-button"
+              className="ghost-button icon-button"
+              aria-label="Edit medical"
+              title="Edit medical"
               onClick={() => {
                 setShowMedical(true);
                 setEditingMedical(true);
                 setMedicalStatus("");
               }}
             >
-              Edit
+              <ActionIcon kind="edit" />
             </button>
           ) : (
             <button
               type="button"
-              className="ghost-button"
+              className="ghost-button icon-button"
+              aria-label="Close medical editor"
+              title="Close"
               onClick={() => {
                 setEditingMedical(false);
                 setShowMedical(false);
                 setMedicalStatus("");
               }}
             >
-              Close
+              <ActionIcon kind="close" />
             </button>
           )}
         </div>
 
         {showMedical && editingMedical ? (
-          <div className="saas-inline-form mt-5">
+          <div className="saas-inline-form saas-inline-form-plain dashboard-setting-form mt-3">
             <label className="saas-field">
               <span>Medical class</span>
               <select
@@ -516,24 +553,28 @@ export default function AccountSettingsPanel() {
             <div className="saas-inline-actions">
               <button
                 type="button"
-                className="primary-button"
+                className="primary-button icon-button"
+                aria-label={savingMedical ? "Saving medical certificate" : "Save medical certificate"}
+                title="Save medical certificate"
                 disabled={savingMedical}
                 onClick={handleMedicalSave}
               >
-                {savingMedical ? "Saving..." : "Save medical certificate"}
+                <ActionIcon kind="save" />
               </button>
               <button
                 type="button"
-                className="secondary-button"
+                className="secondary-button icon-button"
+                aria-label="Cancel medical edits"
+                title="Cancel"
                 disabled={savingMedical}
                 onClick={handleMedicalCancel}
               >
-                Cancel
+                <ActionIcon kind="close" />
               </button>
             </div>
           </div>
         ) : showMedical && hasMedicalData ? (
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="dashboard-setting-subgrid mt-3">
             <article className="saas-quick-link">
               <p className="saas-label">Class</p>
               <p className="saas-value">
@@ -552,10 +593,42 @@ export default function AccountSettingsPanel() {
                 {formatStoredDateToMonthYear(profile?.medical_exam_date) || "Not available"}
               </p>
             </article>
-            <article className="saas-quick-link">
-              <p className="saas-label">Expiration</p>
-              <p className="saas-value">{formatExpirationLabel(profile?.medical_exp_date)}</p>
-            </article>
+            {medicalPrivileges.length > 0 ? (
+              <article className="saas-quick-link md:col-span-2">
+                <p className="saas-label">Privileges</p>
+                <div className="mt-3 grid gap-3">
+                  {medicalPrivileges.map((privilege) => (
+                    <div
+                      key={privilege.label}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-slate-200 bg-slate-50/80 px-3 py-3"
+                    >
+                      <div>
+                        <p className="saas-card-title">{privilege.label}</p>
+                        <p className="saas-meta-text">
+                          Until {formatMedicalPrivilegeDate(privilege.expiresAt)}
+                        </p>
+                      </div>
+                      <span
+                        className={`saas-pill ${
+                          privilege.status === "expired"
+                            ? "saas-pill-critical"
+                            : privilege.status === "expiring-soon"
+                              ? "saas-pill-high"
+                              : "saas-pill-normal"
+                        }`}
+                      >
+                        {formatMedicalPrivilegeRemaining(privilege)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ) : (
+              <article className="saas-quick-link">
+                <p className="saas-label">Privileges</p>
+                <p className="saas-value">Add class, birth date, and exam date</p>
+              </article>
+            )}
           </div>
         ) : showMedical ? (
           <div className="saas-empty-state mt-5">
@@ -564,18 +637,20 @@ export default function AccountSettingsPanel() {
         ) : null}
       </section>
 
-      <section className="saas-panel saas-danger-panel">
+      <section className="saas-panel saas-danger-panel dashboard-setting-row">
         <h3 className="saas-subsection-title">Delete account</h3>
         <p className="saas-meta-text mt-3">
           This action permanently deletes your PilotSeal account and all saved data.
         </p>
         <button
           type="button"
-          className="danger-button danger-button-compact mt-5"
+          className="danger-button icon-button mt-3"
+          aria-label={deleting ? "Deleting account" : "Delete account"}
+          title="Delete account"
           disabled={!session?.user?.id || deleting}
           onClick={handleDeleteAccount}
         >
-          {deleting ? "Deleting account..." : "Delete account"}
+          <ActionIcon kind="delete" />
         </button>
       </section>
     </div>
