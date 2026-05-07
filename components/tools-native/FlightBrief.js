@@ -62,11 +62,37 @@ function calcPressureAltitude(elevationFt, altimeterInHg) {
   return (29.92 - altimeterInHg) * 1000 + elevationFt;
 }
 
+function normalizeAltimeterInHg(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  if (value >= 25 && value <= 35) {
+    return value;
+  }
+
+  if (value >= 2500 && value <= 3500) {
+    return value / 100;
+  }
+
+  if (value >= 800 && value <= 1100) {
+    return value * 0.0295299830714;
+  }
+
+  return null;
+}
+
 // Estimated DA (ft)
-function calcDensityAltitudeFt({ elevationFt, temperatureC, altimeterInHg }) {
+function calcDensityAltitude({ elevationFt, temperatureC, altimeterInHg }) {
   const pressureAltitude = calcPressureAltitude(elevationFt, altimeterInHg);
-  const isaTemp = 15 - 2 * (elevationFt / 1000);
-  return Math.round(pressureAltitude + 120 * (temperatureC - isaTemp));
+  const isaTemp = 15 - 2 * (pressureAltitude / 1000);
+  const densityAltitude = pressureAltitude + 120 * (temperatureC - isaTemp);
+
+  return {
+    pressureAltitude: Math.round(pressureAltitude),
+    isaTemp,
+    densityAltitude: Math.round(densityAltitude),
+  };
 }
 
 function escapeHtml(str) {
@@ -1139,19 +1165,24 @@ export default function FlightBrief() {
       typeof daSourceResult?.alt === "number"
         ? daSourceResult.alt
         : latestAltimeterRef.current;
+    const normalizedAltimeterInHg = normalizeAltimeterInHg(altimeterInHg);
 
     if (Number.isNaN(elevationFt)) {
       setDaResult("Please enter field elevation.");
       return;
     }
-    if (altimeterInHg == null || Number.isNaN(temperatureC)) {
+    if (normalizedAltimeterInHg == null || Number.isNaN(temperatureC)) {
       setDaResult('Weather data is missing or invalid. Please click "Fetch Weather" first.');
       return;
     }
 
-    const da = calcDensityAltitudeFt({ elevationFt, temperatureC, altimeterInHg });
+    const { densityAltitude, pressureAltitude, isaTemp } = calcDensityAltitude({
+      elevationFt,
+      temperatureC,
+      altimeterInHg: normalizedAltimeterInHg,
+    });
     setDaResult(
-      `Estimated Density Altitude: ${da.toLocaleString()} ft using ${daSourceResult?.icao || "latest METAR"} (${altimeterInHg} inHg / ${temperatureC}°C)`
+      `Estimated Density Altitude: ${densityAltitude.toLocaleString()} ft using ${daSourceResult?.icao || "latest METAR"} (${normalizedAltimeterInHg.toFixed(2)} inHg / ${temperatureC}°C, PA ${pressureAltitude.toLocaleString()} ft, ISA ${isaTemp.toFixed(1)}°C)`
     );
   }, [fieldElevation, outsideTemp, daSourceResult]);
 
