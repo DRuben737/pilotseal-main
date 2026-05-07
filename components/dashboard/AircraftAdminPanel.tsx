@@ -1,22 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import {
+  approveAircraftUpdateRequest,
   createAircraft,
   createAircraftModel,
   deleteAircraft,
   deleteAircraftModel,
-  fetchAircraft,
   fetchAircraftModels,
+  fetchAircraftUpdateRequests,
+  fetchSharedAircraft,
+  rejectAircraftUpdateRequest,
   parseAircraftEnvelope,
   parseAircraftStations,
   updateAircraft,
   updateAircraftModel,
   type AircraftModelRecord,
   type AircraftRecord,
+  type AircraftUpdateRequestRecord,
 } from "@/lib/aircraft";
 import { fetchCurrentProfile } from "@/lib/profile";
 
@@ -99,7 +103,7 @@ function normalizeAircraftForm(aircraft: AircraftRecord): AircraftFormState {
   return {
     id: aircraft.id,
     model_id: aircraft.model_id ?? aircraft.model?.id ?? "",
-    name: aircraft.name ?? "",
+    name: aircraft.tail_number ?? aircraft.name ?? "",
     empty_weight: aircraft.empty_weight != null ? String(aircraft.empty_weight) : "",
     empty_arm: aircraft.empty_arm != null ? String(aircraft.empty_arm) : "",
     empty_lat_arm: aircraft.empty_lat_arm != null ? String(aircraft.empty_lat_arm) : "",
@@ -110,19 +114,42 @@ function toNumber(value: string) {
   return Number.parseFloat(value);
 }
 
-function scrollEditorIntoView(targetId: string) {
-  window.setTimeout(() => {
+function scrollEditorIntoView(
+  targetId: string,
+  scrollContainer: HTMLElement | null | undefined
+) {
+  const runScroll = () => {
     const element = document.getElementById(targetId);
-    if (!element) {
+    if (!element || !(scrollContainer instanceof HTMLElement)) {
       return;
     }
 
-    const scrollContainer = element.closest(".tools-child-shell");
-    if (scrollContainer instanceof HTMLElement) {
-      const top = element.offsetTop - 24;
-      scrollContainer.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    const top = element.offsetTop - 24;
+    scrollContainer.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  };
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(runScroll);
+  });
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [record.message, record.details, record.hint]
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(" ");
     }
-  }, 40);
+  }
+
+  return fallback;
 }
 
 export default function AircraftAdminPanel() {
@@ -130,6 +157,7 @@ export default function AircraftAdminPanel() {
   const [profileRole, setProfileRole] = useState("");
   const [models, setModels] = useState<AircraftModelRecord[]>([]);
   const [aircraft, setAircraft] = useState<AircraftRecord[]>([]);
+  const [updateRequests, setUpdateRequests] = useState<AircraftUpdateRequestRecord[]>([]);
   const [modelForm, setModelForm] = useState<ModelFormState>(emptyModelForm);
   const [aircraftForm, setAircraftForm] = useState<AircraftFormState>(emptyAircraftForm);
   const [loading, setLoading] = useState(true);
@@ -137,9 +165,12 @@ export default function AircraftAdminPanel() {
   const [status, setStatus] = useState("");
   const [showModelsModal, setShowModelsModal] = useState(false);
   const [showAircraftModal, setShowAircraftModal] = useState(false);
+  const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showModelForm, setShowModelForm] = useState(false);
   const [showAircraftForm, setShowAircraftForm] = useState(false);
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const modelsScrollRef = useRef<HTMLDivElement | null>(null);
+  const aircraftScrollRef = useRef<HTMLDivElement | null>(null);
 
   const isAdmin = profileRole === "admin";
 
@@ -149,6 +180,12 @@ export default function AircraftAdminPanel() {
 
   useEffect(() => {
     if (!showModelsModal && !showAircraftModal) {
+      if (!showRequestsModal) {
+        return;
+      }
+    }
+
+    if (!showModelsModal && !showAircraftModal && !showRequestsModal) {
       return;
     }
 
@@ -173,7 +210,7 @@ export default function AircraftAdminPanel() {
       document.body.style.width = previousWidth;
       window.scrollTo({ top: scrollY, behavior: "auto" });
     };
-  }, [showModelsModal, showAircraftModal]);
+  }, [showAircraftModal, showModelsModal, showRequestsModal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,9 +257,10 @@ export default function AircraftAdminPanel() {
     }
 
     async function reloadAll(cancelledState = false) {
-      const [modelResult, aircraftResult] = await Promise.allSettled([
+      const [modelResult, aircraftResult, requestResult] = await Promise.allSettled([
         fetchAircraftModels(),
-        fetchAircraft(),
+        fetchSharedAircraft(),
+        fetchAircraftUpdateRequests(),
       ]);
 
       if (cancelledState) {
@@ -237,7 +275,15 @@ export default function AircraftAdminPanel() {
         setAircraft(aircraftResult.value);
       }
 
-      if (modelResult.status === "rejected" || aircraftResult.status === "rejected") {
+      if (requestResult.status === "fulfilled") {
+        setUpdateRequests(requestResult.value);
+      }
+
+      if (
+        modelResult.status === "rejected" ||
+        aircraftResult.status === "rejected" ||
+        requestResult.status === "rejected"
+      ) {
         setStatus("Unable to load aircraft management right now.");
       }
     }
@@ -255,9 +301,10 @@ export default function AircraftAdminPanel() {
   );
 
   async function reloadAll() {
-    const [modelResult, aircraftResult] = await Promise.allSettled([
+    const [modelResult, aircraftResult, requestResult] = await Promise.allSettled([
       fetchAircraftModels(),
-      fetchAircraft(),
+      fetchSharedAircraft(),
+      fetchAircraftUpdateRequests(),
     ]);
 
     if (modelResult.status === "fulfilled") {
@@ -267,25 +314,35 @@ export default function AircraftAdminPanel() {
     if (aircraftResult.status === "fulfilled") {
       setAircraft(aircraftResult.value);
     }
+
+    if (requestResult.status === "fulfilled") {
+      setUpdateRequests(requestResult.value);
+    }
   }
 
   function openModelEditor(nextForm = emptyModelForm) {
     setModelForm(nextForm);
     setShowModelForm(true);
     setShowModelsModal(true);
-    if (!nextForm.id) {
-      scrollEditorIntoView("model-editor-new");
-    }
   }
 
   function openAircraftEditor(nextForm = emptyAircraftForm) {
     setAircraftForm(nextForm);
     setShowAircraftForm(true);
     setShowAircraftModal(true);
-    if (!nextForm.id) {
-      scrollEditorIntoView("aircraft-editor-new");
-    }
   }
+
+  useEffect(() => {
+    if (showModelsModal && showModelForm && !modelForm.id) {
+      scrollEditorIntoView("model-editor-new", modelsScrollRef.current);
+    }
+  }, [showModelsModal, showModelForm, modelForm.id]);
+
+  useEffect(() => {
+    if (showAircraftModal && showAircraftForm && !aircraftForm.id) {
+      scrollEditorIntoView("aircraft-editor-new", aircraftScrollRef.current);
+    }
+  }, [showAircraftModal, showAircraftForm, aircraftForm.id]);
 
   function updateModelField<K extends keyof ModelFormState>(key: K, value: ModelFormState[K]) {
     setModelForm((current) => ({ ...current, [key]: value }));
@@ -380,7 +437,7 @@ export default function AircraftAdminPanel() {
       setModelForm(emptyModelForm);
       setShowModelForm(false);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to save aircraft model right now.");
+      setStatus(getErrorMessage(error, "Unable to save aircraft model right now."));
     } finally {
       setSaving(false);
     }
@@ -435,7 +492,7 @@ export default function AircraftAdminPanel() {
       setAircraftForm(emptyAircraftForm);
       setShowAircraftForm(false);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to save aircraft right now.");
+      setStatus(getErrorMessage(error, "Unable to save aircraft right now."));
     } finally {
       setSaving(false);
     }
@@ -455,7 +512,7 @@ export default function AircraftAdminPanel() {
       setModels((current) => current.filter((model) => model.id !== id));
       setStatus("Aircraft model deleted.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to delete aircraft model right now.");
+      setStatus(getErrorMessage(error, "Unable to delete aircraft model right now."));
     } finally {
       setSaving(false);
     }
@@ -475,7 +532,37 @@ export default function AircraftAdminPanel() {
       setAircraft((current) => current.filter((item) => item.id !== id));
       setStatus("Aircraft deleted.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to delete aircraft right now.");
+      setStatus(getErrorMessage(error, "Unable to delete aircraft right now."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleApproveRequest(request: AircraftUpdateRequestRecord) {
+    setSaving(true);
+    setStatus("");
+
+    try {
+      await approveAircraftUpdateRequest(request);
+      await reloadAll();
+      setStatus(`Approved W&B update for ${request.aircraft_tail_number}.`);
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to approve this aircraft update right now."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRejectRequest(request: AircraftUpdateRequestRecord) {
+    setSaving(true);
+    setStatus("");
+
+    try {
+      await rejectAircraftUpdateRequest(request.id);
+      await reloadAll();
+      setStatus(`Rejected W&B update for ${request.aircraft_tail_number}.`);
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to reject this aircraft update right now."));
     } finally {
       setSaving(false);
     }
@@ -779,8 +866,8 @@ export default function AircraftAdminPanel() {
         <section className="saas-panel">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="saas-subsection-title">Aircraft</h3>
-              <p className="saas-meta-text mt-2">{aircraft.length} saved</p>
+              <h3 className="saas-subsection-title">Shared Aircraft Registry</h3>
+              <p className="saas-meta-text mt-2">{aircraft.length} aircraft</p>
             </div>
             <button
               type="button"
@@ -788,6 +875,24 @@ export default function AircraftAdminPanel() {
               onClick={() => setShowAircraftModal(true)}
             >
               Manage
+            </button>
+          </div>
+        </section>
+
+        <section className="saas-panel md:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="saas-subsection-title">Pending Aircraft Updates</h3>
+              <p className="saas-meta-text mt-2">
+                {updateRequests.filter((request) => request.status === "pending").length} pending
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setShowRequestsModal(true)}
+            >
+              Review
             </button>
           </div>
         </section>
@@ -819,7 +924,10 @@ export default function AircraftAdminPanel() {
                     </div>
                   </div>
 
-                  <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
+                  <div
+                    ref={modelsScrollRef}
+                    className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]"
+                  >
                     <div className="grid gap-3">
                       {models.map((model) => (
                         <div key={model.id} id={`model-editor-${model.id}`}>
@@ -873,7 +981,7 @@ export default function AircraftAdminPanel() {
                   <div className="tools-child-header">
                     <div>
                       <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Aircraft</h2>
+                      <h2 className="tools-child-title">Shared Aircraft Registry</h2>
                     </div>
                     <div className="tools-child-actions">
                       <button type="button" className="ghost-button" onClick={() => openAircraftEditor()}>
@@ -889,14 +997,19 @@ export default function AircraftAdminPanel() {
                     </div>
                   </div>
 
-                  <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
+                  <div
+                    ref={aircraftScrollRef}
+                    className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]"
+                  >
                     <div className="grid gap-3">
                       {aircraft.map((item) => (
                         <div key={item.id} id={`aircraft-editor-${item.id}`}>
                           <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="text-sm font-semibold text-slate-900">{item.name}</p>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {item.tail_number ?? item.name}
+                                </p>
                                 <p className="saas-meta-text">
                                   {modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Model"} · Empty{" "}
                                   {item.empty_weight ?? "--"} lbs
@@ -929,6 +1042,119 @@ export default function AircraftAdminPanel() {
                       {showAircraftForm && !aircraftForm.id ? (
                         <div id="aircraft-editor-new">{renderAircraftForm()}</div>
                       ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            portalRoot
+          )
+        : null}
+
+      {showRequestsModal && portalRoot
+        ? createPortal(
+            <div className="Overlay" onClick={() => setShowRequestsModal(false)}>
+              <div className="Modal" onClick={(event) => event.stopPropagation()}>
+                <div className="tools-child-shell flex h-full min-h-0 flex-col">
+                  <div className="tools-child-header">
+                    <div>
+                      <p className="saas-kicker">Admin</p>
+                      <h2 className="tools-child-title">Pending Aircraft Updates</h2>
+                    </div>
+                    <div className="tools-child-actions">
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setShowRequestsModal(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
+                    <div className="grid gap-3">
+                      {updateRequests.filter((request) => request.status === "pending").length === 0 ? (
+                        <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
+                          <p className="text-sm font-medium text-slate-900">No pending requests.</p>
+                          <p className="saas-meta-text mt-1">
+                            Submitted W&B conflicts will appear here for admin review.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {updateRequests
+                        .filter((request) => request.status === "pending")
+                        .map((request) => (
+                          <div
+                            key={request.id}
+                            className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {request.aircraft_tail_number}
+                                </p>
+                                <p className="saas-meta-text mt-1">
+                                  Submitted by {request.submitted_by_label} ·{" "}
+                                  {request.created_at
+                                    ? new Date(request.created_at).toLocaleString()
+                                    : "Unknown time"}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  disabled={saving}
+                                  onClick={() => void handleApproveRequest(request)}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger-button-compact"
+                                  disabled={saving}
+                                  onClick={() => void handleRejectRequest(request)}
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                              <div className="rounded-2xl border border-[var(--border)] bg-white/85 p-3">
+                                <p className="saas-meta-text">Current shared values</p>
+                                <p className="mt-2 text-sm text-slate-900">
+                                  Empty weight: {request.current_empty_weight ?? "--"} lbs
+                                </p>
+                                <p className="mt-1 text-sm text-slate-900">
+                                  Empty arm: {request.current_empty_arm ?? "--"}
+                                </p>
+                                <p className="mt-1 text-sm text-slate-900">
+                                  Empty lat arm: {request.current_empty_lat_arm ?? "--"}
+                                </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-[var(--border)] bg-white/85 p-3">
+                                <p className="saas-meta-text">Proposed values</p>
+                                <p className="mt-2 text-sm text-slate-900">
+                                  Empty weight: {request.proposed_empty_weight ?? "--"} lbs
+                                </p>
+                                <p className="mt-1 text-sm text-slate-900">
+                                  Empty arm: {request.proposed_empty_arm ?? "--"}
+                                </p>
+                                <p className="mt-1 text-sm text-slate-900">
+                                  Empty lat arm: {request.proposed_empty_lat_arm ?? "--"}
+                                </p>
+                              </div>
+                            </div>
+
+                            {request.note ? (
+                              <p className="saas-meta-text mt-3">Note: {request.note}</p>
+                            ) : null}
+                          </div>
+                        ))}
                     </div>
                   </div>
                 </div>

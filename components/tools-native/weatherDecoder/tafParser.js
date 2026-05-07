@@ -1,6 +1,28 @@
 import { compareFlightCategory, getFlightCategory } from "./flightCategory";
 
 const CLOUD_PREFIXES = ["FEW", "SCT", "BKN", "OVC", "VV"];
+const PHENOMENA = {
+  BR: "mist",
+  FG: "fog",
+  HZ: "haze",
+  FU: "smoke",
+  DU: "dust",
+  SA: "sand",
+  RA: "rain",
+  DZ: "drizzle",
+  SN: "snow",
+  SG: "snow grains",
+  IC: "ice crystals",
+  PL: "ice pellets",
+  GS: "small hail",
+  GR: "hail",
+  UP: "unknown precipitation",
+  TS: "thunderstorm",
+  SH: "showers",
+  FZ: "freezing",
+  VC: "in the vicinity",
+  NSW: "no significant weather",
+};
 
 function parseCloudLayer(token) {
   const match = token.match(/^(FEW|SCT|BKN|OVC|VV)(\d{3})(CB|TCU)?$/);
@@ -31,6 +53,35 @@ function parseVisibility(token) {
   return null;
 }
 
+function describeWeatherToken(token) {
+  if (token === "NSW") return "no significant weather";
+
+  let remaining = token;
+  const pieces = [];
+
+  if (remaining.startsWith("+")) {
+    pieces.push("heavy");
+    remaining = remaining.slice(1);
+  } else if (remaining.startsWith("-")) {
+    pieces.push("light");
+    remaining = remaining.slice(1);
+  }
+
+  ["VC", "MI", "PR", "BC", "DR", "BL", "SH", "TS", "FZ"].forEach((prefix) => {
+    if (remaining.startsWith(prefix)) {
+      pieces.push(PHENOMENA[prefix] || prefix);
+      remaining = remaining.slice(prefix.length);
+    }
+  });
+
+  const chunks = remaining.match(/.{1,2}/g) || [];
+  chunks.forEach((chunk) => {
+    pieces.push(PHENOMENA[chunk] || chunk.toLowerCase());
+  });
+
+  return pieces.join(" ");
+}
+
 function parseWind(token) {
   const match = (token || "").match(/^(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?KT$/);
   if (!match) return null;
@@ -48,6 +99,7 @@ function parseSegmentTokens(tokens) {
     visibility: null,
     weather: [],
     clouds: [],
+    windShear: null,
   };
 
   tokens.forEach((token) => {
@@ -59,12 +111,19 @@ function parseSegmentTokens(tokens) {
       details.visibility = parseVisibility(token);
       return;
     }
+    if (!details.windShear && /^WS\d{3}\/\d{5}KT$/.test(token)) {
+      details.windShear = token;
+      return;
+    }
     if (parseCloudLayer(token)) {
       details.clouds.push(parseCloudLayer(token));
       return;
     }
     if (/^[A-Z\+\-]{2,}$/.test(token) && !token.includes("/")) {
-      details.weather.push(token);
+      details.weather.push({
+        raw: token,
+        text: describeWeatherToken(token),
+      });
     }
   });
 
@@ -102,7 +161,10 @@ export function parseTaf(rawInput) {
     tokens[index] === "AMD" || tokens[index] === "COR" ? tokens[index++] : null;
   const station = /^[A-Z]{4}$/.test(tokens[index] || "") ? tokens[index++] : null;
   const issueTime = /^\d{6}Z$/.test(tokens[index] || "") ? tokens[index++] : null;
-  const validPeriod = /^\d{4}\/\d{4}$/.test(tokens[index] || "") ? tokens[index++] : null;
+  const validPeriod =
+    /^\d{4}\/\d{4}$/.test(tokens[index] || "") || /^\d{6}$/.test(tokens[index] || "")
+      ? tokens[index++]
+      : null;
 
   const segments = [];
   let current = {
@@ -135,7 +197,10 @@ export function parseTaf(rawInput) {
         timeLabel: tokens[index + 1] || null,
         tokens: [],
       };
-      index += /^\d{4}\/\d{4}$/.test(tokens[index + 1] || "") ? 2 : 1;
+      index +=
+        /^\d{4}\/\d{4}$/.test(tokens[index + 1] || "") || /^\d{4}$/.test(tokens[index + 1] || "")
+          ? 2
+          : 1;
       continue;
     }
 
@@ -146,7 +211,13 @@ export function parseTaf(rawInput) {
       if (/^\d{4}\/\d{4}$/.test(tokens[index + 1] || "")) {
         timeLabel = `${token} ${tokens[index + 1]}`;
         step = 2;
+      } else if (/^\d{4}$/.test(tokens[index + 1] || "")) {
+        timeLabel = `${token} ${tokens[index + 1]}`;
+        step = 2;
       } else if (tokens[index + 1] === "TEMPO" && /^\d{4}\/\d{4}$/.test(tokens[index + 2] || "")) {
+        timeLabel = `${token} TEMPO ${tokens[index + 2]}`;
+        step = 3;
+      } else if (tokens[index + 1] === "TEMPO" && /^\d{4}$/.test(tokens[index + 2] || "")) {
         timeLabel = `${token} TEMPO ${tokens[index + 2]}`;
         step = 3;
       }

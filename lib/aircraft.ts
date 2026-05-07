@@ -42,23 +42,78 @@ export type AircraftRecord = {
   id: string;
   model_id: string | null;
   name: string;
+  tail_number: string;
   category?: string | null;
   empty_weight: number | null;
   empty_arm: number | null;
   empty_lat_arm?: number | null;
   max_weight?: number | null;
   model?: AircraftModelRecord | null;
+  source?: "shared" | "mine";
+  is_saved?: boolean;
 };
+
+export type AircraftUpdateRequestRecord = {
+  id: string;
+  aircraft_id: string;
+  aircraft_tail_number: string;
+  current_empty_weight: number | null;
+  current_empty_arm: number | null;
+  current_empty_lat_arm: number | null;
+  proposed_empty_weight: number | null;
+  proposed_empty_arm: number | null;
+  proposed_empty_lat_arm: number | null;
+  note: string;
+  status: string;
+  submitted_by: string;
+  submitted_by_label: string;
+  created_at: string;
+};
+
+export type AttachAircraftByTailInput = {
+  userId: string;
+  model_id: string;
+  tail_number: string;
+  empty_weight: number;
+  empty_arm: number;
+  empty_lat_arm?: number | null;
+};
+
+export type AttachAircraftConflict = {
+  kind: "conflict";
+  aircraft: AircraftRecord;
+  proposed: {
+    model_id: string;
+    tail_number: string;
+    empty_weight: number;
+    empty_arm: number;
+    empty_lat_arm: number | null;
+  };
+};
+
+export type AttachAircraftSuccess = {
+  kind: "attached" | "created";
+  aircraft: AircraftRecord;
+};
+
+export type AttachAircraftResult = AttachAircraftSuccess | AttachAircraftConflict;
 
 const AIRCRAFT_MODEL_SELECT = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
-  "id, model_id, name, empty_weight, empty_arm, empty_lat_arm, max_weight",
-  "id, model_id, name, empty_weight, empty_arm, max_weight",
-  "id, model_id, name, empty_weight, empty_arm",
-  "id, model_id, tail_number, empty_weight, empty_arm, empty_lat_arm, max_weight",
-  "id, model_id, tail_number, empty_weight, empty_arm, max_weight",
+  "id, model_id, name, tail_number, empty_weight, empty_arm, empty_lat_arm",
+  "id, model_id, tail_number, empty_weight, empty_arm, empty_lat_arm",
+  "id, model_id, name, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, tail_number, empty_weight, empty_arm",
+  "id, model_id, name, empty_weight, empty_arm",
+  "id, model_id, name, tail_number, empty_weight, empty_arm, empty_lat_arm, max_weight",
+  "id, model_id, tail_number, empty_weight, empty_arm, empty_lat_arm, max_weight",
+  "id, model_id, name, empty_weight, empty_arm, empty_lat_arm, max_weight",
+  "id, model_id, tail_number, empty_weight, empty_arm, max_weight",
+  "id, model_id, name, empty_weight, empty_arm, max_weight",
 ];
+
+const UPDATE_REQUEST_SELECT =
+  "id, aircraft_id, proposed_empty_weight, proposed_empty_arm, proposed_empty_lat_arm, note, status, submitted_by, created_at";
 
 export async function fetchAircraftModels() {
   const supabase = getSupabaseClient();
@@ -74,8 +129,7 @@ export async function fetchAircraftModels() {
   return (data ?? []) as AircraftModelRecord[];
 }
 
-export async function fetchAircraft() {
-  const supabase = getSupabaseClient();
+export async function fetchSharedAircraft() {
   const [{ data, error }, models] = await Promise.all([
     selectAircraftRecords(),
     fetchAircraftModels().catch(() => [] as AircraftModelRecord[]),
@@ -85,19 +139,49 @@ export async function fetchAircraft() {
     throw error;
   }
 
-  const modelById = new Map(models.map((model) => [model.id, model]));
+  return normalizeAircraftList(data ?? [], models, "shared", new Set());
+}
 
-  return (data ?? []).map((record) => {
-    const rawRecord = ((record ?? {}) as unknown) as Record<string, unknown>;
+export async function fetchMyAircraft(userId: string) {
+  const supabase = getSupabaseClient();
 
-    return normalizeAircraftRecord({
-      ...rawRecord,
-      model:
-        typeof rawRecord.model_id === "string" && modelById.has(rawRecord.model_id)
-          ? modelById.get(rawRecord.model_id)
-          : null,
-    });
-  });
+  const { data: savedRows, error: savedError } = await supabase
+    .from("saved_aircraft")
+    .select("aircraft_id, is_default")
+    .eq("user_id", userId);
+
+  if (savedError) {
+    if (isMissingRelationError(savedError)) {
+      return [] as AircraftRecord[];
+    }
+
+    throw savedError;
+  }
+
+  const savedAircraftIds = new Set(
+    (savedRows ?? [])
+      .map((row) => String((row as Record<string, unknown>).aircraft_id ?? ""))
+      .filter(Boolean)
+  );
+
+  if (savedAircraftIds.size === 0) {
+    return [];
+  }
+
+  const [{ data, error }, models] = await Promise.all([
+    selectAircraftRecords(Array.from(savedAircraftIds)),
+    fetchAircraftModels().catch(() => [] as AircraftModelRecord[]),
+  ]);
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeAircraftList(data ?? [], models, "mine", savedAircraftIds);
+}
+
+export async function fetchAircraft() {
+  return fetchSharedAircraft();
 }
 
 export async function createAircraftModel(input: {
@@ -171,11 +255,13 @@ export async function createAircraft(input: {
   empty_lat_arm?: number | null;
 }) {
   const supabase = getSupabaseClient();
+  const normalizedTail = normalizeTailNumber(input.name);
   const attempts = [
     {
       payload: {
         model_id: input.model_id,
-        name: input.name,
+        tail_number: normalizedTail,
+        name: normalizedTail,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
@@ -185,7 +271,7 @@ export async function createAircraft(input: {
     {
       payload: {
         model_id: input.model_id,
-        name: input.name,
+        tail_number: normalizedTail,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
@@ -195,22 +281,12 @@ export async function createAircraft(input: {
     {
       payload: {
         model_id: input.model_id,
-        tail_number: input.name,
+        name: normalizedTail,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[2],
-    },
-    {
-      payload: {
-        model_id: input.model_id,
-        tail_number: input.name,
-        empty_weight: input.empty_weight,
-        empty_arm: input.empty_arm,
-        empty_lat_arm: input.empty_lat_arm ?? null,
-      },
-      select: AIRCRAFT_SELECT_VARIANTS[3],
     },
   ];
 
@@ -224,7 +300,7 @@ export async function createAircraft(input: {
       .single();
 
     if (!error) {
-      return normalizeAircraftRecord(data);
+      return normalizeAircraftRecord(data, null, "shared", false);
     }
 
     lastError = error;
@@ -244,11 +320,13 @@ export async function updateAircraft(
   }
 ) {
   const supabase = getSupabaseClient();
+  const normalizedTail = normalizeTailNumber(input.name);
   const attempts = [
     {
       payload: {
         model_id: input.model_id,
-        name: input.name,
+        tail_number: normalizedTail,
+        name: normalizedTail,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
@@ -258,7 +336,7 @@ export async function updateAircraft(
     {
       payload: {
         model_id: input.model_id,
-        name: input.name,
+        tail_number: normalizedTail,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
@@ -268,22 +346,12 @@ export async function updateAircraft(
     {
       payload: {
         model_id: input.model_id,
-        tail_number: input.name,
+        name: normalizedTail,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
       },
       select: AIRCRAFT_SELECT_VARIANTS[2],
-    },
-    {
-      payload: {
-        model_id: input.model_id,
-        tail_number: input.name,
-        empty_weight: input.empty_weight,
-        empty_arm: input.empty_arm,
-        empty_lat_arm: input.empty_lat_arm ?? null,
-      },
-      select: AIRCRAFT_SELECT_VARIANTS[3],
     },
   ];
 
@@ -298,7 +366,7 @@ export async function updateAircraft(
       .single();
 
     if (!error) {
-      return normalizeAircraftRecord(data);
+      return normalizeAircraftRecord(data, null, "shared", false);
     }
 
     lastError = error;
@@ -316,6 +384,179 @@ export async function deleteAircraft(id: string) {
   }
 }
 
+export async function attachAircraftByTail(
+  input: AttachAircraftByTailInput
+): Promise<AttachAircraftResult> {
+  const normalizedTail = normalizeTailNumber(input.tail_number);
+  if (!normalizedTail) {
+    throw new Error("Tail number is required.");
+  }
+
+  const existing = await findAircraftByTailNumber(normalizedTail);
+
+  if (existing) {
+    const sameValues =
+      numbersEqual(existing.empty_weight, input.empty_weight) &&
+      numbersEqual(existing.empty_arm, input.empty_arm) &&
+      numbersEqual(existing.empty_lat_arm ?? null, input.empty_lat_arm ?? null) &&
+      String(existing.model_id ?? "") === String(input.model_id ?? "");
+
+    if (!sameValues) {
+      return {
+        kind: "conflict",
+        aircraft: existing,
+        proposed: {
+          model_id: input.model_id,
+          tail_number: normalizedTail,
+          empty_weight: input.empty_weight,
+          empty_arm: input.empty_arm,
+          empty_lat_arm: input.empty_lat_arm ?? null,
+        },
+      };
+    }
+
+    await attachAircraftToUser(input.userId, existing.id);
+    return { kind: "attached", aircraft: { ...existing, source: "mine", is_saved: true } };
+  }
+
+  const created = await createAircraft({
+    model_id: input.model_id,
+    name: normalizedTail,
+    empty_weight: input.empty_weight,
+    empty_arm: input.empty_arm,
+    empty_lat_arm: input.empty_lat_arm ?? null,
+  });
+
+  await attachAircraftToUser(input.userId, created.id);
+  return { kind: "created", aircraft: { ...created, source: "mine", is_saved: true } };
+}
+
+export async function useCurrentAircraftForUser(userId: string, aircraftId: string) {
+  await attachAircraftToUser(userId, aircraftId);
+}
+
+export async function removeMyAircraft(userId: string, aircraftId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("saved_aircraft")
+    .delete()
+    .eq("user_id", userId)
+    .eq("aircraft_id", aircraftId);
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      throw new Error("The saved_aircraft table is not installed yet.");
+    }
+
+    throw error;
+  }
+}
+
+export async function submitAircraftUpdateRequest(input: {
+  aircraft_id: string;
+  submitted_by: string;
+  proposed_empty_weight: number;
+  proposed_empty_arm: number;
+  proposed_empty_lat_arm?: number | null;
+  note?: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("aircraft_update_requests")
+    .insert({
+      aircraft_id: input.aircraft_id,
+      submitted_by: input.submitted_by,
+      proposed_empty_weight: input.proposed_empty_weight,
+      proposed_empty_arm: input.proposed_empty_arm,
+      proposed_empty_lat_arm: input.proposed_empty_lat_arm ?? null,
+      note: input.note?.trim() || null,
+      status: "pending",
+    })
+    .select(UPDATE_REQUEST_SELECT)
+    .single();
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      throw new Error("The aircraft_update_requests table is not installed yet.");
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
+export async function fetchAircraftUpdateRequests() {
+  const supabase = getSupabaseClient();
+
+  const [{ data, error }, aircraftList, profiles] = await Promise.all([
+    supabase
+      .from("aircraft_update_requests")
+      .select(UPDATE_REQUEST_SELECT)
+      .order("created_at", { ascending: false }),
+    fetchSharedAircraft().catch(() => [] as AircraftRecord[]),
+    fetchProfilesMap().catch(() => new Map<string, string>()),
+  ]);
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      return [] as AircraftUpdateRequestRecord[];
+    }
+
+    throw error;
+  }
+
+  const aircraftById = new Map(aircraftList.map((aircraft) => [aircraft.id, aircraft]));
+
+  return (data ?? []).map((row) => {
+    const record = (row ?? {}) as Record<string, unknown>;
+    const aircraft = aircraftById.get(String(record.aircraft_id ?? ""));
+    const submittedBy = String(record.submitted_by ?? "");
+
+    return {
+      id: String(record.id ?? ""),
+      aircraft_id: String(record.aircraft_id ?? ""),
+      aircraft_tail_number: aircraft?.tail_number ?? aircraft?.name ?? "Unknown tail",
+      current_empty_weight: aircraft?.empty_weight ?? null,
+      current_empty_arm: aircraft?.empty_arm ?? null,
+      current_empty_lat_arm: aircraft?.empty_lat_arm ?? null,
+      proposed_empty_weight: toNumber(record.proposed_empty_weight),
+      proposed_empty_arm: toNumber(record.proposed_empty_arm),
+      proposed_empty_lat_arm: toNumber(record.proposed_empty_lat_arm),
+      note: typeof record.note === "string" ? record.note : "",
+      status: typeof record.status === "string" ? record.status : "pending",
+      submitted_by: submittedBy,
+      submitted_by_label: profiles.get(submittedBy) ?? submittedBy,
+      created_at: typeof record.created_at === "string" ? record.created_at : "",
+    } as AircraftUpdateRequestRecord;
+  });
+}
+
+export async function approveAircraftUpdateRequest(request: AircraftUpdateRequestRecord) {
+  const sharedAircraft = await fetchSharedAircraft();
+  const currentAircraft = sharedAircraft.find((aircraft) => aircraft.id === request.aircraft_id);
+
+  if (!currentAircraft) {
+    throw new Error("Unable to find the shared aircraft tied to this update request.");
+  }
+
+  const updatedAircraft = await updateAircraft(request.aircraft_id, {
+    model_id: String(currentAircraft.model_id ?? ""),
+    name: request.aircraft_tail_number,
+    empty_weight: request.proposed_empty_weight ?? 0,
+    empty_arm: request.proposed_empty_arm ?? 0,
+    empty_lat_arm: request.proposed_empty_lat_arm ?? null,
+  });
+
+  await updateAircraftRequestStatus(request.id, "approved");
+
+  return updatedAircraft;
+}
+
+export async function rejectAircraftUpdateRequest(id: string) {
+  await updateAircraftRequestStatus(id, "rejected");
+}
+
 export function parseAircraftEnvelope(envelope: unknown) {
   return parseAircraftEnvelopeSet(envelope).normal;
 }
@@ -325,8 +566,7 @@ export function parseAircraftEnvelopeSet(envelope: unknown): AircraftEnvelopeSet
     return { normal: [], utility: [], topView: [], sideView: [] };
   }
 
-  const rawValue =
-    typeof envelope === "string" ? safelyParseJson(envelope) : envelope;
+  const rawValue = typeof envelope === "string" ? safelyParseJson(envelope) : envelope;
 
   if (Array.isArray(rawValue)) {
     return {
@@ -407,8 +647,7 @@ export function parseAircraftEnvelopeSet(envelope: unknown): AircraftEnvelopeSet
 }
 
 export function parseAircraftStations(stations: unknown) {
-  const rawValue =
-    typeof stations === "string" ? safelyParseJson(stations) : stations;
+  const rawValue = typeof stations === "string" ? safelyParseJson(stations) : stations;
 
   if (!Array.isArray(rawValue)) {
     return [];
@@ -419,7 +658,131 @@ export function parseAircraftStations(stations: unknown) {
     .filter(Boolean) as AircraftStation[];
 }
 
-function normalizeAircraftRecord(value: unknown) {
+async function selectAircraftRecords(aircraftIds?: string[]) {
+  const supabase = getSupabaseClient();
+  let lastError = null;
+
+  for (const select of AIRCRAFT_SELECT_VARIANTS) {
+    const orderColumn = select.includes("tail_number") ? "tail_number" : "name";
+    let query = supabase.from("aircraft").select(select).order(orderColumn, { ascending: true });
+
+    if (Array.isArray(aircraftIds) && aircraftIds.length > 0) {
+      query = query.in("id", aircraftIds);
+    }
+
+    const { data, error } = await query;
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    lastError = error;
+  }
+
+  return { data: null, error: lastError };
+}
+
+async function findAircraftByTailNumber(tailNumber: string) {
+  const sharedAircraft = await fetchSharedAircraft();
+  return (
+    sharedAircraft.find(
+      (aircraft) => normalizeTailNumber(aircraft.tail_number || aircraft.name) === tailNumber
+    ) ?? null
+  );
+}
+
+async function attachAircraftToUser(userId: string, aircraftId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from("saved_aircraft").insert({
+    user_id: userId,
+    aircraft_id: aircraftId,
+  });
+
+  if (!error) {
+    return;
+  }
+
+  if (isDuplicateError(error)) {
+    return;
+  }
+
+  if (isMissingRelationError(error)) {
+    throw new Error("The saved_aircraft table is not installed yet.");
+  }
+
+  throw error;
+}
+
+async function updateAircraftRequestStatus(id: string, status: "approved" | "rejected") {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("aircraft_update_requests")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      throw new Error("The aircraft_update_requests table is not installed yet.");
+    }
+
+    throw error;
+  }
+}
+
+async function fetchProfilesMap() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from("profiles").select("id, display_name, email");
+
+  if (error) {
+    throw error;
+  }
+
+  return new Map(
+    (data ?? []).map((row) => {
+      const record = row as Record<string, unknown>;
+      const id = String(record.id ?? "");
+      const label =
+        (typeof record.display_name === "string" && record.display_name.trim()) ||
+        (typeof record.email === "string" && record.email.trim()) ||
+        id;
+
+      return [id, label];
+    })
+  );
+}
+
+function normalizeAircraftList(
+  records: unknown[],
+  models: AircraftModelRecord[],
+  source: "shared" | "mine",
+  savedAircraftIds: Set<string>
+) {
+  const modelById = new Map(models.map((model) => [model.id, model]));
+
+  return records.map((record) => {
+    const rawRecord = ((record ?? {}) as unknown) as Record<string, unknown>;
+
+    return normalizeAircraftRecord(
+      {
+        ...rawRecord,
+        model:
+          typeof rawRecord.model_id === "string" && modelById.has(rawRecord.model_id)
+            ? modelById.get(rawRecord.model_id)
+            : null,
+      },
+      null,
+      source,
+      savedAircraftIds.has(String(rawRecord.id ?? ""))
+    );
+  });
+}
+
+function normalizeAircraftRecord(
+  value: unknown,
+  fallbackModel: AircraftModelRecord | null = null,
+  source: "shared" | "mine" = "shared",
+  isSaved = false
+) {
   const record = (value ?? {}) as Record<string, unknown>;
   const rawModel = record.model;
   const model =
@@ -438,45 +801,63 @@ function normalizeAircraftRecord(value: unknown) {
           stations: (rawModel as Record<string, unknown>).stations ?? [],
           envelope: (rawModel as Record<string, unknown>).envelope ?? [],
         } as AircraftModelRecord)
-      : null;
+      : fallbackModel;
+  const tailNumber =
+    typeof record.tail_number === "string" && record.tail_number.trim()
+      ? record.tail_number.trim()
+      : typeof record.name === "string" && record.name.trim()
+        ? record.name.trim()
+        : "";
 
   return {
     id: String(record.id ?? ""),
     model_id: typeof record.model_id === "string" ? record.model_id : model?.id ?? null,
-    name:
-      typeof record.name === "string" && record.name.trim()
-        ? record.name
-        : typeof record.tail_number === "string"
-          ? record.tail_number
-          : "",
+    name: tailNumber,
+    tail_number: tailNumber,
     empty_weight: toNumber(record.empty_weight),
     empty_arm: toNumber(record.empty_arm),
     empty_lat_arm: toNumber(record.empty_lat_arm),
     max_weight: toNumber(record.max_weight),
     category: model?.category ?? null,
     model,
+    source,
+    is_saved: isSaved,
   } as AircraftRecord;
 }
 
-async function selectAircraftRecords() {
-  const supabase = getSupabaseClient();
-  let lastError = null;
-
-  for (const select of AIRCRAFT_SELECT_VARIANTS) {
-    const orderColumn = select.includes("tail_number") ? "tail_number" : "name";
-    const { data, error } = await supabase
-      .from("aircraft")
-      .select(select)
-      .order(orderColumn, { ascending: true });
-
-    if (!error) {
-      return { data, error: null };
-    }
-
-    lastError = error;
+function numbersEqual(a: number | null | undefined, b: number | null | undefined) {
+  if (a == null && b == null) {
+    return true;
   }
 
-  return { data: null, error: lastError };
+  if (a == null || b == null) {
+    return false;
+  }
+
+  return Math.abs(a - b) < 0.0001;
+}
+
+function normalizeTailNumber(value: string) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function isMissingRelationError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    ((error as { code?: string }).code === "42P01" ||
+      (error as { code?: string }).code === "PGRST205")
+  );
+}
+
+function isDuplicateError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "23505"
+  );
 }
 
 function safelyParseJson(value: string) {
@@ -509,11 +890,7 @@ function normalizePolygonPoint(value: unknown) {
   }
 
   const point = value as Record<string, unknown>;
-  const x =
-    toNumber(point.x) ??
-    toNumber(point.cg) ??
-    toNumber(point.long) ??
-    toNumber(point.arm);
+  const x = toNumber(point.x) ?? toNumber(point.cg) ?? toNumber(point.long) ?? toNumber(point.arm);
   const y =
     toNumber(point.y) ??
     toNumber(point.weight) ??
@@ -557,8 +934,7 @@ function normalizeStation(value: unknown) {
     name,
     arm,
     latArm: toNumber(station.latArm) ?? toNumber(station.lat_arm),
-    weightPerGallon:
-      toNumber(station.weightPerGallon) ?? toNumber(station.weight_per_gallon),
+    weightPerGallon: toNumber(station.weightPerGallon) ?? toNumber(station.weight_per_gallon),
     fixedWeight: toNumber(station.fixedWeight) ?? toNumber(station.fixed_weight),
     maxWeight: toNumber(station.maxWeight) ?? toNumber(station.max_weight),
   };

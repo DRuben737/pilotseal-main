@@ -57,10 +57,124 @@ function formatTimeToken(token) {
   if (/^\d{4}\/\d{4}$/.test(token)) {
     return `${token.slice(0, 2)}${token.slice(2, 4)}Z to ${token.slice(5, 7)}${token.slice(7, 9)}Z`;
   }
+  if (/^\d{6}$/.test(token)) {
+    return `${ordinalDay(token.slice(0, 2))} ${token.slice(2, 4)}Z to ${token.slice(4, 6)}Z`;
+  }
+  if (/^\d{4}$/.test(token)) {
+    return `${token.slice(0, 2)}Z to ${token.slice(2, 4)}Z`;
+  }
   return token;
 }
 
+const REMARK_WEATHER_MAP = {
+  TS: "thunderstorm",
+  RA: "rain",
+  SN: "snow",
+  DZ: "drizzle",
+  PE: "ice pellets",
+  PL: "ice pellets",
+  GR: "hail",
+  GS: "small hail / snow pellets",
+  UP: "unknown precipitation",
+};
+
+const CLOUD_TYPE_MAP = {
+  0: "none detected",
+  1: "cirrus",
+  2: "cirrocumulus",
+  3: "cirrostratus",
+  4: "altocumulus",
+  5: "altostratus",
+  6: "nimbostratus",
+  7: "stratocumulus",
+  8: "cumulus",
+  9: "cumulonimbus",
+  "/": "not reported",
+};
+
+const REMARK_DIRECTION_MAP = {
+  N: "north",
+  NE: "northeast",
+  E: "east",
+  SE: "southeast",
+  S: "south",
+  SW: "southwest",
+  W: "west",
+  NW: "northwest",
+};
+
+function formatRemarkMinutes(value) {
+  return `:${String(value).padStart(2, "0")}`;
+}
+
+function decodeWeatherBeginEndToken(token) {
+  const match = token.match(/^([A-Z]{2,})(B|E)(\d{2})$/);
+  if (!match) return null;
+
+  const [, weatherCode, phaseCode, minuteToken] = match;
+  const weather = REMARK_WEATHER_MAP[weatherCode];
+  if (!weather) return null;
+
+  return `${token} (${weather} ${phaseCode === "B" ? "began" : "ended"} at ${formatRemarkMinutes(minuteToken)})`;
+}
+
 function decodeSingleRemarkToken(token) {
+  if (REMARK_WEATHER_MAP[token]) {
+    return `${token} (${REMARK_WEATHER_MAP[token]})`;
+  }
+
+  if (/^AO[12]$/.test(token)) {
+    return `${token} (automated station with ${token === "AO2" ? "precipitation sensor" : "no precipitation sensor"})`;
+  }
+
+  const weatherBeginEnd = decodeWeatherBeginEndToken(token);
+  if (weatherBeginEnd) {
+    return weatherBeginEnd;
+  }
+
+  if (/^P\d{4}$/.test(token)) {
+    const inches = Number(token.slice(1)) / 100;
+    return `${token} (${inches.toFixed(2)} inches precipitation in the last hour)`;
+  }
+
+  if (/^6\d{4}$/.test(token)) {
+    const inches = Number(token.slice(1)) / 100;
+    return `${token} (${inches.toFixed(2)} inches precipitation in the past 3 or 6 hours)`;
+  }
+
+  if (/^7\d{4}$/.test(token)) {
+    const inches = Number(token.slice(1)) / 100;
+    return `${token} (${inches.toFixed(2)} inches precipitation in the past 24 hours)`;
+  }
+
+  if (/^4\/\d{3}$/.test(token)) {
+    const depth = Number(token.slice(2));
+    return `${token} (snow depth ${depth} inches)`;
+  }
+
+  if (/^8\/[0-9\/]{3}$/.test(token)) {
+    const low = CLOUD_TYPE_MAP[token[2]] ?? "unknown";
+    const mid = CLOUD_TYPE_MAP[token[3]] ?? "unknown";
+    const high = CLOUD_TYPE_MAP[token[4]] ?? "unknown";
+    return `${token} (cloud types low ${low}, middle ${mid}, high ${high})`;
+  }
+
+  if (token === "SLPNO") {
+    return `${token} (sea level pressure not available)`;
+  }
+
+  if (token === "PRESFR") {
+    return `${token} (pressure falling rapidly)`;
+  }
+
+  if (token === "PRESRR") {
+    return `${token} (pressure rising rapidly)`;
+  }
+
+  if (token === "RVRNO") {
+    return `${token} (runway visual range not available)`;
+  }
+
   const glossaryMatch = decoderData.find(
     (item) => item.contraction.toUpperCase() === token.toUpperCase()
   );
@@ -91,22 +205,137 @@ function decodeSingleRemarkToken(token) {
 
 function decodeRemarks(remarks) {
   if (!remarks) return "";
-  return remarks
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(decodeSingleRemarkToken)
-    .join(" ");
+  const tokens = remarks.split(/\s+/).filter(Boolean);
+  const decoded = [];
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    const nextTwo = tokens[index + 2];
+    const nextThree = tokens[index + 3];
+
+    if ((token === "TWR" || token === "SFC") && next === "VIS" && nextTwo) {
+      decoded.push(
+        `${token} VIS ${nextTwo} (${token === "TWR" ? "tower" : "surface"} visibility ${nextTwo})`
+      );
+      index += 2;
+      continue;
+    }
+
+    if (token === "VIS" && next && nextTwo && /^[0-9]/.test(next) && nextTwo.includes("V")) {
+      decoded.push(`VIS ${next} ${nextTwo} (variable prevailing visibility ${next} to ${nextTwo.split("V")[1]})`);
+      index += 2;
+      continue;
+    }
+
+    if (
+      REMARK_WEATHER_MAP[token] &&
+      next === "OHD" &&
+      nextTwo === "MOV" &&
+      REMARK_DIRECTION_MAP[nextThree]
+    ) {
+      decoded.push(
+        `${token} OHD MOV ${nextThree} (${REMARK_WEATHER_MAP[token]} overhead moving ${REMARK_DIRECTION_MAP[nextThree]})`
+      );
+      index += 3;
+      continue;
+    }
+
+    if (REMARK_WEATHER_MAP[token] && next === "OHD") {
+      decoded.push(`${token} OHD (${REMARK_WEATHER_MAP[token]} overhead)`);
+      index += 1;
+      continue;
+    }
+
+    if (
+      REMARK_WEATHER_MAP[token] &&
+      next === "MOV" &&
+      REMARK_DIRECTION_MAP[nextTwo]
+    ) {
+      decoded.push(
+        `${token} MOV ${nextTwo} (${REMARK_WEATHER_MAP[token]} moving ${REMARK_DIRECTION_MAP[nextTwo]})`
+      );
+      index += 2;
+      continue;
+    }
+
+    if (token === "PK" && next === "WND" && tokens[index + 2]) {
+      const match = tokens[index + 2].match(/^(\d{3})(\d{2,3})\/(\d{2})$/);
+      if (match) {
+        const [, direction, speed, minute] = match;
+        decoded.push(
+          `PK WND ${tokens[index + 2]} (peak wind ${direction}° at ${speed} kt at ${formatRemarkMinutes(minute)})`
+        );
+        index += 2;
+        continue;
+      }
+    }
+
+    if (token === "WSHFT") {
+      if (next && /^\d{2,4}$/.test(next)) {
+        const minute = next.length === 2 ? next : next.slice(-2);
+        const froPa = tokens[index + 2] === "FROPA" ? " due to frontal passage" : "";
+        decoded.push(
+          `WSHFT ${next}${tokens[index + 2] === "FROPA" ? " FROPA" : ""} (wind shift at ${formatRemarkMinutes(minute)}${froPa})`
+        );
+        index += tokens[index + 2] === "FROPA" ? 2 : 1;
+        continue;
+      }
+      decoded.push("WSHFT (wind shift)");
+      continue;
+    }
+
+    if (token === "VIS" && next && /^\d/.test(next)) {
+      if (nextTwo && /^(RWY|N|NE|E|SE|S|SW|W|NW)\d*/.test(nextTwo)) {
+        decoded.push(`VIS ${next} ${nextTwo} (visibility ${next} at ${nextTwo})`);
+        index += 2;
+      } else {
+        decoded.push(`VIS ${next} (remark visibility ${next})`);
+        index += 1;
+      }
+      continue;
+    }
+
+    if (token === "CIG" && next && /^\d{3}V\d{3}$/.test(next)) {
+      const [low, high] = next.split("V").map((value) => Number(value) * 100);
+      decoded.push(`CIG ${next} (ceiling variable between ${low.toLocaleString()} and ${high.toLocaleString()} ft)`);
+      index += 1;
+      continue;
+    }
+
+    if (token === "CIG" && next && /^\d{3}$/.test(next) && nextTwo) {
+      decoded.push(`CIG ${next} ${nextTwo} (ceiling ${Number(next) * 100} ft at ${nextTwo})`);
+      index += 2;
+      continue;
+    }
+
+    decoded.push(decodeSingleRemarkToken(token));
+  }
+
+  return decoded.join(" ");
 }
 
 function formatClouds(clouds) {
   if (!clouds?.length) return "—";
   return clouds
-    .map((layer) => `${layer.amount || layer.code} ${layer.heightFt.toLocaleString()} ft`)
+    .map((layer) => {
+      const qualifier =
+        layer.qualifier === "CB"
+          ? " cumulonimbus"
+          : layer.qualifier === "TCU"
+            ? " towering cumulus"
+            : "";
+      return `${layer.amount || layer.code} ${layer.heightFt.toLocaleString()} ft${qualifier}`;
+    })
     .join(", ");
 }
 
 function joinSentences(parts) {
   return parts.filter(Boolean).join(" ");
+}
+
+function joinLines(parts) {
+  return parts.filter(Boolean);
 }
 
 function categoryTone(category) {
@@ -137,47 +366,78 @@ function FieldRow({ label, value }) {
 
 function buildMetarReadout(report, decodedRemarks) {
   const weatherText = report.weather.length
-    ? `Reported weather: ${report.weather.map((item) => item.text).join(", ")}.`
-    : "No significant weather reported.";
+    ? `Weather ${report.weather.map((item) => item.text).join(", ")}.`
+    : null;
 
-  return joinSentences([
-    report.station ? `${report.station}` : "This station",
+  const visibilityText = report.visibility?.text
+    ? `Visibility ${report.visibility.text}${report.runwayVisualRanges?.length ? `, runway visual range ${report.runwayVisualRanges.join(", ")}` : ""}.`
+    : report.runwayVisualRanges?.length
+      ? `Runway visual range ${report.runwayVisualRanges.join(", ")}.`
+      : null;
+
+  const cloudText = report.clouds.length ? `Clouds ${formatClouds(report.clouds)}.` : null;
+
+  const ceilingText = report.ceilingFt
+    ? `Ceiling ${report.ceilingFt.toLocaleString()} feet.`
+    : null;
+
+  return joinLines([
+    report.reportType && report.station
+      ? `${report.reportType} ${report.station}`
+      : report.station
+        ? `${report.station}`
+        : report.reportType || "This station",
     report.time ? `observation taken on the ${formatTimeToken(report.time)}.` : "observation available.",
-    report.flightCategory ? `Flight category is ${report.flightCategory}.` : null,
+    report.automation === "AUTO" ? "This is an automated report." : null,
+    report.automation === "COR" ? "This is a corrected report." : null,
     report.wind
       ? `Wind ${report.wind.direction} at ${report.wind.speedKt} knots${report.wind.gustKt ? `, gusting ${report.wind.gustKt}` : ""}.`
       : null,
-    report.visibility?.text ? `Visibility ${report.visibility.text}.` : null,
-    report.ceilingFt
-      ? `Ceiling ${report.ceilingFt.toLocaleString()} feet.`
-      : "No ceiling reported.",
-    report.clouds.length ? `Clouds ${formatClouds(report.clouds)}.` : null,
+    report.variableWind
+      ? `Wind direction variable between ${report.variableWind.from}° and ${report.variableWind.to}°.`
+      : null,
+    visibilityText,
+    weatherText,
+    cloudText,
+    ceilingText,
     report.temperature != null && report.dewpoint != null
       ? `Temperature ${report.temperature}°C, dewpoint ${report.dewpoint}°C.`
       : null,
     report.altimeter ? `Altimeter ${report.altimeter}.` : null,
-    weatherText,
     decodedRemarks ? `Remarks: ${decodedRemarks}.` : null,
   ]);
 }
 
 function buildTafReadout(report) {
-  return joinSentences([
-    report.station ? `TAF for ${report.station}.` : "TAF forecast.",
+  const intro = joinSentences([
+    report.station ? `TAF ${report.station}.` : "TAF forecast.",
     report.issueTime ? `Issued ${formatTimeToken(report.issueTime)}.` : null,
     report.validPeriod ? `Valid ${formatTimeToken(report.validPeriod)}.` : null,
-    report.worstCategory ? `Worst expected category ${report.worstCategory}.` : null,
-    ...report.segments.map((segment) =>
-      joinSentences([
-        `${segment.label} ${segment.timeLabel || segment.type}.`,
-        segment.flightCategory ? `${segment.flightCategory} conditions.` : null,
-        segment.wind ? `Wind ${segment.wind.raw}.` : null,
-        segment.visibility?.text ? `Visibility ${segment.visibility.text}.` : null,
-        segment.clouds.length ? `Clouds ${formatClouds(segment.clouds)}.` : null,
-        segment.weather.length ? `Weather ${segment.weather.join(", ")}.` : "No explicit weather.",
-      ])
-    ),
   ]);
+
+  const segmentReadouts = report.segments.map((segment) =>
+    joinSentences([
+      `${segment.label} ${segment.timeLabel || segment.type}.`,
+      segment.wind ? `Wind ${segment.wind.raw}.` : null,
+      segment.visibility?.text ? `Visibility ${segment.visibility.text}.` : null,
+      segment.weather.length ? `Weather ${segment.weather.map((item) => item.text).join(", ")}.` : null,
+      segment.clouds.length ? `Clouds ${formatClouds(segment.clouds)}.` : null,
+      segment.windShear ? `Wind shear ${segment.windShear.replace(/^WS/, "")}.` : null,
+    ])
+  );
+
+  return [intro, ...segmentReadouts].filter(Boolean);
+}
+
+function DecodedCopy({ lines }) {
+  const normalized = Array.isArray(lines) ? lines : [lines];
+  return (
+    <div className="decoder-result-copy">
+      {normalized.filter(Boolean).map((line, index) => (
+        <p key={`${index}-${line.slice(0, 24)}`}>{line}</p>
+      ))}
+    </div>
+  );
 }
 
 function GlossaryPanel({ input }) {
@@ -193,7 +453,7 @@ function GlossaryPanel({ input }) {
 
   return (
     <>
-      <div className="decoder-result-copy">{glossary.naturalLanguageResult}</div>
+      <DecodedCopy lines={glossary.naturalLanguageResult} />
       <div className="decoder-definition-list">
         {glossary.matches.map((item) => (
           <article key={`${item.contraction}-${item.usage}`} className="decoder-definition-card">
@@ -212,7 +472,7 @@ function GlossaryPanel({ input }) {
 function NotamPanel({ report }) {
   return (
     <div className="decoder-output-stack">
-      <div className="decoder-result-copy">{report.decodedBody}</div>
+      <DecodedCopy lines={report.decodedBody} />
 
       <details className="decoder-details">
         <summary className="decoder-detailsSummary">View details</summary>
@@ -244,7 +504,7 @@ function MetarPanel({ report }) {
 
   return (
     <div className="decoder-output-stack">
-      <div className="decoder-result-copy">{readout || "No decoded readout available."}</div>
+      <DecodedCopy lines={readout?.length ? readout : "No decoded readout available."} />
 
       <details className="decoder-details">
         <summary className="decoder-detailsSummary">View details</summary>
@@ -255,11 +515,17 @@ function MetarPanel({ report }) {
               <p>Structured breakdown of the observation.</p>
             </div>
             <div className="decoder-field-grid">
+              <FieldRow label="Type" value={report.reportType || "METAR"} />
               <FieldRow label="Station" value={report.station} />
               <FieldRow label="Observed" value={formatTimeToken(report.time)} />
-              <FieldRow label="Category" value={report.flightCategory} />
+              <FieldRow label="Modifier" value={report.automation || "—"} />
               <FieldRow label="Wind" value={report.wind ? report.wind.raw : "—"} />
+              <FieldRow label="Variable wind" value={report.variableWind?.raw || "—"} />
               <FieldRow label="Visibility" value={report.visibility?.text || "—"} />
+              <FieldRow
+                label="Runway visual range"
+                value={report.runwayVisualRanges?.length ? report.runwayVisualRanges.join(", ") : "—"}
+              />
               {report.weather.length ? (
                 <FieldRow
                   label="Weather"
@@ -276,6 +542,7 @@ function MetarPanel({ report }) {
                 }
               />
               <FieldRow label="Altimeter" value={report.altimeter} />
+              <FieldRow label="Category" value={report.flightCategory} />
               <FieldRow label="Remarks" value={decodedRemarks || report.remarks || "None"} />
             </div>
           </section>
@@ -290,7 +557,7 @@ function TafPanel({ report }) {
 
   return (
     <div className="decoder-output-stack">
-      <div className="decoder-result-copy">{readout || "No forecast readout available."}</div>
+      <DecodedCopy lines={readout?.length ? readout : "No forecast readout available."} />
 
       <details className="decoder-details">
         <summary className="decoder-detailsSummary">View details</summary>
@@ -324,8 +591,9 @@ function TafPanel({ report }) {
                     <FieldRow label="Clouds" value={formatClouds(segment.clouds)} />
                     <FieldRow
                       label="Weather"
-                      value={segment.weather.length ? segment.weather.join(", ") : "None explicit"}
+                      value={segment.weather.length ? segment.weather.map((item) => item.text).join(", ") : "None explicit"}
                     />
+                    <FieldRow label="Wind shear" value={segment.windShear || "—"} />
                   </div>
                 </article>
               ))}

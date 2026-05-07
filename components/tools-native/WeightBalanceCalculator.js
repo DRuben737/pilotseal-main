@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
-  fetchAircraft,
+  fetchMyAircraft,
+  fetchSharedAircraft,
   parseAircraftEnvelopeSet,
   parseAircraftStations,
 } from "@/lib/aircraft";
@@ -351,6 +352,39 @@ function isEditableDefaultWeightStation(station) {
   );
 }
 
+function mergeAircraftOptions(sharedAircraft, myAircraft) {
+  const myAircraftIds = new Set((myAircraft ?? []).map((aircraft) => aircraft.id));
+  const merged = [
+    ...(myAircraft ?? []).map((aircraft) => ({
+      ...aircraft,
+      source: "mine",
+      is_saved: true,
+    })),
+    ...(sharedAircraft ?? [])
+      .filter((aircraft) => !myAircraftIds.has(aircraft.id))
+      .map((aircraft) => ({
+        ...aircraft,
+        source: "shared",
+        is_saved: false,
+      })),
+  ];
+
+  return merged.sort((left, right) => {
+    if (left.is_saved !== right.is_saved) {
+      return left.is_saved ? -1 : 1;
+    }
+
+    return String(left.name ?? left.tail_number ?? "").localeCompare(
+      String(right.name ?? right.tail_number ?? "")
+    );
+  });
+}
+
+function formatAircraftOptionLabel(aircraft) {
+  const baseLabel = String(aircraft.tail_number ?? aircraft.name ?? "Untitled aircraft");
+  return aircraft.is_saved ? `${baseLabel} · My aircraft` : `${baseLabel} · Shared`;
+}
+
 export default function WeightBalanceCalculator({
   stateKey = "wb",
   embedded = false,
@@ -397,8 +431,9 @@ export default function WeightBalanceCalculator({
           data: { session },
         } = await supabase.auth.getSession();
 
-        const [aircraftList, students, cfis] = await Promise.all([
-          fetchAircraft(),
+        const [sharedAircraft, myAircraft, students, cfis] = await Promise.all([
+          fetchSharedAircraft(),
+          session?.user?.id ? fetchMyAircraft(session.user.id) : Promise.resolve([]),
           embedded && session?.user?.id
             ? fetchSavedPeople(session.user.id, "student")
             : Promise.resolve([]),
@@ -407,15 +442,17 @@ export default function WeightBalanceCalculator({
             : Promise.resolve([]),
         ]);
 
-        setAircraftOptions(aircraftList);
+        const mergedAircraft = mergeAircraftOptions(sharedAircraft, myAircraft);
+
+        setAircraftOptions(mergedAircraft);
         setSavedStudents(students);
         setSavedCfis(cfis);
 
-        if (aircraftList.length > 0) {
+        if (mergedAircraft.length > 0) {
           const persistedAircraft =
-            aircraftList.find((aircraft) => aircraft.id === selectedAircraftId) ??
+            mergedAircraft.find((aircraft) => aircraft.id === selectedAircraftId) ??
             (embedded && briefAircraftId
-              ? aircraftList.find((aircraft) => {
+              ? mergedAircraft.find((aircraft) => {
                   const aircraftName = String(aircraft.name ?? "").trim().toLowerCase();
                   const nextBriefAircraftId = String(briefAircraftId).trim().toLowerCase();
                   return (
@@ -424,7 +461,7 @@ export default function WeightBalanceCalculator({
                   );
                 })
               : null) ??
-            aircraftList[0];
+            mergedAircraft[0];
 
           setActiveSelectedAircraft(persistedAircraft);
           setActiveWb((current) => ({
@@ -565,7 +602,7 @@ export default function WeightBalanceCalculator({
                 <option value="">{loading ? "Loading aircraft..." : "Select an aircraft"}</option>
                 {aircraftOptions.map((aircraft) => (
                   <option key={aircraft.id} value={aircraft.id}>
-                    {aircraft.name}
+                    {formatAircraftOptionLabel(aircraft)}
                   </option>
                 ))}
               </select>

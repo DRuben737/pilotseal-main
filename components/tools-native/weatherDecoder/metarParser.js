@@ -140,10 +140,11 @@ export function parseMetar(rawInput) {
   const reportType = ["METAR", "SPECI"].includes(tokens[0]) ? tokens[index++] : null;
   const station = /^[A-Z]{4}$/.test(tokens[index] || "") ? tokens[index++] : null;
   const time = /^\d{6}Z$/.test(tokens[index] || "") ? tokens[index++] : null;
+  const automation = /^(AUTO|COR)$/.test(tokens[index] || "") ? tokens[index++] : null;
 
   const windToken = tokens[index] || "";
   let wind = null;
-  const windMatch = windToken.match(/^(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?KT$/);
+  const windMatch = windToken.match(/^(\d{3}|VRB)\/?(\d{2,3})(G(\d{2,3}))?KT$/);
   if (windMatch) {
     wind = {
       raw: windToken,
@@ -154,8 +155,25 @@ export function parseMetar(rawInput) {
     index += 1;
   }
 
+  let variableWind = null;
+  const variableWindMatch = (tokens[index] || "").match(/^(\d{3})V(\d{3})$/);
+  if (variableWindMatch) {
+    variableWind = {
+      raw: tokens[index],
+      from: Number(variableWindMatch[1]),
+      to: Number(variableWindMatch[2]),
+    };
+    index += 1;
+  }
+
   const visibility = parseVisibility(tokens, index);
   if (visibility) index += visibility.consumed;
+
+  const runwayVisualRanges = [];
+  while (/^R\d{2}[LCR]?\/.+/.test(tokens[index] || "")) {
+    runwayVisualRanges.push(tokens[index]);
+    index += 1;
+  }
 
   const weatherTokens = [];
   while (
@@ -214,9 +232,12 @@ export function parseMetar(rawInput) {
     reportType,
     station,
     time,
+    automation,
     raw,
     wind,
+    variableWind,
     visibility,
+    runwayVisualRanges,
     weather: weatherTokens,
     clouds,
     temperature,

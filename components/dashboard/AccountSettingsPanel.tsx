@@ -1242,11 +1242,17 @@ export default function AccountSettingsPanel() {
                 </div>
               ) : (
                 <>
-                  <div className="people-cert-main">
-                    <p className="saas-card-title">{selfPersonForm.display_name || displayName || "My profile"}</p>
-                    <p className="saas-meta-text">
-                      {selfPersonForm.weight_lbs ? `${selfPersonForm.weight_lbs} lbs` : "No weight saved"}
-                    </p>
+                  <div className="dashboard-setting-subgrid flex-1">
+                    <article className="saas-quick-link">
+                      <p className="saas-label">Name</p>
+                      <p className="saas-value">{selfPersonForm.display_name || displayName || "My profile"}</p>
+                    </article>
+                    <article className="saas-quick-link">
+                      <p className="saas-label">Weight</p>
+                      <p className="saas-value">
+                        {selfPersonForm.weight_lbs ? `${selfPersonForm.weight_lbs} lbs` : "No weight saved"}
+                      </p>
+                    </article>
                   </div>
                   <button
                     type="button"

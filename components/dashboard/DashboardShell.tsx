@@ -12,6 +12,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 const dashboardLinks = [
   { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/my-aircraft", label: "My Aircraft" },
   { href: "/dashboard/saved-people", label: "People" },
   { href: "/dashboard/records", label: "Records" },
   { href: "/dashboard/notifications", label: "Notifications" },
@@ -68,6 +69,13 @@ function DashboardIcon({ kind }: { kind: string }) {
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M2 13.5h7l5.2-7.2c.5-.7 1.5-.8 2.1-.3.5.4.7 1.1.4 1.7L15 13.5h5.2c.9 0 1.8.5 2.2 1.3l-.9.7H15l-1.4 4.1h-1.7l.2-4.1H8.7L7 18H5.4l.5-2.5H2v-2Z" />
+        </svg>
+      );
+    case "My Aircraft":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <path d="M3 14h7l5.2-7.2c.5-.7 1.5-.8 2.1-.3.5.4.7 1.1.4 1.7L16 14h4.4c1 0 1.9.6 2.3 1.5l-.9.7H16l-1.3 3.8H13l.2-3.8H9.5L8 18.5H6.3l.5-2.3H3V14Z" />
+          <circle cx="18.8" cy="5.2" r="2.2" />
         </svg>
       );
     case "new":

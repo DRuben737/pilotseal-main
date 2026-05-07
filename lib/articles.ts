@@ -184,10 +184,19 @@ export function getRelatedArticles(article: ArticleMeta, limit = 3, minSharedTag
 }
 
 export function formatArticleDate(date: string) {
+  const normalized = String(date ?? "").trim();
+  const parsed = normalized.includes("T")
+    ? new Date(normalized)
+    : new Date(`${normalized}T00:00:00Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return normalized || "Unknown date";
+  }
+
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
     timeZone: "UTC",
-  }).format(new Date(`${date}T00:00:00Z`));
+  }).format(parsed);
 }

@@ -3,6 +3,15 @@ import { getAllArticles } from "@/lib/articles";
 
 export const dynamic = "force-static";
 
+function toSafeDate(value: string) {
+  const normalized = String(value ?? "").trim();
+  const parsed = normalized.includes("T")
+    ? new Date(normalized)
+    : new Date(`${normalized}T00:00:00Z`);
+
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -16,7 +25,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/read`, lastModified: new Date() },
     ...articles.map((article) => ({
       url: `${baseUrl}/read/${article.slug}`,
-      lastModified: new Date(article.date),
+      lastModified: toSafeDate(article.updated ?? article.date),
     })),
     { url: `${baseUrl}/tools`, lastModified: new Date() },
     {
