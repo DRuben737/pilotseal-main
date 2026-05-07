@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { fetchSavedPeople } from "@/lib/saved-people";
 import { fetchPersonCertificates } from "@/lib/person-certificates";
+import { fetchCurrentProfile } from "@/lib/profile";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import { parseAircraftStations } from "@/lib/aircraft";
@@ -26,6 +27,19 @@ function matchSavedPersonByName(options, value) {
   }
 
   return options.find((person) => person.display_name?.trim().toLowerCase() === normalizedValue) ?? null;
+}
+
+function getUniqueSavedPeopleByName(options) {
+  const seen = new Set();
+
+  return options.filter((person) => {
+    const key = person.display_name?.trim().toLowerCase();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 // ETE (hours in decimal, string with 2 decimals)
@@ -710,19 +724,22 @@ export default function FlightBrief() {
           return;
         }
 
-        const [people, cfis, certificates] = await Promise.all([
+        const [people, profile, certificates] = await Promise.all([
           fetchSavedPeople(session.user.id),
-          fetchSavedPeople(session.user.id, "cfi"),
+          fetchCurrentProfile(session.user.id),
           fetchPersonCertificates(session.user.id).catch(() => []),
         ]);
         const peopleById = new Map(people.map((person) => [person.id, person]));
+        const selfPersonId = profile?.self_person_id || "";
         const certificatePilots = certificates
-          .filter((certificate) => certificate.certificate_type === "pilot")
+          .filter((certificate) => certificate.certificate_type === "pilot" && certificate.person_id !== selfPersonId)
           .map((certificate) => {
             const person = peopleById.get(certificate.person_id);
             return person
               ? {
                   ...person,
+                  id: certificate.id,
+                  person_id: person.id,
                   cert_number: certificate.certificate_number || person.cert_number,
                 }
               : null;
@@ -730,14 +747,19 @@ export default function FlightBrief() {
           .filter(Boolean);
         const certificateInstructors = certificates
           .filter((certificate) => (
-            certificate.certificate_type === "flight_instructor" ||
-            certificate.certificate_type === "ground_instructor"
+            certificate.person_id === selfPersonId &&
+            (
+              certificate.certificate_type === "flight_instructor" ||
+              certificate.certificate_type === "ground_instructor"
+            )
           ))
           .map((certificate) => {
             const person = peopleById.get(certificate.person_id);
             return person
               ? {
                   ...person,
+                  id: certificate.id,
+                  person_id: person.id,
                   cert_number: certificate.certificate_number || person.cert_number,
                   cert_exp_date: certificate.last_event_date || person.cert_exp_date,
                 }
@@ -747,7 +769,7 @@ export default function FlightBrief() {
 
         if (!cancelled) {
           setSavedStudents(certificatePilots);
-          setSavedCfis(certificateInstructors.length > 0 ? certificateInstructors : cfis);
+          setSavedCfis(certificateInstructors);
         }
       } catch {
         if (!cancelled) {
@@ -797,6 +819,9 @@ export default function FlightBrief() {
     setInstructorName(value);
     setSelectedInstructorId(selected?.id ?? "");
   }, [savedCfis, setInstructorName, setSelectedInstructorId]);
+
+  const savedStudentNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedStudents), [savedStudents]);
+  const savedInstructorNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedCfis), [savedCfis]);
 
   useEffect(() => {
     const wbResult = briefWb?.result;
@@ -1341,12 +1366,12 @@ ${riskComments}
           {session?.user?.id ? (
             <>
               <datalist id="flightBriefSavedPilots">
-                {savedStudents.map((person) => (
+                {savedStudentNameOptions.map((person) => (
                   <option key={person.id} value={person.display_name} />
                 ))}
               </datalist>
               <datalist id="flightBriefSavedInstructors">
-                {savedCfis.map((person) => (
+                {savedInstructorNameOptions.map((person) => (
                   <option key={person.id} value={person.display_name} />
                 ))}
               </datalist>

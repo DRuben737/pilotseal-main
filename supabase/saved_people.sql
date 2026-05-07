@@ -1,7 +1,7 @@
 create table if not exists public.saved_people (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  role text not null check (role in ('cfi', 'student')),
+  role text not null check (role in ('self', 'cfi', 'student')),
   display_name text not null,
   cert_number text,
   cert_exp_date text,

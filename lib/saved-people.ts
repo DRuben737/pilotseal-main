@@ -1,6 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase";
 
-export type SavedPersonRole = "cfi" | "student";
+export type SavedPersonRole = "self" | "cfi" | "student";
 
 export type SavedPerson = {
   id: string;
@@ -249,6 +249,44 @@ export async function fetchDefaultCfi(userId: string) {
     .eq("user_id", userId)
     .eq("role", "cfi")
     .eq("is_default", true)
+    .maybeSingle();
+
+  if (legacyError) {
+    throw legacyError;
+  }
+
+  return (withWeightFallback(
+    legacyData ? [((legacyData as unknown) as Record<string, unknown>)] : []
+  )[0] ?? null) as SavedPerson | null;
+}
+
+export async function fetchSavedPersonById(userId: string, id: string | null | undefined) {
+  if (!id) {
+    return null;
+  }
+
+  const supabase = getSupabaseClient();
+
+  for (const select of SAVED_PERSON_SELECTS) {
+    const { data, error } = await supabase
+      .from("saved_people")
+      .select(select)
+      .eq("user_id", userId)
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!error) {
+      return (withWeightFallback(
+        data ? [((data as unknown) as Record<string, unknown>)] : []
+      )[0] ?? null) as SavedPerson | null;
+    }
+  }
+
+  const { data: legacyData, error: legacyError } = await supabase
+    .from("saved_people")
+    .select(SAVED_PERSON_SELECT_LEGACY)
+    .eq("user_id", userId)
+    .eq("id", id)
     .maybeSingle();
 
   if (legacyError) {

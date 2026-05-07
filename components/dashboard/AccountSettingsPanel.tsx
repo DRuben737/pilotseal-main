@@ -6,6 +6,20 @@ import { useEffect, useState } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { getDeterministicGreeting } from "@/lib/greetings";
 import {
+  CERTIFICATE_TYPE_LABELS,
+  convertDisplayDateToIsoDate,
+  createPersonCertificate,
+  deletePersonCertificate,
+  fetchPersonCertificates,
+  formatIsoDateForDisplay,
+  getCertificateCurrencyLabel,
+  setDefaultInstructorCertificate,
+  updatePersonCertificate,
+  type PersonCertificate,
+  type PersonCertificateType,
+} from "@/lib/person-certificates";
+import { createSavedPerson, fetchSavedPersonById, updateSavedPerson, type SavedPerson } from "@/lib/saved-people";
+import {
   formatMedicalPrivilegeDate,
   formatMedicalPrivilegeRemaining,
   getMedicalPrivileges,
@@ -19,11 +33,63 @@ type MedicalForm = {
   examDate: string;
 };
 
+type CertificateForm = {
+  certificate_number: string;
+  certificate_type: PersonCertificateType;
+  last_event_date: string;
+  ratings: string[];
+  level: string;
+  is_default_for_endorsements: boolean;
+  notes: string;
+};
+
+type SelfPersonForm = {
+  display_name: string;
+  weight_lbs: string;
+};
+
 const emptyMedicalForm: MedicalForm = {
   medicalClass: "",
   birthDate: "",
   examDate: "",
 };
+
+const emptyCertificateForm: CertificateForm = {
+  certificate_number: "",
+  certificate_type: "pilot",
+  last_event_date: "",
+  ratings: [],
+  level: "",
+  is_default_for_endorsements: false,
+  notes: "",
+};
+
+const emptySelfPersonForm: SelfPersonForm = {
+  display_name: "",
+  weight_lbs: "",
+};
+
+const PILOT_RATING_OPTIONS = [
+  "ASEL",
+  "AMEL",
+  "ASES",
+  "AMES",
+  "IR-Airplane",
+  "IR-Helicopter",
+  "Rotorcraft-Helicopter",
+  "Rotorcraft-Gyroplane",
+  "Glider",
+  "Balloon",
+  "Powered Lift",
+];
+
+const RATING_OPTIONS: Record<PersonCertificateType, string[]> = {
+  pilot: PILOT_RATING_OPTIONS,
+  flight_instructor: PILOT_RATING_OPTIONS,
+  ground_instructor: ["Basic", "Instrument", "Advanced"],
+};
+
+const PILOT_LEVEL_OPTIONS = ["Student", "Private", "Commercial", "ATP"];
 
 function formatMonthYearInput(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 6);
@@ -31,6 +97,17 @@ function formatMonthYearInput(value: string) {
     return digits;
   }
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function formatMonthDayYearInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) {
+    return digits;
+  }
+  if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  }
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
 function formatStoredDateToMonthYear(value: string | null | undefined) {
@@ -86,6 +163,30 @@ function buildMedicalForm(profile: UserProfile | null): MedicalForm {
   };
 }
 
+function buildSelfPersonForm(person: SavedPerson | null, profile: UserProfile | null, fallbackEmail?: string | null): SelfPersonForm {
+  return {
+    display_name: person?.display_name || profile?.display_name || fallbackEmail || "",
+    weight_lbs: typeof person?.weight_lbs === "number" ? String(person.weight_lbs) : "",
+  };
+}
+
+function buildCertificateForm(certificate: PersonCertificate): CertificateForm {
+  return {
+    certificate_number: certificate.certificate_number ?? "",
+    certificate_type: certificate.certificate_type,
+    last_event_date: formatIsoDateForDisplay(certificate.last_event_date),
+    ratings: certificate.ratings,
+    level: certificate.certificate_type === "pilot" ? certificate.event_type ?? "" : "",
+    is_default_for_endorsements: certificate.is_default_for_endorsements,
+    notes: certificate.notes ?? "",
+  };
+}
+
+function normalizeRatingsForType(ratings: string[], certificateType: PersonCertificateType) {
+  const allowed = new Set(RATING_OPTIONS[certificateType]);
+  return ratings.filter((rating) => allowed.has(rating));
+}
+
 function formatMedicalClassLabel(value: UserProfile["medical_class"]) {
   if (value === 1) {
     return "First class";
@@ -99,10 +200,17 @@ function formatMedicalClassLabel(value: UserProfile["medical_class"]) {
   return "Medical certificate";
 }
 
-function ActionIcon({ kind }: { kind: "edit" | "close" | "save" | "delete" }) {
+function ActionIcon({ kind }: { kind: "add" | "edit" | "close" | "save" | "delete" | "default" }) {
   const common = "h-4 w-4";
 
   switch (kind) {
+    case "add":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      );
     case "edit":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
@@ -131,7 +239,144 @@ function ActionIcon({ kind }: { kind: "edit" | "close" | "save" | "delete" }) {
           <path d="M7 7l1 13h8l1-13" />
         </svg>
       );
+    case "default":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
+          <path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
+        </svg>
+      );
   }
+}
+
+function RatingPicker({
+  certificateType,
+  value,
+  onChange,
+}: {
+  certificateType: PersonCertificateType;
+  value: string[];
+  onChange: (ratings: string[]) => void;
+}) {
+  function toggleRating(rating: string) {
+    onChange(value.includes(rating) ? value.filter((item) => item !== rating) : [...value, rating]);
+  }
+
+  return (
+    <div className="rating-picker" role="group" aria-label="Ratings">
+      {RATING_OPTIONS[certificateType].map((rating) => (
+        <button
+          key={rating}
+          type="button"
+          className={`rating-picker-option ${value.includes(rating) ? "rating-picker-option-active" : ""}`}
+          aria-pressed={value.includes(rating)}
+          onClick={() => toggleRating(rating)}
+        >
+          {rating}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AccountCertificateForm({
+  form,
+  saving,
+  submitLabel,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  form: CertificateForm;
+  saving: boolean;
+  submitLabel: string;
+  onChange: (field: keyof CertificateForm, value: string | string[] | boolean) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="people-certificate-form dashboard-setting-form mt-3">
+      <label className="saas-field">
+        <span>Certificate type</span>
+        <select
+          value={form.certificate_type}
+          onChange={(event) => onChange("certificate_type", event.target.value as PersonCertificateType)}
+        >
+          <option value="pilot">Pilot certificate</option>
+          <option value="flight_instructor">Flight instructor certificate</option>
+          <option value="ground_instructor">Ground instructor certificate</option>
+        </select>
+      </label>
+      <label className="saas-field">
+        <span>Certificate number</span>
+        <input value={form.certificate_number} onChange={(event) => onChange("certificate_number", event.target.value)} />
+      </label>
+      {form.certificate_type === "pilot" ? (
+        <label className="saas-field">
+          <span>Level</span>
+          <select value={form.level} onChange={(event) => onChange("level", event.target.value)}>
+            <option value="">Select level</option>
+            {PILOT_LEVEL_OPTIONS.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      <label className="saas-field people-ratings-field">
+        <span>Ratings</span>
+        <RatingPicker
+          certificateType={form.certificate_type}
+          value={form.ratings}
+          onChange={(ratings) => onChange("ratings", ratings)}
+        />
+      </label>
+      <label className="saas-field">
+        <span>Last flight review / issuance / activity</span>
+        <input
+          value={form.last_event_date}
+          onChange={(event) => onChange("last_event_date", event.target.value)}
+          placeholder="MM/DD/YYYY"
+        />
+      </label>
+      <label className="saas-field people-notes-field">
+        <span>Notes</span>
+        <textarea value={form.notes} onChange={(event) => onChange("notes", event.target.value)} />
+      </label>
+      {form.certificate_type === "flight_instructor" || form.certificate_type === "ground_instructor" ? (
+        <label className="people-default-check">
+          <input
+            type="checkbox"
+            checked={form.is_default_for_endorsements}
+            onChange={(event) => onChange("is_default_for_endorsements", event.target.checked)}
+          />
+          Default endorsement instructor
+        </label>
+      ) : null}
+      <div className="saas-inline-actions people-form-actions">
+        <button
+          type="button"
+          className="primary-button icon-button"
+          aria-label={saving ? "Saving certificate" : submitLabel}
+          title={submitLabel}
+          disabled={saving}
+          onClick={onSubmit}
+        >
+          <ActionIcon kind="save" />
+        </button>
+        <button
+          type="button"
+          className="secondary-button icon-button"
+          aria-label="Cancel certificate edits"
+          title="Cancel"
+          disabled={saving}
+          onClick={onCancel}
+        >
+          <ActionIcon kind="close" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function AccountSettingsPanel() {
@@ -155,6 +400,17 @@ export default function AccountSettingsPanel() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState("");
+  const [selfPerson, setSelfPerson] = useState<SavedPerson | null>(null);
+  const [selfPersonForm, setSelfPersonForm] = useState<SelfPersonForm>(emptySelfPersonForm);
+  const [selfCertificates, setSelfCertificates] = useState<PersonCertificate[]>([]);
+  const [showCertificates, setShowCertificates] = useState(false);
+  const [editingSelfPerson, setEditingSelfPerson] = useState(false);
+  const [showCertificateForm, setShowCertificateForm] = useState(false);
+  const [certificateForm, setCertificateForm] = useState<CertificateForm>(emptyCertificateForm);
+  const [editingCertificateId, setEditingCertificateId] = useState<string | null>(null);
+  const [certificateDrafts, setCertificateDrafts] = useState<Record<string, CertificateForm>>({});
+  const [savingCertificate, setSavingCertificate] = useState(false);
+  const [certificateStatus, setCertificateStatus] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -171,11 +427,22 @@ export default function AccountSettingsPanel() {
 
       try {
         const nextProfile = await fetchCurrentProfile(session.user.id);
+        const [nextSelfPerson, nextCertificates] = await Promise.all([
+          fetchSavedPersonById(session.user.id, nextProfile?.self_person_id),
+          fetchPersonCertificates(session.user.id).catch(() => []),
+        ]);
 
         if (!cancelled) {
           setProfile(nextProfile);
           setDisplayName(nextProfile?.display_name ?? "");
           setMedicalForm(buildMedicalForm(nextProfile));
+          setSelfPerson(nextSelfPerson);
+          setSelfPersonForm(buildSelfPersonForm(nextSelfPerson, nextProfile, session.user.email));
+          setSelfCertificates(
+            nextProfile?.self_person_id
+              ? nextCertificates.filter((certificate) => certificate.person_id === nextProfile.self_person_id)
+              : []
+          );
           setStatus("");
         }
       } catch (error) {
@@ -183,6 +450,8 @@ export default function AccountSettingsPanel() {
 
         if (!cancelled) {
           setProfile(null);
+          setSelfPerson(null);
+          setSelfCertificates([]);
           setStatus("Unable to load account settings right now.");
         }
       }
@@ -193,7 +462,7 @@ export default function AccountSettingsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.email, session?.user?.id]);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -336,6 +605,255 @@ export default function AccountSettingsPanel() {
     setMedicalForm(buildMedicalForm(profile));
     setEditingMedical(false);
     setMedicalStatus("");
+  }
+
+  async function refreshSelfCertificates(nextProfile = profile) {
+    if (!session?.user?.id) {
+      return;
+    }
+
+    const [nextSelfPerson, nextCertificates] = await Promise.all([
+      fetchSavedPersonById(session.user.id, nextProfile?.self_person_id),
+      fetchPersonCertificates(session.user.id).catch(() => []),
+    ]);
+
+    setSelfPerson(nextSelfPerson);
+    setSelfPersonForm(buildSelfPersonForm(nextSelfPerson, nextProfile, session.user.email));
+    setSelfCertificates(
+      nextProfile?.self_person_id
+        ? nextCertificates.filter((certificate) => certificate.person_id === nextProfile.self_person_id)
+        : []
+    );
+  }
+
+  async function ensureSelfPerson() {
+    if (!session?.user?.id) {
+      throw new Error("You must be signed in to manage certificates.");
+    }
+
+    if (profile?.self_person_id) {
+      const existing = selfPerson ?? await fetchSavedPersonById(session.user.id, profile.self_person_id);
+      if (existing) {
+        return { person: existing, nextProfile: profile };
+      }
+    }
+
+    const displayName =
+      selfPersonForm.display_name.trim() ||
+      displayNameFromProfile() ||
+      session.user.email ||
+      "My profile";
+
+    const createdPerson = await createSavedPerson({
+      userId: session.user.id,
+      role: "self",
+      display_name: displayName,
+      weight_lbs: selfPersonForm.weight_lbs.trim() ? Number.parseFloat(selfPersonForm.weight_lbs) : null,
+    });
+
+    const nextProfile = await updateCurrentProfile(session.user.id, {
+      self_person_id: createdPerson.id,
+    });
+
+    setProfile(nextProfile);
+    setSelfPerson(createdPerson);
+    setSelfPersonForm(buildSelfPersonForm(createdPerson, nextProfile, session.user.email));
+
+    return { person: createdPerson, nextProfile };
+  }
+
+  function displayNameFromProfile() {
+    return displayName.trim() || profile?.display_name || "";
+  }
+
+  function updateSelfCertificateForm(field: keyof CertificateForm, value: string | string[] | boolean) {
+    setCertificateForm((current) => {
+      const nextType = field === "certificate_type" ? value as PersonCertificateType : current.certificate_type;
+      const nextRatings =
+        field === "ratings"
+          ? normalizeRatingsForType(value as string[], nextType)
+          : field === "certificate_type"
+            ? normalizeRatingsForType(current.ratings, nextType)
+            : current.ratings;
+
+      return {
+        ...current,
+        [field]: field === "last_event_date" ? formatMonthDayYearInput(String(value)) : value,
+        certificate_type: nextType,
+        level: nextType === "pilot" ? current.level : "",
+        ratings: nextRatings,
+      };
+    });
+  }
+
+  function updateSelfCertificateDraft(id: string, field: keyof CertificateForm, value: string | string[] | boolean) {
+    setCertificateDrafts((current) => {
+      const currentForm = current[id] ?? emptyCertificateForm;
+      const nextType = field === "certificate_type" ? value as PersonCertificateType : currentForm.certificate_type;
+      const nextRatings =
+        field === "ratings"
+          ? normalizeRatingsForType(value as string[], nextType)
+          : field === "certificate_type"
+            ? normalizeRatingsForType(currentForm.ratings, nextType)
+            : currentForm.ratings;
+
+      return {
+        ...current,
+        [id]: {
+          ...currentForm,
+          [field]: field === "last_event_date" ? formatMonthDayYearInput(String(value)) : value,
+          certificate_type: nextType,
+          level: nextType === "pilot" ? currentForm.level : "",
+          ratings: nextRatings,
+        },
+      };
+    });
+  }
+
+  async function handleSaveSelfPerson() {
+    if (!session?.user?.id) {
+      setCertificateStatus("You must be signed in to save profile details.");
+      return;
+    }
+
+    setSavingCertificate(true);
+    setCertificateStatus("Saving profile details...");
+
+    try {
+      const { person, nextProfile } = await ensureSelfPerson();
+      await updateSavedPerson(session.user.id, person.id, {
+        display_name: selfPersonForm.display_name,
+        cert_number: person.cert_number ?? "",
+        weight_lbs: selfPersonForm.weight_lbs.trim() ? Number.parseFloat(selfPersonForm.weight_lbs) : null,
+      });
+      await refreshSelfCertificates(nextProfile);
+      setEditingSelfPerson(false);
+      setCertificateStatus("Profile details saved.");
+    } catch (error) {
+      console.error(error);
+      setCertificateStatus(error instanceof Error ? error.message : "Failed to save profile details.");
+    } finally {
+      setSavingCertificate(false);
+    }
+  }
+
+  async function handleCreateSelfCertificate() {
+    if (!session?.user?.id) {
+      setCertificateStatus("You must be signed in to manage certificates.");
+      return;
+    }
+
+    setSavingCertificate(true);
+    setCertificateStatus("Saving certificate...");
+
+    try {
+      const { person, nextProfile } = await ensureSelfPerson();
+      await createPersonCertificate({
+        userId: session.user.id,
+        personId: person.id,
+        certificateType: certificateForm.certificate_type,
+        certificateNumber: certificateForm.certificate_number,
+        ratings: certificateForm.ratings,
+        issueDate: null,
+        lastEventDate: certificateForm.last_event_date ? convertDisplayDateToIsoDate(certificateForm.last_event_date) : null,
+        eventType: certificateForm.certificate_type === "pilot" ? certificateForm.level : null,
+        isDefaultForEndorsements: certificateForm.is_default_for_endorsements,
+        notes: certificateForm.notes,
+      });
+      setCertificateForm(emptyCertificateForm);
+      setShowCertificateForm(false);
+      await refreshSelfCertificates(nextProfile);
+      setCertificateStatus("Certificate saved.");
+    } catch (error) {
+      console.error(error);
+      setCertificateStatus(error instanceof Error ? error.message : "Failed to save certificate.");
+    } finally {
+      setSavingCertificate(false);
+    }
+  }
+
+  async function handleSaveSelfCertificate(certificate: PersonCertificate) {
+    if (!session?.user?.id) {
+      setCertificateStatus("You must be signed in to manage certificates.");
+      return;
+    }
+
+    const draft = certificateDrafts[certificate.id];
+    if (!draft) {
+      setCertificateStatus("Certificate changes are missing.");
+      return;
+    }
+
+    setSavingCertificate(true);
+    setCertificateStatus("Saving certificate...");
+
+    try {
+      await updatePersonCertificate(session.user.id, certificate.id, {
+        certificateType: draft.certificate_type,
+        certificateNumber: draft.certificate_number,
+        ratings: draft.ratings,
+        issueDate: null,
+        lastEventDate: draft.last_event_date ? convertDisplayDateToIsoDate(draft.last_event_date) : null,
+        eventType: draft.certificate_type === "pilot" ? draft.level : null,
+        isDefaultForEndorsements: draft.is_default_for_endorsements,
+        notes: draft.notes,
+      });
+      await refreshSelfCertificates();
+      setEditingCertificateId(null);
+      setCertificateDrafts((current) => {
+        const next = { ...current };
+        delete next[certificate.id];
+        return next;
+      });
+      setCertificateStatus("Certificate updated.");
+    } catch (error) {
+      console.error(error);
+      setCertificateStatus(error instanceof Error ? error.message : "Failed to save certificate.");
+    } finally {
+      setSavingCertificate(false);
+    }
+  }
+
+  async function handleDeleteSelfCertificate(id: string) {
+    if (!session?.user?.id) {
+      setCertificateStatus("You must be signed in to manage certificates.");
+      return;
+    }
+
+    setSavingCertificate(true);
+    setCertificateStatus("Deleting certificate...");
+
+    try {
+      await deletePersonCertificate(session.user.id, id);
+      await refreshSelfCertificates();
+      setCertificateStatus("Certificate deleted.");
+    } catch (error) {
+      console.error(error);
+      setCertificateStatus(error instanceof Error ? error.message : "Failed to delete certificate.");
+    } finally {
+      setSavingCertificate(false);
+    }
+  }
+
+  async function handleSetDefaultSelfCertificate(id: string) {
+    if (!session?.user?.id) {
+      setCertificateStatus("You must be signed in to manage certificates.");
+      return;
+    }
+
+    setSavingCertificate(true);
+    setCertificateStatus("Saving default instructor...");
+
+    try {
+      await setDefaultInstructorCertificate(session.user.id, id);
+      await refreshSelfCertificates();
+      setCertificateStatus("Default instructor saved.");
+    } catch (error) {
+      console.error(error);
+      setCertificateStatus(error instanceof Error ? error.message : "Failed to save default instructor.");
+    } finally {
+      setSavingCertificate(false);
+    }
   }
 
   async function handlePasswordSave() {
@@ -633,6 +1151,230 @@ export default function AccountSettingsPanel() {
         ) : showMedical ? (
           <div className="saas-empty-state mt-5">
             <p>No medical certificate saved</p>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="saas-panel dashboard-setting-row">
+        <div className="saas-section-toggle">
+          <div className="saas-section-toggle-main">
+            <p className="saas-subsection-title">My certificates</p>
+            <p className="saas-meta-text">
+              {selfCertificates.length > 0
+                ? `${selfCertificates.length} saved`
+                : "No certificate saved"}
+            </p>
+          </div>
+          <div className="saas-inline-actions">
+            <button
+              type="button"
+              className="ghost-button icon-button"
+              aria-label={showCertificates ? "Close my certificates" : "View my certificates"}
+              title={showCertificates ? "Close" : "View certificates"}
+              onClick={() => setShowCertificates((current) => !current)}
+            >
+              <ActionIcon kind={showCertificates ? "close" : "edit"} />
+            </button>
+            {showCertificates ? (
+              <button
+                type="button"
+                className="secondary-button icon-button"
+                aria-label={showCertificateForm ? "Hide certificate form" : "Add certificate"}
+                title={showCertificateForm ? "Hide certificate form" : "Add certificate"}
+                disabled={savingCertificate}
+                onClick={() => setShowCertificateForm((current) => !current)}
+              >
+                <ActionIcon kind="add" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {showCertificates ? (
+          <div className="mt-3 grid gap-3">
+            <div className="people-cert-row">
+              {editingSelfPerson ? (
+                <div className="people-edit-row">
+                  <label className="saas-field">
+                    <span>Name</span>
+                    <input
+                      value={selfPersonForm.display_name}
+                      onChange={(event) =>
+                        setSelfPersonForm((current) => ({ ...current, display_name: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <label className="saas-field">
+                    <span>Weight</span>
+                    <input
+                      type="number"
+                      value={selfPersonForm.weight_lbs}
+                      onChange={(event) =>
+                        setSelfPersonForm((current) => ({ ...current, weight_lbs: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <div className="saas-inline-actions people-form-actions">
+                    <button
+                      type="button"
+                      className="primary-button icon-button"
+                      aria-label="Save profile certificate owner"
+                      title="Save"
+                      disabled={savingCertificate || !selfPersonForm.display_name.trim()}
+                      onClick={() => void handleSaveSelfPerson()}
+                    >
+                      <ActionIcon kind="save" />
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button icon-button"
+                      aria-label="Cancel profile certificate owner edits"
+                      title="Cancel"
+                      disabled={savingCertificate}
+                      onClick={() => {
+                        setSelfPersonForm(buildSelfPersonForm(selfPerson, profile, session?.user?.email));
+                        setEditingSelfPerson(false);
+                      }}
+                    >
+                      <ActionIcon kind="close" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="people-cert-main">
+                    <p className="saas-card-title">{selfPersonForm.display_name || displayName || "My profile"}</p>
+                    <p className="saas-meta-text">
+                      {selfPersonForm.weight_lbs ? `${selfPersonForm.weight_lbs} lbs` : "No weight saved"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button icon-button"
+                    aria-label="Edit profile certificate owner"
+                    title="Edit"
+                    disabled={savingCertificate}
+                    onClick={() => setEditingSelfPerson(true)}
+                  >
+                    <ActionIcon kind="edit" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {showCertificateForm ? (
+              <AccountCertificateForm
+                form={certificateForm}
+                saving={savingCertificate}
+                submitLabel="Add certificate"
+                onChange={updateSelfCertificateForm}
+                onCancel={() => setShowCertificateForm(false)}
+                onSubmit={() => void handleCreateSelfCertificate()}
+              />
+            ) : null}
+
+            {selfCertificates.length === 0 ? (
+              <p className="saas-empty-state">Add your pilot, flight instructor, or ground instructor certificate.</p>
+            ) : (
+              <div className="people-cert-list">
+                {selfCertificates.map((certificate) => {
+                  const isEditingCertificate = editingCertificateId === certificate.id;
+                  const draft = certificateDrafts[certificate.id] ?? buildCertificateForm(certificate);
+
+                  return (
+                    <div key={certificate.id} className="people-cert-row">
+                      {isEditingCertificate ? (
+                        <AccountCertificateForm
+                          form={draft}
+                          saving={savingCertificate}
+                          submitLabel="Save certificate"
+                          onChange={(field, value) => updateSelfCertificateDraft(certificate.id, field, value)}
+                          onCancel={() => {
+                            setEditingCertificateId(null);
+                            setCertificateDrafts((current) => {
+                              const next = { ...current };
+                              delete next[certificate.id];
+                              return next;
+                            });
+                          }}
+                          onSubmit={() => void handleSaveSelfCertificate(certificate)}
+                        />
+                      ) : (
+                        <>
+                          <div className="people-cert-main">
+                            <div className="people-cert-title">
+                              <p className="saas-card-title">
+                                {CERTIFICATE_TYPE_LABELS[certificate.certificate_type]}
+                              </p>
+                              {certificate.is_default_for_endorsements ? (
+                                <span className="saas-pill saas-pill-normal">Default</span>
+                              ) : null}
+                            </div>
+                            <p className="saas-meta-text">
+                              {certificate.certificate_number || "No certificate number"} |{" "}
+                              {getCertificateCurrencyLabel(certificate)}
+                            </p>
+                            {certificate.certificate_type === "pilot" && certificate.event_type ? (
+                              <p className="saas-meta-text">Level: {certificate.event_type}</p>
+                            ) : null}
+                            {certificate.ratings.length > 0 ? (
+                              <p className="saas-meta-text">Ratings: {certificate.ratings.join(", ")}</p>
+                            ) : null}
+                            {certificate.notes ? (
+                              <p className="saas-meta-text">Notes: {certificate.notes}</p>
+                            ) : null}
+                          </div>
+                          <div className="saas-inline-actions people-row-actions">
+                            {(certificate.certificate_type === "flight_instructor" ||
+                              certificate.certificate_type === "ground_instructor") &&
+                            !certificate.is_default_for_endorsements ? (
+                              <button
+                                type="button"
+                                className="secondary-button icon-button"
+                                aria-label="Set default endorsement instructor"
+                                title="Set default instructor"
+                                disabled={savingCertificate}
+                                onClick={() => void handleSetDefaultSelfCertificate(certificate.id)}
+                              >
+                                <ActionIcon kind="default" />
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="secondary-button icon-button"
+                              aria-label="Edit certificate"
+                              title="Edit certificate"
+                              disabled={savingCertificate}
+                              onClick={() => {
+                                setEditingCertificateId(certificate.id);
+                                setCertificateDrafts((current) => ({
+                                  ...current,
+                                  [certificate.id]: buildCertificateForm(certificate),
+                                }));
+                              }}
+                            >
+                              <ActionIcon kind="edit" />
+                            </button>
+                            <button
+                              type="button"
+                              className="danger-button icon-button"
+                              aria-label="Delete certificate"
+                              title="Delete certificate"
+                              disabled={savingCertificate}
+                              onClick={() => void handleDeleteSelfCertificate(certificate.id)}
+                            >
+                              <ActionIcon kind="delete" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {certificateStatus ? <p className="saas-meta-text">{certificateStatus}</p> : null}
           </div>
         ) : null}
       </section>

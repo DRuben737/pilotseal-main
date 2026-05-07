@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import Badge from "@/components/ui/Badge";
+import { fetchCurrentProfile } from "@/lib/profile";
 import {
   CERTIFICATE_TYPE_LABELS,
   convertDisplayDateToIsoDate,
@@ -360,17 +361,20 @@ export default function SavedPeopleManager() {
       try {
         setLoading(true);
         setStatus("");
-        const [nextPeople, nextCertificates] = await Promise.all([
+        const [nextPeople, nextCertificates, nextProfile] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchPersonCertificates(session.user.id).catch((error) => {
             console.error("Unable to load person certificates:", error);
             setCertificatesAvailable(false);
             return [];
           }),
+          fetchCurrentProfile(session.user.id).catch(() => null),
         ]);
 
         if (!cancelled) {
-          setPeople(normalizePeople(nextPeople));
+          setPeople(normalizePeople(nextPeople).filter((person) => (
+            person.role !== "self" && person.id !== nextProfile?.self_person_id
+          )));
           setCertificates(nextCertificates);
         }
       } catch (error) {
@@ -432,7 +436,7 @@ export default function SavedPeopleManager() {
       return;
     }
 
-    const [nextPeople, nextCertificates] = await Promise.all([
+    const [nextPeople, nextCertificates, nextProfile] = await Promise.all([
       fetchSavedPeople(session.user.id),
       certificatesAvailable
         ? fetchPersonCertificates(session.user.id).catch(() => {
@@ -440,9 +444,12 @@ export default function SavedPeopleManager() {
             return [];
           })
         : Promise.resolve([]),
+      fetchCurrentProfile(session.user.id).catch(() => null),
     ]);
 
-    setPeople(normalizePeople(nextPeople));
+    setPeople(normalizePeople(nextPeople).filter((person) => (
+      person.role !== "self" && person.id !== nextProfile?.self_person_id
+    )));
     setCertificates(nextCertificates);
   }
 

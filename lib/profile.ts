@@ -10,10 +10,11 @@ export type UserProfile = {
   medical_birth_date?: string | null;
   medical_exam_date?: string | null;
   medical_exp_date?: string | null;
+  self_person_id?: string | null;
 };
 
 const PROFILE_SELECT =
-  "id, email, display_name, role, created_at, medical_class, medical_birth_date, medical_exam_date, medical_exp_date";
+  "id, email, display_name, role, created_at, medical_class, medical_birth_date, medical_exam_date, medical_exp_date, self_person_id";
 
 export async function fetchCurrentProfile(userId: string) {
   const supabase = getSupabaseClient();
@@ -38,6 +39,7 @@ export async function updateCurrentProfile(
     medical_class?: 1 | 2 | 3 | null;
     medical_birth_date?: string | null;
     medical_exam_date?: string | null;
+    self_person_id?: string | null;
   }
 ) {
   const supabase = getSupabaseClient();
@@ -47,6 +49,7 @@ export async function updateCurrentProfile(
     medical_class?: 1 | 2 | 3 | null;
     medical_birth_date?: string | null;
     medical_exam_date?: string | null;
+    self_person_id?: string | null;
   } = {};
 
   if ("display_name" in updates) {
@@ -63,6 +66,10 @@ export async function updateCurrentProfile(
 
   if ("medical_exam_date" in updates) {
     payload.medical_exam_date = updates.medical_exam_date ?? null;
+  }
+
+  if ("self_person_id" in updates) {
+    payload.self_person_id = updates.self_person_id ?? null;
   }
 
   const { data, error } = await supabase

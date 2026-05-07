@@ -12,7 +12,7 @@ import {
   ENDORSEMENT_RECORDS_BUCKET,
 } from '@/lib/endorsement-records';
 import { fetchPersonCertificates } from '@/lib/person-certificates';
-import { fetchSavedPeople, fetchDefaultCfi, formatStoredDateForDisplay } from '@/lib/saved-people';
+import { fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people';
 import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -276,11 +276,6 @@ function getCertificateOptionsForName(options, value) {
   return options;
 }
 
-function getCertificateOptionsForExactName(options, value) {
-  const exactMatches = getSavedPeopleByName(options, value);
-  return exactMatches.length > 0 ? exactMatches : options;
-}
-
 function getUniqueSavedPeopleByName(options) {
   const seen = new Set();
 
@@ -532,22 +527,24 @@ function EndorsementGenerator() {
           return;
         }
 
-        const [cfis, defaultCfi, profile] = await Promise.all([
-          fetchSavedPeople(session.user.id, 'cfi'),
-          fetchDefaultCfi(session.user.id),
+        const [allPeople, profile] = await Promise.all([
+          fetchSavedPeople(session.user.id),
           fetchCurrentProfile(session.user.id),
         ]);
 
-        const allPeople = await fetchSavedPeople(session.user.id);
         const certificates = await fetchPersonCertificates(session.user.id).catch((error) => {
           console.error('Unable to load person certificates:', error);
           return [];
         });
         const peopleById = new Map(allPeople.map((person) => [person.id, person]));
+        const selfPersonId = profile?.self_person_id || '';
         const certificateCfis = certificates
           .filter((certificate) => (
-            certificate.certificate_type === 'flight_instructor' ||
-            certificate.certificate_type === 'ground_instructor'
+            certificate.person_id === selfPersonId &&
+            (
+              certificate.certificate_type === 'flight_instructor' ||
+              certificate.certificate_type === 'ground_instructor'
+            )
           ))
           .map((certificate) => {
             const person = peopleById.get(certificate.person_id);
@@ -567,7 +564,7 @@ function EndorsementGenerator() {
           .filter(Boolean)
           .sort((left, right) => Number(right.is_default) - Number(left.is_default));
         const certificatePilots = certificates
-          .filter((certificate) => certificate.certificate_type === 'pilot')
+          .filter((certificate) => certificate.certificate_type === 'pilot' && certificate.person_id !== selfPersonId)
           .map((certificate) => {
             const person = peopleById.get(certificate.person_id);
             if (!person) {
@@ -576,17 +573,19 @@ function EndorsementGenerator() {
 
             return {
               ...person,
+              id: certificate.id,
+              person_id: person.id,
               cert_number: certificate.certificate_number || person.cert_number,
             };
           })
           .filter(Boolean);
 
-        setSavedCfis(certificateCfis.length > 0 ? certificateCfis : cfis);
+        setSavedCfis(certificateCfis);
         setSavedStudents(certificatePilots);
         setSessionIdentity(profile?.display_name || session.user.email || '');
 
         const defaultCertificateCfi = certificateCfis.find((person) => person.is_default);
-        const preferredCfi = defaultCertificateCfi || defaultCfi;
+        const preferredCfi = defaultCertificateCfi || certificateCfis[0];
 
         if (preferredCfi && !defaultCfiAppliedRef.current) {
           setFormData((prev) => ({
@@ -770,7 +769,7 @@ function EndorsementGenerator() {
               ).trim().toLowerCase() === prev.studentCertNumber.trim().toLowerCase()
             );
 
-        setSelectedStudentId(selected?.id || '');
+        setSelectedStudentId(selected?.person_id || selected?.id || '');
         if (selected && matchingCertificates.length === 1) {
           nextForm.studentCertNumber = selected.cert_number || '';
         } else if (matchingCertificates.length > 1 && !selected) {
@@ -783,7 +782,7 @@ function EndorsementGenerator() {
           (person) => (person.cert_number || '').trim().toLowerCase() === nextValue.trim().toLowerCase()
         );
 
-        setSelectedStudentId(selected?.id || '');
+        setSelectedStudentId(selected?.person_id || selected?.id || '');
       }
 
       return nextForm;
@@ -830,14 +829,14 @@ function EndorsementGenerator() {
         const matchingCertificates = getSavedPeopleByName(savedStudents, nextName);
         const selected = matchingCertificates.length === 1 ? matchingCertificates[0] : null;
 
-        setSelectedStudentId(selected?.id || '');
+        setSelectedStudentId(selected?.person_id || selected?.id || '');
         nextForm.studentCertNumber = selected?.cert_number || '';
       }
 
       if (field === 'studentCertNumber') {
         nextForm.studentName = person.display_name || nextForm.studentName;
         nextForm.studentCertNumber = person.cert_number || '';
-        setSelectedStudentId(person.id || '');
+        setSelectedStudentId(person.person_id || person.id || '');
       }
 
       return nextForm;
@@ -1260,10 +1259,10 @@ function EndorsementGenerator() {
   const savedInstructorNameOptions = getUniqueSavedPeopleByName(savedCfis);
   const savedPilotNameOptions = getUniqueSavedPeopleByName(savedStudents);
   const uniqueMatchingInstructorCertificates = getUniqueSavedPeopleByCertificateNumber(
-    getCertificateOptionsForExactName(savedCfis, formData.instructorName)
+    savedCfis
   );
   const uniqueMatchingPilotCertificates = getUniqueSavedPeopleByCertificateNumber(
-    getCertificateOptionsForExactName(savedStudents, formData.studentName)
+    savedStudents
   );
   const getSuggestionOptions = (fieldKey) => {
     if (!sessionIdentity) {
