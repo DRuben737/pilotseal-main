@@ -12,8 +12,8 @@ function getPrivacyContent() {
   const filePath = path.join(
     process.cwd(),
     "content",
-    "disclaimer",
-    "disclaimer.md"
+    "sitelog",
+    "sitelog.md"
   );
 
   const raw = fs.readFileSync(filePath, "utf8");
@@ -21,7 +21,7 @@ function getPrivacyContent() {
   const { data, content } = matter(raw);
 
   return {
-    title: String(data.title ?? "Disclaimer"),
+    title: String(data.title ?? "Site Log"),
     summary: data.summary ? String(data.summary) : undefined,
     highlights: Array.isArray(data.highlights)
       ? data.highlights.map((item) => String(item)).filter(Boolean)

@@ -3,7 +3,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import { Marked } from "marked";
+import { Marked, type Renderer, type Tokens } from "marked";
 
 export type ArticleMeta = {
   slug: string;
@@ -12,6 +12,7 @@ export type ArticleMeta = {
   updated?: string;
   summary: string;
   tags: string[];
+  rank: number;
   body: string;
 };
 
@@ -42,7 +43,7 @@ function escapeHtmlAttribute(value: string) {
 
 marked.use({
   renderer: {
-    link(this: any, token: any) {
+    link(this: Renderer, token: Tokens.Link) {
       const href = token.href;
       const title = token.title ? ` title="${escapeHtmlAttribute(token.title)}"` : "";
       const text = this.parser.parseInline(token.tokens);
@@ -77,6 +78,25 @@ function normalizeTags(value: unknown) {
   return [];
 }
 
+function normalizeRank(value: unknown) {
+  const rank = typeof value === "number"
+    ? value
+    : typeof value === "string" && value.trim() !== ""
+      ? Number(value)
+      : 0;
+
+  return Number.isFinite(rank) ? rank : 0;
+}
+
+function getArticleTimestamp(article: Pick<ArticleMeta, "date">) {
+  const timestamp = new Date(article.date).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortArticlesByRank(a: ArticleMeta, b: ArticleMeta) {
+  return b.rank - a.rank || getArticleTimestamp(b) - getArticleTimestamp(a) || a.title.localeCompare(b.title);
+}
+
 function readArticleFile(slug: string): ArticleRecord {
   const filePath = path.join(READ_DIR, `${slug}.md`);
   const raw = fs.readFileSync(filePath, "utf8");
@@ -89,6 +109,7 @@ function readArticleFile(slug: string): ArticleRecord {
     updated: data.updated ? String(data.updated) : undefined,
     summary: String(data.summary ?? ""),
     tags: normalizeTags(data.tags),
+    rank: normalizeRank(data.rank),
     body: content.trim(),
     html: marked.parse(content) as string,
   };
@@ -103,16 +124,17 @@ export function getArticleSlugs() {
 export function getAllArticles(): ArticleMeta[] {
   return getArticleSlugs()
     .map((slug) => readArticleFile(slug))
-    .map(({ slug, title, date, updated, summary, tags, body }) => ({
+    .map(({ slug, title, date, updated, summary, tags, rank, body }) => ({
       slug,
       title,
       date,
       updated,
       summary,
       tags,
+      rank,
       body,
     }))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort(sortArticlesByRank);
 }
 
 export function getArticleBySlug(slug: string) {
@@ -178,7 +200,7 @@ export function getRelatedArticles(article: ArticleMeta, limit = 3, minSharedTag
       score: candidate.tags.filter((tag) => articleTagSlugs.has(slugifyTag(tag))).length,
     }))
     .filter((candidate) => candidate.score >= minSharedTags)
-    .sort((a, b) => b.score - a.score || new Date(b.article.date).getTime() - new Date(a.article.date).getTime())
+    .sort((a, b) => b.score - a.score || sortArticlesByRank(a.article, b.article))
     .slice(0, limit)
     .map(({ article: candidate }) => candidate);
 }

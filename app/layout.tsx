@@ -80,14 +80,16 @@ export default function RootLayout({
                       <Link href="/tools">Tools</Link>
                       <Link href="/endorsements">Endorsements</Link>
                       <Link href="/read">Read</Link>
-                      <Link href="/disclaimer">Disclaimer</Link>
+                      
                     </div>
                   </div>
 
                   <div className="text-sm text-[var(--muted)]">
-                    <p className="font-semibold text-[var(--foreground)]">Company</p>
+                    <p className="font-semibold text-[var(--foreground)]">Info</p>
                     <div className="mt-4 grid gap-3">
                       <Link href="/privacy">Privacy</Link>
+                      <Link href="/disclaimer">Disclaimer</Link>
+                      <Link href="/sitelog">Site Log</Link>
                       <a href="mailto:admin@pilotseal.com">Contact</a>
                       <a
                         href="https://ruben.pilotseal.com"

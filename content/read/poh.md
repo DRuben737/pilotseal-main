@@ -1,12 +1,12 @@
 ---
 title: "FAA References & POH Library"
-
+date: "2026-05-03" 
+updated: "2026-05-05"
 summary: "Quick access navigation page for commonly used FAA handbooks, chart references, and aircraft POHs."
 tags: ["FAA", "Reference", "POH", "Navigation"]
 rank: 100
 ---
 
-# FAA References & POH Library
 
 ## FAA Handbooks
 

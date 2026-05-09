@@ -75,7 +75,7 @@ export default async function ReadPage({ searchParams }: ReadPageProps) {
       <div className="read-shell">
         <header className="read-masthead">
           <p>
-            Use Read to browse short aviation notes. Pick a topic, then open a
+            Use Read to browse short aviation notes. Pick or search a topic, then open a
             post for the full explanation.
           </p>
           <form className="read-search" action="/read">

@@ -399,6 +399,8 @@ summary:focus-visible {
 }
 
 .read-prose {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 350;
   color: var(--foreground);
   font-size: 1rem;
   line-height: 1.55;
@@ -408,28 +410,29 @@ summary:focus-visible {
 .read-prose h2,
 .read-prose h3 {
   color: var(--foreground);
-  font-weight: 650;
+  font-weight: 530;
   letter-spacing: -0.02em;
-  line-height: 1.18;
+  line-height: 1.7;
 }
 
 .read-prose h1 {
-  margin: 1.8rem 0 0.65rem;
+  margin: 1.8rem 0 0.85rem;
   font-size: 1.45rem;
 }
 
 .read-prose h2 {
-  margin: 1.65rem 0 0.55rem;
+  margin: 1.65rem 0 0.65rem;
   font-size: 1.125rem;
 }
 
 .read-prose h3 {
-  margin: 1.35rem 0 0.45rem;
+  margin: 1.5rem 0 1rem;
   font-size: 1.08rem;
 }
 
 .read-prose p {
   margin: 0 0 0.82rem;
+  line-height: 0.85;
 }
 
 .read-prose ul,
@@ -3609,6 +3612,110 @@ summary:focus-visible {
 
 .privacy-atmosphere-hero {
   min-height: 320px;
+}
+
+.policy-copy {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  letter-spacing: 0em;
+  font-weight: 330;
+  font-size: 1rem;
+  line-height: 1;
+  color: #334155;
+}
+
+.policy-copy > :first-child {
+  margin-top: 0;
+}
+
+.policy-copy h2 {
+  margin: 1.7rem 0 1rem;
+  padding-top: 0.5rem;
+  border-top: 0;
+  font-size: 1.18rem;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.policy-copy h3 {
+  margin: 1.5rem 0 0.8rem;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.policy-copy p {
+  margin: 0.5rem 0;
+  color: #334155;
+}
+
+.policy-copy ul {
+  margin: 0.9rem 0 1rem;
+  padding-left: 1.2rem;
+  list-style: disc;
+}
+
+.policy-copy li {
+  margin: 0.45rem 0;
+  color: #334155;
+}
+
+.policy-copy li::marker {
+  color: #94a3b8;
+}
+
+.policy-copy a {
+  color: #0f172a;
+  font-weight: none;
+  text-decoration: none;
+}
+
+.policy-copy a:hover {
+  text-decoration: underline;
+}
+
+.policy-copy strong {
+  color: #0f172a;
+}
+
+.policy-copy details {
+  margin: 1.5rem 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  background: rgba(248, 250, 252, 0.55);
+}
+
+.policy-copy summary {
+  cursor: pointer;
+
+  list-style: none;
+
+  margin: 0.2rem 0 0.2rem;
+
+  font-size: 1.18rem;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+
+  color: #0f172a;
+}
+
+.policy-copy summary::-webkit-details-marker {
+  display: none;
+}
+
+.policy-copy summary::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 0.5rem;
+  transition: transform 0.2s ease;
+}
+
+.policy-copy details[open] summary::before {
+  transform: rotate(90deg);
 }
 
 .wb-shell {
