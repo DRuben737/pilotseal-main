@@ -7,7 +7,6 @@ import toolFlightBriefBannerImage from "@/images/tool-flight-brief-banner-v2.png
 import toolNighttimeHeroImage from "@/images/tool-nighttime-hero.png";
 import toolWeatherDecoderImage from "@/images/tool-weather-decoder.png";
 import toolWbBannerImage from "@/images/tool-wb-banner-v2.png";
-import utilityToolsImage from "@/images/utility-tools-illustration.png";
 
 export default function ToolsPage() {
   const tools = primaryToolKeys.map((key) => ({
@@ -44,19 +43,7 @@ export default function ToolsPage() {
 
   return (
     <main className="page-shell page-tools px-3">
-      <div className="site-shell page-stack space-y-6">
-        <section className="overflow-hidden border-b border-slate-200/75 pb-5">
-          <div className="relative min-h-[180px] overflow-hidden rounded-[18px] bg-slate-900 sm:min-h-[220px] lg:min-h-[300px]">
-            <Image
-              src={utilityToolsImage}
-              alt="PilotSeal tools overview"
-              className="absolute inset-0 h-full w-full object-cover"
-              priority
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.08),rgba(15,23,42,0.42))]" />
-          </div>
-        </section>
-
+      <div className="site-shell page-stack">
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:gap-4">
           {tools.map((tool) => (
             <Link
