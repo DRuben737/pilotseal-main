@@ -14,7 +14,6 @@ import {
   formatIsoDateForDisplay,
   getCertificateCurrencyLabel,
   getCertificateCurrencyStatus,
-  setDefaultInstructorCertificate,
   updatePersonCertificate,
   type PersonCertificate,
   type PersonCertificateType,
@@ -740,25 +739,6 @@ export default function SavedPeopleManager() {
     }
   }
 
-  async function handleSetDefaultCertificate(id: string) {
-    if (!session?.user?.id) {
-      setStatus("You must be signed in to manage certificates.");
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      await setDefaultInstructorCertificate(session.user.id, id);
-      await refreshPeople();
-      setStatus("Default instructor updated.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to update default instructor.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function toggleCertificateForm(personId: string) {
     setCertificateFormPersonIds((current) => {
       const next = new Set(current);
@@ -1043,20 +1023,6 @@ export default function SavedPeopleManager() {
                                   ) : null}
                                 </div>
                                 <div className="saas-inline-actions people-row-actions">
-                                  {(certificate.certificate_type === "flight_instructor" ||
-                                    certificate.certificate_type === "ground_instructor") &&
-                                  !certificate.is_default_for_endorsements ? (
-                                    <button
-                                      type="button"
-                                      className="secondary-button icon-button"
-                                      aria-label="Set default endorsement instructor"
-                                      title="Set default instructor"
-                                      disabled={saving}
-                                      onClick={() => void handleSetDefaultCertificate(certificate.id)}
-                                    >
-                                      <ActionIcon kind="default" />
-                                    </button>
-                                  ) : null}
                                   <button
                                     type="button"
                                     className="secondary-button icon-button"

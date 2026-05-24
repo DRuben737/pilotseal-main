@@ -352,6 +352,10 @@ function isEditableDefaultWeightStation(station) {
   );
 }
 
+function normalizeTailNumber(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 function mergeAircraftOptions(sharedAircraft, myAircraft) {
   const myAircraftIds = new Set((myAircraft ?? []).map((aircraft) => aircraft.id));
   const merged = [
@@ -409,8 +413,10 @@ export default function WeightBalanceCalculator({
   const [aircraftOptions, setAircraftOptions] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [savedCfis, setSavedCfis] = useState([]);
+  const [savedPeople, setSavedPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [aircraftMatchMissing, setAircraftMatchMissing] = useState(false);
   const [envelopeMode, setEnvelopeMode] = useState("normal");
 
   const inputs = activeWb.inputs ?? DEFAULT_INPUTS;
@@ -418,6 +424,16 @@ export default function WeightBalanceCalculator({
   const selectedStudentId = brief?.selectedStudentId ?? "";
   const selectedInstructorId = brief?.selectedInstructorId ?? "";
   const briefAircraftId = brief?.aircraftId ?? "";
+  const normalizedBriefAircraftId = normalizeTailNumber(briefAircraftId);
+  const activeAircraftMatchesBrief = !embedded || !normalizedBriefAircraftId
+    ? true
+    : activeSelectedAircraft
+      ? [
+          activeSelectedAircraft.name,
+          activeSelectedAircraft.tail_number,
+          activeSelectedAircraft.id,
+        ].some((value) => normalizeTailNumber(value) === normalizedBriefAircraftId)
+      : false;
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -434,39 +450,74 @@ export default function WeightBalanceCalculator({
         const [sharedAircraft, myAircraft, students, cfis] = await Promise.all([
           fetchSharedAircraft(),
           session?.user?.id ? fetchMyAircraft(session.user.id) : Promise.resolve([]),
-          embedded && session?.user?.id
-            ? fetchSavedPeople(session.user.id, "student")
-            : Promise.resolve([]),
-          embedded && session?.user?.id
-            ? fetchSavedPeople(session.user.id, "cfi")
-            : Promise.resolve([]),
+          embedded && session?.user?.id ? fetchSavedPeople(session.user.id, "student") : Promise.resolve([]),
+          embedded && session?.user?.id ? fetchSavedPeople(session.user.id, "cfi") : Promise.resolve([]),
         ]);
+        const people = embedded && session?.user?.id ? await fetchSavedPeople(session.user.id) : [];
 
         const mergedAircraft = mergeAircraftOptions(sharedAircraft, myAircraft);
 
         setAircraftOptions(mergedAircraft);
         setSavedStudents(students);
         setSavedCfis(cfis);
+        setSavedPeople(people);
 
         if (mergedAircraft.length > 0) {
-          const persistedAircraft =
-            mergedAircraft.find((aircraft) => aircraft.id === selectedAircraftId) ??
-            (embedded && briefAircraftId
-              ? mergedAircraft.find((aircraft) => {
-                  const aircraftName = String(aircraft.name ?? "").trim().toLowerCase();
-                  const nextBriefAircraftId = String(briefAircraftId).trim().toLowerCase();
-                  return (
-                    aircraftName === nextBriefAircraftId ||
-                    String(aircraft.id ?? "").trim().toLowerCase() === nextBriefAircraftId
-                  );
-                })
-              : null) ??
-            mergedAircraft[0];
+          const matchedBriefAircraft = normalizedBriefAircraftId
+            ? mergedAircraft.find((aircraft) => {
+                const aircraftName = normalizeTailNumber(aircraft.name);
+                const tailNumber = normalizeTailNumber(aircraft.tail_number);
+                const aircraftId = normalizeTailNumber(aircraft.id);
+                return (
+                  aircraftName === normalizedBriefAircraftId ||
+                  tailNumber === normalizedBriefAircraftId ||
+                  aircraftId === normalizedBriefAircraftId
+                );
+              }) ?? null
+            : null;
+
+          const persistedAircraft = embedded
+            ? matchedBriefAircraft
+            : mergedAircraft.find((aircraft) => aircraft.id === selectedAircraftId) ?? mergedAircraft[0];
+
+          if (embedded && normalizedBriefAircraftId && !matchedBriefAircraft) {
+            setAircraftMatchMissing(true);
+            setActiveSelectedAircraft(null);
+            setActiveWb((current) => ({
+              ...current,
+              selectedTail: "",
+              result: null,
+              status: "",
+            }));
+            return;
+          }
+
+          setAircraftMatchMissing(false);
+
+          if (!persistedAircraft) {
+            setActiveSelectedAircraft(null);
+            setActiveWb((current) => ({
+              ...current,
+              selectedTail: "",
+              result: null,
+              status: "",
+            }));
+            return;
+          }
 
           setActiveSelectedAircraft(persistedAircraft);
           setActiveWb((current) => ({
             ...current,
             selectedTail: persistedAircraft.id,
+          }));
+        } else {
+          setAircraftMatchMissing(Boolean(embedded && normalizedBriefAircraftId));
+          setActiveSelectedAircraft(null);
+          setActiveWb((current) => ({
+            ...current,
+            selectedTail: "",
+            result: null,
+            status: "",
           }));
         }
       } catch {
@@ -477,7 +528,7 @@ export default function WeightBalanceCalculator({
     }
 
     void loadData();
-  }, [briefAircraftId, embedded, selectedAircraftId, setActiveSelectedAircraft, setActiveWb]);
+  }, [briefAircraftId, embedded, normalizedBriefAircraftId, selectedAircraftId, setActiveSelectedAircraft, setActiveWb]);
 
   const aircraftProfile = useMemo(
     () => resolveAircraftProfile(activeSelectedAircraft),
@@ -512,6 +563,10 @@ export default function WeightBalanceCalculator({
   const selectedStudent = savedStudents.find((person) => person.id === selectedStudentId) ?? null;
   const selectedInstructor =
     savedCfis.find((person) => person.id === selectedInstructorId) ?? null;
+  const selectedStudentPerson =
+    selectedStudent ?? savedPeople.find((person) => person.id === selectedStudentId) ?? null;
+  const selectedInstructorPerson =
+    selectedInstructor ?? savedPeople.find((person) => person.id === selectedInstructorId) ?? null;
 
   const handleInputChange = (key, value) => {
     setActiveWb((current) => ({
@@ -539,18 +594,18 @@ export default function WeightBalanceCalculator({
   }, [selectedAircraftId]);
 
   useEffect(() => {
-    if (!embedded || !aircraftProfile || (!selectedStudent && !selectedInstructor)) {
+    if (!embedded || !aircraftProfile || (!selectedStudentPerson && !selectedInstructorPerson)) {
       return;
     }
 
     const { leftStation, rightStation } = resolveCrewStations(renderedStations);
     const isHelicopter = /helicopter/i.test(aircraftProfile.category ?? "");
     const leftWeight = isHelicopter
-      ? selectedInstructor?.weight_lbs ?? null
-      : selectedStudent?.weight_lbs ?? null;
+      ? selectedInstructorPerson?.weight_lbs ?? null
+      : selectedStudentPerson?.weight_lbs ?? null;
     const rightWeight = isHelicopter
-      ? selectedStudent?.weight_lbs ?? null
-      : selectedInstructor?.weight_lbs ?? null;
+      ? selectedStudentPerson?.weight_lbs ?? null
+      : selectedInstructorPerson?.weight_lbs ?? null;
 
     setActiveWb((current) => {
       const currentInputs = current.inputs ?? DEFAULT_INPUTS;
@@ -577,10 +632,30 @@ export default function WeightBalanceCalculator({
     aircraftProfile,
     embedded,
     renderedStations,
-    selectedInstructor,
-    selectedStudent,
+    selectedInstructorPerson,
+    selectedStudentPerson,
     setActiveWb,
   ]);
+
+  if (embedded && !normalizedBriefAircraftId) {
+    return null;
+  }
+
+  if (embedded && loading && !activeAircraftMatchesBrief) {
+    return null;
+  }
+
+  if (embedded && (aircraftMatchMissing || !activeAircraftMatchesBrief)) {
+    return (
+      <div className="wb-shell wb-shell-embedded">
+        <section className="wb-panel wb-panel-embedded">
+          <p className="copy-muted">
+            The W&amp;B of your aircraft is not saved in the system, please calculate manually and add this model in your dashboard.
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className={`wb-shell ${embedded ? "wb-shell-embedded" : ""}`}>
@@ -588,11 +663,6 @@ export default function WeightBalanceCalculator({
         <section className={`wb-panel ${embedded ? "wb-panel-embedded" : ""}`}>
           <div className="wb-section-head">
             <h3>Aircraft and loading</h3>
-            <p>
-              {aircraftType === "helicopter"
-                ? "Seat, fuel, and baggage inputs follow the selected helicopter model."
-                : "Seat, fuel, and baggage inputs follow the selected airplane model."}
-            </p>
           </div>
 
           <div className="wb-top-fields">
@@ -664,12 +734,6 @@ export default function WeightBalanceCalculator({
 
         <section className={`wb-panel wb-results ${embedded ? "wb-panel-embedded" : ""}`}>
           <div className="wb-result-head">
-            <div>
-              <h3>Current result</h3>
-              <p className="copy-muted mt-2">
-                CG and total weight update as soon as aircraft or loading changes.
-              </p>
-            </div>
             <div className="wb-result-actions">
               <p
                 className={

@@ -949,6 +949,83 @@ export default function AccountSettingsPanel() {
       <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
+            <p className="saas-subsection-title">Personal info</p>
+            <p className="saas-meta-text">
+              {selfPersonForm.display_name || displayName || "My profile"}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="ghost-button icon-button"
+            aria-label={editingSelfPerson ? "Close personal info editor" : "Edit personal info"}
+            title={editingSelfPerson ? "Close" : "Edit"}
+            disabled={savingCertificate}
+            onClick={() => {
+              if (editingSelfPerson) {
+                setSelfPersonForm(buildSelfPersonForm(selfPerson, profile, session?.user?.email));
+                setEditingSelfPerson(false);
+                return;
+              }
+
+              setEditingSelfPerson(true);
+            }}
+          >
+            <ActionIcon kind={editingSelfPerson ? "close" : "edit"} />
+          </button>
+        </div>
+
+        {editingSelfPerson ? (
+          <div className="saas-inline-form saas-inline-form-plain dashboard-setting-form mt-3">
+            <label className="saas-field">
+              <span>Name</span>
+              <input
+                value={selfPersonForm.display_name}
+                onChange={(event) =>
+                  setSelfPersonForm((current) => ({ ...current, display_name: event.target.value }))
+                }
+              />
+            </label>
+            <label className="saas-field">
+              <span>Weight</span>
+              <input
+                type="number"
+                value={selfPersonForm.weight_lbs}
+                onChange={(event) =>
+                  setSelfPersonForm((current) => ({ ...current, weight_lbs: event.target.value }))
+                }
+              />
+            </label>
+            {certificateStatus ? <p className="saas-meta-text">{certificateStatus}</p> : null}
+            <button
+              type="button"
+              className="primary-button icon-button"
+              aria-label="Save personal info"
+              title="Save"
+              disabled={savingCertificate || !selfPersonForm.display_name.trim()}
+              onClick={() => void handleSaveSelfPerson()}
+            >
+              <ActionIcon kind="save" />
+            </button>
+          </div>
+        ) : (
+          <div className="dashboard-setting-subgrid mt-3">
+            <article className="saas-quick-link">
+              <p className="saas-label">Name</p>
+              <p className="saas-value">{selfPersonForm.display_name || displayName || "My profile"}</p>
+            </article>
+            <article className="saas-quick-link">
+              <p className="saas-label">Weight</p>
+              <p className="saas-value">
+                {selfPersonForm.weight_lbs ? `${selfPersonForm.weight_lbs} lbs` : "No weight saved"}
+              </p>
+            </article>
+          </div>
+        )}
+      </section>
+
+      <section className="saas-panel dashboard-setting-row">
+        <div className="saas-section-toggle">
+          <div className="saas-section-toggle-main">
             <p className="saas-subsection-title">Password</p>
           </div>
           <button
@@ -1192,82 +1269,6 @@ export default function AccountSettingsPanel() {
 
         {showCertificates ? (
           <div className="mt-3 grid gap-3">
-            <div className="people-cert-row">
-              {editingSelfPerson ? (
-                <div className="people-edit-row">
-                  <label className="saas-field">
-                    <span>Name</span>
-                    <input
-                      value={selfPersonForm.display_name}
-                      onChange={(event) =>
-                        setSelfPersonForm((current) => ({ ...current, display_name: event.target.value }))
-                      }
-                    />
-                  </label>
-                  <label className="saas-field">
-                    <span>Weight</span>
-                    <input
-                      type="number"
-                      value={selfPersonForm.weight_lbs}
-                      onChange={(event) =>
-                        setSelfPersonForm((current) => ({ ...current, weight_lbs: event.target.value }))
-                      }
-                    />
-                  </label>
-                  <div className="saas-inline-actions people-form-actions">
-                    <button
-                      type="button"
-                      className="primary-button icon-button"
-                      aria-label="Save profile certificate owner"
-                      title="Save"
-                      disabled={savingCertificate || !selfPersonForm.display_name.trim()}
-                      onClick={() => void handleSaveSelfPerson()}
-                    >
-                      <ActionIcon kind="save" />
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button icon-button"
-                      aria-label="Cancel profile certificate owner edits"
-                      title="Cancel"
-                      disabled={savingCertificate}
-                      onClick={() => {
-                        setSelfPersonForm(buildSelfPersonForm(selfPerson, profile, session?.user?.email));
-                        setEditingSelfPerson(false);
-                      }}
-                    >
-                      <ActionIcon kind="close" />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="dashboard-setting-subgrid flex-1">
-                    <article className="saas-quick-link">
-                      <p className="saas-label">Name</p>
-                      <p className="saas-value">{selfPersonForm.display_name || displayName || "My profile"}</p>
-                    </article>
-                    <article className="saas-quick-link">
-                      <p className="saas-label">Weight</p>
-                      <p className="saas-value">
-                        {selfPersonForm.weight_lbs ? `${selfPersonForm.weight_lbs} lbs` : "No weight saved"}
-                      </p>
-                    </article>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary-button icon-button"
-                    aria-label="Edit profile certificate owner"
-                    title="Edit"
-                    disabled={savingCertificate}
-                    onClick={() => setEditingSelfPerson(true)}
-                  >
-                    <ActionIcon kind="edit" />
-                  </button>
-                </>
-              )}
-            </div>
-
             {showCertificateForm ? (
               <AccountCertificateForm
                 form={certificateForm}

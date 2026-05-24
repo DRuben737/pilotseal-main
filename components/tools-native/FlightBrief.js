@@ -7,7 +7,7 @@ import { fetchPersonCertificates } from "@/lib/person-certificates";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
-import { parseAircraftStations } from "@/lib/aircraft";
+import { fetchMyAircraft, fetchSharedAircraft, parseAircraftStations } from "@/lib/aircraft";
 import WeightBalanceCalculator from "./WeightBalanceCalculator";
 
 /** ------------------ constants ------------------ */
@@ -34,6 +34,51 @@ function getUniqueSavedPeopleByName(options) {
 
   return options.filter((person) => {
     const key = person.display_name?.trim().toLowerCase();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeTailNumber(value) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function mergeAircraftOptions(sharedAircraft, myAircraft) {
+  const myAircraftIds = new Set((myAircraft ?? []).map((aircraft) => aircraft.id));
+  const merged = [
+    ...(myAircraft ?? []).map((aircraft) => ({
+      ...aircraft,
+      source: "mine",
+      is_saved: true,
+    })),
+    ...(sharedAircraft ?? [])
+      .filter((aircraft) => !myAircraftIds.has(aircraft.id))
+      .map((aircraft) => ({
+        ...aircraft,
+        source: "shared",
+        is_saved: false,
+      })),
+  ];
+
+  return merged.sort((left, right) => {
+    if (left.is_saved !== right.is_saved) {
+      return left.is_saved ? -1 : 1;
+    }
+
+    return String(left.tail_number ?? left.name ?? "").localeCompare(
+      String(right.tail_number ?? right.name ?? "")
+    );
+  });
+}
+
+function getUniqueAircraftByTail(options) {
+  const seen = new Set();
+
+  return options.filter((aircraft) => {
+    const key = normalizeTailNumber(aircraft.tail_number || aircraft.name);
     if (!key || seen.has(key)) {
       return false;
     }
@@ -547,7 +592,6 @@ export default function FlightBrief() {
   const setAircraftId = useCallback((value) => setBriefField("aircraftId", value), [setBriefField]);
   const fuel = brief.fuel ?? "";
   const fuelTime = brief.fuelTime ?? "";
-  const setFuelTime = useCallback((value) => setBriefField("fuelTime", value), [setBriefField]);
   const wbCg = brief.wbCg ?? "";
 
   /** ---- route ---- */
@@ -644,12 +688,123 @@ export default function FlightBrief() {
   const mxDue = brief.mxDue ?? "";
   const setMxDue = useCallback((value) => setBriefField("mxDue", value), [setBriefField]);
 
+  const validateMxTimes = useCallback((nextMxNow, nextMxDue) => {
+    if (!String(nextMxNow).trim() || !String(nextMxDue).trim()) {
+      return true;
+    }
+
+    const now = parseFloat(nextMxNow);
+    const due = parseFloat(nextMxDue);
+    if (Number.isNaN(now) || Number.isNaN(due)) {
+      return true;
+    }
+
+    if (now > due) {
+      window.alert("Mx Time Now cannot be greater than Next Mx Due.");
+      return false;
+    }
+
+    return true;
+  }, []);
+
+  const handleMxNowChange = useCallback((value) => {
+    if (!validateMxTimes(value, mxDue)) {
+      return;
+    }
+
+    setMxNow(value);
+  }, [mxDue, setMxNow, validateMxTimes]);
+
+  const handleMxDueChange = useCallback((value) => {
+    if (!validateMxTimes(mxNow, value)) {
+      return;
+    }
+
+    setMxDue(value);
+  }, [mxNow, setMxDue, validateMxTimes]);
+
   const mxRemaining = useMemo(() => {
-    const now = parseFloat(mxNow || 0);
-    const due = parseFloat(mxDue || 0);
-    if (Number.isNaN(now) || Number.isNaN(due)) return "0.0";
-    return (due - now).toFixed(1);
+    if (!String(mxNow).trim() || !String(mxDue).trim()) {
+      return null;
+    }
+
+    const now = parseFloat(mxNow);
+    const due = parseFloat(mxDue);
+    if (Number.isNaN(now) || Number.isNaN(due)) return null;
+    return due - now;
   }, [mxNow, mxDue]);
+
+  const mxRemainingMeta = useMemo(() => {
+    if (mxRemaining === null) {
+      return { label: "--", detail: "Enter MX times", ok: null };
+    }
+
+    const eteHours = parseFloat(ete);
+    if (Number.isNaN(eteHours)) {
+      return {
+        label: `${mxRemaining.toFixed(1)} hr`,
+        detail: "Enter ETD and ETA",
+        ok: null,
+      };
+    }
+
+    const mxMargin = mxRemaining - eteHours;
+    const isSufficient = mxMargin > 1;
+    return {
+      label: `${mxRemaining.toFixed(1)} hr`,
+      detail: isSufficient
+        ? "Sufficient for ETE"
+        : "Remaining MX time may be insufficient for this flight",
+      ok: isSufficient,
+    };
+  }, [ete, mxRemaining]);
+
+  const avgFuelBurnRate = useMemo(() => {
+    const value = briefSelectedAircraft?.model?.avg_fuel_burn_rate;
+    const parsed = parseFloat(String(value ?? ""));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [briefSelectedAircraft]);
+
+  const calculatedFuelTime = useMemo(() => {
+    const fuelGallons = parseFloat(String(fuel ?? ""));
+    if (!Number.isFinite(fuelGallons) || fuelGallons < 0 || !avgFuelBurnRate) {
+      return null;
+    }
+
+    return fuelGallons / avgFuelBurnRate;
+  }, [avgFuelBurnRate, fuel]);
+
+  const fuelTimeMeta = useMemo(() => {
+    if (calculatedFuelTime === null) {
+      return {
+        label: "--",
+        detail: avgFuelBurnRate ? "Enter fuel amount" : "No average burn rate saved",
+        ok: null,
+      };
+    }
+
+    const eteHours = parseFloat(ete);
+    if (!Number.isFinite(eteHours)) {
+      return {
+        label: `${calculatedFuelTime.toFixed(2)} hr`,
+        detail: "Enter ETD and ETA",
+        ok: null,
+      };
+    }
+
+    const fuelMargin = calculatedFuelTime - eteHours;
+    const isSufficient = fuelMargin >= 0;
+    return {
+      label: `${calculatedFuelTime.toFixed(2)} hr`,
+      detail:
+        fuelMargin < 0
+          ? "Fuel time is less than ETE"
+          : fuelMargin < 0.5
+            ? "Fuel reserve is under 0.5 hr"
+            : "Fuel time covers ETE",
+      ok: isSufficient && fuelMargin >= 0.5,
+    };
+  }, [avgFuelBurnRate, calculatedFuelTime, ete]);
 
   const airmetGroups = useMemo(
     () => groupAdvisories(airmets, (item) => formatWeatherHazardLabel(item?.hazard ?? item?.text)),
@@ -713,8 +868,8 @@ export default function FlightBrief() {
   const currentStep = brief.currentStep ?? 0;
   const setCurrentStep = useCallback((value) => setBriefField("currentStep", value), [setBriefField]);
   const topRef = useRef(null);
-  const [savedStudents, setSavedStudents] = React.useState([]);
-  const [savedCfis, setSavedCfis] = React.useState([]);
+  const [savedPeopleOptions, setSavedPeopleOptions] = React.useState([]);
+  const [aircraftOptions, setAircraftOptions] = React.useState([]);
   const [mobileEditingField, setMobileEditingField] = React.useState(null);
 
   useEffect(() => {
@@ -733,6 +888,24 @@ export default function FlightBrief() {
   const riskMeta = useMemo(() => riskCategory(totalRisk), [totalRisk]);
 
   useEffect(() => {
+    if (calculatedFuelTime === null) {
+      return;
+    }
+
+    const eteHours = parseFloat(ete);
+    if (!Number.isFinite(eteHours)) {
+      return;
+    }
+
+    if (calculatedFuelTime - eteHours < 0.5 && !dynamicChecked["dynamic-max-fuel-flight"]) {
+      setDynamicChecked((current) => ({
+        ...current,
+        "dynamic-max-fuel-flight": true,
+      }));
+    }
+  }, [calculatedFuelTime, dynamicChecked, ete, setDynamicChecked]);
+
+  useEffect(() => {
     let cancelled = false;
     const supabase = getSupabaseClient();
 
@@ -744,19 +917,23 @@ export default function FlightBrief() {
 
         if (!session?.user?.id) {
           if (!cancelled) {
-            setSavedStudents([]);
-            setSavedCfis([]);
+            setSavedPeopleOptions([]);
+            setAircraftOptions([]);
           }
           return;
         }
 
-        const [people, profile, certificates] = await Promise.all([
+        const [people, profile, certificates, sharedAircraft, myAircraft] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchCurrentProfile(session.user.id),
           fetchPersonCertificates(session.user.id).catch(() => []),
+          fetchSharedAircraft().catch(() => []),
+          fetchMyAircraft(session.user.id).catch(() => []),
         ]);
         const peopleById = new Map(people.map((person) => [person.id, person]));
         const selfPersonId = profile?.self_person_id || "";
+        const savedStudentPeople = people.filter((person) => person.role === "student");
+        const savedInstructorPeople = people.filter((person) => person.role === "cfi");
         const certificatePilots = certificates
           .filter((certificate) => certificate.certificate_type === "pilot" && certificate.person_id !== selfPersonId)
           .map((certificate) => {
@@ -764,7 +941,6 @@ export default function FlightBrief() {
             return person
               ? {
                   ...person,
-                  id: certificate.id,
                   person_id: person.id,
                   cert_number: certificate.certificate_number || person.cert_number,
                 }
@@ -773,18 +949,14 @@ export default function FlightBrief() {
           .filter(Boolean);
         const certificateInstructors = certificates
           .filter((certificate) => (
-            certificate.person_id === selfPersonId &&
-            (
-              certificate.certificate_type === "flight_instructor" ||
-              certificate.certificate_type === "ground_instructor"
-            )
+            certificate.certificate_type === "flight_instructor" ||
+            certificate.certificate_type === "ground_instructor"
           ))
           .map((certificate) => {
             const person = peopleById.get(certificate.person_id);
             return person
               ? {
                   ...person,
-                  id: certificate.id,
                   person_id: person.id,
                   cert_number: certificate.certificate_number || person.cert_number,
                   cert_exp_date: certificate.last_event_date || person.cert_exp_date,
@@ -794,13 +966,25 @@ export default function FlightBrief() {
           .filter(Boolean);
 
         if (!cancelled) {
-          setSavedStudents(certificatePilots);
-          setSavedCfis(certificateInstructors);
+          const studentOptions = getUniqueSavedPeopleByName([
+            ...savedStudentPeople,
+            ...certificatePilots,
+          ]);
+          const instructorOptions = getUniqueSavedPeopleByName([
+            ...savedInstructorPeople,
+            ...certificateInstructors,
+          ]);
+
+          setSavedPeopleOptions(getUniqueSavedPeopleByName([
+            ...studentOptions,
+            ...instructorOptions,
+          ]));
+          setAircraftOptions(mergeAircraftOptions(sharedAircraft, myAircraft));
         }
       } catch {
         if (!cancelled) {
-          setSavedStudents([]);
-          setSavedCfis([]);
+          setSavedPeopleOptions([]);
+          setAircraftOptions([]);
         }
       }
     }
@@ -817,37 +1001,37 @@ export default function FlightBrief() {
       return;
     }
 
-    const selectedStudent = savedStudents.find((person) => person.id === selectedStudentId);
+    const selectedStudent = savedPeopleOptions.find((person) => person.id === selectedStudentId);
     if (selectedStudent?.display_name) {
       setStudentName(selectedStudent.display_name);
     }
-  }, [savedStudents, selectedStudentId, setStudentName]);
+  }, [savedPeopleOptions, selectedStudentId, setStudentName]);
 
   useEffect(() => {
     if (!selectedInstructorId) {
       return;
     }
 
-    const selectedInstructor = savedCfis.find((person) => person.id === selectedInstructorId);
+    const selectedInstructor = savedPeopleOptions.find((person) => person.id === selectedInstructorId);
     if (selectedInstructor?.display_name) {
       setInstructorName(selectedInstructor.display_name);
     }
-  }, [savedCfis, selectedInstructorId, setInstructorName]);
+  }, [savedPeopleOptions, selectedInstructorId, setInstructorName]);
 
   const handleStudentNameChange = useCallback((value) => {
-    const selected = matchSavedPersonByName(savedStudents, value);
+    const selected = matchSavedPersonByName(savedPeopleOptions, value);
     setStudentName(value);
     setSelectedStudentId(selected?.id ?? "");
-  }, [savedStudents, setSelectedStudentId, setStudentName]);
+  }, [savedPeopleOptions, setSelectedStudentId, setStudentName]);
 
   const handleInstructorNameChange = useCallback((value) => {
-    const selected = matchSavedPersonByName(savedCfis, value);
+    const selected = matchSavedPersonByName(savedPeopleOptions, value);
     setInstructorName(value);
     setSelectedInstructorId(selected?.id ?? "");
-  }, [savedCfis, setInstructorName, setSelectedInstructorId]);
+  }, [savedPeopleOptions, setInstructorName, setSelectedInstructorId]);
 
-  const savedStudentNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedStudents), [savedStudents]);
-  const savedInstructorNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedCfis), [savedCfis]);
+  const savedPersonNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedPeopleOptions), [savedPeopleOptions]);
+  const aircraftTailOptions = useMemo(() => getUniqueAircraftByTail(aircraftOptions), [aircraftOptions]);
 
   useEffect(() => {
     const wbResult = briefWb?.result;
@@ -863,24 +1047,23 @@ export default function FlightBrief() {
         ? String(wbInputs[fuelStation.id])
         : "";
 
-    if (!wbResult && !briefSelectedAircraft) {
-      return;
-    }
-
     setBrief((current) => ({
       ...current,
-      aircraftId: briefSelectedAircraft?.name ?? current.aircraftId ?? "",
-      fuel: fuelInputValue || current.fuel || "",
+      fuel: wbResult ? fuelInputValue || current.fuel || "" : "",
+      fuelTime:
+        calculatedFuelTime !== null
+          ? calculatedFuelTime.toFixed(2)
+          : "",
       grossWeight: wbResult?.total_weight
         ? wbResult.total_weight.toFixed(1)
-        : current.grossWeight ?? "",
-      wbCg: wbResult?.cg ? wbResult.cg.toFixed(2) : current.wbCg ?? "",
+        : "",
+      wbCg: wbResult?.cg ? wbResult.cg.toFixed(2) : "",
       withinLimitsConfirmed:
         typeof wbResult?.status === "string"
           ? wbResult.status === "within"
-          : current.withinLimitsConfirmed ?? false,
+          : false,
     }));
-  }, [briefSelectedAircraft, briefWb, setBrief]);
+  }, [briefSelectedAircraft, briefWb, calculatedFuelTime, setBrief]);
 
   const riskGates = useMemo(() => {
   const gates = [];
@@ -1357,12 +1540,95 @@ ${riskComments}
     scrollToTop();
   };
 
+  const getMissingStepFields = useCallback((stepIndex) => {
+    const missing = [];
+
+    if (stepIndex === 0) {
+      if (!studentName.trim()) missing.push("Student name");
+      if (!instructorName.trim()) missing.push("Instructor name");
+      if (!flightDate) missing.push("Flight date");
+      if (!etd) missing.push("ETD");
+      if (!eta) missing.push("ETA");
+      if (!aircraftId.trim()) missing.push("Aircraft tail number");
+    }
+
+    if (stepIndex === 1) {
+      if (!String(mxNow).trim()) missing.push("MX time now");
+      if (!String(mxDue).trim()) missing.push("Next MX due");
+      if (briefSelectedAircraft && !withinLimitsConfirmed) {
+        missing.push("Weight and balance within limits");
+      }
+    }
+
+    if (stepIndex === 2) {
+      if (!departure.trim()) missing.push("Departure point");
+      if (!arrival.trim()) missing.push("Arrival point");
+      if (!lessonPractice.trim()) missing.push("Lesson practice");
+      if (routeMode === "cross") {
+        stops.forEach((stop, index) => {
+          if (!String(stop ?? "").trim()) {
+            missing.push(`Intermediate stop ${index + 1}`);
+          }
+        });
+      }
+    }
+
+    if (stepIndex === 4) {
+      if (!riskComments.trim()) missing.push("Risk discussion / comments");
+    }
+
+    return missing;
+  }, [
+    aircraftId,
+    arrival,
+    briefSelectedAircraft,
+    departure,
+    eta,
+    etd,
+    flightDate,
+    instructorName,
+    lessonPractice,
+    mxDue,
+    mxNow,
+    riskComments,
+    routeMode,
+    stops,
+    studentName,
+    withinLimitsConfirmed,
+  ]);
+
+  const confirmMissingStepFields = useCallback((stepIndex) => {
+    const missing = getMissingStepFields(stepIndex);
+    if (missing.length === 0) {
+      return true;
+    }
+
+    return window.confirm(
+      `The following information has not been entered:\n\n${missing
+        .map((field) => `- ${field}`)
+        .join("\n")}\n\nContinue anyway?`
+    );
+  }, [getMissingStepFields]);
+
+  const handleNextStep = () => {
+    if (!confirmMissingStepFields(currentStep)) {
+      return;
+    }
+
+    goToNextStep();
+  };
+
+  const handleGenerateReport = () => {
+    if (!confirmMissingStepFields(currentStep)) {
+      return;
+    }
+
+    generateReport();
+  };
+
   return (
     <div className="flightbrief-body" ref={topRef}>
       <div className="flightbrief-header">
-        <div>
-          <h1 className="text-3xl font-bold text-center mb-6">Flight Brief</h1>
-        </div>
         <div className="flightbrief-stepBadge">
           Step {currentStep + 1} of {steps.length}
         </div>
@@ -1397,13 +1663,21 @@ ${riskComments}
           {session?.user?.id ? (
             <>
               <datalist id="flightBriefSavedPilots">
-                {savedStudentNameOptions.map((person) => (
+                {savedPersonNameOptions.map((person) => (
                   <option key={person.id} value={person.display_name} />
                 ))}
               </datalist>
               <datalist id="flightBriefSavedInstructors">
-                {savedInstructorNameOptions.map((person) => (
+                {savedPersonNameOptions.map((person) => (
                   <option key={person.id} value={person.display_name} />
+                ))}
+              </datalist>
+              <datalist id="flightBriefSavedAircraft">
+                {aircraftTailOptions.map((aircraft) => (
+                  <option
+                    key={aircraft.id}
+                    value={aircraft.tail_number || aircraft.name}
+                  />
                 ))}
               </datalist>
             </>
@@ -1463,6 +1737,7 @@ ${riskComments}
                       <input
                         autoFocus
                         type="text"
+                        list={session?.user?.id ? "flightBriefSavedAircraft" : undefined}
                         value={aircraftId}
                         onChange={(e) => setAircraftId(e.target.value)}
                         onBlur={close}
@@ -1543,22 +1818,6 @@ ${riskComments}
                       />
                     )}
                   />
-                  <EditableInfoRow
-                    label="Fuel Time"
-                    value={formatDisplayValue(fuelTime, "Not set")}
-                    rowKey="fuelTime"
-                    editingKey={mobileEditingField}
-                    setEditingKey={setMobileEditingField}
-                    renderEditor={(close) => (
-                      <input
-                        autoFocus
-                        type="number"
-                        value={fuelTime}
-                        onChange={(e) => setFuelTime(e.target.value)}
-                        onBlur={close}
-                      />
-                    )}
-                  />
                 </div>
               </div>
 
@@ -1624,16 +1883,13 @@ ${riskComments}
                     type="text"
                     id="aircraftId"
                     className="input-field"
+                    list={session?.user?.id ? "flightBriefSavedAircraft" : undefined}
                     value={aircraftId}
                     onChange={(e) => setAircraftId(e.target.value)}
                     placeholder="e.g. N6758H"
                   />
                 </div>
 
-                <div className="inline-label-input inline-label-input-compact">
-                  <label className="label" htmlFor="fuelTime">Fuel Time (hrs):</label>
-                  <input type="number" id="fuelTime" className="input-field" value={fuelTime} onChange={(e) => setFuelTime(e.target.value)} placeholder="e.g. 2.5" />
-                </div>
               </div>
               </div>
             </section>
@@ -1664,13 +1920,27 @@ ${riskComments}
                     {withinLimitsConfirmed ? "Confirmed" : "Not Confirmed"}
                   </strong>
                 </div>
+                <div className="flightbrief-kpi">
+                  <span>Fuel Time</span>
+                  <strong className={fuelTimeMeta.ok === false ? "is-alert" : fuelTimeMeta.ok === true ? "is-ok" : ""}>
+                    {fuelTimeMeta.label}
+                  </strong>
+                  <small>{fuelTimeMeta.detail}</small>
+                </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="mx-now">Mx Time Now:</label>
-                  <input type="number" id="mx-now" className="input-field" value={mxNow} onChange={(e) => setMxNow(e.target.value)} placeholder="Check Aircraft" />
+                  <input type="number" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder="Check Aircraft" />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="mx-due">Next Mx Due:</label>
-                  <input type="number" id="mx-due" className="input-field" value={mxDue} onChange={(e) => setMxDue(e.target.value)} placeholder="" />
+                  <input type="number" id="mx-due" className="input-field" value={mxDue} onChange={(e) => handleMxDueChange(e.target.value)} placeholder="" />
+                </div>
+                <div className="flightbrief-kpi">
+                  <span>MX Remaining</span>
+                  <strong className={mxRemainingMeta.ok === false ? "is-alert" : mxRemainingMeta.ok === true ? "is-ok" : ""}>
+                    {mxRemainingMeta.label}
+                  </strong>
+                  <small>{mxRemainingMeta.detail}</small>
                 </div>
               </div>
 
@@ -2387,12 +2657,12 @@ ${riskComments}
           <strong>{steps[currentStep].title}</strong>
         </div>
         {isLastStep ? (
-          <button type="button" className="flightbrief-navButton primary" onClick={generateReport}>
+          <button type="button" className="flightbrief-navButton primary" onClick={handleGenerateReport}>
             <span className="flightbrief-navButtonDesktop">Generate Flight Brief Report</span>
             <span className="flightbrief-navButtonMobile" aria-hidden="true">✓</span>
           </button>
         ) : (
-          <button type="button" className="flightbrief-navButton primary" onClick={goToNextStep}>
+          <button type="button" className="flightbrief-navButton primary" onClick={handleNextStep}>
             <span className="flightbrief-navButtonDesktop">Next</span>
             <span className="flightbrief-navButtonMobile" aria-hidden="true">›</span>
           </button>

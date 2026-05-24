@@ -76,7 +76,7 @@
 
 .flightbrief-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1rem;
   align-items: start;
   margin-bottom: 0;
@@ -180,7 +180,7 @@
 
 .flightbrief-aircraft-summaryBar {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: 0.55rem;
   margin-bottom: 0.7rem;
   align-items: stretch;
@@ -215,12 +215,28 @@
   color: #b91c1c;
 }
 
+.flightbrief-body .wb-stat-card strong {
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .flightbrief-aircraft-inlineField {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
   padding: 0.7rem 0.78rem;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 14px;
   background: rgba(248, 250, 252, 0.74);
   align-content: start;
+}
+
+.flightbrief-aircraft-inlineField .label {
+  min-width: 0;
+}
+
+.flightbrief-aircraft-inlineField .input-field {
+  min-width: 8rem;
 }
 
 .flightbrief-form {
@@ -485,6 +501,18 @@
   min-width: 0;
 }
 
+.flightbrief-aircraft-summaryBar .flightbrief-aircraft-inlineField {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-width: 11rem;
+}
+
+.flightbrief-aircraft-summaryBar .flightbrief-aircraft-inlineField .input-field {
+  width: 100%;
+  max-width: none;
+  min-width: 8rem;
+}
+
 .btn-toggle {
   padding: 0.6rem 0.9rem;
   background-color: #e2e8f0;
@@ -610,21 +638,21 @@
 .flightbrief-riskBadge {
   display: grid;
   justify-items: center;
-  min-width: 92px;
-  padding: 0.8rem 0.9rem;
-  border-radius: 16px;
+  min-width: 68px;
+  padding: 0.52rem 0.62rem;
+  border-radius: 12px;
   background: #2563eb;
   color: #fff;
 }
 
 .flightbrief-riskBadge span {
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
 }
 
 .flightbrief-riskBadge strong {
-  font-size: 1.7rem;
+  font-size: 1.2rem;
   line-height: 1;
 }
 

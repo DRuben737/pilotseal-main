@@ -34,6 +34,7 @@ export type AircraftModelRecord = {
   name: string;
   category: string | null;
   chart_type?: AircraftChartType | string | null;
+  avg_fuel_burn_rate?: number | null;
   stations: unknown;
   envelope: unknown;
 };
@@ -98,7 +99,8 @@ export type AttachAircraftSuccess = {
 
 export type AttachAircraftResult = AttachAircraftSuccess | AttachAircraftConflict;
 
-const AIRCRAFT_MODEL_SELECT = "id, name, category, chart_type, stations, envelope";
+const AIRCRAFT_MODEL_SELECT = "id, name, category, chart_type, avg_fuel_burn_rate, stations, envelope";
+const AIRCRAFT_MODEL_SELECT_LEGACY = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
   "id, model_id, name, tail_number, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, tail_number, empty_weight, empty_arm, empty_lat_arm",
@@ -122,11 +124,20 @@ export async function fetchAircraftModels() {
     .select(AIRCRAFT_MODEL_SELECT)
     .order("name", { ascending: true });
 
-  if (error) {
-    throw error;
+  if (!error) {
+    return normalizeAircraftModels(data ?? []);
   }
 
-  return (data ?? []) as AircraftModelRecord[];
+  const { data: legacyData, error: legacyError } = await supabase
+    .from("aircraft_models")
+    .select(AIRCRAFT_MODEL_SELECT_LEGACY)
+    .order("name", { ascending: true });
+
+  if (legacyError) {
+    throw legacyError;
+  }
+
+  return normalizeAircraftModels(legacyData ?? []);
 }
 
 export async function fetchSharedAircraft() {
@@ -187,26 +198,45 @@ export async function fetchAircraft() {
 export async function createAircraftModel(input: {
   name: string;
   category: string;
+  avg_fuel_burn_rate?: number | null;
   stations: AircraftStation[];
-  envelope: AircraftEnvelopePoint[];
+  envelope: unknown;
 }) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("aircraft_models")
-    .insert({
-      name: input.name,
-      category: input.category,
-      stations: input.stations,
-      envelope: input.envelope,
-    })
-    .select(AIRCRAFT_MODEL_SELECT)
-    .single();
+  const payload = {
+    name: input.name,
+    category: input.category,
+    avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
+    stations: input.stations,
+    envelope: input.envelope,
+  };
+  const legacyPayload = {
+    name: input.name,
+    category: input.category,
+    stations: input.stations,
+    envelope: input.envelope,
+  };
+  const attempts = [
+    { payload, select: AIRCRAFT_MODEL_SELECT },
+    { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
+  ];
 
-  if (error) {
-    throw error;
+  let lastError = null;
+  for (const attempt of attempts) {
+    const { data, error } = await supabase
+      .from("aircraft_models")
+      .insert(attempt.payload)
+      .select(attempt.select)
+      .single();
+
+    if (!error) {
+      return normalizeAircraftModelRecord(data);
+    }
+
+    lastError = error;
   }
 
-  return data as AircraftModelRecord;
+  throw lastError;
 }
 
 export async function updateAircraftModel(
@@ -214,28 +244,47 @@ export async function updateAircraftModel(
   input: {
     name: string;
     category: string;
+    avg_fuel_burn_rate?: number | null;
     stations: AircraftStation[];
-    envelope: AircraftEnvelopePoint[];
+    envelope: unknown;
   }
 ) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("aircraft_models")
-    .update({
-      name: input.name,
-      category: input.category,
-      stations: input.stations,
-      envelope: input.envelope,
-    })
-    .eq("id", id)
-    .select(AIRCRAFT_MODEL_SELECT)
-    .single();
+  const payload = {
+    name: input.name,
+    category: input.category,
+    avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
+    stations: input.stations,
+    envelope: input.envelope,
+  };
+  const legacyPayload = {
+    name: input.name,
+    category: input.category,
+    stations: input.stations,
+    envelope: input.envelope,
+  };
+  const attempts = [
+    { payload, select: AIRCRAFT_MODEL_SELECT },
+    { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
+  ];
 
-  if (error) {
-    throw error;
+  let lastError = null;
+  for (const attempt of attempts) {
+    const { data, error } = await supabase
+      .from("aircraft_models")
+      .update(attempt.payload)
+      .eq("id", id)
+      .select(attempt.select)
+      .single();
+
+    if (!error) {
+      return normalizeAircraftModelRecord(data);
+    }
+
+    lastError = error;
   }
 
-  return data as AircraftModelRecord;
+  throw lastError;
 }
 
 export async function deleteAircraftModel(id: string) {
@@ -777,6 +826,24 @@ function normalizeAircraftList(
   });
 }
 
+function normalizeAircraftModels(records: unknown[]) {
+  return records.map((record) => normalizeAircraftModelRecord(record));
+}
+
+function normalizeAircraftModelRecord(value: unknown) {
+  const record = (value ?? {}) as Record<string, unknown>;
+
+  return {
+    id: String(record.id ?? ""),
+    name: String(record.name ?? ""),
+    category: typeof record.category === "string" ? record.category : null,
+    chart_type: typeof record.chart_type === "string" ? record.chart_type : null,
+    avg_fuel_burn_rate: toNumber(record.avg_fuel_burn_rate),
+    stations: record.stations ?? [],
+    envelope: record.envelope ?? [],
+  } as AircraftModelRecord;
+}
+
 function normalizeAircraftRecord(
   value: unknown,
   fallbackModel: AircraftModelRecord | null = null,
@@ -798,6 +865,7 @@ function normalizeAircraftRecord(
             typeof (rawModel as Record<string, unknown>).chart_type === "string"
               ? String((rawModel as Record<string, unknown>).chart_type)
               : null,
+          avg_fuel_burn_rate: toNumber((rawModel as Record<string, unknown>).avg_fuel_burn_rate),
           stations: (rawModel as Record<string, unknown>).stations ?? [],
           envelope: (rawModel as Record<string, unknown>).envelope ?? [],
         } as AircraftModelRecord)

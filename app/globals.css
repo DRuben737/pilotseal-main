@@ -3852,7 +3852,8 @@ summary:focus-visible {
 .wb-stat-card strong {
   display: block;
   margin-top: 0.3rem;
-  font-size: 1.1rem;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .wb-chart-wrap {

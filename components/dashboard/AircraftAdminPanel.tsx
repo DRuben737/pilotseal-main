@@ -14,7 +14,7 @@ import {
   fetchAircraftUpdateRequests,
   fetchSharedAircraft,
   rejectAircraftUpdateRequest,
-  parseAircraftEnvelope,
+  parseAircraftEnvelopeSet,
   parseAircraftStations,
   updateAircraft,
   updateAircraftModel,
@@ -35,12 +35,20 @@ type EnvelopePointDraft = {
   weight: string;
 };
 
+type PolygonPointDraft = {
+  x: string;
+  y: string;
+};
+
 type ModelFormState = {
   id: string | null;
   name: string;
   category: "airplane" | "helicopter";
+  avg_fuel_burn_rate: string;
   stations: ModelStationDraft[];
   envelope: EnvelopePointDraft[];
+  topView: PolygonPointDraft[];
+  sideView: PolygonPointDraft[];
 };
 
 type AircraftFormState = {
@@ -56,11 +64,22 @@ const emptyModelForm: ModelFormState = {
   id: null,
   name: "",
   category: "airplane",
+  avg_fuel_burn_rate: "",
   stations: [{ id: "", name: "", arm: "" }],
   envelope: [
     { cg: "", weight: "" },
     { cg: "", weight: "" },
     { cg: "", weight: "" },
+  ],
+  topView: [
+    { x: "", y: "" },
+    { x: "", y: "" },
+    { x: "", y: "" },
+  ],
+  sideView: [
+    { x: "", y: "" },
+    { x: "", y: "" },
+    { x: "", y: "" },
   ],
 };
 
@@ -75,12 +94,15 @@ const emptyAircraftForm: AircraftFormState = {
 
 function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
   const stations = parseAircraftStations(model.stations);
-  const envelope = parseAircraftEnvelope(model.envelope);
+  const envelopeSet = parseAircraftEnvelopeSet(model.envelope);
+  const envelope = envelopeSet.normal;
 
   return {
     id: model.id,
     name: model.name ?? "",
     category: model.category === "helicopter" ? "helicopter" : "airplane",
+    avg_fuel_burn_rate:
+      typeof model.avg_fuel_burn_rate === "number" ? String(model.avg_fuel_burn_rate) : "",
     stations:
       stations.length > 0
         ? stations.map((station) => ({
@@ -96,6 +118,20 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
             weight: String(point.weight),
           }))
         : emptyModelForm.envelope,
+    topView:
+      envelopeSet.topView.length > 0
+        ? envelopeSet.topView.map((point) => ({
+            x: String(point.x),
+            y: String(point.y),
+          }))
+        : emptyModelForm.topView,
+    sideView:
+      envelopeSet.sideView.length > 0
+        ? envelopeSet.sideView.map((point) => ({
+            x: String(point.x),
+            y: String(point.y),
+          }))
+        : emptyModelForm.sideView,
   };
 }
 
@@ -373,6 +409,24 @@ export default function AircraftAdminPanel() {
     }));
   }
 
+  function updateTopView(index: number, key: keyof PolygonPointDraft, value: string) {
+    setModelForm((current) => ({
+      ...current,
+      topView: current.topView.map((point, pointIndex) =>
+        pointIndex === index ? { ...point, [key]: value } : point
+      ),
+    }));
+  }
+
+  function updateSideView(index: number, key: keyof PolygonPointDraft, value: string) {
+    setModelForm((current) => ({
+      ...current,
+      sideView: current.sideView.map((point, pointIndex) =>
+        pointIndex === index ? { ...point, [key]: value } : point
+      ),
+    }));
+  }
+
   async function handleSaveModel() {
     if (!isAdmin) {
       return;
@@ -404,7 +458,43 @@ export default function AircraftAdminPanel() {
         weight: toNumber(point.weight),
       }));
 
-    if (envelope.length < 3) {
+    const topView = modelForm.topView
+      .filter((point) => point.x.trim() && point.y.trim())
+      .map((point) => ({
+        x: toNumber(point.x),
+        y: toNumber(point.y),
+      }));
+
+    const sideView = modelForm.sideView
+      .filter((point) => point.x.trim() && point.y.trim())
+      .map((point) => ({
+        x: toNumber(point.x),
+        y: toNumber(point.y),
+      }));
+
+    const savedEnvelope =
+      modelForm.category === "helicopter" && topView.length > 0 && sideView.length > 0
+        ? {
+            top_view: topView,
+            side_view: sideView,
+          }
+        : modelForm.category === "helicopter" && topView.length > 0
+          ? {
+              polygon: topView,
+            }
+          : envelope;
+
+    if (modelForm.category === "helicopter" && (topView.length > 0 || sideView.length > 0)) {
+      if (topView.length < 3) {
+        setStatus("Add at least three top-view points.");
+        return;
+      }
+
+      if (sideView.length > 0 && sideView.length < 3) {
+        setStatus("Add at least three side-view points or leave side view empty.");
+        return;
+      }
+    } else if (envelope.length < 3) {
       setStatus("Add at least three envelope points.");
       return;
     }
@@ -415,8 +505,11 @@ export default function AircraftAdminPanel() {
       const payload = {
         name: modelForm.name.trim(),
         category: modelForm.category,
+        avg_fuel_burn_rate: modelForm.avg_fuel_burn_rate.trim()
+          ? toNumber(modelForm.avg_fuel_burn_rate)
+          : null,
         stations,
-        envelope,
+        envelope: savedEnvelope,
       };
       let savedModel: AircraftModelRecord;
 
@@ -620,6 +713,18 @@ export default function AircraftAdminPanel() {
             <option value="helicopter">Helicopter</option>
           </select>
         </label>
+        <label className="grid gap-2 text-sm md:col-span-2">
+          <span>Average fuel burn rate (GPH)</span>
+          <input
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            type="number"
+            min="0"
+            step="0.1"
+            value={modelForm.avg_fuel_burn_rate}
+            onChange={(event) => updateModelField("avg_fuel_burn_rate", event.target.value)}
+            placeholder="e.g. 8.5"
+          />
+        </label>
       </div>
 
       <div className="mt-6">
@@ -686,62 +791,180 @@ export default function AircraftAdminPanel() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-slate-900">Envelope</h4>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() =>
-              updateModelField("envelope", [
-                ...modelForm.envelope,
-                { cg: "", weight: "" },
-              ])
-            }
-          >
-            Add point
-          </button>
-        </div>
-        <div className="grid gap-3">
-          {modelForm.envelope.map((point, index) => (
-            <div
-              key={`${point.cg}-${point.weight}-${index}`}
-              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-2 text-sm">
-                <span>CG</span>
-                <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  type="number"
-                  value={point.cg}
-                  onChange={(event) => updateEnvelope(index, "cg", event.target.value)}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Weight</span>
-                <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  type="number"
-                  value={point.weight}
-                  onChange={(event) => updateEnvelope(index, "weight", event.target.value)}
-                />
-              </label>
+      {modelForm.category === "helicopter" ? (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-slate-900">Top view envelope</h4>
               <button
                 type="button"
-                className="danger-button-compact self-end"
+                className="ghost-button"
                 onClick={() =>
-                  updateModelField(
-                    "envelope",
-                    modelForm.envelope.filter((_, pointIndex) => pointIndex !== index)
-                  )
+                  updateModelField("topView", [
+                    ...modelForm.topView,
+                    { x: "", y: "" },
+                  ])
                 }
               >
-                Remove
+                Add point
               </button>
             </div>
-          ))}
+            <div className="grid gap-3">
+              {modelForm.topView.map((point, index) => (
+                <div
+                  key={`top-${point.x}-${point.y}-${index}`}
+                  className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                >
+                  <label className="grid gap-2 text-sm">
+                    <span>Longitudinal CG</span>
+                    <input
+                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      type="number"
+                      value={point.x}
+                      onChange={(event) => updateTopView(index, "x", event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm">
+                    <span>Lateral CG</span>
+                    <input
+                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      type="number"
+                      value={point.y}
+                      onChange={(event) => updateTopView(index, "y", event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="danger-button-compact self-end"
+                    onClick={() =>
+                      updateModelField(
+                        "topView",
+                        modelForm.topView.filter((_, pointIndex) => pointIndex !== index)
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-slate-900">Side view envelope</h4>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() =>
+                  updateModelField("sideView", [
+                    ...modelForm.sideView,
+                    { x: "", y: "" },
+                  ])
+                }
+              >
+                Add point
+              </button>
+            </div>
+            <div className="grid gap-3">
+              {modelForm.sideView.map((point, index) => (
+                <div
+                  key={`side-${point.x}-${point.y}-${index}`}
+                  className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                >
+                  <label className="grid gap-2 text-sm">
+                    <span>Longitudinal CG</span>
+                    <input
+                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      type="number"
+                      value={point.x}
+                      onChange={(event) => updateSideView(index, "x", event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm">
+                    <span>Weight</span>
+                    <input
+                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      type="number"
+                      value={point.y}
+                      onChange={(event) => updateSideView(index, "y", event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="danger-button-compact self-end"
+                    onClick={() =>
+                      updateModelField(
+                        "sideView",
+                        modelForm.sideView.filter((_, pointIndex) => pointIndex !== index)
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="mt-6">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h4 className="text-sm font-semibold text-slate-900">Envelope</h4>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() =>
+                updateModelField("envelope", [
+                  ...modelForm.envelope,
+                  { cg: "", weight: "" },
+                ])
+              }
+            >
+              Add point
+            </button>
+          </div>
+          <div className="grid gap-3">
+            {modelForm.envelope.map((point, index) => (
+              <div
+                key={`${point.cg}-${point.weight}-${index}`}
+                className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              >
+                <label className="grid gap-2 text-sm">
+                  <span>CG</span>
+                  <input
+                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    type="number"
+                    value={point.cg}
+                    onChange={(event) => updateEnvelope(index, "cg", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-2 text-sm">
+                  <span>Weight</span>
+                  <input
+                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    type="number"
+                    value={point.weight}
+                    onChange={(event) => updateEnvelope(index, "weight", event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="danger-button-compact self-end"
+                  onClick={() =>
+                    updateModelField(
+                      "envelope",
+                      modelForm.envelope.filter((_, pointIndex) => pointIndex !== index)
+                    )
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 flex items-center justify-end gap-3">
         <button
@@ -935,7 +1158,12 @@ export default function AircraftAdminPanel() {
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-sm font-semibold text-slate-900">{model.name}</p>
-                                <p className="saas-meta-text">{model.category ?? "Aircraft"} model</p>
+                                <p className="saas-meta-text">
+                                  {model.category ?? "Aircraft"} model · Avg burn{" "}
+                                  {typeof model.avg_fuel_burn_rate === "number"
+                                    ? `${model.avg_fuel_burn_rate} GPH`
+                                    : "--"}
+                                </p>
                               </div>
                               <div className="flex gap-2">
                                 <button
