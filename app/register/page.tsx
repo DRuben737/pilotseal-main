@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
-import AuthForm from "@/components/auth/AuthForm";
 import AuthPageFallback from "@/components/auth/AuthPageFallback";
+import RegisterContent from "@/app/register/RegisterContent";
 
 export const metadata = {
   title: "Register | PilotSeal",
@@ -11,7 +11,7 @@ export const metadata = {
 export default function RegisterPage() {
   return (
     <Suspense fallback={<AuthPageFallback />}>
-      <AuthForm mode="register" />
+      <RegisterContent />
     </Suspense>
   );
 }

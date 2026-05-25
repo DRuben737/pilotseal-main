@@ -932,15 +932,29 @@ export default function FlightBrief() {
         ]);
         const peopleById = new Map(people.map((person) => [person.id, person]));
         const selfPersonId = profile?.self_person_id || "";
-        const savedStudentPeople = people.filter((person) => person.role === "student");
-        const savedInstructorPeople = people.filter((person) => person.role === "cfi");
+        const applySelfNickname = (person) => {
+          if (!person || person.id !== selfPersonId) {
+            return person;
+          }
+
+          return {
+            ...person,
+            display_name: profile?.display_name || person.display_name,
+          };
+        };
+        const savedStudentPeople = people
+          .filter((person) => person.role === "student")
+          .map(applySelfNickname);
+        const savedInstructorPeople = people
+          .filter((person) => person.role === "cfi")
+          .map(applySelfNickname);
         const certificatePilots = certificates
-          .filter((certificate) => certificate.certificate_type === "pilot" && certificate.person_id !== selfPersonId)
+          .filter((certificate) => certificate.certificate_type === "pilot")
           .map((certificate) => {
             const person = peopleById.get(certificate.person_id);
             return person
               ? {
-                  ...person,
+                  ...applySelfNickname(person),
                   person_id: person.id,
                   cert_number: certificate.certificate_number || person.cert_number,
                 }
@@ -956,7 +970,7 @@ export default function FlightBrief() {
             const person = peopleById.get(certificate.person_id);
             return person
               ? {
-                  ...person,
+                  ...applySelfNickname(person),
                   person_id: person.id,
                   cert_number: certificate.certificate_number || person.cert_number,
                   cert_exp_date: certificate.last_event_date || person.cert_exp_date,

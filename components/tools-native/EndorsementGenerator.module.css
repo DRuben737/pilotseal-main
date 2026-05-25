@@ -251,6 +251,146 @@
   background: #fff;
   border: 1px dashed rgba(42, 168, 255, 0.32);
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.mobileSignatureTrigger {
+  display: none;
+  width: 100%;
+  min-height: 168px;
+  border: 1px dashed rgba(42, 168, 255, 0.38);
+  border-radius: 16px;
+  background: #fff;
+  color: #123a75;
+  cursor: pointer;
+  place-items: center;
+  gap: 0.35rem;
+  padding: 0.9rem;
+  text-align: center;
+  touch-action: manipulation;
+}
+
+.mobileSignatureTriggerActive {
+  display: grid;
+}
+
+.signatureCanvasHiddenOnMobile {
+  display: none;
+}
+
+.mobileSignaturePreview {
+  width: 100%;
+  height: 112px;
+  max-height: 112px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.mobileSignatureTrigger span {
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.mobileSignaturePlaceholder {
+  color: #123a75 !important;
+  font-size: 1.05rem !important;
+}
+
+.signatureModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: grid;
+  background: rgba(8, 13, 24, 0.94);
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+}
+
+.signatureModal {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  min-width: 0;
+  min-height: 0;
+  color: #fff;
+}
+
+.signatureModalRotated {
+  position: fixed;
+  top: 0;
+  left: 100dvw;
+  width: 100dvh;
+  height: 100dvw;
+  transform: rotate(90deg);
+  transform-origin: top left;
+}
+
+.signatureModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.signatureModalHeader h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.signatureModalHeader p {
+  margin: 0.2rem 0 0;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.78rem;
+}
+
+.signatureModalActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.signatureModalActions button {
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 0.55rem 0.8rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.signatureModalActions button:last-child {
+  border-color: rgba(125, 211, 252, 0.55);
+  background: #0ea5e9;
+}
+
+.signatureModalCanvasWrap {
+  min-height: 0;
+  border-radius: 18px;
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    #fff;
+  background-size: 100% 52%;
+  overflow: hidden;
+}
+
+.signatureModalCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .actionRow {
@@ -620,12 +760,66 @@
     grid-template-columns: 1fr;
   }
 
-  .signatureCanvas {
-    height: 180px;
-  }
-
   .templateCategoryHeader {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .signatureModalOverlay {
+    padding: 0;
+  }
+
+  .signatureModal {
+    padding: max(0.7rem, env(safe-area-inset-top)) max(0.7rem, env(safe-area-inset-right))
+      max(0.7rem, env(safe-area-inset-bottom)) max(0.7rem, env(safe-area-inset-left));
+  }
+}
+
+@media (hover: none) and (orientation: portrait), (pointer: coarse) and (orientation: portrait) {
+  .signatureModalRotated {
+    grid-template-rows: auto minmax(0, 1fr);
+    padding: max(0.7rem, env(safe-area-inset-left)) max(0.7rem, env(safe-area-inset-top))
+      max(0.7rem, env(safe-area-inset-right)) max(0.7rem, env(safe-area-inset-bottom));
+  }
+
+  .signatureModalRotated .signatureModalHeader {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .signatureModalRotated .signatureModalHeader p {
+    display: none;
+  }
+
+  .signatureModalRotated .signatureModalActions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .signatureModalRotated .signatureModalActions button {
+    flex: 0 0 auto;
+  }
+}
+
+@media (hover: none) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
+  .signatureModal {
+    grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .signatureModalHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .signatureModalHeader p {
+    display: none;
+  }
+
+  .signatureModalActions {
+    flex-direction: column;
+    justify-content: flex-start;
   }
 }

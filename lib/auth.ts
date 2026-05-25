@@ -13,6 +13,18 @@ export async function getSessionSnapshot() {
     throw error;
   }
 
+  if (session) {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      await supabase.auth.signOut();
+      return null;
+    }
+  }
+
   return session;
 }
 

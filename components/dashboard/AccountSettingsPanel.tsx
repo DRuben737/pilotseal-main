@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
@@ -381,6 +381,7 @@ function AccountCertificateForm({
 
 export default function AccountSettingsPanel() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { loading, session } = useAuthSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [status, setStatus] = useState("Checking account settings...");
@@ -404,6 +405,7 @@ export default function AccountSettingsPanel() {
   const [selfPersonForm, setSelfPersonForm] = useState<SelfPersonForm>(emptySelfPersonForm);
   const [selfCertificates, setSelfCertificates] = useState<PersonCertificate[]>([]);
   const [showCertificates, setShowCertificates] = useState(false);
+  const [editingWeight, setEditingWeight] = useState(false);
   const [editingSelfPerson, setEditingSelfPerson] = useState(false);
   const [showCertificateForm, setShowCertificateForm] = useState(false);
   const [certificateForm, setCertificateForm] = useState<CertificateForm>(emptyCertificateForm);
@@ -473,6 +475,14 @@ export default function AccountSettingsPanel() {
     setGreeting("");
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    const onboardingTarget = searchParams.get("onboarding");
+    if (onboardingTarget === "certificates" || onboardingTarget === "endorsement-cfi") {
+      setShowCertificates(true);
+      setShowCertificateForm(true);
+    }
+  }, [searchParams]);
+
   async function handleDeleteAccount() {
     if (!session?.user?.id) {
       setStatus("You must be signed in to delete your account.");
@@ -533,7 +543,7 @@ export default function AccountSettingsPanel() {
     }
 
     setSavingIdentity(true);
-    setIdentityStatus(displayName.trim() ? "Saving display name..." : "Clearing display name...");
+    setIdentityStatus(displayName.trim() ? "Saving nickname..." : "Clearing nickname...");
 
     try {
       const nextProfile = await updateCurrentProfile(session.user.id, {
@@ -542,10 +552,10 @@ export default function AccountSettingsPanel() {
 
       setProfile(nextProfile);
       setDisplayName(nextProfile.display_name ?? "");
-      setIdentityStatus("Display name saved.");
+      setIdentityStatus("Nickname saved.");
     } catch (error) {
       console.error(error);
-      setIdentityStatus(error instanceof Error ? error.message : "Failed to save display name.");
+      setIdentityStatus(error instanceof Error ? error.message : "Failed to save nickname.");
     } finally {
       setSavingIdentity(false);
     }
@@ -710,7 +720,7 @@ export default function AccountSettingsPanel() {
     });
   }
 
-  async function handleSaveSelfPerson() {
+  async function handleSaveSelfPerson(options?: { closeWeightEditor?: boolean; closeNameEditor?: boolean }) {
     if (!session?.user?.id) {
       setCertificateStatus("You must be signed in to save profile details.");
       return;
@@ -722,12 +732,22 @@ export default function AccountSettingsPanel() {
     try {
       const { person, nextProfile } = await ensureSelfPerson();
       await updateSavedPerson(session.user.id, person.id, {
-        display_name: selfPersonForm.display_name,
+        display_name:
+          selfPersonForm.display_name.trim() ||
+          person.display_name ||
+          displayNameFromProfile() ||
+          session.user.email ||
+          "My profile",
         cert_number: person.cert_number ?? "",
         weight_lbs: selfPersonForm.weight_lbs.trim() ? Number.parseFloat(selfPersonForm.weight_lbs) : null,
       });
       await refreshSelfCertificates(nextProfile);
-      setEditingSelfPerson(false);
+      if (options?.closeWeightEditor) {
+        setEditingWeight(false);
+      }
+      if (options?.closeNameEditor) {
+        setEditingSelfPerson(false);
+      }
       setCertificateStatus("Profile details saved.");
     } catch (error) {
       console.error(error);
@@ -907,13 +927,13 @@ export default function AccountSettingsPanel() {
       <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
-            <p className="saas-subsection-title">Display name</p>
+            <p className="saas-subsection-title">Nickname</p>
             <p className="saas-meta-text">{displayName.trim() || "未设置"}</p>
           </div>
           <button
             type="button"
             className="ghost-button icon-button"
-            aria-label={showDisplayName ? "Close display name editor" : "Edit display name"}
+            aria-label={showDisplayName ? "Close nickname editor" : "Edit nickname"}
             title={showDisplayName ? "Close" : "Edit"}
             onClick={() => setShowDisplayName((current) => !current)}
           >
@@ -923,11 +943,11 @@ export default function AccountSettingsPanel() {
         {showDisplayName ? (
         <div className="saas-inline-form saas-inline-form-plain dashboard-setting-form mt-3">
           <label className="saas-field">
-            <span>Name shown in the interface</span>
+            <span>Nickname shown in the interface</span>
             <input
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="Optional display name"
+              placeholder="Optional nickname"
             />
           </label>
           {identityStatus ? <p className="saas-meta-text">{identityStatus}</p> : null}
@@ -935,8 +955,8 @@ export default function AccountSettingsPanel() {
           <button
             type="button"
             className="primary-button icon-button"
-            aria-label={savingIdentity ? "Saving display name" : "Save display name"}
-            title="Save display name"
+            aria-label={savingIdentity ? "Saving nickname" : "Save nickname"}
+            title="Save nickname"
             disabled={savingIdentity || loading}
             onClick={handleIdentitySave}
           >
@@ -949,42 +969,33 @@ export default function AccountSettingsPanel() {
       <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
-            <p className="saas-subsection-title">Personal info</p>
+            <p className="saas-subsection-title">Weight</p>
             <p className="saas-meta-text">
-              {selfPersonForm.display_name || displayName || "My profile"}
+              {selfPersonForm.weight_lbs ? `${selfPersonForm.weight_lbs} lbs` : "No weight saved"}
             </p>
           </div>
           <button
             type="button"
             className="ghost-button icon-button"
-            aria-label={editingSelfPerson ? "Close personal info editor" : "Edit personal info"}
-            title={editingSelfPerson ? "Close" : "Edit"}
+            aria-label={editingWeight ? "Close weight editor" : "Edit weight"}
+            title={editingWeight ? "Close" : "Edit"}
             disabled={savingCertificate}
             onClick={() => {
-              if (editingSelfPerson) {
+              if (editingWeight) {
                 setSelfPersonForm(buildSelfPersonForm(selfPerson, profile, session?.user?.email));
-                setEditingSelfPerson(false);
+                setEditingWeight(false);
                 return;
               }
 
-              setEditingSelfPerson(true);
+              setEditingWeight(true);
             }}
           >
-            <ActionIcon kind={editingSelfPerson ? "close" : "edit"} />
+            <ActionIcon kind={editingWeight ? "close" : "edit"} />
           </button>
         </div>
 
-        {editingSelfPerson ? (
+        {editingWeight ? (
           <div className="saas-inline-form saas-inline-form-plain dashboard-setting-form mt-3">
-            <label className="saas-field">
-              <span>Name</span>
-              <input
-                value={selfPersonForm.display_name}
-                onChange={(event) =>
-                  setSelfPersonForm((current) => ({ ...current, display_name: event.target.value }))
-                }
-              />
-            </label>
             <label className="saas-field">
               <span>Weight</span>
               <input
@@ -999,28 +1010,15 @@ export default function AccountSettingsPanel() {
             <button
               type="button"
               className="primary-button icon-button"
-              aria-label="Save personal info"
+              aria-label="Save weight"
               title="Save"
-              disabled={savingCertificate || !selfPersonForm.display_name.trim()}
-              onClick={() => void handleSaveSelfPerson()}
+              disabled={savingCertificate}
+              onClick={() => void handleSaveSelfPerson({ closeWeightEditor: true })}
             >
               <ActionIcon kind="save" />
             </button>
           </div>
-        ) : (
-          <div className="dashboard-setting-subgrid mt-3">
-            <article className="saas-quick-link">
-              <p className="saas-label">Name</p>
-              <p className="saas-value">{selfPersonForm.display_name || displayName || "My profile"}</p>
-            </article>
-            <article className="saas-quick-link">
-              <p className="saas-label">Weight</p>
-              <p className="saas-value">
-                {selfPersonForm.weight_lbs ? `${selfPersonForm.weight_lbs} lbs` : "No weight saved"}
-              </p>
-            </article>
-          </div>
-        )}
+        ) : null}
       </section>
 
       <section className="saas-panel dashboard-setting-row">
@@ -1269,6 +1267,65 @@ export default function AccountSettingsPanel() {
 
         {showCertificates ? (
           <div className="mt-3 grid gap-3">
+            <div className="dashboard-setting-subgrid">
+              <article className="saas-quick-link">
+                <p className="saas-label">Certificate name</p>
+                {editingSelfPerson ? (
+                  <div className="saas-inline-form saas-inline-form-plain dashboard-setting-form mt-3">
+                    <label className="saas-field">
+                      <span>Name printed with your certificates</span>
+                      <input
+                        value={selfPersonForm.display_name}
+                        onChange={(event) =>
+                          setSelfPersonForm((current) => ({
+                            ...current,
+                            display_name: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="primary-button icon-button"
+                      aria-label="Save certificate name"
+                      title="Save"
+                      disabled={savingCertificate || !selfPersonForm.display_name.trim()}
+                      onClick={() => void handleSaveSelfPerson({ closeNameEditor: true })}
+                    >
+                      <ActionIcon kind="save" />
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button icon-button"
+                      aria-label="Cancel certificate name edit"
+                      title="Cancel"
+                      disabled={savingCertificate}
+                      onClick={() => {
+                        setSelfPersonForm(buildSelfPersonForm(selfPerson, profile, session?.user?.email));
+                        setEditingSelfPerson(false);
+                      }}
+                    >
+                      <ActionIcon kind="close" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="saas-value">{selfPersonForm.display_name || "My profile"}</p>
+                    <button
+                      type="button"
+                      className="ghost-button icon-button"
+                      aria-label="Edit certificate name"
+                      title="Edit certificate name"
+                      disabled={savingCertificate}
+                      onClick={() => setEditingSelfPerson(true)}
+                    >
+                      <ActionIcon kind="edit" />
+                    </button>
+                  </div>
+                )}
+              </article>
+            </div>
+
             {showCertificateForm ? (
               <AccountCertificateForm
                 form={certificateForm}

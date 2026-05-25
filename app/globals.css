@@ -3392,6 +3392,92 @@ summary:focus-visible {
   -webkit-overflow-scrolling: touch;
 }
 
+.auth-onboarding-overlay {
+  align-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.auth-onboarding-modal {
+  width: min(92vw, 420px);
+  max-height: min(86vh, 560px);
+  overflow-y: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: #ffffff;
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.22);
+  -webkit-overflow-scrolling: touch;
+}
+
+.auth-onboarding-content {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+}
+
+.auth-onboarding-head {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.auth-onboarding-modal .saas-kicker {
+  color: #2563eb;
+}
+
+.auth-onboarding-modal .tools-child-title {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  color: #0f172a;
+}
+
+.auth-onboarding-copy,
+.auth-onboarding-modal .saas-meta-text {
+  margin: 0;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.auth-onboarding-modal .saas-field {
+  gap: 0.45rem;
+}
+
+.auth-onboarding-modal .saas-field input {
+  min-height: 3rem;
+  border-radius: 14px;
+}
+
+.auth-onboarding-primary {
+  width: 100%;
+  justify-content: center;
+  min-height: 3rem;
+}
+
+.auth-onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.auth-onboarding-actions .primary-button,
+.auth-onboarding-actions .ghost-button {
+  min-height: 2.75rem;
+}
+
+@media (max-width: 520px) {
+  .auth-onboarding-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .auth-onboarding-actions .primary-button,
+  .auth-onboarding-actions .ghost-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 .tools-child-shell {
   border-radius: 22px;
   border: 1px solid rgba(18, 45, 68, 0.08);

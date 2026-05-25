@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useRouter } from 'next/navigation';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import SignaturePad from 'signature_pad';
 import templates from './templates';
 import styles from './EndorsementGenerator.module.css';
 import { useAuthSession } from '@/components/auth/AuthSessionProvider';
@@ -391,6 +392,185 @@ function getTrimmedSignatureDataUrl(canvas) {
   return trimmedCanvas.toDataURL('image/png');
 }
 
+function clearCanvas(canvas) {
+  if (!canvas) {
+    return;
+  }
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return;
+  }
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function resizeSignaturePadCanvas(canvas, signaturePad) {
+  if (!canvas) {
+    return;
+  }
+
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(1, rect.width);
+  const height = Math.max(1, rect.height);
+  const existingData = signaturePad && !signaturePad.isEmpty() ? signaturePad.toData() : null;
+
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
+  canvas.getContext('2d')?.scale(ratio, ratio);
+
+  if (!signaturePad) {
+    return;
+  }
+
+  signaturePad.clear();
+  if (existingData) {
+    signaturePad.fromData(existingData);
+  }
+}
+
+function drawSignatureDataUrlToCanvas(canvas, dataUrl) {
+  if (!canvas || !dataUrl) {
+    return;
+  }
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return;
+  }
+
+  const image = new Image();
+  image.onload = () => {
+    const imageRatio = image.width / image.height;
+    const canvasRatio = canvas.width / canvas.height;
+    const drawWidth = imageRatio > canvasRatio ? canvas.width * 0.86 : canvas.height * 0.58 * imageRatio;
+    const drawHeight = imageRatio > canvasRatio ? drawWidth / imageRatio : canvas.height * 0.58;
+    const x = (canvas.width - drawWidth) / 2;
+    const y = (canvas.height - drawHeight) / 2;
+
+    context.drawImage(image, x, y, drawWidth, drawHeight);
+  };
+  image.src = dataUrl;
+}
+
+function initializeRotatedSignatureCanvas(canvas, { dataUrl, onBegin, onEnd }) {
+  if (!canvas) {
+    return undefined;
+  }
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return undefined;
+  }
+
+  const resizeCanvas = () => {
+    const rect = canvas.getBoundingClientRect();
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    const localWidth = Math.max(1, rect.height);
+    const localHeight = Math.max(1, rect.width);
+    const currentDataUrl = getTrimmedSignatureDataUrl(canvas) || dataUrl;
+
+    canvas.width = localWidth * ratio;
+    canvas.height = localHeight * ratio;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.lineWidth = 3.2 * ratio;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = '#0f172a';
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    drawSignatureDataUrlToCanvas(canvas, currentDataUrl);
+  };
+
+  resizeCanvas();
+
+  let drawing = false;
+
+  const getPoint = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / Math.max(1, rect.height);
+    const scaleY = canvas.height / Math.max(1, rect.width);
+
+    return {
+      x: Math.max(0, Math.min(canvas.width, (event.clientY - rect.top) * scaleX)),
+      y: Math.max(0, Math.min(canvas.height, (rect.right - event.clientX) * scaleY)),
+    };
+  };
+
+  const handlePointerDown = (event) => {
+    event.preventDefault();
+    drawing = true;
+    onBegin?.();
+    canvas.setPointerCapture?.(event.pointerId);
+    const { x, y } = getPoint(event);
+    context.beginPath();
+    context.moveTo(x, y);
+  };
+
+  const handlePointerMove = (event) => {
+    if (!drawing) {
+      return;
+    }
+
+    event.preventDefault();
+    const { x, y } = getPoint(event);
+    context.lineTo(x, y);
+    context.stroke();
+  };
+
+  const handlePointerUp = () => {
+    if (!drawing) {
+      return;
+    }
+
+    drawing = false;
+    context.closePath();
+    onEnd?.();
+  };
+
+  canvas.addEventListener('pointerdown', handlePointerDown);
+  canvas.addEventListener('pointermove', handlePointerMove);
+  canvas.addEventListener('pointerup', handlePointerUp);
+  canvas.addEventListener('pointercancel', handlePointerUp);
+  canvas.addEventListener('pointerleave', handlePointerUp);
+  window.addEventListener('resize', resizeCanvas);
+
+  return () => {
+    canvas.removeEventListener('pointerdown', handlePointerDown);
+    canvas.removeEventListener('pointermove', handlePointerMove);
+    canvas.removeEventListener('pointerup', handlePointerUp);
+    canvas.removeEventListener('pointercancel', handlePointerUp);
+    canvas.removeEventListener('pointerleave', handlePointerUp);
+    window.removeEventListener('resize', resizeCanvas);
+  };
+}
+
+function createSignaturePad(canvas, { onBegin, onEnd } = {}) {
+  if (!canvas) {
+    return null;
+  }
+
+  const signaturePad = new SignaturePad(canvas, {
+    backgroundColor: 'rgba(255,255,255,0)',
+    penColor: '#0f172a',
+    minWidth: 1.2,
+    maxWidth: 3.2,
+    throttle: 8,
+  });
+
+  resizeSignaturePadCanvas(canvas, signaturePad);
+
+  if (onBegin) {
+    signaturePad.addEventListener('beginStroke', onBegin);
+  }
+
+  if (onEnd) {
+    signaturePad.addEventListener('endStroke', onEnd);
+  }
+
+  return signaturePad;
+}
+
 function EndorsementGenerator() {
   const router = useRouter();
   const { session } = useAuthSession();
@@ -398,6 +578,7 @@ function EndorsementGenerator() {
   const [errors, setErrors] = useState({});
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [detailsModalIsOpen, setDetailsModalIsOpen] = useState(false);
+  const [guestRegisterPromptOpen, setGuestRegisterPromptOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [latestPdfBlob, setLatestPdfBlob] = useState(null);
   const [savingRecord, setSavingRecord] = useState(false);
@@ -411,8 +592,16 @@ function EndorsementGenerator() {
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [signaturePreviewDataUrl, setSignaturePreviewDataUrl] = useState('');
+  const [isMobileSignatureDevice, setIsMobileSignatureDevice] = useState(false);
+  const [isRotatedSignatureMode, setIsRotatedSignatureMode] = useState(false);
 
   const canvasRef = useRef(null);
+  const mobileSignatureCanvasRef = useRef(null);
+  const signatureModalOverlayRef = useRef(null);
+  const desktopSignaturePadRef = useRef(null);
+  const mobileSignaturePadRef = useRef(null);
   const signatureDirtyRef = useRef(false);
   const pdfUrlRef = useRef('');
   const defaultCfiAppliedRef = useRef(false);
@@ -431,75 +620,119 @@ function EndorsementGenerator() {
   }, []);
 
   useEffect(() => {
+    const query = window.matchMedia('(hover: none), (pointer: coarse)');
+    const portraitQuery = window.matchMedia('(orientation: portrait)');
+    const syncMobileSignatureMode = () => {
+      setIsMobileSignatureDevice(query.matches);
+      setIsRotatedSignatureMode(query.matches && portraitQuery.matches);
+    };
+
+    syncMobileSignatureMode();
+    query.addEventListener?.('change', syncMobileSignatureMode);
+    portraitQuery.addEventListener?.('change', syncMobileSignatureMode);
+
+    return () => {
+      query.removeEventListener?.('change', syncMobileSignatureMode);
+      portraitQuery.removeEventListener?.('change', syncMobileSignatureMode);
+    };
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) {
+    const signaturePad = createSignaturePad(canvas, {
+      onBegin: () => {
+        resetGeneratedPdf();
+        setSignaturePreviewDataUrl('');
+      },
+      onEnd: () => {
+        signatureDirtyRef.current = true;
+      },
+    });
+
+    desktopSignaturePadRef.current = signaturePad;
+
+    const handleResize = () => {
+      resizeSignaturePadCanvas(canvas, signaturePad);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      signaturePad?.off();
+      desktopSignaturePadRef.current = null;
+    };
+  }, [resetGeneratedPdf]);
+
+  useEffect(() => {
+    if (!signatureModalOpen) {
       return undefined;
     }
 
-    const context = canvas.getContext('2d');
-    const ratio = window.devicePixelRatio || 1;
-    const width = canvas.offsetWidth;
-    const height = canvas.offsetHeight;
-
-    canvas.width = width * ratio;
-    canvas.height = height * ratio;
-    context.scale(ratio, ratio);
-    context.lineWidth = 6.4;
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    context.strokeStyle = '#0f172a';
-
-    let drawing = false;
-
-    const getPoint = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      };
-    };
-
-    const handlePointerDown = (event) => {
-      drawing = true;
-      resetGeneratedPdf();
-      canvas.setPointerCapture?.(event.pointerId);
-      const { x, y } = getPoint(event);
-      context.beginPath();
-      context.moveTo(x, y);
-    };
-
-    const handlePointerMove = (event) => {
-      if (!drawing) {
-        return;
-      }
-
-      const { x, y } = getPoint(event);
-      signatureDirtyRef.current = true;
-      context.lineTo(x, y);
-      context.stroke();
-    };
-
-    const handlePointerUp = () => {
-      if (!drawing) {
-        return;
-      }
-
-      drawing = false;
-      context.closePath();
-    };
-
-    canvas.addEventListener('pointerdown', handlePointerDown);
-    canvas.addEventListener('pointermove', handlePointerMove);
-    canvas.addEventListener('pointerup', handlePointerUp);
-    canvas.addEventListener('pointerleave', handlePointerUp);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const orientation = window.screen?.orientation;
+    const overlay = signatureModalOverlayRef.current;
+    overlay?.requestFullscreen?.().then(() => {
+      orientation?.lock?.('landscape').catch(() => {});
+    }).catch(() => {
+      orientation?.lock?.('landscape').catch(() => {});
+    });
 
     return () => {
-      canvas.removeEventListener('pointerdown', handlePointerDown);
-      canvas.removeEventListener('pointermove', handlePointerMove);
-      canvas.removeEventListener('pointerup', handlePointerUp);
-      canvas.removeEventListener('pointerleave', handlePointerUp);
+      document.body.style.overflow = previousOverflow;
+      orientation?.unlock?.();
+      if (document.fullscreenElement === overlay) {
+        document.exitFullscreen?.().catch(() => {});
+      }
     };
-  }, [resetGeneratedPdf]);
+  }, [signatureModalOpen]);
+
+  useEffect(() => {
+    if (!signatureModalOpen) {
+      return undefined;
+    }
+
+    const canvas = mobileSignatureCanvasRef.current;
+    if (isRotatedSignatureMode) {
+      const cleanup = initializeRotatedSignatureCanvas(canvas, {
+        dataUrl: signaturePreviewDataUrl,
+        onBegin: () => {
+          resetGeneratedPdf();
+        },
+        onEnd: () => {
+          signatureDirtyRef.current = true;
+        },
+      });
+
+      mobileSignaturePadRef.current = null;
+
+      return cleanup;
+    }
+
+    const signaturePad = createSignaturePad(canvas);
+    mobileSignaturePadRef.current = signaturePad;
+
+    const loadSavedSignature = () => {
+      if (signaturePreviewDataUrl && signaturePad) {
+        signaturePad.fromDataURL(signaturePreviewDataUrl).catch(() => {});
+      }
+    };
+
+    const handleResize = () => {
+      resizeSignaturePadCanvas(canvas, signaturePad);
+      loadSavedSignature();
+    };
+
+    loadSavedSignature();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      signaturePad?.off();
+      mobileSignaturePadRef.current = null;
+    };
+  }, [isRotatedSignatureMode, resetGeneratedPdf, signatureModalOpen, signaturePreviewDataUrl]);
 
   useEffect(() => {
     return () => {
@@ -705,14 +938,54 @@ function EndorsementGenerator() {
     }, []);
 
   const clearSignature = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
+    desktopSignaturePadRef.current?.clear();
+    mobileSignaturePadRef.current?.clear();
+    clearCanvas(canvasRef.current);
+    clearCanvas(mobileSignatureCanvasRef.current);
+    signatureDirtyRef.current = false;
+    setSignaturePreviewDataUrl('');
+    resetGeneratedPdf();
+    setStatusMessage('Signature cleared. PDF generation will leave the signature area blank.');
+  };
+
+  const openSignatureModal = () => {
+    setSignatureModalOpen(true);
+  };
+
+  const closeSignatureModal = () => {
+    setSignatureModalOpen(false);
+  };
+
+  const confirmMobileSignature = () => {
+    const mobileSignaturePad = mobileSignaturePadRef.current;
+    const dataUrl = getTrimmedSignatureDataUrl(mobileSignatureCanvasRef.current) || signaturePreviewDataUrl;
+
+    if ((!mobileSignaturePad || mobileSignaturePad.isEmpty()) && !dataUrl) {
+      clearSignature();
+      setSignatureModalOpen(false);
       return;
     }
 
-    const context = canvas.getContext('2d');
-    context.clearRect(0, 0, canvas.width, canvas.height);
+    if (!dataUrl) {
+      clearSignature();
+      setSignatureModalOpen(false);
+      return;
+    }
+
+    signatureDirtyRef.current = true;
+    setSignaturePreviewDataUrl(dataUrl);
+    resetGeneratedPdf();
+    setSignatureModalOpen(false);
+    setStatusMessage('Signature saved. Preview the PDF again to include the updated signature.');
+  };
+
+  const clearMobileSignature = () => {
+    mobileSignaturePadRef.current?.clear();
+    desktopSignaturePadRef.current?.clear();
+    clearCanvas(mobileSignatureCanvasRef.current);
+    clearCanvas(canvasRef.current);
     signatureDirtyRef.current = false;
+    setSignaturePreviewDataUrl('');
     resetGeneratedPdf();
     setStatusMessage('Signature cleared. PDF generation will leave the signature area blank.');
   };
@@ -1006,7 +1279,7 @@ function EndorsementGenerator() {
       let signatureImage;
 
       if (signatureDirtyRef.current) {
-        const dataUrl = getTrimmedSignatureDataUrl(canvasRef.current);
+        const dataUrl = signaturePreviewDataUrl || getTrimmedSignatureDataUrl(canvasRef.current);
         if (!dataUrl) {
           throw new Error('Unable to capture the signature image.');
         }
@@ -1184,6 +1457,10 @@ function EndorsementGenerator() {
     }
 
     previewWindow.location.href = nextPdf.url;
+
+    if (!session?.user?.id) {
+      setGuestRegisterPromptOpen(true);
+    }
   };
 
   const handleSaveRecord = async () => {
@@ -1459,7 +1736,36 @@ function EndorsementGenerator() {
                 </div>
               </div>
 
-              <canvas ref={canvasRef} className={styles.signatureCanvas} />
+              <button
+                className={`${styles.mobileSignatureTrigger} ${
+                  isMobileSignatureDevice ? styles.mobileSignatureTriggerActive : ''
+                }`}
+                type="button"
+                onClick={openSignatureModal}
+              >
+                {signaturePreviewDataUrl ? (
+                  <>
+                    <span
+                      className={styles.mobileSignaturePreview}
+                      style={{ backgroundImage: `url(${signaturePreviewDataUrl})` }}
+                      aria-hidden="true"
+                    />
+                    <span>Edit signature</span>
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.mobileSignaturePlaceholder}>Tap to sign</span>
+                    <span>Open full-screen signature pad</span>
+                  </>
+                )}
+              </button>
+
+              <canvas
+                ref={canvasRef}
+                className={`${styles.signatureCanvas} ${
+                  isMobileSignatureDevice ? styles.signatureCanvasHiddenOnMobile : ''
+                }`}
+              />
 
               <div className={styles.actionRow}>
                 <button className={styles.secondaryButton} onClick={handlePreview} type="button">
@@ -1484,6 +1790,72 @@ function EndorsementGenerator() {
           </section>
         </div>
       </div>
+
+      <Modal
+        isOpen={guestRegisterPromptOpen}
+        onRequestClose={() => setGuestRegisterPromptOpen(false)}
+        contentLabel="Create an account"
+        className="Modal"
+        overlayClassName="Overlay"
+      >
+        <div className="endorsementModal">
+          <div className="endorsementModalHeader">
+            <div>
+              <h2>Create an account</h2>
+              <p>
+                Your PDF is open in a new page. Register to save CFI certificates, student profiles,
+                and endorsement records for next time.
+              </p>
+            </div>
+            <div className="endorsementModalActions">
+              <button
+                type="button"
+                className="modalGhostButton"
+                onClick={() => setGuestRegisterPromptOpen(false)}
+              >
+                Continue as guest
+              </button>
+              <button
+                type="button"
+                className="modalPrimaryButton"
+                onClick={() => {
+                  setGuestRegisterPromptOpen(false);
+                  router.push('/register?next=%2Fdashboard%3Fonboarding%3Dendorsement-cfi');
+                }}
+              >
+                Register
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {signatureModalOpen ? (
+        <div ref={signatureModalOverlayRef} className={styles.signatureModalOverlay}>
+          <div className={`${styles.signatureModal} ${isRotatedSignatureMode ? styles.signatureModalRotated : ''}`}>
+            <div className={styles.signatureModalHeader}>
+              <div>
+                <h2>Sign endorsement</h2>
+                <p>Rotate your phone for more signing space.</p>
+              </div>
+              <div className={styles.signatureModalActions}>
+                <button type="button" onClick={clearMobileSignature}>
+                  Clear
+                </button>
+                <button type="button" onClick={closeSignatureModal}>
+                  Cancel
+                </button>
+                <button type="button" onClick={confirmMobileSignature}>
+                  Done
+                </button>
+              </div>
+            </div>
+            <div className={styles.signatureModalCanvasWrap}>
+              <canvas ref={mobileSignatureCanvasRef} className={styles.signatureModalCanvas} />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <Modal
         isOpen={detailsModalIsOpen}

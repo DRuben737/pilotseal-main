@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
+import AuthOnboardingGate from "@/components/auth/AuthOnboardingGate";
 import SiteHeader from "@/components/ui/SiteHeader";
 import SiteNotificationBanner from "@/components/notifications/SiteNotificationBanner";
 import { getSiteUrl } from "@/lib/seo";
@@ -54,6 +56,9 @@ export default function RootLayout({
         <ToolProvider>
           <AuthSessionProvider>
             <SiteHeader />
+            <Suspense fallback={null}>
+              <AuthOnboardingGate />
+            </Suspense>
 
             <div className="pb-16 pt-6 sm:pt-10">
               <SiteNotificationBanner />
