@@ -991,7 +991,7 @@ function normalizeStation(value: unknown) {
       : typeof station.label === "string"
         ? station.label.trim()
         : "";
-  const arm = toNumber(station.arm);
+  const arm = toNumber(station.arm) ?? toNumber(station.longArm) ?? toNumber(station.long_arm);
 
   if (!id || !name || arm === null) {
     return null;
@@ -1001,7 +1001,7 @@ function normalizeStation(value: unknown) {
     id,
     name,
     arm,
-    latArm: toNumber(station.latArm) ?? toNumber(station.lat_arm),
+    latArm: toNumber(station.latArm) ?? toNumber(station.lat_arm) ?? toNumber(station.lat),
     weightPerGallon: toNumber(station.weightPerGallon) ?? toNumber(station.weight_per_gallon),
     fixedWeight: toNumber(station.fixedWeight) ?? toNumber(station.fixed_weight),
     maxWeight: toNumber(station.maxWeight) ?? toNumber(station.max_weight),

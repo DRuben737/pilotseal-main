@@ -203,15 +203,21 @@ Additional updates included:
 </details>
 
 <details>
-<summary>May 2026 — Decoder, Reading, and Flight Computer</summary>
+<summary>May 2026 — Decoder, Reading, Flight Computer, User Functions, and Signature Pad</summary>
 
 Improved the decoder system.
 
-Added smarter decoding for larger METAR / TAF / NOTAM text blocks.
+Added smarter decoding support for larger METAR, TAF, and NOTAM text blocks.
 
 Removed the old endorsement explanation section and replaced it with a broader Reading section.
 
 Added a Flight Computer section for common aviation calculations.
+
+Updated the signature pad with a flexible mobile layout, allowing users to use the full screen as a signature pad.
+
+Added a reset password function.
+
+Improved the Flight Brief function. Logged-in users with saved weight data can now quickly autofill weight, aircraft type, and other built-in information. Added automatic fuel time calculation and alerts for low remaining MX time.
 
 </details>
 

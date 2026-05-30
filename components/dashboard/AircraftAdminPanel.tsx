@@ -28,6 +28,10 @@ type ModelStationDraft = {
   id: string;
   name: string;
   arm: string;
+  latArm: string;
+  weightPerGallon: string;
+  fixedWeight: string;
+  maxWeight: string;
 };
 
 type EnvelopePointDraft = {
@@ -65,7 +69,7 @@ const emptyModelForm: ModelFormState = {
   name: "",
   category: "airplane",
   avg_fuel_burn_rate: "",
-  stations: [{ id: "", name: "", arm: "" }],
+  stations: [{ id: "", name: "", arm: "", latArm: "", weightPerGallon: "", fixedWeight: "", maxWeight: "" }],
   envelope: [
     { cg: "", weight: "" },
     { cg: "", weight: "" },
@@ -109,6 +113,10 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
             id: station.id,
             name: station.name,
             arm: String(station.arm),
+            latArm: station.latArm != null ? String(station.latArm) : "",
+            weightPerGallon: station.weightPerGallon != null ? String(station.weightPerGallon) : "",
+            fixedWeight: station.fixedWeight != null ? String(station.fixedWeight) : "",
+            maxWeight: station.maxWeight != null ? String(station.maxWeight) : "",
           }))
         : emptyModelForm.stations,
     envelope:
@@ -148,6 +156,16 @@ function normalizeAircraftForm(aircraft: AircraftRecord): AircraftFormState {
 
 function toNumber(value: string) {
   return Number.parseFloat(value);
+}
+
+function toOptionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function scrollEditorIntoView(
@@ -439,12 +457,21 @@ export default function AircraftAdminPanel() {
 
     const stations = modelForm.stations
       .filter((station) => station.id.trim() && station.name.trim() && station.arm.trim())
-      .map((station) => ({
-        id: station.id.trim(),
-        name: station.name.trim(),
-        arm: toNumber(station.arm),
-        weightPerGallon: /fuel/i.test(station.id) || /fuel/i.test(station.name) ? 6 : null,
-      }));
+      .map((station) => {
+        const weightPerGallon =
+          toOptionalNumber(station.weightPerGallon) ??
+          (/fuel/i.test(station.id) || /fuel/i.test(station.name) ? 6 : null);
+
+        return {
+          id: station.id.trim(),
+          name: station.name.trim(),
+          arm: toNumber(station.arm),
+          latArm: toOptionalNumber(station.latArm),
+          weightPerGallon,
+          fixedWeight: toOptionalNumber(station.fixedWeight),
+          maxWeight: toOptionalNumber(station.maxWeight),
+        };
+      });
 
     if (stations.length < 1) {
       setStatus("Add at least one station.");
@@ -736,7 +763,7 @@ export default function AircraftAdminPanel() {
             onClick={() =>
               updateModelField("stations", [
                 ...modelForm.stations,
-                { id: "", name: "", arm: "" },
+                { id: "", name: "", arm: "", latArm: "", weightPerGallon: "", fixedWeight: "", maxWeight: "" },
               ])
             }
           >
@@ -747,7 +774,7 @@ export default function AircraftAdminPanel() {
           {modelForm.stations.map((station, index) => (
             <div
               key={`${station.id}-${index}`}
-              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_auto]"
             >
               <label className="grid gap-2 text-sm">
                 <span>Key</span>
@@ -766,12 +793,49 @@ export default function AircraftAdminPanel() {
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Arm</span>
+                <span>Long arm</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   type="number"
                   value={station.arm}
                   onChange={(event) => updateStation(index, "arm", event.target.value)}
+                />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Lat arm</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  type="number"
+                  value={station.latArm}
+                  onChange={(event) => updateStation(index, "latArm", event.target.value)}
+                />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Weight / gallon</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  type="number"
+                  value={station.weightPerGallon}
+                  onChange={(event) => updateStation(index, "weightPerGallon", event.target.value)}
+                  placeholder={/fuel/i.test(station.id) || /fuel/i.test(station.name) ? "6" : ""}
+                />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Fixed weight</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  type="number"
+                  value={station.fixedWeight}
+                  onChange={(event) => updateStation(index, "fixedWeight", event.target.value)}
+                />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Max weight</span>
+                <input
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  type="number"
+                  value={station.maxWeight}
+                  onChange={(event) => updateStation(index, "maxWeight", event.target.value)}
                 />
               </label>
               <button
