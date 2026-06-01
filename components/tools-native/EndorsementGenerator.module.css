@@ -42,6 +42,33 @@
   width: 100%;
 }
 
+.modeSwitch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-self: start;
+  padding: 0.35rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.modeSwitch button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.65rem 0.9rem;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.modeSwitch .modeSwitchActive {
+  background: #123a75;
+  color: #fff;
+}
+
 .card {
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(15, 23, 42, 0.08);

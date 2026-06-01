@@ -36,6 +36,17 @@ const INITIAL_FORM_DATA = {
 };
 
 const BASE_FIELD_KEYS = new Set(FIELD_CONFIG.map((field) => field.key));
+const BLANK_TEMPLATE_SHORT_FIELDS = new Set([
+  'annualReviewDueDate',
+  'date',
+  'eventDate',
+  'instructorCertExpDate',
+]);
+const BLANK_TEMPLATE_MEDIUM_FIELDS = new Set([
+  'citizenshipDocumentNumber',
+  'instructorCertNumber',
+  'studentCertNumber',
+]);
 const LETTER_PAGE_WIDTH = 612;
 const LETTER_PAGE_HEIGHT = 792;
 const AVERY_5163_LABEL_WIDTH = 288;
@@ -335,6 +346,22 @@ function formatTemplateFieldValue(key, value) {
   return BASE_FIELD_KEYS.has(key) ? value : formatDateForPdf(String(value ?? '').trim());
 }
 
+function getBlankTemplateValue(key) {
+  if (BLANK_TEMPLATE_SHORT_FIELDS.has(key) || key.toLowerCase().includes('date')) {
+    return '____________';
+  }
+
+  if (
+    BLANK_TEMPLATE_MEDIUM_FIELDS.has(key) ||
+    key.toLowerCase().includes('number') ||
+    key.toLowerCase().includes('certificate')
+  ) {
+    return '____________________';
+  }
+
+  return '______________________________';
+}
+
 function getTrimmedSignatureDataUrl(canvas) {
   if (!canvas) {
     return null;
@@ -596,6 +623,7 @@ function EndorsementGenerator() {
   const [printFormat, setPrintFormat] = useState('letter');
   const [labelStartSlot, setLabelStartSlot] = useState('1');
   const [printablePdfUrl, setPrintablePdfUrl] = useState('');
+  const [generatorMode, setGeneratorMode] = useState('customized');
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then preview to confirm and open the PDF packet.');
@@ -1029,6 +1057,17 @@ function EndorsementGenerator() {
   const closeModal = () => setModalIsOpen(false);
   const openDetailsModal = () => setDetailsModalIsOpen(true);
   const closeDetailsModal = () => setDetailsModalIsOpen(false);
+  const handleGeneratorModeChange = (nextMode) => {
+    resetGeneratedPdf();
+    setGeneratorMode(nextMode);
+    setDetailsModalIsOpen(false);
+    setErrors({});
+    setStatusMessage(
+      nextMode === 'blank'
+        ? 'Select blank endorsement templates, then preview the reusable PDF before printing.'
+        : 'Fill the form, select endorsements, then preview to confirm and open the PDF packet.'
+    );
+  };
   const handleChange = (field) => (event) => {
     const nextValue = formatInputValue(field, event.target.value);
     resetGeneratedPdf();
@@ -1186,7 +1225,7 @@ function EndorsementGenerator() {
 
     setErrors((prev) => ({ ...prev, selectedTemplates: undefined }));
 
-    if (!isAlreadySelected) {
+    if (generatorMode === 'customized' && !isAlreadySelected) {
       const nextFields = getFieldsForTemplates(nextSelected);
       const hasMissingRequiredFields = nextFields.some(
         (field) => field.required && !hasFieldValue(templateFieldData[field.key])
@@ -1226,25 +1265,27 @@ function EndorsementGenerator() {
     const nextErrors = {};
     let hasTemplateFieldErrors = false;
 
-    FIELD_CONFIG.forEach((field) => {
-      if (field.required && !formData[field.key].trim()) {
-        nextErrors[field.key] = 'Required';
-      }
-    });
+    if (generatorMode === 'customized') {
+      FIELD_CONFIG.forEach((field) => {
+        if (field.required && !formData[field.key].trim()) {
+          nextErrors[field.key] = 'Required';
+        }
+      });
 
-    selectedTemplateFields.forEach((field) => {
-      const value = templateFieldData[field.key];
-      if (field.required && !hasFieldValue(value)) {
-        nextErrors[field.key] = 'Required';
-        hasTemplateFieldErrors = true;
-      }
-    });
+      selectedTemplateFields.forEach((field) => {
+        const value = templateFieldData[field.key];
+        if (field.required && !hasFieldValue(value)) {
+          nextErrors[field.key] = 'Required';
+          hasTemplateFieldErrors = true;
+        }
+      });
+    }
 
     if (formData.instructorCertExpDate && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(formData.instructorCertExpDate)) {
       nextErrors.instructorCertExpDate = 'Use MM/DD/YYYY';
     }
 
-    if (formData.date && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(formData.date)) {
+    if (generatorMode === 'customized' && formData.date && !/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(formData.date)) {
       nextErrors.date = 'Use MM/DD/YYYY';
     }
 
@@ -1260,6 +1301,15 @@ function EndorsementGenerator() {
   };
 
   const createTemplateDraft = (templateKey) => {
+    const blankTemplateMappedData = {
+      studentName: getBlankTemplateValue('studentName'),
+      studentCertNumber: getBlankTemplateValue('studentCertNumber'),
+      date: getBlankTemplateValue('date'),
+      instructorName: formData.instructorName.trim() || getBlankTemplateValue('instructorName'),
+      instructorCertNumber: formData.instructorCertNumber.trim() || getBlankTemplateValue('instructorCertNumber'),
+      instructorCertExpDate:
+        formatDateForPdf(formData.instructorCertExpDate) || getBlankTemplateValue('instructorCertExpDate'),
+    };
     const mappedData = {
       studentName: formData.studentName.trim(),
       studentCertNumber: formData.studentCertNumber.trim(),
@@ -1276,12 +1326,15 @@ function EndorsementGenerator() {
     };
 
     const template = templates[templateKey];
+    const nextMappedData = generatorMode === 'blank' ? blankTemplateMappedData : mappedData;
 
     return sanitizeText(
-      Object.entries(mappedData).reduce(
+      Object.entries(nextMappedData).reduce(
         (content, [token, value]) => content.replaceAll(`{${token}}`, value),
         template.text
-      )
+      ).replace(/\{([^}]+)\}/g, (_, token) => (
+        generatorMode === 'blank' ? getBlankTemplateValue(token) : `{${token}}`
+      ))
     );
   };
 
@@ -1469,7 +1522,9 @@ function EndorsementGenerator() {
     }
 
     const confirmed = window.confirm(
-      `Preview ${selectedTemplates.length} endorsement draft(s)?\n\nInstructor: ${formData.instructorName.trim()}\nStudent: ${formData.studentName.trim()}\nDate: ${formatDateForPdf(formData.date)}`
+      generatorMode === 'blank'
+        ? `Preview ${selectedTemplates.length} reusable blank endorsement template(s)?`
+        : `Preview ${selectedTemplates.length} endorsement draft(s)?\n\nInstructor: ${formData.instructorName.trim()}\nStudent: ${formData.studentName.trim()}\nDate: ${formatDateForPdf(formData.date)}`
     );
 
     if (!confirmed) {
@@ -1493,7 +1548,7 @@ function EndorsementGenerator() {
 
     previewWindow.location.href = nextPdf.url;
 
-    if (!session?.user?.id) {
+    if (generatorMode === 'customized' && !session?.user?.id) {
       setGuestRegisterPromptOpen(true);
     }
   };
@@ -1751,7 +1806,7 @@ function EndorsementGenerator() {
     rememberPrintablePdf(printablePdf.url, printFormat === 'avery-5163');
     requestPrintDialog(printablePdf.url);
 
-    if (session?.user?.id) {
+    if (generatorMode === 'customized' && session?.user?.id) {
       void savePrintedRecord(printablePdf.blob);
     }
   };
@@ -1866,10 +1921,34 @@ function EndorsementGenerator() {
       <div className={styles.page}>
         <div className={styles.workspace}>
           <section className={styles.mainPanel}>
+            <div className={styles.modeSwitch} role="group" aria-label="Endorsement generator mode">
+              <button
+                type="button"
+                className={generatorMode === 'customized' ? styles.modeSwitchActive : ''}
+                onClick={() => handleGeneratorModeChange('customized')}
+                aria-pressed={generatorMode === 'customized'}
+              >
+                Customized endorsement
+              </button>
+              <button
+                type="button"
+                className={generatorMode === 'blank' ? styles.modeSwitchActive : ''}
+                onClick={() => handleGeneratorModeChange('blank')}
+                aria-pressed={generatorMode === 'blank'}
+              >
+                Blank template
+              </button>
+            </div>
+
             <div className={styles.card}>
               <div className={styles.sectionHeader}>
                 <div>
-                  <h2>Information details(* required)</h2>
+                  <h2>{generatorMode === 'blank' ? 'Optional instructor details' : 'Information details(* required)'}</h2>
+                  {generatorMode === 'blank' ? (
+                    <p className={styles.sectionCopy}>
+                      Enter any instructor details you want to preprint. All other fields stay blank for handwriting.
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -1879,7 +1958,7 @@ function EndorsementGenerator() {
                     <label key={field.key} className={styles.field}>
                       <span>
                         {field.label}
-                        {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
+                        {generatorMode === 'blank' ? ' (optional)' : field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
                       </span>
                       {renderFieldInput(field)}
                       {errors[field.key] ? <small>{errors[field.key]}</small> : null}
@@ -1887,48 +1966,58 @@ function EndorsementGenerator() {
                   ))}
                 </div>
 
-                <div className={styles.formRowTwo}>
-                  {FIELD_CONFIG.slice(3, 5).map((field) => (
-                    <label key={field.key} className={styles.field}>
-                      <span>
-                        {field.label}
-                        {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
-                      </span>
-                      {renderFieldInput(field)}
-                      {errors[field.key] ? <small>{errors[field.key]}</small> : null}
-                    </label>
-                  ))}
-                </div>
+                {generatorMode === 'customized' ? (
+                  <>
+                    <div className={styles.formRowTwo}>
+                      {FIELD_CONFIG.slice(3, 5).map((field) => (
+                        <label key={field.key} className={styles.field}>
+                          <span>
+                            {field.label}
+                            {field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
+                          </span>
+                          {renderFieldInput(field)}
+                          {errors[field.key] ? <small>{errors[field.key]}</small> : null}
+                        </label>
+                      ))}
+                    </div>
 
-                <div className={styles.formRowDateAction}>
-                  <label className={styles.field}>
-                    <span>
-                      {FIELD_CONFIG[5].label}
-                      {FIELD_CONFIG[5].required ? ' *' : ' (optional)'}
-                    </span>
-                    <input
-                      type={FIELD_CONFIG[5].type}
-                      value={formData[FIELD_CONFIG[5].key]}
-                      onChange={handleChange(FIELD_CONFIG[5].key)}
-                      autoComplete={FIELD_CONFIG[5].autoComplete}
-                      placeholder={FIELD_CONFIG[5].placeholder}
-                      inputMode={FIELD_CONFIG[5].inputMode}
-                      maxLength={FIELD_CONFIG[5].maxLength}
-                      className={errors[FIELD_CONFIG[5].key] ? styles.fieldError : ''}
-                    />
-                    {errors[FIELD_CONFIG[5].key] ? <small>{errors[FIELD_CONFIG[5].key]}</small> : null}
-                  </label>
+                    <div className={styles.formRowDateAction}>
+                      <label className={styles.field}>
+                        <span>
+                          {FIELD_CONFIG[5].label}
+                          {FIELD_CONFIG[5].required ? ' *' : ' (optional)'}
+                        </span>
+                        <input
+                          type={FIELD_CONFIG[5].type}
+                          value={formData[FIELD_CONFIG[5].key]}
+                          onChange={handleChange(FIELD_CONFIG[5].key)}
+                          autoComplete={FIELD_CONFIG[5].autoComplete}
+                          placeholder={FIELD_CONFIG[5].placeholder}
+                          inputMode={FIELD_CONFIG[5].inputMode}
+                          maxLength={FIELD_CONFIG[5].maxLength}
+                          className={errors[FIELD_CONFIG[5].key] ? styles.fieldError : ''}
+                        />
+                        {errors[FIELD_CONFIG[5].key] ? <small>{errors[FIELD_CONFIG[5].key]}</small> : null}
+                      </label>
 
+                      <div className={styles.inlineActionBlock}>
+                        <button className={styles.primaryButton} onClick={openModal} type="button">
+                          Select endorsement
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
                   <div className={styles.inlineActionBlock}>
                     <button className={styles.primaryButton} onClick={openModal} type="button">
-                      Select endorsement
+                      Select blank template
                     </button>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
-            {selectedTemplateFields.length > 0 ? (
+            {generatorMode === 'customized' && selectedTemplateFields.length > 0 ? (
               <div className={styles.card}>
                 <div className={styles.sectionHeader}>
                   <div>
@@ -2017,7 +2106,9 @@ function EndorsementGenerator() {
 
               <p className={styles.printHint}>
                 You can choose a print format after clicking Print: standard Letter paper or Avery 5163 labels.
-                If you are signed in, printing automatically saves the PDF to your dashboard records.
+                {generatorMode === 'customized' && session?.user?.id
+                  ? ' Printing automatically saves the PDF to your dashboard records.'
+                  : ''}
               </p>
               {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}
               {errors.selectedTemplates ? <p className={styles.inlineError}>{errors.selectedTemplates}</p> : null}
@@ -2279,8 +2370,12 @@ function EndorsementGenerator() {
         <div className="endorsementModal">
           <div className="endorsementModalHeader">
             <div>
-              <h2>Select endorsement templates</h2>
-              <p>Selected templates stay pinned to the top of the result list.</p>
+              <h2>{generatorMode === 'blank' ? 'Select blank endorsement templates' : 'Select endorsement templates'}</h2>
+              <p>
+                {generatorMode === 'blank'
+                  ? 'Customizable fields will print as handwriting blanks.'
+                  : 'Selected templates stay pinned to the top of the result list.'}
+              </p>
             </div>
             <div className="endorsementModalActions">
               <button type="button" className="modalGhostButton" onClick={() => setSelectedTemplates([])}>
