@@ -479,6 +479,67 @@
   line-height: 1.5;
 }
 
+.printHint {
+  margin: 0.7rem 0 0;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.printFormatBody {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.printFormatOption {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+}
+
+.printFormatOption input {
+  margin-top: 0.2rem;
+}
+
+.printFormatOption span,
+.printStartSlot {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.printFormatOption small,
+.printStartSlot small {
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.printStartSlot {
+  justify-items: start;
+  padding: 1rem;
+  border-radius: 16px;
+  background: rgba(42, 168, 255, 0.06);
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.printStartSlot select {
+  min-width: 120px;
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0.6rem 0.75rem;
+  background: #fff;
+}
+
 .selectedList {
   display: grid;
   gap: 0.85rem;

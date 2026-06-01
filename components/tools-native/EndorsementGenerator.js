@@ -36,6 +36,16 @@ const INITIAL_FORM_DATA = {
 };
 
 const BASE_FIELD_KEYS = new Set(FIELD_CONFIG.map((field) => field.key));
+const LETTER_PAGE_WIDTH = 612;
+const LETTER_PAGE_HEIGHT = 792;
+const AVERY_5163_LABEL_WIDTH = 288;
+const AVERY_5163_LABEL_HEIGHT = 144;
+const AVERY_5163_COLUMNS = 2;
+const AVERY_5163_ROWS = 5;
+const AVERY_5163_LABELS_PER_PAGE = AVERY_5163_COLUMNS * AVERY_5163_ROWS;
+const AVERY_5163_SIDE_MARGIN = 11.25;
+const AVERY_5163_TOP_MARGIN = 36;
+const AVERY_5163_COLUMN_GAP = 13.5;
 const TEMPLATE_CATEGORY_ORDER = [
   'Solo Endorsements',
   'Other Solo',
@@ -582,6 +592,10 @@ function EndorsementGenerator() {
   const [pdfUrl, setPdfUrl] = useState('');
   const [latestPdfBlob, setLatestPdfBlob] = useState(null);
   const [savingRecord, setSavingRecord] = useState(false);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printFormat, setPrintFormat] = useState('letter');
+  const [labelStartSlot, setLabelStartSlot] = useState('1');
+  const [printablePdfUrl, setPrintablePdfUrl] = useState('');
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then preview to confirm and open the PDF packet.');
@@ -604,15 +618,24 @@ function EndorsementGenerator() {
   const mobileSignaturePadRef = useRef(null);
   const signatureDirtyRef = useRef(false);
   const pdfUrlRef = useRef('');
+  const printablePdfUrlRef = useRef('');
+  const printablePdfIsTemporaryRef = useRef(false);
+  const printFrameRef = useRef(null);
   const defaultCfiAppliedRef = useRef(false);
 
   const resetGeneratedPdf = useCallback(() => {
+    if (printablePdfIsTemporaryRef.current && printablePdfUrlRef.current) {
+      URL.revokeObjectURL(printablePdfUrlRef.current);
+    }
     if (pdfUrlRef.current) {
       URL.revokeObjectURL(pdfUrlRef.current);
       pdfUrlRef.current = '';
     }
     setPdfUrl('');
     setLatestPdfBlob(null);
+    setPrintablePdfUrl('');
+    printablePdfUrlRef.current = '';
+    printablePdfIsTemporaryRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -739,6 +762,10 @@ function EndorsementGenerator() {
       if (pdfUrlRef.current) {
         URL.revokeObjectURL(pdfUrlRef.current);
       }
+      if (printablePdfIsTemporaryRef.current && printablePdfUrlRef.current) {
+        URL.revokeObjectURL(printablePdfUrlRef.current);
+      }
+      printFrameRef.current?.remove();
     };
   }, []);
 
@@ -812,9 +839,17 @@ function EndorsementGenerator() {
             };
           })
           .filter(Boolean);
+        const pilotCertificatePersonIds = new Set(
+          certificatePilots.map((person) => person.person_id)
+        );
+        const savedStudentPeople = allPeople.filter((person) => (
+          person.role === 'student' &&
+          person.id !== selfPersonId &&
+          !pilotCertificatePersonIds.has(person.id)
+        ));
 
         setSavedCfis(certificateCfis);
-        setSavedStudents(certificatePilots);
+        setSavedStudents([...certificatePilots, ...savedStudentPeople]);
         setSessionIdentity(profile?.display_name || session.user.email || '');
 
         const defaultCertificateCfi = certificateCfis.find((person) => person.is_default);
@@ -945,7 +980,7 @@ function EndorsementGenerator() {
     signatureDirtyRef.current = false;
     setSignaturePreviewDataUrl('');
     resetGeneratedPdf();
-    setStatusMessage('Signature cleared. PDF generation will leave the signature area blank.');
+    setStatusMessage('Signature cleared.');
   };
 
   const openSignatureModal = () => {
@@ -1261,8 +1296,8 @@ function EndorsementGenerator() {
       const font = await doc.embedFont(StandardFonts.Helvetica);
       const fontSize = 7;
       const lineHeight = fontSize * 1.2;
-      const pageWidth = 612;
-      const pageHeight = 792;
+      const pageWidth = LETTER_PAGE_WIDTH;
+      const pageHeight = LETTER_PAGE_HEIGHT;
       const margin = 32;
       const columns = 2;
       const boxGapX = 5;
@@ -1463,15 +1498,8 @@ function EndorsementGenerator() {
     }
   };
 
-  const handleSaveRecord = async () => {
-    if (!latestPdfBlob) {
-      setStatusMessage('Open a preview first so the exact PDF can be saved.');
-      return;
-    }
-
-    if (!session?.user?.id) {
-      const nextPath = `${window.location.pathname}${window.location.search}`;
-      router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+  const savePrintedRecord = async (pdfBlob) => {
+    if (!session?.user?.id || !pdfBlob) {
       return;
     }
 
@@ -1484,7 +1512,7 @@ function EndorsementGenerator() {
 
       const { error: uploadError } = await supabase.storage
         .from(ENDORSEMENT_RECORDS_BUCKET)
-        .upload(storagePath, latestPdfBlob, {
+        .upload(storagePath, pdfBlob, {
           contentType: 'application/pdf',
           upsert: false,
         });
@@ -1504,13 +1532,13 @@ function EndorsementGenerator() {
         endorsementDate: formatDateForPdf(formData.date),
         templateTitles: selectedTemplates,
         storagePath,
-        fileSizeBytes: latestPdfBlob.size,
+        fileSizeBytes: pdfBlob.size,
       });
 
-      setStatusMessage('Endorsement PDF saved to your dashboard records.');
+      setStatusMessage('Print window opened. The PDF was saved to your dashboard records.');
     } catch (error) {
       console.error('Error saving endorsement record:', error);
-      setStatusMessage(error instanceof Error ? error.message : 'Failed to save endorsement record.');
+      setStatusMessage('Print window opened, but the PDF could not be saved to your dashboard records.');
     } finally {
       setSavingRecord(false);
     }
@@ -1522,15 +1550,221 @@ function EndorsementGenerator() {
       return;
     }
 
-    const printWindow = window.open(pdfUrl, '_blank');
-    if (!printWindow) {
-      setStatusMessage('The print window was blocked by the browser.');
+    setPrintModalOpen(true);
+  };
+
+  const buildAvery5163PdfUrl = async () => {
+    if (!validateForm()) {
+      setStatusMessage('Resolve the highlighted fields before printing Avery 5163 labels.');
+      return null;
+    }
+
+    try {
+      const doc = await PDFDocument.create();
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const labelPaddingX = 6;
+      const labelPaddingTop = 6;
+      const labelPaddingBottom = 6;
+      const signatureDrop = 18;
+      const signatureAreaHeight = 30;
+      const textWidth = AVERY_5163_LABEL_WIDTH - labelPaddingX * 2;
+      const maxTextHeight =
+        AVERY_5163_LABEL_HEIGHT - labelPaddingTop - labelPaddingBottom - signatureAreaHeight;
+      const startIndex = Number.parseInt(labelStartSlot, 10) - 1;
+      let signatureImage;
+
+      if (signatureDirtyRef.current) {
+        const dataUrl = signaturePreviewDataUrl || getTrimmedSignatureDataUrl(canvasRef.current);
+        if (!dataUrl) {
+          throw new Error('Unable to capture the signature image.');
+        }
+        const signatureImageBytes = await fetch(dataUrl).then((response) => response.arrayBuffer());
+        signatureImage = await doc.embedPng(signatureImageBytes);
+      }
+
+      const labels = selectedTemplates.map((templateKey) => {
+        const content = createTemplateDraft(templateKey);
+
+        for (let fontSize = 7; fontSize >= 5.5; fontSize -= 0.25) {
+          const lineHeight = fontSize * 1.15;
+          const lines = splitTextIntoLines(content, font, fontSize, textWidth);
+
+          if (lines.length * lineHeight <= maxTextHeight) {
+            return { lines, fontSize, lineHeight };
+          }
+        }
+
+        throw new Error(`"${templateKey}" is too long for an Avery 5163 label. Use standard Letter paper.`);
+      });
+      const requiredSlots = startIndex + labels.length;
+      const pageCount = Math.ceil(requiredSlots / AVERY_5163_LABELS_PER_PAGE);
+
+      for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+        const page = doc.addPage([LETTER_PAGE_WIDTH, LETTER_PAGE_HEIGHT]);
+
+        for (let slot = 0; slot < AVERY_5163_LABELS_PER_PAGE; slot += 1) {
+          const labelIndex = pageIndex * AVERY_5163_LABELS_PER_PAGE + slot - startIndex;
+          const label = labels[labelIndex];
+          if (!label) {
+            continue;
+          }
+
+          const column = slot % AVERY_5163_COLUMNS;
+          const row = Math.floor(slot / AVERY_5163_COLUMNS);
+          const x = AVERY_5163_SIDE_MARGIN + column * (AVERY_5163_LABEL_WIDTH + AVERY_5163_COLUMN_GAP);
+          const y = LETTER_PAGE_HEIGHT - AVERY_5163_TOP_MARGIN - (row + 1) * AVERY_5163_LABEL_HEIGHT;
+          let textY = y + AVERY_5163_LABEL_HEIGHT - labelPaddingTop - label.fontSize;
+
+          label.lines.forEach((line) => {
+            page.drawText(line, {
+              x: x + labelPaddingX,
+              y: textY,
+              size: label.fontSize,
+              font,
+            });
+            textY -= label.lineHeight;
+          });
+
+          const signatureLabelY = textY - signatureDrop - 2;
+          page.drawText('Signature:', {
+            x: x + labelPaddingX,
+            y: signatureLabelY,
+            size: label.fontSize,
+            font,
+          });
+
+          if (signatureImage) {
+            const signatureTargetWidth = 60;
+            const signatureTargetHeight = signatureDrop;
+            const imageRatio = signatureImage.width / signatureImage.height;
+            const targetRatio = signatureTargetWidth / signatureTargetHeight;
+            const drawWidth = imageRatio > targetRatio
+              ? signatureTargetWidth
+              : signatureTargetHeight * imageRatio;
+            const drawHeight = imageRatio > targetRatio
+              ? signatureTargetWidth / imageRatio
+              : signatureTargetHeight;
+
+            page.drawImage(signatureImage, {
+              x: x + 48,
+              y: signatureLabelY - 3,
+              width: drawWidth,
+              height: drawHeight,
+            });
+          } else {
+            page.drawLine({
+              start: { x: x + 48, y: signatureLabelY + 2 },
+              end: { x: x + 126, y: signatureLabelY + 2 },
+              thickness: 1,
+              color: rgb(0.15, 0.23, 0.33),
+            });
+          }
+        }
+      }
+
+      const pdfBytes = await doc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      return { url: URL.createObjectURL(blob), blob };
+    } catch (error) {
+      console.error('Error generating Avery 5163 PDF:', error);
+      setStatusMessage(error instanceof Error ? error.message : 'Failed to generate Avery 5163 labels.');
+      return null;
+    }
+  };
+
+  const rememberPrintablePdf = (url, isTemporary) => {
+    if (
+      printablePdfIsTemporaryRef.current &&
+      printablePdfUrlRef.current &&
+      printablePdfUrlRef.current !== url
+    ) {
+      URL.revokeObjectURL(printablePdfUrlRef.current);
+    }
+
+    printablePdfUrlRef.current = url;
+    printablePdfIsTemporaryRef.current = isTemporary;
+    setPrintablePdfUrl(url);
+  };
+
+  const requestPrintDialog = (url) => {
+    printFrameRef.current?.remove();
+
+    const frame = document.createElement('iframe');
+    frame.title = 'PilotSeal printable PDF';
+    frame.style.position = 'fixed';
+    frame.style.right = '0';
+    frame.style.bottom = '0';
+    frame.style.width = '1px';
+    frame.style.height = '1px';
+    frame.style.border = '0';
+    frame.style.opacity = '0';
+    frame.setAttribute('aria-hidden', 'true');
+
+    const cleanup = () => {
+      if (printFrameRef.current === frame) {
+        printFrameRef.current = null;
+      }
+      frame.remove();
+    };
+
+    frame.onload = () => {
+      window.setTimeout(() => {
+        try {
+          const printableWindow = frame.contentWindow;
+          if (!printableWindow) {
+            throw new Error('Printable PDF window is unavailable.');
+          }
+
+          printableWindow.addEventListener('afterprint', cleanup, { once: true });
+          printableWindow.focus();
+          printableWindow.print();
+          setStatusMessage('Print dialog requested. If it does not open, use Open printable PDF below.');
+        } catch (error) {
+          console.error('Unable to open the print dialog:', error);
+          cleanup();
+          setStatusMessage('The browser did not open the print dialog. Open the printable PDF and use the print button in the PDF viewer.');
+        }
+      }, 250);
+    };
+    frame.onerror = () => {
+      cleanup();
+      setStatusMessage('The browser did not open the print dialog. Open the printable PDF and use the print button in the PDF viewer.');
+    };
+
+    printFrameRef.current = frame;
+    frame.src = url;
+    document.body.appendChild(frame);
+    window.setTimeout(cleanup, 60_000);
+  };
+
+  const handlePrintFormatConfirm = async () => {
+    setPrintModalOpen(false);
+
+    const printablePdf = printFormat === 'avery-5163'
+      ? await buildAvery5163PdfUrl()
+      : { url: pdfUrl, blob: latestPdfBlob };
+
+    if (!printablePdf?.url || !printablePdf.blob) {
       return;
     }
 
-    printWindow.onload = () => {
-      printWindow.print();
-    };
+    rememberPrintablePdf(printablePdf.url, printFormat === 'avery-5163');
+    requestPrintDialog(printablePdf.url);
+
+    if (session?.user?.id) {
+      void savePrintedRecord(printablePdf.blob);
+    }
+  };
+
+  const handleOpenPrintablePdf = () => {
+    if (!printablePdfUrl) {
+      return;
+    }
+
+    const printableWindow = window.open(printablePdfUrl, '_blank');
+    if (!printableWindow) {
+      setStatusMessage('The printable PDF window was blocked by the browser.');
+    }
   };
 
   const savedInstructorNameOptions = getUniqueSavedPeopleByName(savedCfis);
@@ -1771,25 +2005,100 @@ function EndorsementGenerator() {
                 <button className={styles.secondaryButton} onClick={handlePreview} type="button">
                   Preview
                 </button>
-                <button
-                  className={styles.secondaryButton}
-                  onClick={handleSaveRecord}
-                  type="button"
-                  disabled={!latestPdfBlob || savingRecord}
-                >
-                  {savingRecord ? 'Saving...' : 'Save record'}
+                <button className={styles.secondaryButton} onClick={handlePrint} type="button" disabled={!pdfUrl || savingRecord}>
+                  {savingRecord ? 'Saving...' : 'Print'}
                 </button>
-                <button className={styles.secondaryButton} onClick={handlePrint} type="button" disabled={!pdfUrl}>
-                  Print
-                </button>
+                {printablePdfUrl ? (
+                  <button className={styles.secondaryButton} onClick={handleOpenPrintablePdf} type="button">
+                    Open printable PDF
+                  </button>
+                ) : null}
               </div>
 
+              <p className={styles.printHint}>
+                You can choose a print format after clicking Print: standard Letter paper or Avery 5163 labels.
+                If you are signed in, printing automatically saves the PDF to your dashboard records.
+              </p>
               {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}
               {errors.selectedTemplates ? <p className={styles.inlineError}>{errors.selectedTemplates}</p> : null}
             </div>
           </section>
         </div>
       </div>
+
+      <Modal
+        isOpen={printModalOpen}
+        onRequestClose={() => setPrintModalOpen(false)}
+        contentLabel="Choose print format"
+        className="Modal"
+        overlayClassName="Overlay"
+      >
+        <div className="endorsementModal">
+          <div className="endorsementModalHeader">
+            <div>
+              <h2>Choose print format</h2>
+              <p>Select standard Letter paper or Avery 5163 labels before opening the print dialog.</p>
+            </div>
+            <div className="endorsementModalActions">
+              <button
+                type="button"
+                className="modalGhostButton"
+                onClick={() => setPrintModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="modalPrimaryButton"
+                onClick={handlePrintFormatConfirm}
+              >
+                Continue to print
+              </button>
+            </div>
+          </div>
+          <div className={styles.printFormatBody}>
+            <label className={styles.printFormatOption}>
+              <input
+                type="radio"
+                name="print-format"
+                value="letter"
+                checked={printFormat === 'letter'}
+                onChange={(event) => setPrintFormat(event.target.value)}
+              />
+              <span>
+                <strong>Standard Letter paper</strong>
+                <small>Use the existing endorsement PDF layout.</small>
+              </span>
+            </label>
+            <label className={styles.printFormatOption}>
+              <input
+                type="radio"
+                name="print-format"
+                value="avery-5163"
+                checked={printFormat === 'avery-5163'}
+                onChange={(event) => setPrintFormat(event.target.value)}
+              />
+              <span>
+                <strong>Avery 5163 labels</strong>
+                <small>Print one endorsement per 2&quot; x 4&quot; label on a 10-label sheet.</small>
+              </span>
+            </label>
+            {printFormat === 'avery-5163' ? (
+              <label className={styles.printStartSlot}>
+                <span>Start at label slot</span>
+                <select value={labelStartSlot} onChange={(event) => setLabelStartSlot(event.target.value)}>
+                  {Array.from({ length: AVERY_5163_LABELS_PER_PAGE }, (_, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {index + 1}
+                    </option>
+                  ))}
+                </select>
+                <small>Slots fill from left to right, then top to bottom. Earlier slots stay blank.</small>
+              </label>
+            ) : null}
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={guestRegisterPromptOpen}

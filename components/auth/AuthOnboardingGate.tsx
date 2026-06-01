@@ -30,6 +30,7 @@ export default function AuthOnboardingGate() {
   const [dismissedCfiPrompt, setDismissedCfiPrompt] = useState(false);
   const [notInstructor, setNotInstructor] = useState(false);
   const [skippedWeight, setSkippedWeight] = useState(false);
+  const [onboardingLoaded, setOnboardingLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -42,6 +43,7 @@ export default function AuthOnboardingGate() {
 
     async function loadOnboardingState() {
       if (!shouldLoad || !session?.user?.id) {
+        setOnboardingLoaded(false);
         setProfile(null);
         setSelfPerson(null);
         setNickname("");
@@ -53,6 +55,7 @@ export default function AuthOnboardingGate() {
       }
 
       try {
+        setOnboardingLoaded(false);
         const [nextProfile, certificates] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchPersonCertificates(session.user.id).catch(() => []),
@@ -95,10 +98,12 @@ export default function AuthOnboardingGate() {
                 certificate.certificate_type === "ground_instructor")
           )
         );
+        setOnboardingLoaded(true);
         setStatus("");
       } catch (error) {
         if (!cancelled) {
           console.error(error);
+          setOnboardingLoaded(false);
           setStatus("Unable to load onboarding details right now.");
         }
       }
@@ -111,15 +116,17 @@ export default function AuthOnboardingGate() {
     };
   }, [session?.user?.id, shouldLoad]);
 
-  const needsNickname = shouldLoad && !profile?.display_name?.trim();
+  const needsNickname = shouldLoad && onboardingLoaded && !profile?.display_name?.trim();
   const needsWeightPrompt =
     shouldLoad &&
+    onboardingLoaded &&
     !needsNickname &&
     !skippedWeight &&
     typeof selfPerson?.weight_lbs !== "number";
   const showCfiPrompt = useMemo(
     () =>
       shouldLoad &&
+      onboardingLoaded &&
       !needsNickname &&
       !needsWeightPrompt &&
       !hasInstructorCertificate &&
@@ -131,6 +138,7 @@ export default function AuthOnboardingGate() {
       needsNickname,
       needsWeightPrompt,
       notInstructor,
+      onboardingLoaded,
       shouldLoad,
     ]
   );
@@ -229,7 +237,7 @@ export default function AuthOnboardingGate() {
     setStatus("");
   }
 
-  if (!shouldLoad) {
+  if (!shouldLoad || !onboardingLoaded) {
     return null;
   }
 
