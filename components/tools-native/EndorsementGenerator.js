@@ -12,7 +12,10 @@ import {
   createEndorsementRecord,
   ENDORSEMENT_RECORDS_BUCKET,
 } from '@/lib/endorsement-records';
-import { fetchPersonCertificates } from '@/lib/person-certificates';
+import {
+  fetchPersonCertificates,
+  getCertificateCurrencyDueDate,
+} from '@/lib/person-certificates';
 import { fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people';
 import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -75,6 +78,23 @@ const TEMPLATE_CATEGORY_ORDER = [
 ];
 
 const templateEntries = Object.entries(templates);
+
+function getInstructorExpirationDate(certificate, person) {
+  if (person.cert_exp_date) {
+    return person.cert_exp_date;
+  }
+
+  const dueDate = getCertificateCurrencyDueDate(certificate);
+  if (!dueDate) {
+    return '';
+  }
+
+  return [
+    String(dueDate.getMonth() + 1).padStart(2, '0'),
+    String(dueDate.getDate()).padStart(2, '0'),
+    String(dueDate.getFullYear()).padStart(4, '0'),
+  ].join('/');
+}
 
 function sanitizeText(text) {
   return text.replace(/\t/g, ' ').replace(/[\u{0080}-\u{FFFF}]/gu, '');
@@ -845,7 +865,7 @@ function EndorsementGenerator() {
               id: certificate.id,
               person_id: person.id,
               cert_number: certificate.certificate_number || person.cert_number,
-              cert_exp_date: certificate.last_event_date || person.cert_exp_date,
+              cert_exp_date: getInstructorExpirationDate(certificate, person),
               is_default: certificate.is_default_for_endorsements || person.is_default,
             };
           })
