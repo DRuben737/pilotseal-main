@@ -38,6 +38,14 @@ const INITIAL_FORM_DATA = {
   date: '',
 };
 
+function getTodayUsDate() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+
+  return `${month}/${day}/${today.getFullYear()}`;
+}
+
 const BASE_FIELD_KEYS = new Set(FIELD_CONFIG.map((field) => field.key));
 const BLANK_TEMPLATE_SHORT_FIELDS = new Set([
   'annualReviewDueDate',
@@ -631,7 +639,10 @@ function createSignaturePad(canvas, { onBegin, onEnd } = {}) {
 function EndorsementGenerator() {
   const router = useRouter();
   const { session } = useAuthSession();
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [formData, setFormData] = useState(() => ({
+    ...INITIAL_FORM_DATA,
+    date: getTodayUsDate(),
+  }));
   const [errors, setErrors] = useState({});
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [detailsModalIsOpen, setDetailsModalIsOpen] = useState(false);
