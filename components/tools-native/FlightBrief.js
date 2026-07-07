@@ -409,50 +409,69 @@ function categorizeNotams(notams) {
 function riskCategory(total) {
   if (total <= 10) {
     return {
-      level: "🟢 LOW RISK",
-      color: "green",
-      recommendation: "Risk acceptable after discussion. Flight may proceed.",
+      level: "LOW RISK",
+      color: "#15803d",
+      recommendation: "Risk acceptable after normal mitigation and preflight discussion.",
     };
   }
   if (total <= 15) {
     return {
-      level: "🟡 MODERATE RISK",
-      color: "orange",
+      level: "MITIGATION REQUIRED",
+      color: "#b45309",
       recommendation:
-        "Consult with senior or chief instructor to discuss risk mitigation. May proceed after reduction.",
+        "List mitigations and discuss with the appropriate instructor or approval level before release.",
     };
   }
   return {
-    level: "🔴 HIGH RISK",
-    color: "red",
+    level: "APPROVAL REQUIRED",
+    color: "#b91c1c",
     recommendation:
-      "Flight requires Chief Pilot approval. Discuss flight plan in detail.",
+      "Adjust the plan or seek Chief Pilot / designated approval before the flight is released.",
   };
 }
 
 /** ------------------ Risk definitions ------------------ */
 const STATIC_RISKS = [
-  { id: "static-dual-flight", label: "Dual flight", value: 1 },
-  { id: "static-training-pre-solo", label: "Training Pre-solo student", value: 3 },
-  { id: "static-solo-student", label: "SOLO student", value: 3 },
-  { id: "static-dpe-check", label: "DPE or Check flight", value: 2 },
-  { id: "static-first-fly-fi", label: "First fly with FI", value: 1 },
-  { id: "static-different-model", label: "Different model", value: 1 },
-  { id: "static-last-flight-30", label: "Last flight >30 days", value: 1 },
-  { id: "static-acft-time-40", label: "Aircraft time < 40 hours (Rated)", value: 1 },
-  { id: "static-fi-dual-200", label: "FI < 200 hours Dual given", value: 1 },
+  { id: "static-student-under-50-type", label: "Student < 50 hrs in type (e.g. R44)", value: 1 },
+  { id: "static-training-pre-solo", label: "Training with Pre-solo Student", value: 3 },
+  { id: "static-cfi-under-100-instruction", label: "CFI < 100 hrs Instruction given", value: 3 },
+  { id: "static-last-dual-30", label: "Last DUAL flight > 30 days", value: 1 },
+  { id: "static-last-night-30", label: "Last NIGHT flight > 30 days", value: 1 },
+  { id: "static-solo-flight", label: "SOLO flight", value: 2 },
+  { id: "static-last-solo-30", label: "Last SOLO flight > 30 days (SOLO)", value: 2 },
+  { id: "static-prior-mx", label: "Prior MX but released, nothing found / Recurrent MX", value: 1 },
+  { id: "static-inspection-under-20", label: "Aircraft < 20 hrs to next required inspection", value: 1 },
+  {
+    id: "static-secondary-aircraft-type",
+    label: "Secondary Aircraft type in same week",
+    detail: "(not the aircraft that is primarily flown)",
+    value: 1,
+  },
+  { id: "static-first-different-cfi", label: "First flight with different CFI", value: 1 },
+  { id: "static-stage-check", label: "Stage Check / Check Ride", value: 1 },
 ];
 
 const DYNAMIC_RISKS = [
-  { id: "dynamic-night-ops", label: "Night ops", value: 1 },
-  { id: "dynamic-last-night-30", label: "Last night >30 days", value: 1 },
-  { id: "dynamic-svfr", label: "SVFR", value: 1 },
-  { id: "dynamic-gust-spread", label: "Gust spread > 13 kt", value: 1 },
-  { id: "dynamic-other-fi-cancel", label: "Other FI cancellation due to WX", value: 1 },
-  { id: "dynamic-max-fuel-flight", label: "Max fuel flight", value: 1 },
-  { id: "full-down-auto", label: "Full down auto", value: 1 },
-  { id: "dynamic-stall-training", label: "STALL Training", value: 1 },
-  { id: "dynamic-spin-training", label: "SPIN Training", value: 2 },
+  { id: "dynamic-dusk-ops", label: "Dusk Ops (Mesopic Vision)", value: 1 },
+  { id: "dynamic-svfr-dual", label: "Possibility of SVFR (DUAL)", value: 2 },
+  { id: "dynamic-visibility-within-1sm", label: "Visibility w/in 1 SM", detail: "Clouds w/in 200' USATS mins. (SOLO)", value: 1 },
+  { id: "dynamic-clouds-within-200", label: "Clouds w/in 200' USATS mins. (SOLO)", value: 1 },
+  {
+    id: "dynamic-wind-gust-personal-min",
+    label: "Wind / Gust spread w/in 2 kts of personal min or USATS mins, whichever is lower.",
+    value: 2,
+  },
+  { id: "dynamic-high-da-gw", label: "High DA / high gross weight per W&B", value: 1 },
+  { id: "dynamic-frontal-passage", label: "Frontal Passage to occur within 6 hrs.", value: 1 },
+  { id: "dynamic-deteriorating-wx", label: "Deteriorating WX trend", detail: "(FG/BR/VCTS/VCSH)", value: 2 },
+  { id: "dynamic-class-bc-solo", label: "Entering Class B or C airspace (SOLO)", value: 1 },
+  { id: "dynamic-night-flight", label: "Night Flight", value: 1 },
+  { id: "dynamic-fuel-90", label: "90% of usable fuel required", value: 2 },
+  { id: "dynamic-other-cfis-cancel-wx", label: "Other CFIs canceling flights due to WX", value: 2 },
+  { id: "dynamic-full-down-auto-heli", label: "Full Down Autorotation - Helicopter", value: 2, tone: "heli" },
+  { id: "dynamic-stalls-airplane", label: "Stalls - Airplane", value: 2, tone: "airplane" },
+  { id: "dynamic-spins-airplane", label: "Spins - Airplane", value: 2, tone: "airplane" },
+  { id: "dynamic-single-engine-out-me", label: "Single Engine Out - ME Airplane", value: 2, tone: "airplane" },
 ];
 
 function sumChecked(riskConfig, checkedMap) {
@@ -463,6 +482,18 @@ function checkedItemsLines(riskConfig, checkedMap) {
   return riskConfig
     .filter((r) => checkedMap[r.id])
     .map((r) => `- ${r.label} [${r.value}]`);
+}
+
+function RiskItemCopy({ risk, className = "risk-item-copy" }) {
+  return (
+    <span className={className}>
+      <span className="risk-item-title">
+        <strong>{risk.label}</strong>
+        <small className="risk-item-score">{risk.value} pt</small>
+      </span>
+      {risk.detail && <small className="risk-item-detail">{risk.detail}</small>}
+    </span>
+  );
 }
 
 function formatDisplayDate(value) {
@@ -861,8 +892,12 @@ export default function FlightBrief() {
   const setDynamicChecked = useCallback((value) => setBriefField("dynamicChecked", value), [setBriefField]);
   const imsafe = brief.imsafe ?? 0; // 0..6
   const setImsafe = useCallback((value) => setBriefField("imsafe", value), [setBriefField]);
+  const cfiStress = brief.cfiStress ?? 0; // 0..6, no flight above 2
+  const setCfiStress = useCallback((value) => setBriefField("cfiStress", value), [setBriefField]);
   const otherRisks = brief.otherRisks ?? 0; // 0..5
   const setOtherRisks = useCallback((value) => setBriefField("otherRisks", value), [setBriefField]);
+  const otherRiskLabel = brief.otherRiskLabel ?? "";
+  const setOtherRiskLabel = useCallback((value) => setBriefField("otherRiskLabel", value), [setBriefField]);
   const riskComments = brief.riskComments ?? "";
   const setRiskComments = useCallback((value) => setBriefField("riskComments", value), [setBriefField]);
   const currentStep = brief.currentStep ?? 0;
@@ -877,8 +912,11 @@ export default function FlightBrief() {
   }, [currentStep]);
 
   const staticScore = useMemo(
-    () => sumChecked(STATIC_RISKS, staticChecked) + (parseInt(imsafe, 10) || 0),
-    [staticChecked, imsafe]
+    () =>
+      sumChecked(STATIC_RISKS, staticChecked) +
+      (parseInt(imsafe, 10) || 0) +
+      (parseInt(cfiStress, 10) || 0),
+    [staticChecked, imsafe, cfiStress]
   );
   const dynamicScore = useMemo(
     () => sumChecked(DYNAMIC_RISKS, dynamicChecked) + (parseInt(otherRisks, 10) || 0),
@@ -897,10 +935,10 @@ export default function FlightBrief() {
       return;
     }
 
-    if (calculatedFuelTime - eteHours < 0.5 && !dynamicChecked["dynamic-max-fuel-flight"]) {
+    if (calculatedFuelTime - eteHours < 0.5 && !dynamicChecked["dynamic-fuel-90"]) {
       setDynamicChecked((current) => ({
         ...current,
-        "dynamic-max-fuel-flight": true,
+        "dynamic-fuel-90": true,
       }));
     }
   }, [calculatedFuelTime, dynamicChecked, ete, setDynamicChecked]);
@@ -1082,65 +1120,68 @@ export default function FlightBrief() {
   const riskGates = useMemo(() => {
   const gates = [];
 
-  const isSolo = staticChecked["static-solo-student"];
+  const isSolo = staticChecked["static-solo-flight"];
   const isPreSolo = staticChecked["static-training-pre-solo"];
-  const isSVFR = dynamicChecked["dynamic-svfr"];
-  const isNight = dynamicChecked["dynamic-night-ops"];
-  const nightCurrency = dynamicChecked["dynamic-last-night-30"];
+  const isSVFR = dynamicChecked["dynamic-svfr-dual"];
+  const isNight = dynamicChecked["dynamic-night-flight"];
+  const nightCurrency = staticChecked["static-last-night-30"];
 
-  const isStall = dynamicChecked["dynamic-stall-training"]; // STALL Training
-  const isSpin = dynamicChecked["dynamic-spin-training"]; // SPIN Training
-  const isAutorotation = dynamicChecked["full-down-auto"]; // Full down auto (autorotation)
+  const isStall = dynamicChecked["dynamic-stalls-airplane"];
+  const isSpin = dynamicChecked["dynamic-spins-airplane"];
+  const isAutorotation = dynamicChecked["dynamic-full-down-auto-heli"];
+  const cfiStressScore = parseInt(cfiStress, 10) || 0;
 
-  // 1️⃣ SVFR + Solo
   if (isSVFR && isSolo) {
-    gates.push("SVFR with SOLO student – Chief Pilot review required.");
+    gates.push("SVFR possibility with SOLO flight - Chief Pilot review required.");
   }
 
-  // 2️⃣ Night + no recent night
   if (isNight && nightCurrency) {
-    gates.push("Night operation with no recent night currency – mitigation required.");
+    gates.push("Night flight with last night flight > 30 days - mitigation required.");
   }
 
-  // 3️⃣ IFR + Pre-solo
+  if (cfiStressScore > 2) {
+    gates.push("CFI stress factors above 2 - NO FLIGHT until reduced.");
+  }
+
+  if (totalRisk > 15) {
+    gates.push("Total risk score above 15 - adjust plan or obtain required approval before release.");
+  }
+
   if (flightRules === "IFR" && isPreSolo) {
-    gates.push("IFR selected with Pre-solo student – confirm training intent.");
+    gates.push("IFR selected with pre-solo student - confirm training intent and approval level.");
   }
 
-  // 4️⃣ METAR IFR/LIFR
   const anyIFR = Object.values(metarByIcaoData || {}).some(
     (m) => m?.flight_rules === "IFR" || m?.flight_rules === "LIFR"
   );
   if (anyIFR) {
-    gates.push("Destination/route reporting IFR/LIFR – evaluate alternate and minima.");
+    gates.push("Destination/route reporting IFR/LIFR - evaluate alternate and minima.");
   }
 
-  // 5️⃣ Airport closures
   const closureAirport = Object.entries(notamByIcao || {}).find(
     ([, g]) => g?.closures?.length > 0
   );
   if (closureAirport) {
     gates.push(
-      `Airport operational closure NOTAM present (${closureAirport[0]}) – verify runway/taxiway availability.`
+      `Airport operational closure NOTAM present (${closureAirport[0]}) - verify runway/taxiway availability.`
     );
   }
 
-  // 6️⃣ Maneuver training: discuss recovery altitude and procedure
   if (isAutorotation) {
     gates.push(
-      "Autorotation (Full down auto) selected – brief recovery altitude (AGL/MSL), entry/termination criteria, and go-around procedure."
+      "Full down autorotation selected - brief recovery altitude, entry/termination criteria, and go-around procedure."
     );
   }
 
   if (isStall) {
     gates.push(
-      "STALL training selected – brief recovery altitude, configuration (power/flaps), and standard recovery procedure (reduce AoA, add power, minimize altitude loss)."
+      "Stalls selected - brief recovery altitude, configuration, and standard recovery procedure."
     );
   }
 
   if (isSpin) {
     gates.push(
-      "SPIN training selected – brief entry criteria, minimum recovery altitude, and recovery procedure (PARE or school SOP)."
+      "Spins selected - brief entry criteria, minimum recovery altitude, and recovery procedure."
     );
   }
 
@@ -1148,6 +1189,8 @@ export default function FlightBrief() {
 }, [
   staticChecked,
   dynamicChecked,
+  cfiStress,
+  totalRisk,
   flightRules,
   metarByIcaoData,
   notamByIcao,
@@ -1395,11 +1438,14 @@ export default function FlightBrief() {
 
     const staticLines = [
       ...checkedItemsLines(STATIC_RISKS, staticChecked),
-      ...(parseInt(imsafe, 10) ? [`- IMSAFE [${parseInt(imsafe, 10)}]`] : []),
+      ...(parseInt(imsafe, 10) ? [`- Student stress factors / IMSAFE [${parseInt(imsafe, 10)}]`] : []),
+      ...(parseInt(cfiStress, 10) ? [`- CFI stress factors / IMSAFE [${parseInt(cfiStress, 10)}]`] : []),
     ];
     const dynamicLines = [
       ...checkedItemsLines(DYNAMIC_RISKS, dynamicChecked),
-      ...(parseInt(otherRisks, 10) ? [`- Other Risks [${parseInt(otherRisks, 10)}]`] : []),
+      ...(parseInt(otherRisks, 10)
+        ? [`- Other: ${otherRiskLabel || "Other Risks"} [${parseInt(otherRisks, 10)}]`]
+        : []),
     ];
 
     // Optional: include NOTAM summary counts
@@ -1452,7 +1498,7 @@ Total Risk Score: ${totalRisk}
 Category: ${riskMeta.level}
 Recommendation: ${riskMeta.recommendation}
 
-🗒️ Risk Discussion / Comments:
+Risk Mitigation (RM):
 ${riskComments}
 `;
 
@@ -1493,11 +1539,14 @@ ${riskComments}
     airportsForWxAndNotams,
     daResult,
     grossWeight,
+    wbCg,
     fuelTime,
     mxRemaining,
     staticChecked,
     dynamicChecked,
     imsafe,
+    cfiStress,
+    otherRiskLabel,
     otherRisks,
     staticScore,
     dynamicScore,
@@ -2481,16 +2530,22 @@ ${riskComments}
           {currentStep === 4 && (
             <section className="flightbrief-panel">
               <h2>Risk Assessment</h2>
+              <div className="flightbrief-riskInstructions" aria-label="Flight risk assessment instructions">
+                <strong>Flight Risk Assessment Tool</strong>
+                <p>
+                  Complete before each flight. Any risk shall be mitigated as low as reasonably possible.
+                  If unable to mitigate risks at the pilot&apos;s level, adjust plan of action or seek the
+                  appropriate approval level for discussion and release.
+                </p>
+                <p>Cross out any specific risk that is not applicable.</p>
+              </div>
               <div className="flightbrief-mobile-settings">
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">Static Risk</h3>
                   <div className="settings-checklist">
                     {STATIC_RISKS.map((r) => (
                       <label className="settings-checkRow" key={r.id} htmlFor={`mobile-${r.id}`}>
-                        <span className="settings-checkCopy">
-                          <strong>{r.label}</strong>
-                          <small>{r.value} pt</small>
-                        </span>
+                        <RiskItemCopy risk={r} className="settings-checkCopy" />
                         <input
                           id={`mobile-${r.id}`}
                           type="checkbox"
@@ -2500,7 +2555,7 @@ ${riskComments}
                       </label>
                     ))}
                     <EditableInfoRow
-                      label="IMSAFE"
+                      label="Student Stress Factors (IMSAFE) - 1 for each"
                       value={formatDisplayValue(imsafe, "0")}
                       rowKey="imsafe"
                       editingKey={mobileEditingField}
@@ -2517,6 +2572,24 @@ ${riskComments}
                         />
                       )}
                     />
+                    <EditableInfoRow
+                      label="CFI Stress Factors (IMSAFE) - 1 for each / NO FLIGHT if above 2"
+                      value={formatDisplayValue(cfiStress, "0")}
+                      rowKey="cfiStress"
+                      editingKey={mobileEditingField}
+                      setEditingKey={setMobileEditingField}
+                      renderEditor={(close) => (
+                        <input
+                          autoFocus
+                          type="number"
+                          min="0"
+                          max="6"
+                          value={cfiStress}
+                          onChange={(e) => setCfiStress(e.target.value)}
+                          onBlur={close}
+                        />
+                      )}
+                    />
                   </div>
                 </div>
 
@@ -2525,10 +2598,7 @@ ${riskComments}
                   <div className="settings-checklist">
                     {DYNAMIC_RISKS.map((r) => (
                       <label className="settings-checkRow" key={r.id} htmlFor={`mobile-${r.id}`}>
-                        <span className="settings-checkCopy">
-                          <strong>{r.label}</strong>
-                          <small>{r.value} pt</small>
-                        </span>
+                        <RiskItemCopy risk={r} className="settings-checkCopy" />
                         <input
                           id={`mobile-${r.id}`}
                           type="checkbox"
@@ -2537,6 +2607,21 @@ ${riskComments}
                         />
                       </label>
                     ))}
+                    <EditableInfoRow
+                      label="Other:"
+                      value={formatDisplayValue(otherRiskLabel, "Not set")}
+                      rowKey="otherRiskLabel"
+                      editingKey={mobileEditingField}
+                      setEditingKey={setMobileEditingField}
+                      renderEditor={(close) => (
+                        <input
+                          autoFocus
+                          value={otherRiskLabel}
+                          onChange={(e) => setOtherRiskLabel(e.target.value)}
+                          onBlur={close}
+                        />
+                      )}
+                    />
                     <EditableInfoRow
                       label="Other Risks"
                       value={formatDisplayValue(otherRisks, "0")}
@@ -2560,11 +2645,25 @@ ${riskComments}
 
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">Summary</h3>
+                  <div className="settings-summaryCopy">
+                    Static {staticScore} + Dynamic {dynamicScore}
+                  </div>
                   <div className="settings-summaryValue">{totalRisk}</div>
                   <div className="settings-summaryMeta" style={{ color: riskMeta.color }}>
                     {riskMeta.level}
                   </div>
                   <p className="settings-summaryCopy">{riskMeta.recommendation}</p>
+                </div>
+
+                <div className="settings-card">
+                  <h3 className="settings-cardTitle">Risk Mitigation (RM)</h3>
+                  <textarea
+                    rows="4"
+                    className="input-field"
+                    value={riskComments}
+                    onChange={(e) => setRiskComments(e.target.value)}
+                    placeholder="List RM in place - required for approval"
+                  />
                 </div>
               </div>
 
@@ -2581,10 +2680,7 @@ ${riskComments}
                   <div className="flightbrief-riskList">
                     {STATIC_RISKS.map((r) => (
                       <label className="risk-item" key={r.id} htmlFor={r.id}>
-                        <span className="risk-item-copy">
-                          <strong>{r.label}</strong>
-                          <small>{r.value} pt</small>
-                        </span>
+                        <RiskItemCopy risk={r} />
                         <input
                           type="checkbox"
                           id={r.id}
@@ -2595,8 +2691,16 @@ ${riskComments}
                     ))}
                   </div>
                   <div className="risk-item risk-item-number">
-                    <label htmlFor="imsafe-risk">IMSAFE</label>
+                    <label htmlFor="imsafe-risk">Student Stress Factors (IMSAFE) - 1 for each</label>
                     <input type="number" id="imsafe-risk" min="0" max="6" value={imsafe} onChange={(e) => setImsafe(e.target.value)} />
+                  </div>
+                  <div className="risk-item risk-item-number">
+                    <label htmlFor="cfi-stress-risk">CFI Stress Factors (IMSAFE) - 1 for each / NO FLIGHT if above 2</label>
+                    <input type="number" id="cfi-stress-risk" min="0" max="6" value={cfiStress} onChange={(e) => setCfiStress(e.target.value)} />
+                  </div>
+                  <div className="flightbrief-riskSubtotal">
+                    <span>Subtotal Static Risks</span>
+                    <strong>{staticScore}</strong>
                   </div>
                 </div>
 
@@ -2610,11 +2714,8 @@ ${riskComments}
                   </div>
                   <div className="flightbrief-riskList">
                     {DYNAMIC_RISKS.map((r) => (
-                      <label className="risk-item" key={r.id} htmlFor={r.id}>
-                        <span className="risk-item-copy">
-                          <strong>{r.label}</strong>
-                          <small>{r.value} pt</small>
-                        </span>
+                      <label className={`risk-item${r.tone ? ` risk-item-${r.tone}` : ""}`} key={r.id} htmlFor={r.id}>
+                        <RiskItemCopy risk={r} />
                         <input
                           type="checkbox"
                           id={r.id}
@@ -2624,21 +2725,34 @@ ${riskComments}
                       </label>
                     ))}
                   </div>
+                  <div className="risk-item risk-item-other">
+                    <label htmlFor="other-risk-label">Other:</label>
+                    <input
+                      id="other-risk-label"
+                      value={otherRiskLabel}
+                      onChange={(e) => setOtherRiskLabel(e.target.value)}
+                      placeholder="Specific risk"
+                    />
+                  </div>
                   <div className="risk-item risk-item-number">
                     <label htmlFor="other-risk">Other Risks</label>
                     <input id="other-risk" type="number" min="0" max="5" value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)} />
+                  </div>
+                  <div className="flightbrief-riskSubtotal">
+                    <span>Subtotal Dynamic Risks</span>
+                    <strong>{dynamicScore}</strong>
                   </div>
                 </div>
               </div>
 
               <div className="section inline-label-input">
-                <label className="label" htmlFor="riskComments"><strong>Risk Discussion / Comments</strong></label>
-                <textarea id="riskComments" rows="3" className="input-field" value={riskComments} onChange={(e) => setRiskComments(e.target.value)} placeholder="Notes from discussion with senior/chief pilot..." />
+                <label className="label" htmlFor="riskComments"><strong>Risk Mitigation (RM)</strong></label>
+                <textarea id="riskComments" rows="4" className="input-field" value={riskComments} onChange={(e) => setRiskComments(e.target.value)} placeholder="List RM in place - required for approval" />
               </div>
 
               <div className="flightbrief-riskSummary">
                 <div className="flightbrief-riskBadge">
-                  <span>Total</span>
+                  <span>Total Risk</span>
                   <strong>{totalRisk}</strong>
                 </div>
                 <div className="flightbrief-riskMeta">
