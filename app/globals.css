@@ -2310,15 +2310,15 @@ summary:focus-visible {
 
 .my-aircraft-primary {
   margin: 0;
-  font-size: 0.98rem;
-  font-weight: 700;
+  font-size: 0.9rem;
+  font-weight: 650;
   color: #0f172a;
 }
 
 .my-aircraft-secondary {
   margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.45;
+  font-size: 0.84rem;
+  line-height: 1.35;
   color: #334155;
 }
 

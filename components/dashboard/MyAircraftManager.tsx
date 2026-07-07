@@ -12,6 +12,7 @@ import {
   removeMyAircraft,
   saveCurrentAircraftForUser,
   submitAircraftUpdateRequest,
+  updateMyAircraft,
   type AircraftModelRecord,
   type AircraftRecord,
   type AttachAircraftConflict,
@@ -96,6 +97,7 @@ export default function MyAircraftManager() {
   const [myAircraft, setMyAircraft] = useState<AircraftRecord[]>([]);
   const [sharedAircraft, setSharedAircraft] = useState<AircraftRecord[]>([]);
   const [form, setForm] = useState<AircraftFormState>(emptyForm);
+  const [editingAircraftId, setEditingAircraftId] = useState("");
   const [conflict, setConflict] = useState<AttachAircraftConflict | null>(null);
   const [showManager, setShowManager] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -215,6 +217,21 @@ export default function MyAircraftManager() {
 
   function openAddForm() {
     setForm(emptyForm);
+    setEditingAircraftId("");
+    setConflict(null);
+    setShowForm(true);
+    setShowManager(true);
+  }
+
+  function openEditForm(aircraft: AircraftRecord) {
+    setForm({
+      model_id: aircraft.model_id ?? "",
+      tail_number: aircraft.tail_number ?? aircraft.name ?? "",
+      empty_weight: aircraft.empty_weight != null ? String(aircraft.empty_weight) : "",
+      empty_arm: aircraft.empty_arm != null ? String(aircraft.empty_arm) : "",
+      empty_lat_arm: aircraft.empty_lat_arm != null ? String(aircraft.empty_lat_arm) : "",
+    });
+    setEditingAircraftId(aircraft.id);
     setConflict(null);
     setShowForm(true);
     setShowManager(true);
@@ -222,6 +239,7 @@ export default function MyAircraftManager() {
 
   function closeForm() {
     setForm(emptyForm);
+    setEditingAircraftId("");
     setConflict(null);
     setShowForm(false);
   }
@@ -246,6 +264,44 @@ export default function MyAircraftManager() {
     setConflict(null);
 
     try {
+      if (editingAircraftId) {
+        const currentAircraft = myAircraft.find((aircraft) => aircraft.id === editingAircraftId);
+
+        if (!currentAircraft) {
+          throw new Error("Unable to find this aircraft.");
+        }
+
+        const proposed = {
+          model_id: form.model_id,
+          tail_number: form.tail_number.trim().toUpperCase(),
+          empty_weight: toRequiredNumber(form.empty_weight, "Empty weight"),
+          empty_arm: toRequiredNumber(form.empty_arm, "Empty arm"),
+          empty_lat_arm: toNullableNumber(form.empty_lat_arm),
+        };
+
+        if (currentAircraft.visibility === "private" && currentAircraft.owner_user_id === session.user.id) {
+          await updateMyAircraft(session.user.id, editingAircraftId, {
+            model_id: proposed.model_id,
+            name: proposed.tail_number,
+            empty_weight: proposed.empty_weight,
+            empty_arm: proposed.empty_arm,
+            empty_lat_arm: proposed.empty_lat_arm,
+          });
+          await reloadAircraftLists();
+          closeForm();
+          setStatus("Aircraft updated.");
+          return;
+        }
+
+        setConflict({
+          kind: "conflict",
+          aircraft: currentAircraft,
+          proposed,
+        });
+        setStatus("This shared aircraft needs an update request for W&B changes.");
+        return;
+      }
+
       const result = await attachAircraftByTail({
         userId: session.user.id,
         model_id: form.model_id,
@@ -465,14 +521,24 @@ export default function MyAircraftManager() {
                                 {aircraft.empty_lat_arm != null ? ` · Lat ${aircraft.empty_lat_arm}` : ""}
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              className="danger-button-compact"
-                              disabled={saving}
-                              onClick={() => void handleRemove(aircraft.id)}
-                            >
-                              Remove
-                            </button>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                disabled={saving}
+                                onClick={() => openEditForm(aircraft)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="danger-button-compact"
+                                disabled={saving}
+                                onClick={() => void handleRemove(aircraft.id)}
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -483,14 +549,18 @@ export default function MyAircraftManager() {
                           className="mt-3 rounded-2xl border border-[var(--border)] bg-white/85 p-4"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <h3 className="text-sm font-semibold text-slate-900">Add aircraft</h3>
+                            <h3 className="text-sm font-semibold text-slate-900">
+                              {editingAircraftId ? "Edit aircraft" : "Add aircraft"}
+                            </h3>
                             <button type="button" className="ghost-button" onClick={closeForm}>
                               Close
                             </button>
                           </div>
 
                           <p className="saas-meta-text mt-3">
-                            Add a tail number to your aircraft list or attach an existing shared aircraft.
+                            {editingAircraftId
+                              ? "Update this aircraft. Private aircraft save directly; shared aircraft changes submit an update request."
+                              : "Add a tail number to your aircraft list or attach an existing shared aircraft."}
                           </p>
 
                           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -555,7 +625,7 @@ export default function MyAircraftManager() {
                               disabled={saving}
                               onClick={() => void handleAttach()}
                             >
-                              {saving ? "Working..." : "Add to My Aircraft"}
+                              {saving ? "Working..." : editingAircraftId ? "Save aircraft" : "Add to My Aircraft"}
                             </button>
                           </div>
 

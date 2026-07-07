@@ -547,6 +547,75 @@ export async function saveCurrentAircraftForUser(userId: string, aircraftId: str
   await attachAircraftToUser(userId, aircraftId);
 }
 
+export async function updateMyAircraft(
+  userId: string,
+  aircraftId: string,
+  input: {
+    model_id: string;
+    name: string;
+    empty_weight: number;
+    empty_arm: number;
+    empty_lat_arm?: number | null;
+  }
+) {
+  const supabase = getSupabaseClient();
+  const normalizedTail = normalizeTailNumber(input.name);
+  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = [
+    {
+      payload: {
+        model_id: input.model_id,
+        tail_number: normalizedTail,
+        name: normalizedTail,
+        empty_weight: input.empty_weight,
+        empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
+      },
+      select: AIRCRAFT_SELECT_VARIANTS[0],
+    },
+    {
+      payload: {
+        model_id: input.model_id,
+        tail_number: normalizedTail,
+        empty_weight: input.empty_weight,
+        empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
+      },
+      select: AIRCRAFT_SELECT_VARIANTS[1],
+    },
+    {
+      payload: {
+        model_id: input.model_id,
+        name: normalizedTail,
+        empty_weight: input.empty_weight,
+        empty_arm: input.empty_arm,
+        empty_lat_arm: input.empty_lat_arm ?? null,
+      },
+      select: AIRCRAFT_SELECT_VARIANTS[2],
+    },
+  ];
+
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    const { data, error } = await supabase
+      .from("aircraft")
+      .update(attempt.payload)
+      .eq("id", aircraftId)
+      .eq("owner_user_id", userId)
+      .eq("visibility", "private")
+      .select(attempt.select)
+      .single();
+
+    if (!error) {
+      return normalizeAircraftRecord(data, null, "mine", true);
+    }
+
+    lastError = error;
+  }
+
+  throw lastError ?? new Error("Unable to update this aircraft.");
+}
+
 export async function makeAircraftPrivateForUser(userId: string, aircraftId: string) {
   const supabase = getSupabaseClient();
   const { error } = await supabase
