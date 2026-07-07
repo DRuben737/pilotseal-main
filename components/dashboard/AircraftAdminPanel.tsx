@@ -13,9 +13,11 @@ import {
   fetchAircraftModels,
   fetchAircraftUpdateRequests,
   fetchSharedAircraft,
+  makeAircraftPrivateForUser,
   rejectAircraftUpdateRequest,
   parseAircraftEnvelopeSet,
   parseAircraftStations,
+  saveCurrentAircraftForUser,
   updateAircraft,
   updateAircraftModel,
   type AircraftModelRecord,
@@ -372,6 +374,7 @@ export default function AircraftAdminPanel() {
     if (requestResult.status === "fulfilled") {
       setUpdateRequests(requestResult.value);
     }
+
   }
 
   function openModelEditor(nextForm = emptyModelForm) {
@@ -588,6 +591,8 @@ export default function AircraftAdminPanel() {
         empty_arm: toNumber(aircraftForm.empty_arm),
         empty_lat_arm:
           aircraftForm.empty_lat_arm.trim() === "" ? null : toNumber(aircraftForm.empty_lat_arm),
+        owner_user_id: session?.user?.id ?? null,
+        visibility: "private" as const,
       };
       let savedAircraft: AircraftRecord;
 
@@ -596,7 +601,22 @@ export default function AircraftAdminPanel() {
         setStatus("Aircraft updated.");
       } else {
         savedAircraft = await createAircraft(payload);
-        setStatus("Aircraft created.");
+        if (session?.user?.id) {
+          try {
+            await saveCurrentAircraftForUser(session.user.id, savedAircraft.id);
+            savedAircraft = { ...savedAircraft, source: "mine", is_saved: true };
+            setStatus("Aircraft created and added to My Aircraft.");
+          } catch (attachError) {
+            setStatus(
+              getErrorMessage(
+                attachError,
+                "Aircraft created, but it could not be added to My Aircraft."
+              )
+            );
+          }
+        } else {
+          setStatus("Aircraft created.");
+        }
       }
 
       setAircraft((current) =>
@@ -613,6 +633,24 @@ export default function AircraftAdminPanel() {
       setShowAircraftForm(false);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to save aircraft right now."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleMakeAircraftPrivate(aircraftId: string) {
+    if (!session?.user?.id) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await makeAircraftPrivateForUser(session.user.id, aircraftId);
+      setAircraft((current) => current.filter((item) => item.id !== aircraftId));
+      setStatus("Aircraft moved to My Aircraft and removed from shared registry.");
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to make this aircraft private."));
     } finally {
       setSaving(false);
     }
@@ -1229,7 +1267,7 @@ export default function AircraftAdminPanel() {
                                     : "--"}
                                 </p>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex flex-wrap justify-end gap-2">
                                 <button
                                   type="button"
                                   className="ghost-button"
@@ -1307,7 +1345,15 @@ export default function AircraftAdminPanel() {
                                   {item.empty_weight ?? "--"} lbs
                                 </p>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  disabled={saving}
+                                  onClick={() => void handleMakeAircraftPrivate(item.id)}
+                                >
+                                  Make private
+                                </button>
                                 <button
                                   type="button"
                                   className="ghost-button"

@@ -44,6 +44,8 @@ export type AircraftRecord = {
   model_id: string | null;
   name: string;
   tail_number: string;
+  owner_user_id?: string | null;
+  visibility?: "shared" | "private" | string | null;
   category?: string | null;
   empty_weight: number | null;
   empty_arm: number | null;
@@ -102,9 +104,15 @@ export type AttachAircraftResult = AttachAircraftSuccess | AttachAircraftConflic
 const AIRCRAFT_MODEL_SELECT = "id, name, category, chart_type, avg_fuel_burn_rate, stations, envelope";
 const AIRCRAFT_MODEL_SELECT_LEGACY = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
+  "id, model_id, name, tail_number, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
+  "id, model_id, tail_number, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
+  "id, model_id, name, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, name, tail_number, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, tail_number, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, name, empty_weight, empty_arm, empty_lat_arm",
+  "id, model_id, name, tail_number, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm, max_weight",
+  "id, model_id, tail_number, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm, max_weight",
+  "id, model_id, name, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm, max_weight",
   "id, model_id, tail_number, empty_weight, empty_arm",
   "id, model_id, name, empty_weight, empty_arm",
   "id, model_id, name, tail_number, empty_weight, empty_arm, empty_lat_arm, max_weight",
@@ -150,7 +158,9 @@ export async function fetchSharedAircraft() {
     throw error;
   }
 
-  return normalizeAircraftList(data ?? [], models, "shared", new Set());
+  return normalizeAircraftList(data ?? [], models, "shared", new Set()).filter(
+    (aircraft) => aircraft.visibility !== "private"
+  );
 }
 
 export async function fetchMyAircraft(userId: string) {
@@ -216,7 +226,7 @@ export async function createAircraftModel(input: {
     stations: input.stations,
     envelope: input.envelope,
   };
-  const attempts = [
+  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = [
     { payload, select: AIRCRAFT_MODEL_SELECT },
     { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
   ];
@@ -263,7 +273,7 @@ export async function updateAircraftModel(
     stations: input.stations,
     envelope: input.envelope,
   };
-  const attempts = [
+  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = [
     { payload, select: AIRCRAFT_MODEL_SELECT },
     { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
   ];
@@ -302,15 +312,20 @@ export async function createAircraft(input: {
   empty_weight: number;
   empty_arm: number;
   empty_lat_arm?: number | null;
+  owner_user_id?: string | null;
+  visibility?: "shared" | "private";
 }) {
   const supabase = getSupabaseClient();
   const normalizedTail = normalizeTailNumber(input.name);
-  const attempts = [
+  const visibility = input.visibility ?? (input.owner_user_id ? "private" : "shared");
+  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = [
     {
       payload: {
         model_id: input.model_id,
         tail_number: normalizedTail,
         name: normalizedTail,
+        owner_user_id: input.owner_user_id ?? null,
+        visibility,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
@@ -321,6 +336,8 @@ export async function createAircraft(input: {
       payload: {
         model_id: input.model_id,
         tail_number: normalizedTail,
+        owner_user_id: input.owner_user_id ?? null,
+        visibility,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
@@ -331,6 +348,8 @@ export async function createAircraft(input: {
       payload: {
         model_id: input.model_id,
         name: normalizedTail,
+        owner_user_id: input.owner_user_id ?? null,
+        visibility,
         empty_weight: input.empty_weight,
         empty_arm: input.empty_arm,
         empty_lat_arm: input.empty_lat_arm ?? null,
@@ -338,6 +357,42 @@ export async function createAircraft(input: {
       select: AIRCRAFT_SELECT_VARIANTS[2],
     },
   ];
+
+  if (visibility === "shared" && !input.owner_user_id) {
+    attempts.push(
+      {
+        payload: {
+          model_id: input.model_id,
+          tail_number: normalizedTail,
+          name: normalizedTail,
+          empty_weight: input.empty_weight,
+          empty_arm: input.empty_arm,
+          empty_lat_arm: input.empty_lat_arm ?? null,
+        },
+        select: AIRCRAFT_SELECT_VARIANTS[3],
+      },
+      {
+        payload: {
+          model_id: input.model_id,
+          tail_number: normalizedTail,
+          empty_weight: input.empty_weight,
+          empty_arm: input.empty_arm,
+          empty_lat_arm: input.empty_lat_arm ?? null,
+        },
+        select: AIRCRAFT_SELECT_VARIANTS[4],
+      },
+      {
+        payload: {
+          model_id: input.model_id,
+          name: normalizedTail,
+          empty_weight: input.empty_weight,
+          empty_arm: input.empty_arm,
+          empty_lat_arm: input.empty_lat_arm ?? null,
+        },
+        select: AIRCRAFT_SELECT_VARIANTS[5],
+      }
+    );
+  }
 
   let lastError = null;
 
@@ -353,6 +408,10 @@ export async function createAircraft(input: {
     }
 
     lastError = error;
+  }
+
+  if (lastError && isMissingColumnError(lastError) && visibility === "private") {
+    throw new Error("Run the aircraft visibility migration before creating private aircraft.");
   }
 
   throw lastError;
@@ -441,7 +500,9 @@ export async function attachAircraftByTail(
     throw new Error("Tail number is required.");
   }
 
-  const existing = await findAircraftByTailNumber(normalizedTail);
+  const existing =
+    (await findUserAircraftByTailNumber(input.userId, normalizedTail)) ??
+    (await findAircraftByTailNumber(normalizedTail));
 
   if (existing) {
     const sameValues =
@@ -474,13 +535,36 @@ export async function attachAircraftByTail(
     empty_weight: input.empty_weight,
     empty_arm: input.empty_arm,
     empty_lat_arm: input.empty_lat_arm ?? null,
+    owner_user_id: input.userId,
+    visibility: "private",
   });
 
   await attachAircraftToUser(input.userId, created.id);
   return { kind: "created", aircraft: { ...created, source: "mine", is_saved: true } };
 }
 
-export async function useCurrentAircraftForUser(userId: string, aircraftId: string) {
+export async function saveCurrentAircraftForUser(userId: string, aircraftId: string) {
+  await attachAircraftToUser(userId, aircraftId);
+}
+
+export async function makeAircraftPrivateForUser(userId: string, aircraftId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("aircraft")
+    .update({
+      owner_user_id: userId,
+      visibility: "private",
+    })
+    .eq("id", aircraftId);
+
+  if (error) {
+    if (isMissingColumnError(error)) {
+      throw new Error("Run the aircraft visibility migration before marking aircraft private.");
+    }
+
+    throw error;
+  }
+
   await attachAircraftToUser(userId, aircraftId);
 }
 
@@ -740,6 +824,15 @@ async function findAircraftByTailNumber(tailNumber: string) {
   );
 }
 
+async function findUserAircraftByTailNumber(userId: string, tailNumber: string) {
+  const myAircraft = await fetchMyAircraft(userId);
+  return (
+    myAircraft.find(
+      (aircraft) => normalizeTailNumber(aircraft.tail_number || aircraft.name) === tailNumber
+    ) ?? null
+  );
+}
+
 async function attachAircraftToUser(userId: string, aircraftId: string) {
   const supabase = getSupabaseClient();
   const { error } = await supabase.from("saved_aircraft").insert({
@@ -886,6 +979,8 @@ function normalizeAircraftRecord(
     empty_arm: toNumber(record.empty_arm),
     empty_lat_arm: toNumber(record.empty_lat_arm),
     max_weight: toNumber(record.max_weight),
+    owner_user_id: typeof record.owner_user_id === "string" ? record.owner_user_id : null,
+    visibility: typeof record.visibility === "string" ? record.visibility : "shared",
     category: model?.category ?? null,
     model,
     source,
@@ -925,6 +1020,16 @@ function isDuplicateError(error: unknown) {
     error !== null &&
     "code" in error &&
     (error as { code?: string }).code === "23505"
+  );
+}
+
+function isMissingColumnError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    ((error as { code?: string }).code === "42703" ||
+      (error as { code?: string }).code === "PGRST204")
   );
 }
 

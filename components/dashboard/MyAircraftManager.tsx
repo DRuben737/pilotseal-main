@@ -10,8 +10,8 @@ import {
   fetchMyAircraft,
   fetchSharedAircraft,
   removeMyAircraft,
+  saveCurrentAircraftForUser,
   submitAircraftUpdateRequest,
-  useCurrentAircraftForUser,
   type AircraftModelRecord,
   type AircraftRecord,
   type AttachAircraftConflict,
@@ -284,7 +284,7 @@ export default function MyAircraftManager() {
     setStatus("");
 
     try {
-      await useCurrentAircraftForUser(session.user.id, conflict.aircraft.id);
+      await saveCurrentAircraftForUser(session.user.id, conflict.aircraft.id);
       await reloadAircraftLists();
       closeForm();
       setStatus("Current shared aircraft added to My Aircraft.");
