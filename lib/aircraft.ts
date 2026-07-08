@@ -44,6 +44,7 @@ export type AircraftRecord = {
   model_id: string | null;
   name: string;
   tail_number: string;
+  updated_at?: string | null;
   owner_user_id?: string | null;
   visibility?: "shared" | "private" | string | null;
   category?: string | null;
@@ -54,6 +55,19 @@ export type AircraftRecord = {
   model?: AircraftModelRecord | null;
   source?: "shared" | "mine";
   is_saved?: boolean;
+  hundred_hour_due_hours?: number | null;
+  annual_due_date?: string | null;
+  static_due_date?: string | null;
+  transponder_due_date?: string | null;
+  elt_due_date?: string | null;
+};
+
+export type SavedAircraftDueInput = {
+  hundred_hour_due_hours?: number | null;
+  annual_due_date?: string | null;
+  static_due_date?: string | null;
+  transponder_due_date?: string | null;
+  elt_due_date?: string | null;
 };
 
 export type AircraftUpdateRequestRecord = {
@@ -104,6 +118,9 @@ export type AttachAircraftResult = AttachAircraftSuccess | AttachAircraftConflic
 const AIRCRAFT_MODEL_SELECT = "id, name, category, chart_type, avg_fuel_burn_rate, stations, envelope";
 const AIRCRAFT_MODEL_SELECT_LEGACY = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
+  "id, model_id, name, tail_number, updated_at, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
+  "id, model_id, tail_number, updated_at, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
+  "id, model_id, name, updated_at, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, name, tail_number, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, tail_number, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
   "id, model_id, name, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
@@ -124,6 +141,10 @@ const AIRCRAFT_SELECT_VARIANTS = [
 
 const UPDATE_REQUEST_SELECT =
   "id, aircraft_id, proposed_empty_weight, proposed_empty_arm, proposed_empty_lat_arm, note, status, submitted_by, created_at";
+
+const SAVED_AIRCRAFT_SELECT_WITH_DUE =
+  "aircraft_id, is_default, hundred_hour_due_hours, annual_due_date, static_due_date, transponder_due_date, elt_due_date";
+const SAVED_AIRCRAFT_SELECT_LEGACY = "aircraft_id, is_default";
 
 export async function fetchAircraftModels() {
   const supabase = getSupabaseClient();
@@ -166,10 +187,22 @@ export async function fetchSharedAircraft() {
 export async function fetchMyAircraft(userId: string) {
   const supabase = getSupabaseClient();
 
-  const { data: savedRows, error: savedError } = await supabase
+  const savedResult = await supabase
     .from("saved_aircraft")
-    .select("aircraft_id, is_default")
+    .select(SAVED_AIRCRAFT_SELECT_WITH_DUE)
     .eq("user_id", userId);
+  let savedRows = (savedResult.data ?? null) as Array<Record<string, unknown>> | null;
+  let savedError = savedResult.error;
+
+  if (savedError && isMissingColumnError(savedError)) {
+    const legacyResult = await supabase
+      .from("saved_aircraft")
+      .select(SAVED_AIRCRAFT_SELECT_LEGACY)
+      .eq("user_id", userId);
+
+    savedRows = (legacyResult.data ?? null) as Array<Record<string, unknown>> | null;
+    savedError = legacyResult.error;
+  }
 
   if (savedError) {
     if (isMissingRelationError(savedError)) {
@@ -183,6 +216,21 @@ export async function fetchMyAircraft(userId: string) {
     (savedRows ?? [])
       .map((row) => String((row as Record<string, unknown>).aircraft_id ?? ""))
       .filter(Boolean)
+  );
+  const savedDetailsByAircraftId = new Map(
+    (savedRows ?? []).map((row) => {
+      const record = (row ?? {}) as Record<string, unknown>;
+      return [
+        String(record.aircraft_id ?? ""),
+        {
+          hundred_hour_due_hours: toNumber(record.hundred_hour_due_hours),
+          annual_due_date: toDateString(record.annual_due_date),
+          static_due_date: toDateString(record.static_due_date),
+          transponder_due_date: toDateString(record.transponder_due_date),
+          elt_due_date: toDateString(record.elt_due_date),
+        } satisfies SavedAircraftDueInput,
+      ];
+    })
   );
 
   if (savedAircraftIds.size === 0) {
@@ -198,7 +246,7 @@ export async function fetchMyAircraft(userId: string) {
     throw error;
   }
 
-  return normalizeAircraftList(data ?? [], models, "mine", savedAircraftIds);
+  return normalizeAircraftList(data ?? [], models, "mine", savedAircraftIds, savedDetailsByAircraftId);
 }
 
 export async function fetchAircraft() {
@@ -369,7 +417,7 @@ export async function createAircraft(input: {
           empty_arm: input.empty_arm,
           empty_lat_arm: input.empty_lat_arm ?? null,
         },
-        select: AIRCRAFT_SELECT_VARIANTS[3],
+        select: AIRCRAFT_SELECT_VARIANTS[6],
       },
       {
         payload: {
@@ -379,7 +427,7 @@ export async function createAircraft(input: {
           empty_arm: input.empty_arm,
           empty_lat_arm: input.empty_lat_arm ?? null,
         },
-        select: AIRCRAFT_SELECT_VARIANTS[4],
+        select: AIRCRAFT_SELECT_VARIANTS[7],
       },
       {
         payload: {
@@ -389,7 +437,7 @@ export async function createAircraft(input: {
           empty_arm: input.empty_arm,
           empty_lat_arm: input.empty_lat_arm ?? null,
         },
-        select: AIRCRAFT_SELECT_VARIANTS[5],
+        select: AIRCRAFT_SELECT_VARIANTS[8],
       }
     );
   }
@@ -545,6 +593,31 @@ export async function attachAircraftByTail(
 
 export async function saveCurrentAircraftForUser(userId: string, aircraftId: string) {
   await attachAircraftToUser(userId, aircraftId);
+}
+
+export async function updateSavedAircraftDue(
+  userId: string,
+  aircraftId: string,
+  input: SavedAircraftDueInput
+) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("saved_aircraft")
+    .update(normalizeSavedAircraftDueInput(input))
+    .eq("user_id", userId)
+    .eq("aircraft_id", aircraftId);
+
+  if (error) {
+    if (isMissingColumnError(error)) {
+      throw new Error("Run the saved aircraft due fields migration before saving due dates.");
+    }
+
+    if (isMissingRelationError(error)) {
+      throw new Error("The saved_aircraft table is not installed yet.");
+    }
+
+    throw error;
+  }
 }
 
 export async function updateMyAircraft(
@@ -966,16 +1039,20 @@ function normalizeAircraftList(
   records: unknown[],
   models: AircraftModelRecord[],
   source: "shared" | "mine",
-  savedAircraftIds: Set<string>
+  savedAircraftIds: Set<string>,
+  savedDetailsByAircraftId = new Map<string, SavedAircraftDueInput>()
 ) {
   const modelById = new Map(models.map((model) => [model.id, model]));
 
   return records.map((record) => {
     const rawRecord = ((record ?? {}) as unknown) as Record<string, unknown>;
+    const aircraftId = String(rawRecord.id ?? "");
+    const savedDetails = savedDetailsByAircraftId.get(aircraftId);
 
     return normalizeAircraftRecord(
       {
         ...rawRecord,
+        ...(savedDetails ?? {}),
         model:
           typeof rawRecord.model_id === "string" && modelById.has(rawRecord.model_id)
             ? modelById.get(rawRecord.model_id)
@@ -983,7 +1060,7 @@ function normalizeAircraftList(
       },
       null,
       source,
-      savedAircraftIds.has(String(rawRecord.id ?? ""))
+      savedAircraftIds.has(aircraftId)
     );
   });
 }
@@ -1044,6 +1121,7 @@ function normalizeAircraftRecord(
     model_id: typeof record.model_id === "string" ? record.model_id : model?.id ?? null,
     name: tailNumber,
     tail_number: tailNumber,
+    updated_at: toDateString(record.updated_at),
     empty_weight: toNumber(record.empty_weight),
     empty_arm: toNumber(record.empty_arm),
     empty_lat_arm: toNumber(record.empty_lat_arm),
@@ -1054,7 +1132,22 @@ function normalizeAircraftRecord(
     model,
     source,
     is_saved: isSaved,
+    hundred_hour_due_hours: toNumber(record.hundred_hour_due_hours),
+    annual_due_date: toDateString(record.annual_due_date),
+    static_due_date: toDateString(record.static_due_date),
+    transponder_due_date: toDateString(record.transponder_due_date),
+    elt_due_date: toDateString(record.elt_due_date),
   } as AircraftRecord;
+}
+
+function normalizeSavedAircraftDueInput(input: SavedAircraftDueInput) {
+  return {
+    hundred_hour_due_hours: input.hundred_hour_due_hours ?? null,
+    annual_due_date: normalizeDateForStorage(input.annual_due_date),
+    static_due_date: normalizeDateForStorage(input.static_due_date),
+    transponder_due_date: normalizeDateForStorage(input.transponder_due_date),
+    elt_due_date: normalizeDateForStorage(input.elt_due_date),
+  };
 }
 
 function numbersEqual(a: number | null | undefined, b: number | null | undefined) {
@@ -1071,6 +1164,19 @@ function numbersEqual(a: number | null | undefined, b: number | null | undefined
 
 function normalizeTailNumber(value: string) {
   return String(value ?? "").trim().toUpperCase();
+}
+
+function normalizeDateForStorage(value: string | null | undefined) {
+  const trimmed = String(value ?? "").trim();
+  return trimmed ? trimmed : null;
+}
+
+function toDateString(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  return value.trim();
 }
 
 function isMissingRelationError(error: unknown) {

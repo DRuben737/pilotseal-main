@@ -2322,8 +2322,15 @@ summary:focus-visible {
   color: #334155;
 }
 
+.my-aircraft-muted-line {
+  margin-top: 0.18rem;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
 .my-aircraft-actions {
   display: flex;
+  gap: 0.45rem;
   justify-content: flex-end;
 }
 

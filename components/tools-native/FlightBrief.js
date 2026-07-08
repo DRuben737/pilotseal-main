@@ -87,6 +87,115 @@ function getUniqueAircraftByTail(options) {
   });
 }
 
+function matchAircraftByTail(options, value) {
+  const normalizedValue = normalizeTailNumber(value);
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return (
+    options.find((aircraft) => normalizeTailNumber(aircraft.tail_number || aircraft.name) === normalizedValue) ??
+    null
+  );
+}
+
+function formatDueMonth(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "";
+  }
+
+  const [datePart] = value.split("T");
+  const [year, month, day] = datePart.split("-");
+  if (!year || !month) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day || "1"))));
+}
+
+function parseDueDateMs(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  const [datePart] = value.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return Date.UTC(year, month - 1, day);
+}
+
+function getTodayUtcMs() {
+  const today = new Date();
+  return Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
+function getAircraftDueMeta(aircraft, mxNow) {
+  if (!aircraft?.is_saved) {
+    return {
+      label: "--",
+      detail: "Select a saved aircraft",
+      ok: null,
+      report: "(none saved)",
+    };
+  }
+
+  const todayMs = getTodayUtcMs();
+  const items = [];
+  let hasExpired = false;
+  let needsMxTime = false;
+
+  if (aircraft.hundred_hour_due_hours != null) {
+    const currentMx = parseFloat(String(mxNow ?? ""));
+    if (Number.isFinite(currentMx)) {
+      const isCurrent = currentMx <= Number(aircraft.hundred_hour_due_hours);
+      hasExpired = hasExpired || !isCurrent;
+      items.push(`100hr ${isCurrent ? "OK" : "overdue"} (${aircraft.hundred_hour_due_hours})`);
+    } else {
+      needsMxTime = true;
+      items.push(`100hr check time (${aircraft.hundred_hour_due_hours})`);
+    }
+  }
+
+  [
+    ["Annual", aircraft.annual_due_date],
+    ["91.411", aircraft.static_due_date],
+    ["91.413", aircraft.transponder_due_date],
+    ["ELT", aircraft.elt_due_date],
+  ].forEach(([label, value]) => {
+    if (!value) {
+      return;
+    }
+
+    const dueMs = parseDueDateMs(value);
+    const isCurrent = dueMs === null || dueMs >= todayMs;
+    hasExpired = hasExpired || !isCurrent;
+    items.push(`${label} ${isCurrent ? "OK through" : "expired"} ${formatDueMonth(value)}`);
+  });
+
+  if (items.length === 0) {
+    return {
+      label: "--",
+      detail: "No due info saved",
+      ok: null,
+      report: "(none saved)",
+    };
+  }
+
+  return {
+    label: hasExpired ? "Not available" : needsMxTime ? "Check MX time" : "Available",
+    detail: items.join(" · "),
+    ok: hasExpired ? false : needsMxTime ? null : true,
+    report: items.join("; "),
+  };
+}
+
 // ETE (hours in decimal, string with 2 decimals)
 function calcETE(etd, eta) {
   if (!etd || !eta) return "";
@@ -1084,6 +1193,37 @@ export default function FlightBrief() {
 
   const savedPersonNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedPeopleOptions), [savedPeopleOptions]);
   const aircraftTailOptions = useMemo(() => getUniqueAircraftByTail(aircraftOptions), [aircraftOptions]);
+  const selectedSavedAircraft = useMemo(
+    () => matchAircraftByTail(aircraftOptions, aircraftId),
+    [aircraftId, aircraftOptions]
+  );
+  const selectedAircraftDueMeta = useMemo(
+    () => getAircraftDueMeta(selectedSavedAircraft, mxNow),
+    [mxNow, selectedSavedAircraft]
+  );
+
+  useEffect(() => {
+    if (!selectedSavedAircraft?.is_saved || selectedSavedAircraft.hundred_hour_due_hours == null) {
+      return;
+    }
+
+    const selectedTail = normalizeTailNumber(selectedSavedAircraft.tail_number || selectedSavedAircraft.name);
+    const nextMxDue = String(selectedSavedAircraft.hundred_hour_due_hours);
+    setBrief((current) => {
+      if (
+        current?.aircraftDueSourceTail === selectedTail &&
+        String(current?.mxDue ?? "").trim()
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        mxDue: nextMxDue,
+        aircraftDueSourceTail: selectedTail,
+      };
+    });
+  }, [selectedSavedAircraft, setBrief]);
 
   useEffect(() => {
     const wbResult = briefWb?.result;
@@ -1485,6 +1625,7 @@ Gross Weight: ${grossWeight}
 CG: ${wbCg}
 Fuel Time: ${fuelTime}
 Mx Remaining: ${mxRemaining}
+Saved Aircraft Due: ${selectedAircraftDueMeta.label} - ${selectedAircraftDueMeta.report}
 
 🪨 Static Risk:
 ${staticLines.length ? staticLines.join("\n") : "- None"}
@@ -1542,6 +1683,7 @@ ${riskComments}
     wbCg,
     fuelTime,
     mxRemaining,
+    selectedAircraftDueMeta,
     staticChecked,
     dynamicChecked,
     imsafe,
@@ -2004,6 +2146,21 @@ ${riskComments}
                     {mxRemainingMeta.label}
                   </strong>
                   <small>{mxRemainingMeta.detail}</small>
+                </div>
+                <div className="flightbrief-kpi flightbrief-maintenance-due">
+                  <span>Saved due</span>
+                  <strong
+                    className={
+                      selectedAircraftDueMeta.ok === false
+                        ? "is-alert"
+                        : selectedAircraftDueMeta.ok === true
+                          ? "is-ok"
+                          : ""
+                    }
+                  >
+                    {selectedAircraftDueMeta.label}
+                  </strong>
+                  <small>{selectedAircraftDueMeta.detail}</small>
                 </div>
               </div>
 

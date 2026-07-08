@@ -13,9 +13,11 @@ import {
   saveCurrentAircraftForUser,
   submitAircraftUpdateRequest,
   updateMyAircraft,
+  updateSavedAircraftDue,
   type AircraftModelRecord,
   type AircraftRecord,
   type AttachAircraftConflict,
+  type SavedAircraftDueInput,
 } from "@/lib/aircraft";
 
 type AircraftFormState = {
@@ -24,6 +26,11 @@ type AircraftFormState = {
   empty_weight: string;
   empty_arm: string;
   empty_lat_arm: string;
+  hundred_hour_due_hours: string;
+  annual_due_date: string;
+  static_due_date: string;
+  transponder_due_date: string;
+  elt_due_date: string;
 };
 
 const emptyForm: AircraftFormState = {
@@ -32,6 +39,11 @@ const emptyForm: AircraftFormState = {
   empty_weight: "",
   empty_arm: "",
   empty_lat_arm: "",
+  hundred_hour_due_hours: "",
+  annual_due_date: "",
+  static_due_date: "",
+  transponder_due_date: "",
+  elt_due_date: "",
 };
 
 function toNullableNumber(value: string) {
@@ -86,6 +98,40 @@ function scrollEditorIntoView(targetId: string, scrollContainer: HTMLElement | n
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(runScroll);
   });
+}
+
+function formatDateLabel(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  const [datePart] = value.split("T");
+  const [year, month, day] = datePart.split("-");
+  if (!year || !month) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day || "1"))));
+}
+
+function formatDateInput(value: string | null | undefined) {
+  return value ? value.slice(0, 7) : "";
+}
+
+function getDueSummary(aircraft: AircraftRecord) {
+  const items = [
+    aircraft.hundred_hour_due_hours != null ? `100hr ${aircraft.hundred_hour_due_hours}` : "",
+    aircraft.annual_due_date ? `Annual ${formatDateLabel(aircraft.annual_due_date)}` : "",
+    aircraft.static_due_date ? `91.411 ${formatDateLabel(aircraft.static_due_date)}` : "",
+    aircraft.transponder_due_date ? `91.413 ${formatDateLabel(aircraft.transponder_due_date)}` : "",
+    aircraft.elt_due_date ? `ELT ${formatDateLabel(aircraft.elt_due_date)}` : "",
+  ].filter(Boolean);
+
+  return items.join(" · ");
 }
 
 export default function MyAircraftManager() {
@@ -215,6 +261,42 @@ export default function MyAircraftManager() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function getDueInputFromForm(): SavedAircraftDueInput {
+    const toStoredMonthEnd = (value: string) => {
+      const [year, month] = value.split("-").map(Number);
+      if (!year || !month) {
+        return null;
+      }
+
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    };
+
+    return {
+      hundred_hour_due_hours: toNullableNumber(form.hundred_hour_due_hours),
+      annual_due_date: toStoredMonthEnd(form.annual_due_date),
+      static_due_date: toStoredMonthEnd(form.static_due_date),
+      transponder_due_date: toStoredMonthEnd(form.transponder_due_date),
+      elt_due_date: toStoredMonthEnd(form.elt_due_date),
+    };
+  }
+
+  function hasAircraftInfoChanges(aircraft: AircraftRecord, proposed: {
+    model_id: string;
+    tail_number: string;
+    empty_weight: number;
+    empty_arm: number;
+    empty_lat_arm: number | null;
+  }) {
+    return (
+      String(aircraft.model_id ?? "") !== proposed.model_id ||
+      String(aircraft.tail_number ?? "").toUpperCase() !== proposed.tail_number ||
+      aircraft.empty_weight !== proposed.empty_weight ||
+      aircraft.empty_arm !== proposed.empty_arm ||
+      (aircraft.empty_lat_arm ?? null) !== proposed.empty_lat_arm
+    );
+  }
+
   function openAddForm() {
     setForm(emptyForm);
     setEditingAircraftId("");
@@ -230,6 +312,12 @@ export default function MyAircraftManager() {
       empty_weight: aircraft.empty_weight != null ? String(aircraft.empty_weight) : "",
       empty_arm: aircraft.empty_arm != null ? String(aircraft.empty_arm) : "",
       empty_lat_arm: aircraft.empty_lat_arm != null ? String(aircraft.empty_lat_arm) : "",
+      hundred_hour_due_hours:
+        aircraft.hundred_hour_due_hours != null ? String(aircraft.hundred_hour_due_hours) : "",
+      annual_due_date: formatDateInput(aircraft.annual_due_date),
+      static_due_date: formatDateInput(aircraft.static_due_date),
+      transponder_due_date: formatDateInput(aircraft.transponder_due_date),
+      elt_due_date: formatDateInput(aircraft.elt_due_date),
     });
     setEditingAircraftId(aircraft.id);
     setConflict(null);
@@ -278,6 +366,7 @@ export default function MyAircraftManager() {
           empty_arm: toRequiredNumber(form.empty_arm, "Empty arm"),
           empty_lat_arm: toNullableNumber(form.empty_lat_arm),
         };
+        const dueInput = getDueInputFromForm();
 
         if (currentAircraft.visibility === "private" && currentAircraft.owner_user_id === session.user.id) {
           await updateMyAircraft(session.user.id, editingAircraftId, {
@@ -287,9 +376,18 @@ export default function MyAircraftManager() {
             empty_arm: proposed.empty_arm,
             empty_lat_arm: proposed.empty_lat_arm,
           });
+          await updateSavedAircraftDue(session.user.id, editingAircraftId, dueInput);
           await reloadAircraftLists();
           closeForm();
           setStatus("Aircraft updated.");
+          return;
+        }
+
+        if (!hasAircraftInfoChanges(currentAircraft, proposed)) {
+          await updateSavedAircraftDue(session.user.id, editingAircraftId, dueInput);
+          await reloadAircraftLists();
+          closeForm();
+          setStatus("Aircraft due info saved.");
           return;
         }
 
@@ -302,6 +400,7 @@ export default function MyAircraftManager() {
         return;
       }
 
+      const dueInput = getDueInputFromForm();
       const result = await attachAircraftByTail({
         userId: session.user.id,
         model_id: form.model_id,
@@ -317,6 +416,7 @@ export default function MyAircraftManager() {
         return;
       }
 
+      await updateSavedAircraftDue(session.user.id, result.aircraft.id, dueInput);
       await reloadAircraftLists();
       closeForm();
       setStatus(
@@ -341,6 +441,7 @@ export default function MyAircraftManager() {
 
     try {
       await saveCurrentAircraftForUser(session.user.id, conflict.aircraft.id);
+      await updateSavedAircraftDue(session.user.id, conflict.aircraft.id, getDueInputFromForm());
       await reloadAircraftLists();
       closeForm();
       setStatus("Current shared aircraft added to My Aircraft.");
@@ -360,6 +461,10 @@ export default function MyAircraftManager() {
     setStatus("");
 
     try {
+      if (editingAircraftId) {
+        await updateSavedAircraftDue(session.user.id, editingAircraftId, getDueInputFromForm());
+      }
+
       await submitAircraftUpdateRequest({
         aircraft_id: conflict.aircraft.id,
         submitted_by: session.user.id,
@@ -456,8 +561,20 @@ export default function MyAircraftManager() {
                     {aircraft.empty_weight ?? "--"} lbs · Arm {aircraft.empty_arm ?? "--"}
                     {aircraft.empty_lat_arm != null ? ` · Lat ${aircraft.empty_lat_arm}` : ""}
                   </p>
+                  <p className="my-aircraft-secondary my-aircraft-muted-line">
+                    Updated {formatDateLabel(aircraft.updated_at) || "--"}
+                    {getDueSummary(aircraft) ? ` · ${getDueSummary(aircraft)}` : ""}
+                  </p>
                 </div>
                 <div className="my-aircraft-cell my-aircraft-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={saving}
+                    onClick={() => openEditForm(aircraft)}
+                  >
+                    Edit
+                  </button>
                   <button
                     type="button"
                     className="danger-button-compact"
@@ -519,6 +636,10 @@ export default function MyAircraftManager() {
                               <p className="saas-meta-text mt-2">
                                 Empty {aircraft.empty_weight ?? "--"} lbs · Arm {aircraft.empty_arm ?? "--"}
                                 {aircraft.empty_lat_arm != null ? ` · Lat ${aircraft.empty_lat_arm}` : ""}
+                              </p>
+                              <p className="saas-meta-text mt-1">
+                                Updated {formatDateLabel(aircraft.updated_at) || "--"}
+                                {getDueSummary(aircraft) ? ` · ${getDueSummary(aircraft)}` : ""}
                               </p>
                             </div>
                             <div className="flex flex-wrap justify-end gap-2">
@@ -616,6 +737,76 @@ export default function MyAircraftManager() {
                                 onChange={(event) => updateField("empty_lat_arm", event.target.value)}
                               />
                             </label>
+                          </div>
+
+                          <div className="mt-5 border-t border-slate-200/80 pt-4">
+                            <div className="flex flex-wrap items-end justify-between gap-2">
+                              <div>
+                                <h4 className="text-sm font-semibold text-slate-900">Personal due info</h4>
+                                <p className="saas-meta-text mt-1">
+                                  These values stay on your saved aircraft record.
+                                </p>
+                              </div>
+                              {editingAircraftId ? (
+                                <p className="saas-meta-text">
+                                  Updated{" "}
+                                  {formatDateLabel(
+                                    myAircraft.find((aircraft) => aircraft.id === editingAircraftId)?.updated_at
+                                  ) || "--"}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="mt-4 grid gap-3 md:grid-cols-5">
+                              <label className="grid gap-2 text-sm">
+                                <span>100hr due</span>
+                                <input
+                                  className="rounded-xl border border-slate-300 px-3 py-2"
+                                  type="number"
+                                  step="0.1"
+                                  value={form.hundred_hour_due_hours}
+                                  onChange={(event) =>
+                                    updateField("hundred_hour_due_hours", event.target.value)
+                                  }
+                                />
+                              </label>
+                              <label className="grid gap-2 text-sm">
+                                <span>Annual</span>
+                                <input
+                                  className="rounded-xl border border-slate-300 px-3 py-2"
+                                  type="month"
+                                  value={form.annual_due_date}
+                                  onChange={(event) => updateField("annual_due_date", event.target.value)}
+                                />
+                              </label>
+                              <label className="grid gap-2 text-sm">
+                                <span>91.411 (PS)</span>
+                                <input
+                                  className="rounded-xl border border-slate-300 px-3 py-2"
+                                  type="month"
+                                  value={form.static_due_date}
+                                  onChange={(event) => updateField("static_due_date", event.target.value)}
+                                />
+                              </label>
+                              <label className="grid gap-2 text-sm">
+                                <span>91.413 (TX)</span>
+                                <input
+                                  className="rounded-xl border border-slate-300 px-3 py-2"
+                                  type="month"
+                                  value={form.transponder_due_date}
+                                  onChange={(event) => updateField("transponder_due_date", event.target.value)}
+                                />
+                              </label>
+                              <label className="grid gap-2 text-sm">
+                                <span>ELT</span>
+                                <input
+                                  className="rounded-xl border border-slate-300 px-3 py-2"
+                                  type="month"
+                                  value={form.elt_due_date}
+                                  onChange={(event) => updateField("elt_due_date", event.target.value)}
+                                />
+                              </label>
+                            </div>
                           </div>
 
                           <div className="mt-6 flex items-center justify-end gap-3">

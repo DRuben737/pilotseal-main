@@ -215,6 +215,11 @@
   color: #b91c1c;
 }
 
+.flightbrief-maintenance-due strong {
+  font-size: 0.86rem;
+  line-height: 1.28;
+}
+
 .flightbrief-body .wb-stat-card strong {
   font-size: 12px;
   font-weight: 400;
