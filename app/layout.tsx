@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import AuthOnboardingGate from "@/components/auth/AuthOnboardingGate";
 import SiteHeader from "@/components/ui/SiteHeader";
@@ -53,6 +54,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${inter.className} app-body text-black`}>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-5VFT1X8VN2"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-5VFT1X8VN2');
+          `}
+        </Script>
         <ToolProvider>
           <AuthSessionProvider>
             <SiteHeader />
