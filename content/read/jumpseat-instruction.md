@@ -2,7 +2,12 @@
 title: "Can a CFI Instruct from a Jump Seat?"
 date: "2026-05-03"
 summary: "A focused interpretation of FAA Williams (2018) on whether a flight instructor can provide instrument training without occupying a pilot station."
-tags: ["CFI", "Instrument Training", "FAA Interpretation"]
+category: "Instructor Rules"
+tags: ["FAA Interpretation", "CFI", "Instrument Training"]
+questions:
+  - "Can a CFI instruct from a jump seat?"
+  - "Can a CFII give instrument training without sitting at a pilot station?"
+  - "Does an instrument instructor need access to the controls?"
 ---
 
 ## Key Conclusion

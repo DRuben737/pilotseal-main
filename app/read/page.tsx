@@ -2,9 +2,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import {
+  articleMatchesSearch,
   formatArticleDate,
   getAllArticles,
+  getAllArticleCategories,
   getAllArticleTags,
+  getArticleSearchScore,
+  slugifyCategory,
   slugifyTag,
 } from "@/lib/articles";
 import { buildPageMetadata } from "@/lib/seo";
@@ -21,6 +25,36 @@ function getParamValue(value: SearchParamsValue) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function getQuestionPreview(questions: string[], query: string) {
+  if (!questions.length) {
+    return [];
+  }
+
+  const queryTokens = query
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 1);
+
+  if (!queryTokens.length) {
+    return questions.slice(0, 2);
+  }
+
+  const scoredQuestions = questions
+    .map((question, index) => {
+      const normalized = question.toLowerCase();
+      const score = queryTokens.filter((token) => normalized.includes(token)).length;
+
+      return { question, index, score };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+
+  return scoredQuestions
+    .filter((question) => question.score > 0)
+    .slice(0, 2)
+    .map((question) => question.question);
+}
+
 export const metadata: Metadata = buildPageMetadata({
   title: "Read",
   description:
@@ -31,32 +65,34 @@ export const metadata: Metadata = buildPageMetadata({
 
 export default async function ReadPage({ searchParams }: ReadPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
+  const selectedCategory = getParamValue(resolvedSearchParams.category);
   const selectedTag = getParamValue(resolvedSearchParams.tag);
   const searchQuery = (getParamValue(resolvedSearchParams.q) ?? "").trim();
-  const normalizedSearchQuery = searchQuery.toLowerCase();
   const rawPage = Number(getParamValue(resolvedSearchParams.page) ?? "1");
   const currentPage = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
   const articles = getAllArticles();
+  const categories = getAllArticleCategories();
   const tags = getAllArticleTags();
-  const filteredArticles = articles.filter((article) => {
-    const matchesTag = selectedTag
-      ? article.tags.some((tag) => slugifyTag(tag) === selectedTag)
-      : true;
-    const searchableText = [
-      article.title,
-      article.summary,
-      article.tags.join(" "),
-      article.body,
-    ]
-      .join(" ")
-      .toLowerCase();
-    const matchesSearch = normalizedSearchQuery
-      ? searchableText.includes(normalizedSearchQuery)
-      : true;
+  const filteredArticles = articles
+    .filter((article) => {
+      const matchesCategory = selectedCategory
+        ? slugifyCategory(article.category) === selectedCategory
+        : true;
+      const matchesTag = selectedTag
+        ? article.tags.some((tag) => slugifyTag(tag) === selectedTag)
+        : true;
+      const matchesSearch = articleMatchesSearch(article, searchQuery);
 
-    return matchesTag && matchesSearch;
-  });
+      return matchesCategory && matchesTag && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (!searchQuery) {
+        return 0;
+      }
+
+      return getArticleSearchScore(b, searchQuery) - getArticleSearchScore(a, searchQuery);
+    });
   const totalPages = Math.ceil(filteredArticles.length / POSTS_PER_PAGE);
   const pageArticles = filteredArticles.slice(
     (currentPage - 1) * POSTS_PER_PAGE,
@@ -65,6 +101,7 @@ export default async function ReadPage({ searchParams }: ReadPageProps) {
   const getPageHref = (page: number) => {
     const params = new URLSearchParams();
     params.set("page", String(page));
+    if (selectedCategory) params.set("category", selectedCategory);
     if (selectedTag) params.set("tag", selectedTag);
     if (searchQuery) params.set("q", searchQuery);
     return `/read?${params.toString()}`;
@@ -79,6 +116,9 @@ export default async function ReadPage({ searchParams }: ReadPageProps) {
             post for the full explanation.
           </p>
           <form className="read-search" action="/read">
+            {selectedCategory ? (
+              <input type="hidden" name="category" value={selectedCategory} />
+            ) : null}
             {selectedTag ? (
               <input type="hidden" name="tag" value={selectedTag} />
             ) : null}
@@ -94,25 +134,25 @@ export default async function ReadPage({ searchParams }: ReadPageProps) {
         </header>
 
         <div className="read-layout">
-          <aside className="read-tags" aria-label="Read tags">
-            <p className="read-section-label">Topics</p>
+          <aside className="read-tags" aria-label="Read categories">
+            <p className="read-section-label">Categories</p>
             <Link
               href="/read"
-              className={`read-tag-link ${!selectedTag ? "is-active" : ""}`}
+              className={`read-tag-link ${!selectedCategory && !selectedTag ? "is-active" : ""}`}
             >
               <span>All</span>
               <span>{articles.length}</span>
             </Link>
-            {tags.map((tag) => (
+            {categories.map((category) => (
               <Link
-                key={tag.slug}
-                href={`/read?tag=${tag.slug}`}
+                key={category.slug}
+                href={`/read?category=${category.slug}`}
                 className={`read-tag-link ${
-                  selectedTag === tag.slug ? "is-active" : ""
+                  selectedCategory === category.slug ? "is-active" : ""
                 }`}
               >
-                <span>{tag.label}</span>
-                <span>{tag.count}</span>
+                <span>{category.label}</span>
+                <span>{category.count}</span>
               </Link>
             ))}
           </aside>
@@ -122,6 +162,8 @@ export default async function ReadPage({ searchParams }: ReadPageProps) {
               <p className="read-section-label">
                 {searchQuery
                   ? "Search results"
+                  : selectedCategory
+                    ? categories.find((category) => category.slug === selectedCategory)?.label ?? "Category"
                   : selectedTag
                     ? tags.find((tag) => tag.slug === selectedTag)?.label ?? "Topic"
                     : "Latest"}
@@ -135,10 +177,23 @@ export default async function ReadPage({ searchParams }: ReadPageProps) {
                   <article key={article.slug} className="read-post-item">
                     <time dateTime={article.date}>{formatArticleDate(article.date)}</time>
                     <div>
+                      <Link className="read-category-link" href={`/read?category=${slugifyCategory(article.category)}`}>
+                        {article.category}
+                      </Link>
                       <h2>
                         <Link href={`/read/${article.slug}`}>{article.title}</Link>
                       </h2>
                       <p>{article.summary}</p>
+                      <p className="read-answer-preview">
+                        <span>Answer:</span> {article.quickAnswer}
+                      </p>
+                      {getQuestionPreview(article.questions, searchQuery).length ? (
+                        <div className="read-question-preview" aria-label="Questions answered">
+                          {getQuestionPreview(article.questions, searchQuery).map((question) => (
+                            <span key={question}>{question}</span>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="read-chip-row">
                         {article.tags.map((tag) => (
                           <Link key={tag} href={`/read?tag=${slugifyTag(tag)}`}>

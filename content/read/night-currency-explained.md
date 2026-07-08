@@ -2,7 +2,13 @@
 title: "Night Currency Windows"
 date: "2026-04-20"
 summary: "A concise explanation of sunset, civil twilight, and the one-hour night passenger currency window pilots actually need to plan around."
-tags: ["Night Operations", "Currency", "Student Pilot","FAR"]
+category: "Pilot Logging & Currency"
+tags: ["Night Currency", "Recent Experience", "Student Pilot"]
+questions:
+  - "When does night currency start?"
+  - "Is night currency based on sunset or civil twilight?"
+  - "When can I carry passengers at night?"
+  - "What is the difference between loggable night and night currency?"
 ---
 
 Night terminology creates confusion because several valid time windows exist at once. A pilot may be legal for one purpose and outside the relevant window for another. The practical fix is to stop using the word `night` as if it means only one thing.

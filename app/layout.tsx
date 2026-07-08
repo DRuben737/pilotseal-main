@@ -78,7 +78,7 @@ export default function RootLayout({
               {children}
             </div>
 
-            <footer className="border-t border-slate-200/70 px-3 pb-10 pt-10">
+            <footer className="app-footer-shell px-3 pb-10 pt-10">
               <div className="site-shell">
                 <div className="grid gap-10 md:grid-cols-[1.35fr_0.8fr_0.8fr]">
                   <div>

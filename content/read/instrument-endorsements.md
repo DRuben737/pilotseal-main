@@ -2,7 +2,12 @@
 title: "Cleaner Instrument Endorsements"
 date: "2026-04-24"
 summary: "A short guide to drafting instrument-related endorsements with cleaner scope, better record support, and fewer copy-paste errors."
-tags: ["Instrument", "Endorsements", "CFI"]
+category: "Endorsements"
+tags: ["Endorsements", "Instrument Training", "CFI"]
+questions:
+  - "How should I write an instrument endorsement?"
+  - "What should an instrument training endorsement include?"
+  - "How do I avoid vague instrument endorsement wording?"
 ---
 
 Instrument endorsements often fail for the same reason other endorsement records fail: the wording is broader than the training record behind it. The cleaner standard is to write only what the actual training supports.

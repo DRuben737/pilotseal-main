@@ -11,7 +11,10 @@ export type ArticleMeta = {
   date: string;
   updated?: string;
   summary: string;
+  category: string;
   tags: string[];
+  questions: string[];
+  quickAnswer: string;
   rank: number;
   body: string;
 };
@@ -25,6 +28,8 @@ export type ArticleTag = {
   label: string;
   count: number;
 };
+
+export type ArticleCategory = ArticleTag;
 
 const READ_DIR = path.join(process.cwd(), "content/read");
 const marked = new Marked({
@@ -78,6 +83,119 @@ function normalizeTags(value: unknown) {
   return [];
 }
 
+function normalizeStringList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map(String).map((item) => item.trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeCategory(value: unknown, tags: string[]) {
+  if (typeof value === "string" && value.trim() !== "") {
+    return value.trim();
+  }
+
+  return tags[0] ?? "General";
+}
+
+function normalizeInlineMarkdown(value: string) {
+  return value
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractSectionFirstParagraph(content: string, headingPattern: RegExp) {
+  const lines = content.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => headingPattern.test(line.trim()));
+
+  if (headingIndex < 0) {
+    return "";
+  }
+
+  const paragraph: string[] = [];
+
+  for (const line of lines.slice(headingIndex + 1)) {
+    const trimmed = line.trim();
+
+    if (/^#{1,6}\s+/.test(trimmed)) {
+      break;
+    }
+
+    if (!trimmed || trimmed === "---") {
+      if (paragraph.length) break;
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(trimmed)) {
+      continue;
+    }
+
+    paragraph.push(trimmed);
+  }
+
+  return normalizeInlineMarkdown(paragraph.join(" "));
+}
+
+function extractQuickAnswer(content: string, summary: string) {
+  const answer =
+    extractSectionFirstParagraph(content, /^#{1,6}\s+(Key Conclusion|Practical takeaway|One-Sentence Summary)\s*$/i) ||
+    extractSectionFirstParagraph(content, /^#{1,6}\s+(FAA Interpretation|Core Logic|Why It Matters)\s*$/i);
+
+  return answer || summary;
+}
+
+function tokenizeSearchQuery(query: string) {
+  const stopWords = new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "can",
+    "do",
+    "does",
+    "for",
+    "from",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "may",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "under",
+    "what",
+    "when",
+    "who",
+    "with",
+  ]);
+
+  return query
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !stopWords.has(token));
+}
+
 function normalizeRank(value: unknown) {
   const rank = typeof value === "number"
     ? value
@@ -102,13 +220,20 @@ function readArticleFile(slug: string): ArticleRecord {
   const raw = fs.readFileSync(filePath, "utf8");
   const { data, content } = matter(raw);
 
+  const tags = normalizeTags(data.tags);
+  const questions = normalizeStringList(data.questions);
+  const summary = String(data.summary ?? "");
+
   return {
     slug,
     title: String(data.title ?? ""),
     date: String(data.date ?? ""),
     updated: data.updated ? String(data.updated) : undefined,
-    summary: String(data.summary ?? ""),
-    tags: normalizeTags(data.tags),
+    summary,
+    category: normalizeCategory(data.category, tags),
+    tags,
+    questions,
+    quickAnswer: extractQuickAnswer(content, summary),
     rank: normalizeRank(data.rank),
     body: content.trim(),
     html: marked.parse(content) as string,
@@ -124,13 +249,16 @@ export function getArticleSlugs() {
 export function getAllArticles(): ArticleMeta[] {
   return getArticleSlugs()
     .map((slug) => readArticleFile(slug))
-    .map(({ slug, title, date, updated, summary, tags, rank, body }) => ({
+    .map(({ slug, title, date, updated, summary, category, tags, questions, quickAnswer, rank, body }) => ({
       slug,
       title,
       date,
       updated,
       summary,
+      category,
       tags,
+      questions,
+      quickAnswer,
       rank,
       body,
     }))
@@ -153,6 +281,25 @@ export function slugifyTag(tag: string) {
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+export const slugifyCategory = slugifyTag;
+
+export function getAllArticleCategories(): ArticleCategory[] {
+  const counts = new Map<string, { label: string; count: number }>();
+
+  for (const article of getAllArticles()) {
+    const slug = slugifyCategory(article.category);
+    const current = counts.get(slug);
+    counts.set(slug, {
+      label: current?.label ?? article.category,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+
+  return [...counts.entries()]
+    .map(([slug, value]) => ({ slug, ...value }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export function getAllArticleTags(): ArticleTag[] {
@@ -178,6 +325,72 @@ export function getArticlesByTag(tagSlug: string) {
   return getAllArticles().filter((article) =>
     article.tags.some((tag) => slugifyTag(tag) === tagSlug)
   );
+}
+
+export function getArticlesByCategory(categorySlug: string) {
+  return getAllArticles().filter((article) =>
+    slugifyCategory(article.category) === categorySlug
+  );
+}
+
+export function articleMatchesSearch(article: ArticleMeta, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const searchableText = [
+    article.title,
+    article.questions.join(" "),
+    article.summary,
+    article.quickAnswer,
+    article.category,
+    article.tags.join(" "),
+    article.body,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (searchableText.includes(normalizedQuery)) {
+    return true;
+  }
+
+  const queryTokens = tokenizeSearchQuery(normalizedQuery);
+
+  if (!queryTokens.length) {
+    return true;
+  }
+
+  const matchedTokens = queryTokens.filter((token) => searchableText.includes(token));
+  const minimumMatches = queryTokens.length <= 2 ? queryTokens.length : Math.ceil(queryTokens.length * 0.7);
+
+  return matchedTokens.length >= minimumMatches;
+}
+
+export function getArticleSearchScore(article: ArticleMeta, query: string) {
+  const queryTokens = tokenizeSearchQuery(query);
+
+  if (!queryTokens.length) {
+    return 0;
+  }
+
+  const weightedFields = [
+    { value: article.title, weight: 8 },
+    { value: article.questions.join(" "), weight: 10 },
+    { value: article.quickAnswer, weight: 7 },
+    { value: article.summary, weight: 5 },
+    { value: article.category, weight: 4 },
+    { value: article.tags.join(" "), weight: 4 },
+    { value: article.body, weight: 1 },
+  ];
+
+  return weightedFields.reduce((score, field) => {
+    const text = field.value.toLowerCase();
+    const matches = queryTokens.filter((token) => text.includes(token)).length;
+
+    return score + matches * field.weight;
+  }, 0);
 }
 
 export function getAdjacentArticles(slug: string) {

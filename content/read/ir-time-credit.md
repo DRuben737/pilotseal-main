@@ -2,7 +2,12 @@
 title: "Instrument Time Credit Rules"
 date: "2026-05-03"
 summary: "A practical interpretation of FAA legal opinion on how private pilot instrument training applies toward instrument rating requirements."
-tags: ["Instrument", "Flight Training", "Instrument Training","FAA Interpretation"]
+category: "Instrument Training"
+tags: ["FAA Interpretation", "Instrument Training", "Training Credit"]
+questions:
+  - "Does private pilot instrument training count toward the instrument rating?"
+  - "Can previous instrument training be credited toward an instrument rating?"
+  - "How much instrument time can I credit toward an instrument rating?"
 ---
 
 ## Key Conclusion

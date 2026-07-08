@@ -2,7 +2,12 @@
 title: "Parachute Requirement for Spin Training"
 date: "2026-05-03"
 summary: "A practical interpretation of FAA legal opinion on when parachutes are required during spin training under §91.307."
-tags: ["Spin Training", "Parachute", "FAA Interpretation"]
+category: "Operations & Equipment"
+tags: ["FAA Interpretation", "Spin Training", "Parachute"]
+questions:
+  - "Do I need a parachute for spin training?"
+  - "When are parachutes required during spins?"
+  - "Does CFI spin training require parachutes?"
 ---
 
 ## Key Conclusion

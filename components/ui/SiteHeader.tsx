@@ -13,7 +13,7 @@ export default function SiteHeader() {
   return (
     <header
       className={[
-        "border-b border-slate-200/70 bg-white/78 backdrop-blur-xl",
+        "app-header-shell",
         isHome ? "sticky top-0 z-80" : "relative z-10",
       ].join(" ")}
     >

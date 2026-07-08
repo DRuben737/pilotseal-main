@@ -2,7 +2,13 @@
 title: "Required Crewmember Definition"
 date: "2026-05-03"
 summary: "A practical interpretation of FAA legal opinion on the meaning of 'required crewmember seat' and its regulatory implications."
-tags: ["CFI", "Medical", "FAA Interpretation"]
+category: "Operations & Equipment"
+tags: ["FAA Interpretation", "Required Crewmember", "Medical"]
+questions:
+  - "Who is a required crewmember?"
+  - "Does an instructor count as a required crewmember?"
+  - "What medical does a required crewmember need?"
+  - "Does a simulator instructor need a second class medical?"
 ---
 
 ## Key Conclusion

@@ -3,7 +3,12 @@ title: "FAA References & POH Library"
 date: "2026-05-03" 
 updated: "2026-05-05"
 summary: "Quick access navigation page for commonly used FAA handbooks, chart references, and aircraft POHs."
-tags: ["FAA", "Reference", "POH", "Navigation"]
+category: "Reference Library"
+tags: ["Reference Library", "FAA Handbooks", "POH"]
+questions:
+  - "Where can I find FAA handbooks?"
+  - "Where can I find aircraft POH references?"
+  - "Where are the PilotSeal reference documents?"
 rank: 100
 ---
 

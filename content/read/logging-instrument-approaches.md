@@ -2,7 +2,12 @@
 title: "Logging Instrument Approaches"
 date: "2026-04-28"
 summary: "A practical interpretation of FAA InFO 15012 and what actually qualifies as a loggable instrument approach."
-tags: ["Instrument","Instrument Training", "Currency", "FAA Interpretation"]
+category: "Pilot Logging & Currency"
+tags: ["FAA Interpretation", "Instrument Currency", "Pilot Logging"]
+questions:
+  - "When can I log an instrument approach?"
+  - "What counts as a loggable instrument approach?"
+  - "Can I log an approach if I do not fly to minimums?"
 ---
 
 Pilots often assume logging an instrument approach is straightforward: fly the procedure, log the approach. In reality, the FAA defines it much more narrowly. This becomes critical when maintaining instrument currency.

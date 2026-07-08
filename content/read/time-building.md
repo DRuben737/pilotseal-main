@@ -2,7 +2,12 @@
 title: "Safety Pilot Logging and Cost Sharing"
 date: "2026-05-03"
 summary: "A practical interpretation of FAA legal opinion on how safety pilots log time and share expenses during simulated instrument flight."
-tags: ["Safety Pilot", "Logging", "FAA Interpretation"]
+category: "Pilot Logging & Currency"
+tags: ["FAA Interpretation", "Safety Pilot", "Pilot Logging", "Expense Sharing"]
+questions:
+  - "Can a safety pilot share expenses?"
+  - "Can a safety pilot log time while time building?"
+  - "Can two pilots split costs during simulated instrument flight?"
 ---
 
 ## Key Conclusion

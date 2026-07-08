@@ -2,7 +2,12 @@
 title: "Can AGIs Teach Simulator Instrument Training?"
 date: "2026-05-03"
 summary: "A practical interpretation of FAA legal opinion on whether AGI/IGI qualify as authorized instructors for simulator training."
-tags: ["Instrument","Instrument Training", "Ground Instructor", "FAA Interpretation"]
+category: "Instrument Training"
+tags: ["FAA Interpretation", "Instrument Training", "Ground Instructor"]
+questions:
+  - "Can an AGI teach simulator instrument training?"
+  - "Can a ground instructor log simulator training for an instrument rating?"
+  - "Does simulator training count as flight training?"
 ---
 
 ## Key Conclusion

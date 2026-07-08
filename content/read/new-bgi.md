@@ -2,7 +2,12 @@
 title: "New BGI Recency Requirement"
 date: "2026-05-03"
 summary: "A practical interpretation of FAA legal opinion on whether newly certified ground instructors must meet recent experience requirements before instructing."
-tags: ["Ground Instructor", "Recent Experience", "FAA Interpretation"]
+category: "Instructor Rules"
+tags: ["FAA Interpretation", "Ground Instructor", "Recent Experience"]
+questions:
+  - "Does a new BGI need recent experience before teaching?"
+  - "Can a newly certified ground instructor provide ground training?"
+  - "What recent experience does a ground instructor need?"
 ---
 
 ## Key Conclusion

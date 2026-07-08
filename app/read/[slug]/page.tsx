@@ -9,6 +9,7 @@ import {
   getAllArticles,
   getArticleBySlug,
   getRelatedArticles,
+  slugifyCategory,
   slugifyTag,
 } from "@/lib/articles";
 
@@ -73,6 +74,9 @@ export default async function ReadPostPage({ params }: ReadPostPageProps) {
           </div>
           <h1>{article.title}</h1>
           <p>{article.summary}</p>
+          <Link className="read-category-link" href={`/read?category=${slugifyCategory(article.category)}`}>
+            {article.category}
+          </Link>
           <div className="read-chip-row">
             {article.tags.map((tag) => (
               <Link key={tag} href={`/read?tag=${slugifyTag(tag)}`}>

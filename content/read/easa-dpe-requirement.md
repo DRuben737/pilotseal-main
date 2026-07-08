@@ -2,7 +2,12 @@
 title: "Foreign Examiner as PIC?"
 date: "2026-05-03"
 summary: "A focused interpretation of FAA Olson (2016) on whether a non-FAA examiner may conduct a flight test in an N-registered aircraft and what certificate level is required."
-tags: ["PIC", "Commercial", "FAA Interpretation"]
+category: "Operations & Equipment"
+tags: ["FAA Interpretation", "PIC", "Commercial Operations"]
+questions:
+  - "Can a foreign examiner act as PIC in an N-registered aircraft?"
+  - "Does a non-FAA examiner need a commercial certificate?"
+  - "Who can be PIC during a foreign practical test in a US registered aircraft?"
 ---
 
 ## Key Conclusion

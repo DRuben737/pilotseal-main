@@ -2,7 +2,14 @@
 title: "Murphy 2008 Key Clarifications"
 date: "2026-05-03"
 summary: "A structured reading of FAA Murphy (2008) addressing multiple independent regulatory questions without collapsing them into a single rule."
-tags: ["CFI", "Medical","student pilot","solo student", "FAA Interpretation"]
+category: "Instructor Rules"
+tags: ["FAA Interpretation", "CFI", "Medical", "Student Pilot"]
+questions:
+  - "If I lost my medical can I log PIC?"
+  - "Can a CFI instruct without a medical?"
+  - "Does a flight instructor need a medical when acting as PIC?"
+  - "Can a student pilot fly above a cloud layer?"
+  - "Does an electronic logbook count as a logbook?"
 ---
 
 ## Key Conclusion

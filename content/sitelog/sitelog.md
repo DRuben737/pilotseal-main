@@ -1,7 +1,7 @@
 ---
 title: "Site Log"
 summary: "Ongoing development notes and history of PilotSeal."
-updated: "2026-05-08"
+updated: "2026-07-08"
 ---
 
 
@@ -218,6 +218,50 @@ Updated the signature pad with a flexible mobile layout, allowing users to use t
 Added a reset password function.
 
 Improved the Flight Brief function. Logged-in users with saved weight data can now quickly autofill weight, aircraft type, and other built-in information. Added automatic fuel time calculation and alerts for low remaining MX time.
+
+</details>
+
+<details>
+<summary>June 2026 — Endorsement Printing and Date Cleanup</summary>
+
+Improved the endorsement generator print workflow.
+
+This update focused on making generated endorsements easier to print and use as real logbook paperwork.
+
+Changes included:
+
+- Better browser print behavior for generated endorsements
+- Cleaner print layout styling
+- More reliable endorsement output formatting
+- Improved mobile signature and print preparation flow
+- Date handling cleanup for endorsement dates
+- More consistent date insertion in generated endorsement text
+
+</details>
+
+<details>
+<summary>July 2026 — Risk Assessment, Aircraft Records, Maintenance Due Tracking, and Analytics</summary>
+
+Upgraded the Flight Brief risk assessment workflow.
+
+The risk tool was expanded to more closely match the paper flight risk assessment format, with added static and dynamic risk items, compact scoring, and a tighter layout so the page remains usable without becoming visually crowded.
+
+Aircraft management also received a major update.
+
+Changes included:
+
+- Private aircraft records for users instead of forcing newly added aircraft into the shared registry
+- Protection for saved personal aircraft so admin/user accounts do not accidentally share aircraft
+- Restored editing for My Aircraft records
+- Smaller, denser My Aircraft typography and layout improvements
+- Last aircraft information update date shown on saved aircraft
+- Personal saved aircraft due tracking for 100hr, Annual, 91.411, 91.413, and ELT
+- Month/year due entry with stored due dates normalized to the end of the selected month
+- Flight Brief integration with saved aircraft due data
+- Automatic 100hr due autofill into Flight Brief MX due when selecting a saved aircraft
+- Automatic available / not available / check MX time status based on today's date and current aircraft time
+
+Added Google Analytics tracking so future usage patterns can be reviewed, including page traffic and tool usage trends.
 
 </details>
 

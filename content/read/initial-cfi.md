@@ -2,7 +2,12 @@
 title: "Initial CFI Training Requirement"
 date: "2026-05-03"
 summary: "A practical interpretation of FAA legal opinion on whether initial CFI applicants must receive training from a qualified senior CFI."
-tags: ["CFI", "CFI Training", "FAA Interpretation"]
+category: "Instructor Rules"
+tags: ["FAA Interpretation", "CFI", "Instructor Training"]
+questions:
+  - "Who can train an initial CFI applicant?"
+  - "Does initial CFI training require a two-year CFI?"
+  - "Can any CFI provide initial flight instructor training?"
 ---
 
 ## Key Conclusion
