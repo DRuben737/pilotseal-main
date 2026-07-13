@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function SoloTakeoffLandingPage() {
-  const endorsementText = `I certify that [Student Name] [Student Cert Number] has received the required training of § 61.93(b)(1). I have determined that [Student Name] is proficient to practice solo takeoffs and landings at [Airport Name]. The takeoffs and landings at [Airport Name] are subject to the following conditions: [List any applicable conditions or limitations.]
+  const endorsementText = `I certify that [Student Name] has received the required training of § 61.93(b)(1). I have determined that they are proficient to practice solo takeoffs and landings at [Airport Name]. The takeoffs and landings at [Airport Name] are subject to the following conditions: [List any applicable conditions or limitations.]
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;

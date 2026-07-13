@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function KnowledgeTestPage() {
-  const endorsementText = `I certify that [Pilot Name] [Pilot Cert Number] has received the required training of § 61.35(a)(1). I have determined that [Pilot Name] is prepared for the [Certificate]–[Category] knowledge test.
+  const endorsementText = `I certify that [Pilot Name] has received the required training in accordance with [Applicable Regulation]. I have determined they are prepared for the [Name of] knowledge test.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;

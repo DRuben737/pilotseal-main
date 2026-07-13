@@ -188,6 +188,7 @@ function getTemplateCategory(title) {
   const normalizedTitle = String(title || '').trim().replace(/\s+/g, ' ');
   const explicitCategoryMap = {
     'TSA U.S. Citizenship': null,
+    'Practical Test Prereqs': 'Retest / Recurrent / IPC',
     'Pre-Solo Written': 'Solo Endorsements',
     'Pre-Solo Flight Training': 'Solo Endorsements',
     'Pre-Solo Night Training': 'Other Solo',
@@ -196,6 +197,8 @@ function getTemplateCategory(title) {
     'Solo in other airport': 'Other Solo',
     'Solo airport inside Class B': 'Other Solo',
     'Solo in Class B': 'Other Solo',
+    'Solo Flight in Class B/C/D': 'Other Solo',
+    'Solo Ops at Towered/Class B/C/D Airport': 'Other Solo',
     'Solo cross-country training': 'Solo Cross-Country',
     'Solo cross-country plan review': 'Solo Cross-Country',
     'Solo cross-country day': 'Solo Cross-Country',
@@ -245,6 +248,7 @@ function getTemplateCategory(title) {
     'High-Performance Airplane PIC': 'Other PIC',
     'High-Altitude Pressurized PIC': 'Other PIC',
     'Tailwheel Airplane PIC': 'Other PIC',
+    'Night Vision Goggles': 'Other PIC',
     'NVG ground training': 'Other PIC',
     'NVG PIC': 'Other PIC',
   };
@@ -356,6 +360,11 @@ function getUniqueSavedPeopleByCertificateNumber(options) {
 }
 
 function formatTemplateFieldValue(key, value) {
+  if (key === 'flightReviewAircraft') {
+    const aircraftModel = String(value ?? '').trim();
+    return aircraftModel ? ` in a ${aircraftModel} aircraft` : '';
+  }
+
   if (key === 'cfiKnowledgeTests') {
     const selected = Array.isArray(value) ? value.filter(Boolean) : [];
     if (selected.length === 0) {
@@ -376,6 +385,10 @@ function formatTemplateFieldValue(key, value) {
 }
 
 function getBlankTemplateValue(key) {
+  if (key === 'flightReviewAircraft') {
+    return ' [optional: in a __________ aircraft]';
+  }
+
   if (BLANK_TEMPLATE_SHORT_FIELDS.has(key) || key.toLowerCase().includes('date')) {
     return '____________';
   }
@@ -1026,7 +1039,8 @@ function EndorsementGenerator() {
     return accumulator;
   }, []);
 
-  const completedTemplateFieldCount = selectedTemplateFields.filter((field) =>
+  const requiredTemplateFields = selectedTemplateFields.filter((field) => field.required);
+  const completedTemplateFieldCount = requiredTemplateFields.filter((field) =>
     hasFieldValue(templateFieldData[field.key])
   ).length;
 
@@ -1378,9 +1392,14 @@ function EndorsementGenerator() {
       Object.entries(nextMappedData).reduce(
         (content, [token, value]) => content.replaceAll(`{${token}}`, value),
         template.text
-      ).replace(/\{([^}]+)\}/g, (_, token) => (
-        generatorMode === 'blank' ? getBlankTemplateValue(token) : `{${token}}`
-      ))
+      ).replace(/\{([^}]+)\}/g, (_, token) => {
+        if (generatorMode === 'blank') {
+          return getBlankTemplateValue(token);
+        }
+
+        const field = selectedTemplateFields.find((templateField) => templateField.key === token);
+        return field && !field.required ? '' : `{${token}}`;
+      })
     );
   };
 
@@ -1992,7 +2011,7 @@ function EndorsementGenerator() {
               <span>{selectedTemplates.length} selected</span>
               <span>
                 {selectedTemplateFields.length > 0
-                  ? `${completedTemplateFieldCount}/${selectedTemplateFields.length} details`
+                  ? `${completedTemplateFieldCount}/${requiredTemplateFields.length} required`
                   : 'No details'}
               </span>
               <span>{signaturePreviewDataUrl ? 'Signed' : 'No signature'}</span>
@@ -2087,14 +2106,14 @@ function EndorsementGenerator() {
                     </p>
                   </div>
                   <button className={styles.ghostButton} onClick={openDetailsModal} type="button">
-                    {completedTemplateFieldCount === selectedTemplateFields.length ? 'Review details' : 'Add details'}
+                    {completedTemplateFieldCount === requiredTemplateFields.length ? 'Review details' : 'Add details'}
                   </button>
                 </div>
 
                 <div className={styles.templateDetailsSummary}>
                   <span>
-                    {completedTemplateFieldCount} of {selectedTemplateFields.length} required field
-                    {selectedTemplateFields.length === 1 ? '' : 's'} completed
+                    {completedTemplateFieldCount} of {requiredTemplateFields.length} required field
+                    {requiredTemplateFields.length === 1 ? '' : 's'} completed
                   </span>
                   {selectedTemplateDetails
                     .filter((template) => template.fields.length > 0)
@@ -2352,8 +2371,8 @@ function EndorsementGenerator() {
             <div className={styles.templateDetailsModalBody}>
               <div className={styles.templateDetailsModalMeta}>
                 <span>
-                  {completedTemplateFieldCount} of {selectedTemplateFields.length} required field
-                  {selectedTemplateFields.length === 1 ? '' : 's'} completed
+                  {completedTemplateFieldCount} of {requiredTemplateFields.length} required field
+                  {requiredTemplateFields.length === 1 ? '' : 's'} completed
                 </span>
                 <div className={styles.templateDetailsSummary}>
                   {selectedTemplateDetails

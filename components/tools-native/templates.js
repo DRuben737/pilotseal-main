@@ -1,288 +1,232 @@
 // src/templates.js
 
+const SIGNATURE_BLOCK = `Date: {date}           *
+{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`;
 
 const rawTemplates = {
-"TSA U.S. Citizenship":`
-I certify that {studentName} {studentCertNumber} has presented me a ____________(U.S. birth certificate or U.S. passport) and ______________(the relevant control or sequential number on the document, if any) establishing that {studentName} is a U.S. citizen or national in accordance with 49 CFR § 1552.3(h).  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "TSA U.S. Citizenship": `
+I certify that {studentName} has presented me a {citizenshipDocument}, document number {citizenshipDocumentNumber}, establishing that they are a U.S. citizen or national in accordance with 49 CFR § 1552.15(c).
+${SIGNATURE_BLOCK}`,
 
-"Practical Test Prereqs": `
-I certify that {studentName} {studentCertNumber} has received and logged training time within 2 calendar-months preceding the month of application in preparation for the practical test and {studentName} is prepared for the required practical test for the issuance of _____ certificate. 
-Date: {date} 	          *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Practical Test Prereqs": `
+I certify that {studentName} has received and logged training time within 2 calendar months preceding the month of application in preparation for the practical test and they are prepared for the required practical test for the issuance of {certificateType} certificate.
+${SIGNATURE_BLOCK}`,
 
+  "Pre-Solo Written": `
+I certify that {studentName} has satisfactorily completed the pre-solo knowledge test of § 61.87(b) for the {aircraft} aircraft.
+${SIGNATURE_BLOCK}`,
 
-"Pre-Solo Written":`
-I certify that {studentName} {studentCertNumber} has satisfactorily completed the pre-solo knowledge test of § 61.87(b) for the __________(make & model).
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
-"Pre-Solo Flight Training":`
-I certify that {studentName} {studentCertNumber} has received and logged pre-solo flight training for the maneuvers and procedures that are appropriate to the __________(make & model). I have determined {studentName} has demonstrated satisfactory proficiency and safety on the maneuvers and procedures required by § 61.87 in this or similar make and model of aircraft to be flown. 
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Pre-Solo Flight Training": `
+I certify that {studentName} has received and logged pre-solo flight training for the maneuvers and procedures that are appropriate to the {aircraft} aircraft. I have determined they have demonstrated satisfactory proficiency and safety on the maneuvers and procedures required by § 61.87 in this or similar make and model of aircraft to be flown.
+${SIGNATURE_BLOCK}`,
 
-"Pre-Solo Night Training": `
-I certify that {studentName} {studentCertNumber} has received flight training at night on night flying procedures that include takeoffs, approaches, landings, and go-arounds at night at the (airport name) airport where the solo flight will be conducted; navigation training at night in the vicinity of the (airport name) airport where the solo flight will be conducted. This endorsement expires 90 calendar-days from the date the flight training at night was received.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Pre-Solo Night Training": `
+I certify that {studentName} has received flight training at night on night flying procedures that include takeoffs, approaches, landings, and go-arounds at night at the {airportName} airport where the solo flight will be conducted; navigation training at night in the vicinity of the {airportName} airport where the solo flight will be conducted. This endorsement expires 90 calendar days from the date the flight training at night was received.
+${SIGNATURE_BLOCK}`,
 
-"Solo Flight Initial 90 Days": `
-I certify that {studentName} {studentCertNumber} has received the required training to qualify for solo flying. I have determined {studentName} meets the applicable requirements of § 61.87(n) and is proficient to make solo flights in __________(make & model).  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo Flight Initial 90 Days": `
+I certify that {studentName} has received the required training to qualify for solo flying. I have determined they meet the applicable requirements of § 61.87(n) and are proficient to make solo flights in {aircraft}.
+${SIGNATURE_BLOCK}`,
 
-"Solo Flight Additional 90 Days": `
-I certify that {studentName} {studentCertNumber} has received the required training to qualify for solo flying. I have determined that {studentName} meets the applicable requirements of § 61.87(p) and is proficient to make solo flights in __________(make & model).  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo Flight Additional 90 Days": `
+I certify that {studentName} has received the required training to qualify for solo flying. I have determined that they meet the applicable requirements of § 61.87(p) and are proficient to make solo flights in {aircraft}.
+${SIGNATURE_BLOCK}`,
 
-"Solo in other airport": `
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.93(b)(1). I have determined that {studentName} is proficient to practice solo takeoffs and landings at (airport name). The takeoffs and landings at (airport name) are subject to the following conditions: (List any applicable conditions or limitations.)  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo in other airport": `
+I certify that {studentName} has received the required training of § 61.93(b)(1). I have determined that they are proficient to practice solo takeoffs and landings at {airportName}. The takeoffs and landings at {airportName} are subject to the following conditions: {localConditions}
+${SIGNATURE_BLOCK}`,
 
-"Solo cross-country training":`
-I certify that {studentName} {studentCertNumber} has received the required solo cross-country training. I find {studentName} has met the applicable requirements of § 61.93, and is proficient to make solo cross-country flights in a __________(make & model), (aircraft  category).  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo cross-country training": `
+I certify that {studentName} has received the required solo cross-country training. I find they have met the applicable requirements of § 61.93 and are proficient to make solo cross-country flights in a {aircraft} aircraft, {aircraftCategory}.
+${SIGNATURE_BLOCK}`,
 
-"Solo cross-country day": `
-I have reviewed the cross-country planning of                    . I find the planning and preparation to be correct to make the solo flight from ______ to _______ via_______ (route of flight) with landings at (names of the airports) in a__________(make & model) on ______(date). (limitations attached.) 
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo cross-country day": `
+I have reviewed the cross-country planning of {routeStudentName}. I find the planning and preparation to be correct to make the solo flight from {routeFrom} to {routeTo} via {routeDescription} with landings at {routeLandings} in a {aircraft} aircraft on {eventDate}. {localConditions}
+${SIGNATURE_BLOCK}`,
 
-"Repeated Solo XC Within 50 NM": ` 
-I certify that {studentName} {studentCertNumber} has received the required training in both directions between ______and ______at both (airport names). I have determined that {studentName} is proficient of § 61.93(b)(2) to conduct repeated solo cross-country flights over that route, subject to the following conditions: (Limitations attached.)  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Repeated Solo XC Within 50 NM": `
+I certify that {studentName} has received the required training in both directions between {routeFrom} and {routeTo} at both {airportPair}. I have determined that they are proficient of § 61.93(b)(2) to conduct repeated solo cross-country flights over that route, subject to the following conditions: {localConditions}
+${SIGNATURE_BLOCK}`,
 
-"Solo in Class B": `
-I certify that {studentName} {studentCertNumber} has received the required training of §61.95(a). I have determined {studentName} is proficient to conduct solo flights in (name of Class B) airspace. (List any applicable conditions or limitations.)  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo in Class B": `
+I certify that {studentName} has received the required training of § 61.95(a). I have determined they are proficient to conduct solo flights in {airspaceName} airspace. {localConditions}
+${SIGNATURE_BLOCK}`,
 
-"Solo airport inside Class B":` 
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.95(b)(1). I have determined that {studentName} is proficient to conduct solo flight operations at (name of airport). (List any applicable conditions or limitations.)  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo airport inside Class B": `
+I certify that {studentName} has received the required training of § 61.95(b)(1). I have determined that they are proficient to conduct solo flight operations at {airportName}. {localConditions}
+${SIGNATURE_BLOCK}`,
 
+  "Solo Flight in Class B/C/D": `
+I certify that {studentName} has received the required training of § 61.94(a). I have determined they are proficient to conduct solo flights in {airspaceName} airspace and authorized to operate to, from, through, and at {airportName}. {localConditions}
+${SIGNATURE_BLOCK}`,
 
-"Solo Flight in Class B/C/D":`  
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.94(a). I have determined {studentName} is proficient to conduct solo flights in (name of Class B, C, or D) airspace and authorized to operate to, from through and at (name of airport). (List any applicable conditions or limitations.)
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Solo Ops at Towered/Class B/C/D Airport": `
+I certify that {studentName} has received the required training of § 61.94(a)(1). I have determined that they are proficient to conduct solo flight operations at {airportName}. {localConditions}
+${SIGNATURE_BLOCK}`,
 
-"Solo Ops at Towered/Class B/C/D Airport":` 
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.94(a)(1). I have determined that {studentName} is proficient to conduct solo flight operations at (name of airport located in Class B, C, or D airspace or an airport having an  operational control tower). (List any applicable conditions or limitations.)  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "PIC Solo Outside Rating": `
+I certify that {studentName} has received the training as required by § 61.31(d)(2) to serve as a pilot in command in a {categoryClass} of aircraft. I have determined that they are prepared to solo that {trainingAircraft} aircraft. Limitations: {limitations}
+${SIGNATURE_BLOCK}`,
 
-"PIC Solo Outside Rating":` 
-I certify that {studentName} {studentCertNumber} has received the training as required by  § 61.31(d)(2) to serve as a pilot in command in a (specific category and class) of aircraft. I have determined that {studentName} is prepared to solo that __________ aircraft.  Limitations:_______________. `,
+  "Sport Pilot Proficiency Check": `
+I certify that {studentName} has received the required training required in accordance with §§ 61.309 and 61.311 and have determined that they are prepared for the {proficiencyCheckName}.
+${SIGNATURE_BLOCK}`,
 
-"Sport Pilot Proficiency Check":` 
-I certify that {studentName} {studentCertNumber} has received the required training required in accordance with §§ 61.309 and 61.311 and have determined that {studentName} is prepared for the (name of) proficiency check.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Sport Pilot Practical Test": `
+I certify that {studentName} has received the training required in accordance with §§ 61.309 and 61.311 and met the aeronautical experience requirements of § 61.313. I have determined that they are prepared for the {practicalTestType}.
+${SIGNATURE_BLOCK}`,
 
-"Sport Pilot Practical Test":` 
-I certify that {studentName} {studentCertNumber} has received the training required in accordance with §§ 61.309 and 61.311 and met the aeronautical experience requirements of § 61.313. I have determined that {studentName} is prepared for the (type of) practical test.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
-"LSA PIC VH <= 87 KCAS":` 
-I certify that {studentName} {studentCertNumber} has received the required training required in  accordance with § 61.327(a) in a __________ aircraft. I have determined (him or  her) proficient Pilot in command of a light-sport aircraft that has a VH less than  or equal to 87 KCAS.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "LSA PIC VH <= 87 KCAS": `
+I certify that {studentName} has received the required training required in accordance with § 61.327(a) in a {trainingAircraft} aircraft. I have determined them proficient to act as pilot in command of a light-sport aircraft that has a VH less than or equal to 87 KCAS.
+${SIGNATURE_BLOCK}`,
 
-"LSA PIC VH > 87 KCAS":`  
-I certify that {studentName} {studentCertNumber} has received the required training required in  accordance with § 61.327(b) in a __________ aircraft. I have determined (him or  her) proficient Pilot in command of a light-sport aircraft that has a VH greater  than 87 KCAS.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
+  "LSA PIC VH > 87 KCAS": `
+I certify that {studentName} has received the required training required in accordance with § 61.327(b) in a {trainingAircraft} aircraft. I have determined them proficient to act as pilot in command of a light-sport aircraft that has a VH greater than 87 KCAS.
+${SIGNATURE_BLOCK}`,
 
-"PVT knowledge test":`  
-I certify that {studentName} {studentCertNumber} has received the required training in accordance  with § 61.105. I have determined {studentName} is prepared for the PVT  knowledge test.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "PVT knowledge test": `
+I certify that {studentName} has received the required training in accordance with § 61.105. I have determined they are prepared for the {knowledgeTestName} knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"PVT Written Deficiencies":`
-I certify that {studentName} {studentCertNumber} has demonstrated satisfactory knowledge of the subject areas in which {studentName} was deficient on the PVT airman knowledge test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "PVT Written Deficiencies": `
+I certify that {studentName} has demonstrated satisfactory knowledge of the subject areas in which they were deficient on the {knowledgeTestName} airman knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"PVT Practical Test":`
-I certify that {studentName} {studentCertNumber} has received the required training in accordance  with §61.107 and § 61.109 . I have determined {studentName} is prepared for the PVT-________ practical test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
-"PVT 2-Month Review": `
-I certify that {studentName} {studentCertNumber} has received and logged training time within 2 calendar-months preceding the month of application in preparation for the practical test and {studentName} is prepared for the required practical test for the issuance of PVT-________ certificate. 
-Date: {date} 	          *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "PVT Practical Test": `
+I certify that {studentName} has received the required training in accordance with §§ 61.107 and 61.109. I have determined they are prepared for the {practicalTestType}.
+${SIGNATURE_BLOCK}`,
 
-"COM knowledge test":` 
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.97(b). I have determined that {studentName} is prepared for the COM knowledge test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
-"COM Written Deficiencies":`
-I certify that {studentName} {studentCertNumber} has demonstrated satisfactory knowledge of the subject areas in which {studentName} was deficient on the COM airman knowledge test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "PVT 2-Month Review": `
+I certify that {studentName} has received and logged training time within 2 calendar months preceding the month of application in preparation for the practical test and they are prepared for the required practical test for the issuance of {practicalTestCertificate} certificate.
+${SIGNATURE_BLOCK}`,
 
-"COM Practical Test":` 
-I certify that {studentName} {studentCertNumber} has received the required training of §§ 61.127  and 61.129. I have determined that {studentName} is prepared for the COM-________ practical test.  
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "COM knowledge test": `
+I certify that {studentName} has received the required training of § 61.125. I have determined that they are prepared for the {knowledgeTestName} knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"COM 2-Month Review": `
-I certify that {studentName} {studentCertNumber} has received and logged training time within 2 calendar-months preceding the month of application in preparation for the practical test and {studentName} is prepared for the required practical test for the issuance of Commercial-________ certificate. 
-Date: {date} 	          *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "COM Written Deficiencies": `
+I certify that {studentName} has demonstrated satisfactory knowledge of the subject areas in which they were deficient on the {knowledgeTestName} airman knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"IR knowledge test": ` 
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.65(b). I have determined that {studentName} is prepared for the Instrument–(airplane helicopter) knowledge test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "COM Practical Test": `
+I certify that {studentName} has received the required training of §§ 61.127 and 61.129. I have determined that they are prepared for the {practicalTestType}.
+${SIGNATURE_BLOCK}`,
 
-"IR Written Deficiencies":`
-I certify that {studentName} {studentCertNumber} has demonstrated satisfactory knowledge of the subject areas in which {studentName} was deficient on the Instrument airman knowledge test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "COM 2-Month Review": `
+I certify that {studentName} has received and logged training time within 2 calendar months preceding the month of application in preparation for the practical test and they are prepared for the required practical test for the issuance of {practicalTestCertificate} certificate.
+${SIGNATURE_BLOCK}`,
 
-"IR Practical Test":` 
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.65(c) and (d). I have determined {studentName} is prepared for the Instrument–(airplane/helicopter) practical test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
-"IR 2-Month Review":`  
-I certify that {studentName} {studentCertNumber} has received and logged the required flight  time/training of § 61.39(a) in preparation for the practical test within 2 calendar-months  preceding the date of the test and has satisfactory knowledge of the subject areas in which  {studentName} was shown to be deficient by the FAA Airman Knowledge Test Report. I have  determined {studentName} is prepared for the Instrument–(airplane/helicopter) practical test.   
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "IR knowledge test": `
+I certify that {studentName} has received the required training of § 61.65(b). I have determined that they are prepared for the {instrumentRating} knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"FOI knowledge test":`  
-I certify that {studentName} {studentCertNumber} has received the required fundamentals of  instruction training of § 61.185(a)(1). I have determined that {studentName} is prepared for  the Fundamentals of Instructing knowledge test. 
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "IR Written Deficiencies": `
+I certify that {studentName} has demonstrated satisfactory knowledge of the subject areas in which they were deficient on the {knowledgeTestName} airman knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"CFI Knowledge Test": ` 
-I certify that {studentName} {studentCertNumber} has received the required training of  § 61.185(a)((2) or (3) (as appropriate to the flight instructor rating sought)). I have  determined that {studentName} is prepared for the FIA/FIH knowledge test.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "IR Practical Test": `
+I certify that {studentName} has received the required training of § 61.65(c) and (d). I have determined they are prepared for the {instrumentRating} practical test.
+${SIGNATURE_BLOCK}`,
 
-"CFI Written Deficiencies":`
-I certify that {studentName} {studentCertNumber} has demonstrated satisfactory knowledge of the subject areas in which {studentName} was deficient on the ________________ airman knowledge test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "IR 2-Month Review": `
+I certify that {studentName} has received and logged the required flight time/training of § 61.39(a) in preparation for the practical test within 2 calendar months preceding the date of the test and has satisfactory knowledge of the subject areas in which they were shown to be deficient by the FAA Airman Knowledge Test Report. I have determined they are prepared for the {instrumentRating} practical test.
+${SIGNATURE_BLOCK}`,
 
-"CFI required training": ` 
-I certify that {studentName} {studentCertNumber} has received the required training of  § 61.187(b). I have determined that {studentName} is prepared for the CFI – (aircraft category  and class) practical test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "FOI knowledge test": `
+I certify that {studentName} has received the required fundamentals of instruction training of § 61.185(a)(1). I have determined that they are prepared for the Fundamentals of Instructing knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"CFII Practical Test":  `
-I certify that {studentName} {studentCertNumber} has received the required certificated flight instructor – instrument training of § 61.187(b)(7). I have determined {studentName} is  prepared for the certificated flight instructor – instrument – (airplane  helicopter  ) practical test. 
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "CFI Knowledge Test": `
+I certify that {studentName} has received the required training of § 61.185(a){cfiKnowledgeParagraph}. I have determined that they are prepared for the {flightInstructorKnowledgeTest} knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"Spin training":` 
-I certify that {studentName} {studentCertNumber} has received the required training of § 61.183(i)  in (an airplane). I have determined that {studentName} is competent and possesses  instructional proficiency in stall awareness, spin entry, spins, and spin recovery  procedures.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
-"R-22/R-44 Awareness":` 
-I certify that  {studentName} {studentCertNumber} has received the Awareness Training required by SFAR 73, section 2(a)(3)(i)–(v).  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "CFI Written Deficiencies": `
+I certify that {studentName} has demonstrated satisfactory knowledge of the subject areas in which they were deficient on the {knowledgeTestName} airman knowledge test.
+${SIGNATURE_BLOCK}`,
 
-"R-22 solo endorsement":`  
-I certify that  {studentName} {studentCertNumber} meets the  experience requirements of SFAR 73, section 2(b)(3) and has been given training specified by SFAR 73, section 2(b)(3)(i–iv). {studentName} has been found proficient to  solo the R-22 helicopter. 
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
- 
-"R-22 PIC":`  
-I certify that  {studentName} {studentCertNumber} has been given  training specified by SFAR 73, section 2(b)(1)(ii)(A–D) for Robinson R-22 helicopters  and is proficient Pilot in command. An annual flight review must be completed by ________(date 12 calendar-months after date of this endorsement) unless the requirements of  SFAR 73, section 2(b)(1)(i) are met. 
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "CFI required training": `
+I certify that {studentName} has received the required training of § 61.187(b). I have determined that they are prepared for the CFI - {categoryClass} practical test.
+${SIGNATURE_BLOCK}`,
 
-"R-22 Flight Review":`  
-I certify that  {studentName} {studentCertNumber} has satisfactorily  completed the flight review in an R-22 required by § 61.56 and SFAR 73, section 2(c)(1)  and (3), on {date} 
- *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "CFII Practical Test": `
+I certify that {studentName} has received the required certificated flight instructor - instrument training of § 61.187(b)(7). I have determined they are prepared for the certificated flight instructor - instrument-{flightInstructorInstrumentRating} practical test.
+${SIGNATURE_BLOCK}`,
 
-"R-44 solo endorsement":` 
-I certify that  {studentName} {studentCertNumber} meets the experience requirements of SFAR 73, section 2(b)(4) and has been given training specified by SFAR 73, section 2(b)(4)(i)–(iv). They have been found proficient to solo the R-44 helicopter.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Spin training": `
+I certify that {studentName} has received the required training of § 61.183(i) in {aircraft}. I have determined that they are competent and possess instructional proficiency in stall awareness, spin entry, spins, and spin recovery procedures.
+${SIGNATURE_BLOCK}`,
 
-"R-44 PIC":` 
-I certify that  {studentName} {studentCertNumber} has been given training specified by SFAR 73, section 2(b)(2)(ii)(A–D) for Robinson R-44 helicopters  and is proficient Pilot in command. An annual flight review must be completed  by _________________(date 12 calendar-months after this endorsement) unless the requirements of  SFAR 73, section 2(b)(2)(i) are met.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "R-22/R-44 Awareness": `
+I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, has received the ground training required by SFAR 73, section 2(a)(3)(i)-(v).
+${SIGNATURE_BLOCK}`,
 
-"R-44 Flight Review":`  
-I certify that  {studentName} {studentCertNumber} has satisfactorily completed the flight review in an R-44 required by 14 CFR, § 61.56 and SFAR 73,  section 2(c)(2) and (3), on {date} 
- *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "R-22 solo endorsement": `
+I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, meets the experience requirements of SFAR 73, section 2(b)(3) and has been given training specified by SFAR 73, section 2(b)(3)(i)-(iv). They have been found proficient to solo the R-22 helicopter.
+${SIGNATURE_BLOCK}`,
 
-"Helicopter Touchdown Autorotation":` 
-I certify that {studentName} {studentCertNumber} has received training in straight-in and  180-degree autorotations to include touchdown. I have determined that {studentName} is  competent in instructional knowledge relating to the elements, common errors,  performance, and correction of common errors related to straight-in and 180-degree  autorotations.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "R-22 PIC": `
+I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, has been given training specified by SFAR 73, section 2(b)(1)(ii)(A)-(D) for Robinson R-22 helicopters and is proficient to act as pilot in command. An annual flight review must be completed by {annualReviewDueDate} unless the requirements of SFAR 73, section 2(b)(1)(i) are met.
+${SIGNATURE_BLOCK}`,
 
-"Flight review":` 
-I certify that  {studentName} {studentCertNumber} , has satisfactorily completed a flight review of § 61.56(a) on {date} . 
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "R-22 Flight Review": `
+I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, has satisfactorily completed the flight review in an R-22 required by § 61.56 and SFAR 73, section 2(c)(1) and (3), on {eventDate}.
+${SIGNATURE_BLOCK}`,
 
-"Instrument proficiency check":`  
-I certify that  {studentName} {studentCertNumber} , has satisfactorily completed the instrument proficiency check of § 61.57(d) in a (make  and model) aircraft on (date).  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "R-44 solo endorsement": `
+I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, meets the experience requirements of SFAR 73, section 2(b)(4) and has been given training specified by SFAR 73, section 2(b)(4)(i)-(iv). They have been found proficient to solo the R-44 helicopter.
+${SIGNATURE_BLOCK}`,
 
-"Ground Instructor Recency": `
-I certify that {studentName} {studentCertNumber}  has demonstrated knowledge in the subject areas prescribed for a [basic, advanced, instrument] ground instructor under § 61.213(a)(3) and (a)(4), as appropriate.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "R-44 PIC": `
+I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, has been given training specified by SFAR 73, section 2(b)(2)(ii)(A)-(D) for Robinson R-44 helicopters and is proficient to act as pilot in command. An annual flight review must be completed by {annualReviewDueDate} unless the requirements of SFAR 73, section 2(b)(2)(i) are met.
+${SIGNATURE_BLOCK}`,
 
-"Written Retest":`
-I certify that {studentName} {studentCertNumber} has received the additional ground training as required by § 61.49. I have determined that {studentName}  is proficient to pass the_______________knowledge.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "R-44 Flight Review": `
+I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, has satisfactorily completed the flight review in an R-44 required by § 61.56 and SFAR 73, section 2(c)(2) and (3), on {eventDate}.
+${SIGNATURE_BLOCK}`,
 
-"Practical Test Retest":`
-I certify that {studentName} {studentCertNumber} has received the additional flight training as required by § 61.49. I have determined that {studentName}  is proficient to pass the________________practical test.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Helicopter Touchdown Autorotation": `
+I certify that {studentName} has received training in straight-in and 180-degree autorotations to include touchdown. I have determined that they are competent in instructional knowledge relating to the elements, common errors, performance, and correction of common errors related to straight-in and 180-degree autorotations.
+${SIGNATURE_BLOCK}`,
 
-"Complex Airplane PIC":`  
-I certify that  {studentName} {studentCertNumber} , has received the required training of § 61.31(e) in a __________ complex airplane. I have determined that {studentName} is proficient in the operation and systems of a complex  airplane.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Flight review": `
+I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has satisfactorily completed a flight review of § 61.56(a) on {eventDate}{flightReviewAircraft}.
+${SIGNATURE_BLOCK}`,
 
-"High-Performance Airplane PIC":`  
-I certify that  {studentName} {studentCertNumber} , has received the required training of § 61.31(f) in a __________ high performance  airplane. I have determined that {studentName} is proficient in the operation and systems of a  high-performance airplane.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Instrument proficiency check": `
+I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has satisfactorily completed the instrument proficiency check of § 61.57(d) in a {aircraft} aircraft on {eventDate}.
+${SIGNATURE_BLOCK}`,
 
-"High-Altitude Pressurized PIC":` 
-I certify that  {studentName} {studentCertNumber} , has received the required training of § 61.31(g) in a __________ pressurized  aircraft. I have determined that {studentName} is proficient in the operation and systems of a  pressurized aircraft.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Ground Instructor Recency": `
+I certify that {studentName} has demonstrated knowledge in the subject areas prescribed for a {groundInstructorType} ground instructor under § 61.213(a)(3) and (a)(4), as appropriate.
+${SIGNATURE_BLOCK}`,
 
-"Tailwheel Airplane PIC":`
-I certify that  {studentName} {studentCertNumber} , has received the required training of § 61.31(i) in a 			of tailwheel airplane. I have determined that {studentName} is proficient in the operation of a tailwheel  airplane.  
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Written Retest": `
+I certify that {studentName} has received the additional ground training as required by § 61.49. I have determined that they are proficient to pass the {knowledgeTestName} knowledge test.
+${SIGNATURE_BLOCK}`,
 
+  "Practical Test Retest": `
+I certify that {studentName} has received the additional flight training as required by § 61.49. I have determined that they are proficient to pass the {practicalTestType}.
+${SIGNATURE_BLOCK}`,
 
-"Night Vision Goggles": `
-I certify that {studentName} {studentCertNumber} has received the required training in the use of night vision goggles as specified in § 61.31(j) and is proficient to operate an __________(Category and class) using such equipment.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  "Complex Airplane PIC": `
+I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the required training of § 61.31(e) in a {aircraft} complex airplane. I have determined that they are proficient in the operation and systems of a complex airplane.
+${SIGNATURE_BLOCK}`,
 
+  "High-Performance Airplane PIC": `
+I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the required training of § 61.31(f) in a {aircraft} high-performance airplane. I have determined that they are proficient in the operation and systems of a high-performance airplane.
+${SIGNATURE_BLOCK}`,
+
+  "High-Altitude Pressurized PIC": `
+I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the required training of § 61.31(g) in a {aircraft} pressurized aircraft. I have determined that they are proficient in the operation and systems of a pressurized aircraft.
+${SIGNATURE_BLOCK}`,
+
+  "Tailwheel Airplane PIC": `
+I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the required training of § 61.31(i) in a {aircraft} of tailwheel airplane. I have determined that they are proficient in the operation of a tailwheel airplane.
+${SIGNATURE_BLOCK}`,
+
+  "Night Vision Goggles": `
+I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the ground training required by § 61.31(k)(1), (i) through (v) to conduct night vision goggle operations.
+${SIGNATURE_BLOCK}`,
 };
 
 const BASE_FIELD_KEYS = new Set([
@@ -376,12 +320,25 @@ const FIELD_LIBRARY = {
     options: ["FIA", "FIH", "FOI", "FII"],
     placeholder: "Select every instructor knowledge test covered by this deficiency endorsement.",
   },
+  cfiKnowledgeParagraph: {
+    label: "§ 61.185(a) paragraph",
+    type: "select",
+    required: true,
+    options: ["(2)", "(3)"],
+    placeholder: "Select the paragraph appropriate to the flight instructor rating sought.",
+  },
   flightInstructorInstrumentRating: {
     label: "CFII category",
     type: "select",
     required: true,
     options: ["Airplane", "Helicopter", "Powered-Lift"],
     placeholder: "Select the aircraft category for the CFII practical test.",
+  },
+  flightReviewAircraft: {
+    label: "Aircraft model",
+    type: "text",
+    required: false,
+    placeholder: "Optional: add the aircraft make/model used for the flight review.",
   },
   classCategory: { label: "Category and class", type: "text", required: true },
   eventDate: { label: "Date", type: "date", required: true },
@@ -682,15 +639,9 @@ const templates = Object.fromEntries(
 );
 
 delete templates["CFI Written Deficiencies"];
-delete templates["Practical Test Prereqs"];
-delete templates["Solo Ops at Towered/Class B/C/D Airport"];
-delete templates["Solo Flight in Class B/C/D"];
-delete templates["Night Vision Goggles"];
-
 templates["CFI Knowledge Test Deficiencies"] = {
-  text: `I certify that {studentName} {studentCertNumber} has demonstrated satisfactory knowledge of the subject areas in which {studentName} was deficient on the {cfiKnowledgeTests}.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  text: `I certify that {studentName} has demonstrated satisfactory knowledge of the subject areas in which they were deficient on the {cfiKnowledgeTests}.
+${SIGNATURE_BLOCK}`,
   fields: [{ key: "cfiKnowledgeTests", ...FIELD_LIBRARY.cfiKnowledgeTests }],
 };
 
@@ -699,9 +650,8 @@ templates["CFII Written Deficiency"] = {
 };
 
 templates["CFII Practical Test"] = {
-  text: `I certify that {studentName} {studentCertNumber} has received the required certificated flight instructor – instrument training of § 61.187(b)(7). I have determined {studentName} is prepared for the certificated flight instructor – instrument – {flightInstructorInstrumentRating} practical test.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  text: `I certify that {studentName} has received the required certificated flight instructor - instrument training of § 61.187(b)(7). I have determined they are prepared for the certificated flight instructor - instrument-{flightInstructorInstrumentRating} practical test.
+${SIGNATURE_BLOCK}`,
   fields: [
     {
       key: "flightInstructorInstrumentRating",
@@ -727,9 +677,8 @@ templates["COM addon"] = {
 };
 
 templates["NVG ground training"] = {
-  text: `I certify that {studentName}, {pilotCertificateGrade} [certificate number {studentCertNumber}], has received the flight training on night vision goggle operations required by 14 CFR § 61.31(k)(2), (i) through (iv). I find {studentName} proficient in the use of night vision goggles.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  text: `I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the ground training required by § 61.31(k)(1), (i) through (v) to conduct night vision goggle operations.
+${SIGNATURE_BLOCK}`,
   fields: [
     {
       key: "pilotCertificateGrade",
@@ -739,17 +688,12 @@ Date: {date}           *
 };
 
 templates["NVG PIC"] = {
-  text: `I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the flight training on night vision goggle operations required by 14 CFR § 61.31(k)(2), (i) through (iv). I find {pronounSubject} proficient in the use of night vision goggles.
-Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`,
+  text: `I certify that {studentName}, {pilotCertificateGrade}, {studentCertNumber}, has received the flight training on night vision goggle operations required by § 61.31(k)(2), (i) through (iv). I find them proficient in the use of night vision goggles.
+${SIGNATURE_BLOCK}`,
   fields: [
     {
       key: "pilotCertificateGrade",
       ...FIELD_LIBRARY.pilotCertificateGrade,
-    },
-    {
-      key: "pronounSubject",
-      ...FIELD_LIBRARY.pronounSubject,
     },
   ],
 };

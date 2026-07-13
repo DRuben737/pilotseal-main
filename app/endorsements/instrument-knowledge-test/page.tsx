@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function InstrumentKnowledgeTestPage() {
-  const endorsementText = `I certify that [Pilot Name] [Pilot Cert Number] has received the required training of § 61.65(b). I have determined that [Pilot Name] is prepared for the Instrument-[Airplane/Helicopter] knowledge test.
+  const endorsementText = `I certify that [Pilot Name] has received the required training of § 61.65(b). I have determined that they are prepared for the Instrument-[Airplane, Helicopter, or Powered-Lift] knowledge test.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;

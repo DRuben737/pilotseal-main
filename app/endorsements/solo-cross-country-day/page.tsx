@@ -2,12 +2,12 @@ import Link from 'next/link';
 import CopyTemplateButton from '@/components/endorsements/CopyTemplateButton';
 
 export const metadata = {
-  title: 'Solo Cross-Country Day-of-Flight Endorsement | FAA § 61.93(b)(1) | PilotSeal',
+  title: 'Solo Cross-Country Day-of-Flight Endorsement | FAA § 61.93(c)(3) | PilotSeal',
   description: 'Solo cross-country day-of-flight endorsement template. CFI planning approval for each cross-country flight with route verification.',
 };
 
 export default function SoloCrossCountryDayPage() {
-  const endorsementText = `I have reviewed the cross-country planning of [Student Name]. I find the planning and preparation to be correct to make the solo flight from [Departure Airport] to [Destination Airport] via [Route of Flight] with landings at [Airport Names] in a [Make & Model] on [Date].
+  const endorsementText = `I have reviewed the cross-country planning of [Student Name]. I find the planning and preparation to be correct to make the solo flight from [Origination Airport] to [Destination Airport] via [Route of Flight] with landings at [Airport Names] in a [Make/Model] aircraft on [Date]. [List any applicable conditions or limitations.]
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Solo Cross-Country Day-of-Flight Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.93(b)(1) that CFIs use to approve each specific student cross-country flight before it departs.
+              This is the FAA required logbook endorsement under FAR § 61.93(c)(3) that CFIs use to approve each specific student cross-country flight before it departs.
             </p>
           </div>
         </section>
@@ -74,7 +74,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.93(b)(1)</p>
+                <p className="font-semibold text-[var(--foreground)]">FAR § 61.93(c)(3)</p>
                 <p className="copy-muted text-sm mt-1">Requires CFI review and approval of each solo cross-country flight plan.</p>
               </li>
               <li className="reference-item">
@@ -116,7 +116,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal captures flight plan details, verifies 2-calendar-month recency, and ensures all required identifiers are included.
+              PilotSeal captures flight plan details, verifies 2 calendar months recency, and ensures all required identifiers are included.
             </p>
             <Link
               href="/tools/endorsement-generator?type=solo-cross-country-day"

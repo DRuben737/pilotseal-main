@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function SoloFlightInitialPage() {
-  const endorsementText = `I certify that [Student Name] [Student Cert Number] has received the required training to qualify for solo flying. I have determined [Student Name] meets the applicable requirements of § 61.87(n) and is proficient to make solo flights in [Make & Model].
+  const endorsementText = `I certify that [Student Name] has received the required training to qualify for solo flying. I have determined they meet the applicable requirements of § 61.87(n) and are proficient to make solo flights in [Make/Model].
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;

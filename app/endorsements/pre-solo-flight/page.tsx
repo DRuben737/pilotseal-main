@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function PreSoloFlightPage() {
-  const endorsementText = `I certify that [Student Name] [Student Cert Number] has received and logged pre-solo flight training for the maneuvers and procedures that are appropriate to the [Make & Model]. I have determined [Student Name] has demonstrated satisfactory proficiency and safety on the maneuvers and procedures required by § 61.87 in this or similar make and model of aircraft to be flown.
+  const endorsementText = `I certify that [Student Name] has received and logged pre-solo flight training for the maneuvers and procedures that are appropriate to the [Make/Model] aircraft. I have determined they have demonstrated satisfactory proficiency and safety on the maneuvers and procedures required by § 61.87 in this or similar make and model of aircraft to be flown.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;

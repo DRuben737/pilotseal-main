@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function PreSoloKnowledgePage() {
-  const endorsementText = `I certify that [Student Name] [Student Cert Number] has satisfactorily completed the pre-solo knowledge test of § 61.87(b) for the [Make & Model].
+  const endorsementText = `I certify that [Student Name] has satisfactorily completed the pre-solo knowledge test of § 61.87(b) for the [Make/Model] aircraft.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;

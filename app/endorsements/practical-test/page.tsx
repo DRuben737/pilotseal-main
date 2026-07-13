@@ -2,12 +2,12 @@ import Link from 'next/link';
 import CopyTemplateButton from '@/components/endorsements/CopyTemplateButton';
 
 export const metadata = {
-  title: 'Practical Test Endorsement | Checkride Prep | FAA § 61.39 | PilotSeal',
-  description: 'Practical test endorsement template. Certify pilot completion of training and readiness for checkride. FAA § 61.39 wording.',
+  title: 'Practical Test Prerequisites Endorsement | Checkride Prep | FAA § 61.39 | PilotSeal',
+  description: 'Practical test prerequisites endorsement template. Certify recent training and readiness for checkride. FAA § 61.39 wording.',
 };
 
 export default function PracticalTestPage() {
-  const endorsementText = `I certify that [Pilot Name] [Pilot Cert Number] has received the required training in accordance with § 61.39(a)(5). I have determined that [Pilot Name] is prepared for the [Certificate Type]-[Category] practical test.
+  const endorsementText = `I certify that [Pilot Name] has received and logged training time within 2 calendar months preceding the month of application in preparation for the practical test and they are prepared for the required practical test for the issuance of [Applicable] certificate.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Practical Test (Checkride) Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.39(a)(5) that certifies a pilot has completed training and is ready for their practical test (checkride).
+              This is the FAA required logbook endorsement under FAR § 61.39(a)(6)(i) and (ii) that certifies recent practical-test preparation and readiness for the practical test.
             </p>
           </div>
         </section>
@@ -58,8 +58,8 @@ Date: [Date]
           <div className="reading-rail max-w-2xl">
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
-              <p className="copy-muted leading-7">
-                The practical test endorsement documents that the pilot has received the required ground and flight training and is prepared for their checkride. This must be issued within 2 calendar months of the scheduled practical test and placed in the pilot&apos;s logbook.
+                <p className="copy-muted leading-7">
+                The practical test prerequisites endorsement documents that the pilot has received and logged training time within 2 calendar months preceding the month of application and is prepared for the required practical test. It should be placed in the pilot&apos;s logbook or other acceptable record.
               </p>
               <p className="copy-muted leading-7">
                 Specify the certificate type (Private, Commercial, Airline Transport) and aircraft category/class. Verify all prerequisite training is logged and the pilot meets all experience requirements before endorsing.
@@ -74,8 +74,8 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.39(a)(5)</p>
-                <p className="copy-muted text-sm mt-1">Practical test eligibility and endorsement requirements.</p>
+                <p className="font-semibold text-[var(--foreground)]">FAR § 61.39(a)(6)(i) and (ii)</p>
+                <p className="copy-muted text-sm mt-1">Practical test prerequisite endorsement requirements.</p>
               </li>
               <li className="reference-item">
                 <p className="font-semibold text-[var(--foreground)]">AC 61-65K</p>
@@ -116,7 +116,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal verifies 2-calendar-month recency, confirms all prerequisites are met, and ensures FAA-compliant wording.
+              PilotSeal verifies 2 calendar months recency, confirms all prerequisites are met, and ensures FAA-compliant wording.
             </p>
             <Link
               href="/tools/endorsement-generator?type=practical-test"
