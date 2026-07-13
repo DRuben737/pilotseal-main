@@ -712,6 +712,16 @@ export async function makeAircraftPrivateForUser(userId: string, aircraftId: str
 
 export async function removeMyAircraft(userId: string, aircraftId: string) {
   const supabase = getSupabaseClient();
+  const { data: aircraftRecord, error: aircraftError } = await supabase
+    .from("aircraft")
+    .select("id, owner_user_id, visibility")
+    .eq("id", aircraftId)
+    .maybeSingle();
+
+  if (aircraftError) {
+    throw aircraftError;
+  }
+
   const { error } = await supabase
     .from("saved_aircraft")
     .delete()
@@ -724,6 +734,25 @@ export async function removeMyAircraft(userId: string, aircraftId: string) {
     }
 
     throw error;
+  }
+
+  const aircraft = (aircraftRecord ?? {}) as Record<string, unknown>;
+  const isOwnedPrivateAircraft =
+    aircraft.visibility === "private" && aircraft.owner_user_id === userId;
+
+  if (!isOwnedPrivateAircraft) {
+    return;
+  }
+
+  const { error: deleteAircraftError } = await supabase
+    .from("aircraft")
+    .delete()
+    .eq("id", aircraftId)
+    .eq("owner_user_id", userId)
+    .eq("visibility", "private");
+
+  if (deleteAircraftError) {
+    throw deleteAircraftError;
   }
 }
 
