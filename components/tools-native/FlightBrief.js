@@ -11,6 +11,10 @@ import { fetchMyAircraft, fetchSharedAircraft, parseAircraftStations } from "@/l
 import WeightBalanceCalculator from "./WeightBalanceCalculator";
 
 /** ------------------ constants ------------------ */
+const EMPTY_STOPS = Object.freeze([""]);
+const EMPTY_ARRAY = Object.freeze([]);
+const EMPTY_OBJECT = Object.freeze({});
+
 /** ------------------ utils (pure functions) ------------------ */
 function normalizeICAO(s) {
   return (s || "").trim().toUpperCase();
@@ -361,12 +365,6 @@ function formatWeatherHazardLabel(value) {
   return labels[normalized] ?? (normalized.replaceAll("_", " ") || "Unknown");
 }
 
-function toTitleCase(value) {
-  return String(value ?? "")
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 function getHazardExplanation(value, kind = "advisory") {
   const normalized = String(value ?? "")
     .trim()
@@ -475,14 +473,6 @@ function groupAdvisories(items, keyResolver) {
   return Array.from(counts.entries())
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-}
-
-function formatAltitudeBand(base, top) {
-  const start = base == null || base === "" ? null : String(base);
-  const end = top == null || top === "" ? null : String(top);
-  if (!start && !end) return "";
-  if (start && end) return `${start} to ${end}`;
-  return start ? `Base ${start}` : `Top ${end}`;
 }
 
 function formatAdvisoryAltitude(value) {
@@ -665,12 +655,6 @@ function EditableInfoRow({ label, value, rowKey, editingKey, setEditingKey, rend
 }
 
 /** ------------------ Fetch helpers ------------------ */
-async function fetchJson(url, signal) {
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.json();
-}
-
 async function postJson(url, body, signal) {
   const response = await fetch(url, {
     method: "POST",
@@ -741,7 +725,7 @@ export default function FlightBrief() {
   const setDeparture = useCallback((value) => setBriefField("departure", value), [setBriefField]);
   const arrival = brief.arrival ?? "";
   const setArrival = useCallback((value) => setBriefField("arrival", value), [setBriefField]);
-  const stops = brief.stops ?? [""]; // at least one input
+  const stops = brief.stops ?? EMPTY_STOPS; // at least one input
   const setStops = useCallback((value) => setBriefField("stops", value), [setBriefField]);
 
   /** ---- lesson ---- */
@@ -755,19 +739,19 @@ export default function FlightBrief() {
   const setWeatherError = useCallback((value) => setBriefField("weatherError", value), [setBriefField]);
 
   // store richer metar for category visualization
-  const metarByIcaoData = brief.metarByIcaoData ?? {}; // { ICAO: { raw, flight_rules } }
+  const metarByIcaoData = brief.metarByIcaoData ?? EMPTY_OBJECT; // { ICAO: { raw, flight_rules } }
   const setMetarByIcaoData = useCallback((value) => setBriefField("metarByIcaoData", value), [setBriefField]);
   const tafByIcao = brief.tafByIcao ?? {}; // { ICAO: "ICAO: raw" }
   const setTafByIcao = useCallback((value) => setBriefField("tafByIcao", value), [setBriefField]);
   const airsigmetSummary = brief.airsigmetSummary ?? "";
   const setAirsigmetSummary = useCallback((value) => setBriefField("airsigmetSummary", value), [setBriefField]);
-  const airmets = brief.airmets ?? [];
+  const airmets = brief.airmets ?? EMPTY_ARRAY;
   const setAirmets = useCallback((value) => setBriefField("airmets", value), [setBriefField]);
-  const sigmets = brief.sigmets ?? [];
+  const sigmets = brief.sigmets ?? EMPTY_ARRAY;
   const setSigmets = useCallback((value) => setBriefField("sigmets", value), [setBriefField]);
-  const pireps = brief.pireps ?? [];
+  const pireps = brief.pireps ?? EMPTY_ARRAY;
   const setPireps = useCallback((value) => setBriefField("pireps", value), [setBriefField]);
-  const weatherResults = brief.weatherResults ?? [];
+  const weatherResults = brief.weatherResults ?? EMPTY_ARRAY;
   const setWeatherResults = useCallback((value) => setBriefField("weatherResults", value), [setBriefField]);
 
   const latestAltimeterRef = useRef(null); // inHg number
@@ -789,14 +773,14 @@ export default function FlightBrief() {
   const setNotamLoading = useCallback((value) => setBriefField("notamLoading", value), [setBriefField]);
   const notamError = brief.notamError ?? "";
   const setNotamError = useCallback((value) => setBriefField("notamError", value), [setBriefField]);
-  const notamByIcao = brief.notamByIcao ?? {}; // { ICAO: {closures, nav, general} }
+  const notamByIcao = brief.notamByIcao ?? EMPTY_OBJECT; // { ICAO: {closures, nav, general} }
   const setNotamByIcao = useCallback((value) => setBriefField("notamByIcao", value), [setBriefField]);
   // airport-level collapse: { KPAO: true/false }  true=expanded
-  const notamAirportOpen = brief.notamAirportOpen ?? {};
+  const notamAirportOpen = brief.notamAirportOpen ?? EMPTY_OBJECT;
   const setNotamAirportOpen = useCallback((value) => setBriefField("notamAirportOpen", value), [setBriefField]);
 
   // category-level collapse per airport: { KPAO: { closures:true, nav:false, general:false } }
-  const notamCategoryOpen = brief.notamCategoryOpen ?? {};
+  const notamCategoryOpen = brief.notamCategoryOpen ?? EMPTY_OBJECT;
   const setNotamCategoryOpen = useCallback((value) => setBriefField("notamCategoryOpen", value), [setBriefField]);
 
   const toggleAirport = useCallback((icao) => {
@@ -807,7 +791,7 @@ export default function FlightBrief() {
       if (prev[icao]) return prev; // keep user's previous open/close choices
       return { ...prev, [icao]: { closures: true, nav: false, general: false } };
     });
-  }, []);
+  }, [setNotamAirportOpen, setNotamCategoryOpen]);
 
   const toggleCategory = useCallback((icao, key) => {
     setNotamCategoryOpen((prev) => ({
@@ -817,7 +801,7 @@ export default function FlightBrief() {
         [key]: !(prev[icao]?.[key]),
       },
     }));
-  }, []);
+  }, [setNotamCategoryOpen]);
 
   /** ---- aircraft conditions ---- */
   const grossWeight = brief.grossWeight ?? "";
@@ -995,9 +979,9 @@ export default function FlightBrief() {
   }, [weatherResults, departure]);
 
   /** ---- risk ---- */
-  const staticChecked = brief.staticChecked ?? {};
+  const staticChecked = brief.staticChecked ?? EMPTY_OBJECT;
   const setStaticChecked = useCallback((value) => setBriefField("staticChecked", value), [setBriefField]);
-  const dynamicChecked = brief.dynamicChecked ?? {};
+  const dynamicChecked = brief.dynamicChecked ?? EMPTY_OBJECT;
   const setDynamicChecked = useCallback((value) => setBriefField("dynamicChecked", value), [setBriefField]);
   const imsafe = brief.imsafe ?? 0; // 0..6
   const setImsafe = useCallback((value) => setBriefField("imsafe", value), [setBriefField]);
@@ -1342,31 +1326,31 @@ export default function FlightBrief() {
       setDeparture(val);
       if (routeMode === "local") setArrival(val);
     },
-    [routeMode]
+    [routeMode, setArrival, setDeparture]
   );
 
   const onSelectLocal = useCallback(() => {
     setRouteMode("local");
     setArrival(departure);
     setStops([""]);
-  }, [departure]);
+  }, [departure, setArrival, setRouteMode, setStops]);
 
   const onSelectCross = useCallback(() => {
     setRouteMode("cross");
     setArrival("");
     setStops((prev) => (prev.length ? prev : [""]));
-  }, []);
+  }, [setArrival, setRouteMode, setStops]);
 
-  const addStop = useCallback(() => setStops((prev) => [...prev, ""]), []);
+  const addStop = useCallback(() => setStops((prev) => [...prev, ""]), [setStops]);
   const removeStop = useCallback((idx) => {
     setStops((prev) => {
       const next = prev.filter((_, i) => i !== idx);
       return next.length ? next : [""];
     });
-  }, []);
+  }, [setStops]);
   const updateStop = useCallback((idx, val) => {
     setStops((prev) => prev.map((s, i) => (i === idx ? val : s)));
-  }, []);
+  }, [setStops]);
 
   /** ---- airports list for weather / notams ---- */
   const airportsForWxAndNotams = useMemo(() => {
@@ -1472,7 +1456,21 @@ export default function FlightBrief() {
     } finally {
       setWeatherLoading(false);
     }
-  }, [airportsForWxAndNotams, departure]);
+  }, [
+    airportsForWxAndNotams,
+    departure,
+    setAirmets,
+    setAirsigmetSummary,
+    setDaResult,
+    setMetarByIcaoData,
+    setOutsideTemp,
+    setPireps,
+    setSigmets,
+    setTafByIcao,
+    setWeatherError,
+    setWeatherLoading,
+    setWeatherResults,
+  ]);
 
   /** ---- fetch NOTAMs (NMS) ---- */
   const fetchNotams = useCallback(async () => {
@@ -1532,7 +1530,14 @@ export default function FlightBrief() {
     } finally {
       setNotamLoading(false);
     }
-  }, [airportsForWxAndNotams]);
+  }, [
+    airportsForWxAndNotams,
+    setNotamAirportOpen,
+    setNotamByIcao,
+    setNotamCategoryOpen,
+    setNotamError,
+    setNotamLoading,
+  ]);
 
   /** ---- calculate DA ---- */
   const calculateDA = useCallback(() => {
@@ -1564,7 +1569,7 @@ export default function FlightBrief() {
     setDaResult(
       `Estimated Density Altitude: ${densityAltitude.toLocaleString()} ft using ${daSourceResult?.icao || "latest METAR"} (${normalizedAltimeterInHg.toFixed(2)} inHg / ${temperatureC}°C, PA ${pressureAltitude.toLocaleString()} ft, ISA ${isaTemp.toFixed(1)}°C)`
     );
-  }, [fieldElevation, outsideTemp, daSourceResult]);
+  }, [fieldElevation, outsideTemp, daSourceResult, setDaResult]);
 
   /** ---- report ---- */
   const generateReport = useCallback(() => {

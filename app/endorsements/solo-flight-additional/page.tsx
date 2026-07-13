@@ -109,7 +109,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                The additional 90-day solo endorsement extends solo flying authorization when the student's initial § 61.87(n) endorsement approaches expiration. This endorsement renews authorization for another 90 calendar days.
+                The additional 90-day solo endorsement extends solo flying authorization when the student&apos;s initial § 61.87(n) endorsement approaches expiration. This endorsement renews authorization for another 90 calendar days.
               </p>
               <p className="copy-muted leading-7">
                 Verify the student has maintained currency, completed any required flight reviews, and demonstrated continued proficiency before issuing the additional endorsement.

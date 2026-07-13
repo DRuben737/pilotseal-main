@@ -59,7 +59,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                This endorsement authorizes a student pilot to conduct solo operations at a specific Class B airport after receiving the required training. Name the airport (e.g., "Los Angeles International") and include any limitations or special procedures.
+                This endorsement authorizes a student pilot to conduct solo operations at a specific Class B airport after receiving the required training. Name the airport (e.g., &quot;Los Angeles International&quot;) and include any limitations or special procedures.
               </p>
               <p className="copy-muted leading-7">
                 Verify the student has received training on Class B airport operations, tower communications, and demonstrated proficiency at the specific airport.

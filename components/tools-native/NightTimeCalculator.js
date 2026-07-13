@@ -11,7 +11,7 @@ const NightTimeCalculator = () => {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [sunToday, setSunToday] = useState(null);
-  const [sunNext, setSunNext] = useState(null);
+  const [, setSunNext] = useState(null);
   const [activeTrack, setActiveTrack] = useState("");
 
   const handleCalculate = async () => {

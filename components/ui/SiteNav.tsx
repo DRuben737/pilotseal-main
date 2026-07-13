@@ -68,6 +68,10 @@ export default function SiteNav() {
     };
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   return (
     <div className="site-nav">
       <div className="site-nav-desktop">
@@ -108,9 +112,10 @@ export default function SiteNav() {
 
       <button
         type="button"
-        className="site-nav-toggle"
+        className={`site-nav-toggle ${mobileOpen ? "site-nav-toggle-open" : ""}`}
         aria-expanded={mobileOpen}
-        aria-label="Toggle navigation"
+        aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+        aria-controls="site-mobile-menu"
         onClick={() => setMobileOpen((value) => !value)}
       >
         <span />
@@ -118,7 +123,14 @@ export default function SiteNav() {
         <span />
       </button>
 
-      <div className={`site-nav-menu ${mobileOpen ? "site-nav-menu-open" : ""}`}>
+      <div
+        id="site-mobile-menu"
+        className={`site-nav-menu ${mobileOpen ? "site-nav-menu-open" : ""}`}
+      >
+        <div className="site-nav-mobile-head">
+          <span>Navigation</span>
+          <span>{isAuthenticated ? identityLabel : "Guest"}</span>
+        </div>
         <nav className="site-nav-mobile-links">
           {publicNavItems.map((item) => (
             <Link
@@ -147,7 +159,7 @@ export default function SiteNav() {
             <div className="site-nav-mobile-account">
               <Link
                 href="/dashboard"
-                className="site-nav-link"
+                className={`site-nav-link ${pathname.startsWith("/dashboard") ? "site-nav-link-active" : ""}`}
                 onClick={() => setMobileOpen(false)}
               >
                 Dashboard

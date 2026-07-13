@@ -88,12 +88,6 @@ const NOTAM_TERM_MAP = {
   WPT: "waypoint",
 };
 
-function titleize(text) {
-  return text
-    .toLowerCase()
-    .replace(/\b[a-z]/g, (char) => char.toUpperCase());
-}
-
 function formatNotamTimestamp(token) {
   if (!token) return null;
   const match = String(token).match(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);

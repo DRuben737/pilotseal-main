@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createUuid } from "@/lib/uuid";
 
 const MACH_ONE_KT = 661.47;
 const LITERS_PER_US_GALLON = 3.78541;
@@ -606,7 +607,7 @@ function computeHoldingTrainer({
 
 function createNavlogLeg() {
   return {
-    id: crypto.randomUUID(),
+    id: createUuid(),
     from: "",
     to: "",
     course: "",
@@ -1962,17 +1963,6 @@ export default function FlightComputer() {
     },
   ];
 
-  useEffect(() => {
-    const activeGroup = toolGroups.find((group) =>
-      group.items.some((item) => item.id === activeToolId)
-    );
-
-    if (!activeGroup) return;
-    setOpenGroups((current) =>
-      current.includes(activeGroup.label) ? current : [activeGroup.label]
-    );
-  }, [activeToolId]);
-
   const activeTool = toolPanels[activeToolId];
 
   useEffect(() => {
@@ -2030,7 +2020,10 @@ export default function FlightComputer() {
                         key={tool.id}
                         type="button"
                         className={`flight-computer-toolButton ${isActive ? "is-active" : ""}`}
-                        onClick={() => setActiveToolId(tool.id)}
+                        onClick={() => {
+                          setActiveToolId(tool.id);
+                          setOpenGroups([group.label]);
+                        }}
                       >
                         <span className="flight-computer-toolCode">{tool.title}</span>
                       </button>

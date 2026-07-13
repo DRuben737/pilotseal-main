@@ -40,6 +40,14 @@ export default function Home() {
                 <p className="max-w-md text-sm leading-7 text-slate-200/86">
                   We offer FAA endorsement generator, W&amp;B, quick preflight brief, and more.
                 </p>
+                <div className="home-mobile-actions">
+                  <Link href="/tools/endorsement-generator" className="home-mobile-primary">
+                    New endorsement
+                  </Link>
+                  <Link href="/tools" className="home-mobile-secondary">
+                    Browse tools
+                  </Link>
+                </div>
                 <div className="flex flex-wrap gap-4 pt-2 text-sm font-medium text-sky-200/90">
                   <Link href="/tools" className="hover:text-white">
                     Tools
@@ -47,17 +55,15 @@ export default function Home() {
                   <Link href="/read" className="hover:text-white">
                     Read
                   </Link>
-                  <Link href="/login" className="hover:text-white">
-                    Login
-                  </Link>
+                  <Link href="/login" className="hover:text-white">Login</Link>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <Link href="/tools" className="group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
+        <section className="home-mobile-card-grid grid gap-4 md:grid-cols-3">
+          <Link href="/tools" className="home-mobile-card group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
             <div className="relative h-40 overflow-hidden">
               <Image
                 src={utilityToolsIllustration}
@@ -65,9 +71,13 @@ export default function Home() {
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               />
             </div>
+            <div className="home-mobile-card-copy p-4">
+              <h2 className="text-sm font-semibold text-slate-950">Pilot tools</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">Endorsements, briefing, W&amp;B, decoding, and flight math.</p>
+            </div>
           </Link>
 
-          <Link href={guideLinks[0].href} className="group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
+          <Link href={guideLinks[0].href} className="home-mobile-card group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
             <div className="relative h-40 overflow-hidden">
               <Image
                 src={endorsementsHeroIllustration}
@@ -75,15 +85,23 @@ export default function Home() {
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               />
             </div>
+            <div className="home-mobile-card-copy p-4">
+              <h2 className="text-sm font-semibold text-slate-950">Endorsement guides</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">Find the common FAA endorsement path before drafting.</p>
+            </div>
           </Link>
 
-          <Link href="/login" className="group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
+          <Link href="/login" className="home-mobile-card group overflow-hidden rounded-[14px] border border-slate-200/75 bg-white/70">
             <div className="relative h-40 overflow-hidden">
               <Image
                 src={authWorkspaceIllustration}
                 alt="PilotSeal account workspace preview"
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               />
+            </div>
+            <div className="home-mobile-card-copy p-4">
+              <h2 className="text-sm font-semibold text-slate-950">Saved workspace</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">Keep people, aircraft, and generated records together.</p>
             </div>
           </Link>
         </section>

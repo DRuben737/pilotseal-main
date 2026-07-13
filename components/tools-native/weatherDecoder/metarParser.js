@@ -1,6 +1,5 @@
 import { getFlightCategory } from "./flightCategory";
 
-const CLOUD_PREFIXES = ["FEW", "SCT", "BKN", "OVC", "VV"];
 const PHENOMENA = {
   BR: "mist",
   FG: "fog",

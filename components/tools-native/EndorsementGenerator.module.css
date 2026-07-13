@@ -91,6 +91,14 @@
   font-size: 1.05rem;
 }
 
+.mobileStepLabel {
+  display: none;
+}
+
+.mobileWorkflowStatus {
+  display: none;
+}
+
 .sectionCopy {
   margin: 0.35rem 0 0;
   color: #64748b;
@@ -854,6 +862,283 @@
   }
 }
 
+@media (max-width: 760px) {
+  .page {
+    gap: 0.72rem;
+    justify-items: stretch;
+    color: #142033;
+  }
+
+  .utilityBar,
+  .workspace {
+    width: 100%;
+  }
+
+  .utilityBar {
+    gap: 0.35rem;
+    padding-inline: 0.1rem;
+  }
+
+  .utilityTitle {
+    font-size: 1.12rem;
+  }
+
+  .utilityNote {
+    font-size: 0.8rem;
+  }
+
+  .workspace,
+  .mainPanel,
+  .sidePanel {
+    gap: 0.72rem;
+  }
+
+  .modeSwitch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    border: 1px solid rgba(18, 58, 117, 0.08);
+    border-radius: 18px;
+    background: #fffdf7;
+    box-shadow: 0 10px 24px rgba(18, 58, 117, 0.05);
+  }
+
+  .modeSwitch .mobileStepLabel {
+    grid-column: 1 / -1;
+    margin: 0.15rem 0.45rem 0;
+  }
+
+  .modeSwitch button {
+    min-height: 46px;
+    border-radius: 14px;
+    padding: 0.65rem 0.7rem;
+  }
+
+  .mobileWorkflowStatus {
+    display: flex;
+    gap: 0.45rem;
+    margin: -0.2rem 0 0.05rem;
+    overflow-x: auto;
+    padding: 0.1rem 0.1rem 0.25rem;
+    scrollbar-width: none;
+  }
+
+  .mobileWorkflowStatus::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobileWorkflowStatus span {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    border: 1px solid rgba(18, 58, 117, 0.08);
+    border-radius: 999px;
+    background: #fffdf7;
+    color: #475569;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.74rem;
+    font-weight: 720;
+  }
+
+  .card {
+    border-radius: 20px;
+    padding: 0.72rem;
+    background: #fffdf7;
+    box-shadow: 0 10px 24px rgba(18, 58, 117, 0.055);
+    border-color: rgba(18, 58, 117, 0.08);
+  }
+
+  .mobileStepLabel {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 1.65rem;
+    margin: 0 0 0.65rem;
+    border-radius: 999px;
+    background: rgba(79, 127, 229, 0.1);
+    color: #123a75;
+    padding: 0.22rem 0.58rem;
+    font-size: 0.68rem;
+    font-weight: 820;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .sectionHeader h2 {
+    color: #142033;
+    font-size: 1rem;
+    font-weight: 760;
+  }
+
+  .sectionCopy {
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: #6b7687;
+  }
+
+  .formRows,
+  .inputGrid,
+  .formRowThree,
+  .formRowTwo,
+  .formRowDateAction {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .field,
+  .field input,
+  .field select,
+  .comboField,
+  .inlineActionBlock {
+    width: 100%;
+  }
+
+  .field input,
+  .field select {
+    min-height: 48px;
+    height: 48px;
+    border-color: rgba(18, 58, 117, 0.14);
+    border-radius: 15px;
+    background: #ffffff;
+    font-size: 1rem;
+  }
+
+  .primaryButton,
+  .secondaryButton,
+  .ghostButton {
+    min-height: 48px;
+    border-radius: 16px;
+    justify-content: center;
+  }
+
+  .primaryButton {
+    border-color: rgba(79, 127, 229, 0.2);
+    background: #4f7fe5;
+    color: #fff;
+    box-shadow: 0 10px 22px rgba(79, 127, 229, 0.2);
+  }
+
+  .secondaryButton {
+    background: #ffffff;
+  }
+
+  .ghostButton {
+    background: rgba(79, 127, 229, 0.08);
+    color: #123a75;
+  }
+
+  .inlineActionBlock .primaryButton,
+  .sectionHeader .ghostButton,
+  .actionRow .secondaryButton {
+    width: 100%;
+  }
+
+  .templateDetailsSummary,
+  .actionRow,
+  .signatureActions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .templateDetailsSummary,
+  .templateCategoryActions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .templateDetailsSummary::-webkit-scrollbar,
+  .templateCategoryActions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .templateCategoryActions button {
+    flex: 0 0 auto;
+    min-height: 2.35rem;
+  }
+
+  .mobileSignatureTriggerActive {
+    min-height: 188px;
+    border-color: rgba(79, 127, 229, 0.36);
+    border-radius: 20px;
+    background:
+      linear-gradient(rgba(18, 58, 117, 0.05) 1px, transparent 1px),
+      #fff;
+    background-size: 100% 52%;
+    box-shadow: inset 0 0 0 1px rgba(79, 127, 229, 0.04);
+  }
+
+  .mobileSignatureTrigger {
+    display: grid;
+  }
+
+  .signatureCanvas {
+    display: none;
+  }
+
+  .mobileSignaturePlaceholder {
+    font-size: 1.12rem !important;
+    font-weight: 780 !important;
+  }
+
+  .printHint,
+  .statusMessage {
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+
+  .statusMessage {
+    border-radius: 15px;
+    background: rgba(79, 127, 229, 0.09);
+    padding: 0.72rem 0.8rem;
+    color: #123a75;
+  }
+
+  .inlineError {
+    border-radius: 12px;
+    background: rgba(254, 226, 226, 0.9);
+    padding: 0.72rem 0.8rem;
+  }
+
+  .templateDetailsChip {
+    min-height: 2rem;
+  }
+
+  .templateDetailsModalMeta,
+  .templateDetailsModalGrid {
+    margin-inline: 0.85rem;
+    padding-inline: 0;
+  }
+
+  .templateDetailsModalGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .templateDetailsField {
+    border-radius: 14px;
+    padding: 0.85rem;
+  }
+
+  .printFormatBody {
+    padding: 0.85rem;
+  }
+
+  .printFormatOption,
+  .printStartSlot {
+    border-radius: 14px;
+  }
+}
+
 @media (hover: none), (pointer: coarse) {
   .signatureModalOverlay {
     padding: 0;
@@ -888,6 +1173,29 @@
 
   .signatureModalRotated .signatureModalActions button {
     flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .signatureModalOverlay {
+    background: #08111f;
+  }
+
+  .signatureModal {
+    gap: 0.55rem;
+  }
+
+  .signatureModalHeader {
+    min-width: 0;
+  }
+
+  .signatureModalActions button {
+    min-height: 42px;
+    padding-inline: 0.9rem;
+  }
+
+  .signatureModalCanvasWrap {
+    border-radius: 16px;
   }
 }
 

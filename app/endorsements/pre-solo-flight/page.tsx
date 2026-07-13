@@ -59,7 +59,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                The pre-solo flight training endorsement documents that the student has completed all required flight maneuvers and procedures and has demonstrated the proficiency necessary for solo flight. This endorsement must be issued by a flight instructor and placed in the student's logbook.
+                The pre-solo flight training endorsement documents that the student has completed all required flight maneuvers and procedures and has demonstrated the proficiency necessary for solo flight. This endorsement must be issued by a flight instructor and placed in the student&apos;s logbook.
               </p>
               <p className="copy-muted leading-7">
                 Include the specific aircraft make and model and verify the student has completed training in this or a similar aircraft. This is a mandatory prerequisite before the student pilot solo endorsement.

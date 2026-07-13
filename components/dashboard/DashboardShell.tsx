@@ -182,8 +182,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     <main className="page-shell dashboard-shell px-3">
       <div className="site-shell page-stack">
         {loading || !session?.user ? null : (
-          <section className="flex items-start gap-3 sm:gap-4">
-            <aside className="group shrink-0 overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-2.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)] transition-[width] duration-200 w-[74px] sm:w-[78px] md:hover:w-[220px]">
+          <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
+            <aside className="dashboard-sidebar group shrink-0 overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-2.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)] transition-[width] duration-200 w-[74px] sm:w-[78px] md:hover:w-[220px]">
               <div className="sticky top-24">
                 <div className="block">
                   <div className="flex items-center justify-center gap-3 overflow-hidden md:justify-center md:group-hover:justify-start">
@@ -262,8 +262,43 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </aside>
 
             <div className="min-w-0 flex-1">
+              <section className="dashboard-mobile-top">
+                <div className="min-w-0">
+                  <p className="dashboard-mobile-kicker">Dashboard</p>
+                  <p className="dashboard-mobile-identity">{identityLabel}</p>
+                </div>
+                <Link
+                  href="/tools/endorsement-generator"
+                  className="dashboard-mobile-action"
+                >
+                  <DashboardIcon kind="new" />
+                  <span>New</span>
+                </Link>
+              </section>
               {children}
             </div>
+
+            <nav className="dashboard-bottom-nav" aria-label="Dashboard navigation">
+              {visibleDashboardLinks.map((item) => {
+                const active =
+                  item.href === "/dashboard"
+                    ? pathname === "/dashboard"
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`dashboard-bottom-nav-link ${
+                      active ? "dashboard-bottom-nav-link-active" : ""
+                    }`}
+                  >
+                    <DashboardIcon kind={item.label} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
           </section>
         )}
       </div>

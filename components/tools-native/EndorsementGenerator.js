@@ -19,6 +19,7 @@ import {
 import { fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people';
 import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
+import { createUuid } from '@/lib/uuid';
 
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
@@ -636,6 +637,24 @@ function createSignaturePad(canvas, { onBegin, onEnd } = {}) {
   return signaturePad;
 }
 
+async function requestFullscreenAndLandscape(element) {
+  const orientation = window.screen?.orientation;
+
+  try {
+    if (element?.requestFullscreen) {
+      await element.requestFullscreen();
+    }
+  } catch {
+    // Fullscreen is best-effort on mobile browsers.
+  }
+
+  try {
+    await orientation?.lock?.('landscape');
+  } catch {
+    // iOS Safari and some embedded browsers do not support orientation lock.
+  }
+}
+
 function EndorsementGenerator() {
   const router = useRouter();
   const { session } = useAuthSession();
@@ -753,17 +772,13 @@ function EndorsementGenerator() {
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const orientation = window.screen?.orientation;
     const overlay = signatureModalOverlayRef.current;
-    overlay?.requestFullscreen?.().then(() => {
-      orientation?.lock?.('landscape').catch(() => {});
-    }).catch(() => {
-      orientation?.lock?.('landscape').catch(() => {});
-    });
+
+    void requestFullscreenAndLandscape(overlay);
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      orientation?.unlock?.();
+      window.screen?.orientation?.unlock?.();
       if (document.fullscreenElement === overlay) {
         document.exitFullscreen?.().catch(() => {});
       }
@@ -1592,7 +1607,7 @@ function EndorsementGenerator() {
     setSavingRecord(true);
 
     try {
-      const recordId = crypto.randomUUID();
+      const recordId = createUuid();
       const storagePath = `${session.user.id}/${recordId}.pdf`;
       const supabase = getSupabaseClient();
 
@@ -1953,6 +1968,7 @@ function EndorsementGenerator() {
         <div className={styles.workspace}>
           <section className={styles.mainPanel}>
             <div className={styles.modeSwitch} role="group" aria-label="Endorsement generator mode">
+              <span className={styles.mobileStepLabel}>1 Mode</span>
               <button
                 type="button"
                 className={generatorMode === 'customized' ? styles.modeSwitchActive : ''}
@@ -1971,7 +1987,19 @@ function EndorsementGenerator() {
               </button>
             </div>
 
+            <div className={styles.mobileWorkflowStatus} aria-label="Endorsement workflow status">
+              <span>{generatorMode === 'blank' ? 'Blank' : 'Custom'}</span>
+              <span>{selectedTemplates.length} selected</span>
+              <span>
+                {selectedTemplateFields.length > 0
+                  ? `${completedTemplateFieldCount}/${selectedTemplateFields.length} details`
+                  : 'No details'}
+              </span>
+              <span>{signaturePreviewDataUrl ? 'Signed' : 'No signature'}</span>
+            </div>
+
             <div className={styles.card}>
+              <p className={styles.mobileStepLabel}>2 Profiles</p>
               <div className={styles.sectionHeader}>
                 <div>
                   <h2>{generatorMode === 'blank' ? 'Optional instructor details' : 'Information details(* required)'}</h2>
@@ -2050,6 +2078,7 @@ function EndorsementGenerator() {
 
             {generatorMode === 'customized' && selectedTemplateFields.length > 0 ? (
               <div className={styles.card}>
+                <p className={styles.mobileStepLabel}>3 Details</p>
                 <div className={styles.sectionHeader}>
                   <div>
                     <h2>Template details</h2>
@@ -2079,6 +2108,7 @@ function EndorsementGenerator() {
             ) : null}
 
             <div className={styles.card}>
+              <p className={styles.mobileStepLabel}>4 Signature</p>
               <div className={styles.sectionHeader}>
                 <div>
                   <h2>Signature</h2>
@@ -2122,6 +2152,7 @@ function EndorsementGenerator() {
               />
 
               <div className={styles.actionRow}>
+                <span className={styles.mobileStepLabel}>5 Preview &amp; print</span>
                 <button className={styles.secondaryButton} onClick={handlePreview} type="button">
                   Preview
                 </button>

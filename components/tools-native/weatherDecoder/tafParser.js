@@ -1,6 +1,5 @@
 import { compareFlightCategory, getFlightCategory } from "./flightCategory";
 
-const CLOUD_PREFIXES = ["FEW", "SCT", "BKN", "OVC", "VV"];
 const PHENOMENA = {
   BR: "mist",
   FG: "fog",
@@ -139,15 +138,6 @@ function parseSegmentTokens(tokens) {
     visibilitySm,
     flightCategory: getFlightCategory(visibilitySm, ceilingFt),
   };
-}
-
-function isChangeToken(token) {
-  return (
-    /^FM\d{6}$/.test(token) ||
-    token === "TEMPO" ||
-    token === "BECMG" ||
-    /^PROB\d{2}$/.test(token)
-  );
 }
 
 export function parseTaf(rawInput) {

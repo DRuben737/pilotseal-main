@@ -59,7 +59,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                The practical test endorsement documents that the pilot has received the required ground and flight training and is prepared for their checkride. This must be issued within 2 calendar months of the scheduled practical test and placed in the pilot's logbook.
+                The practical test endorsement documents that the pilot has received the required ground and flight training and is prepared for their checkride. This must be issued within 2 calendar months of the scheduled practical test and placed in the pilot&apos;s logbook.
               </p>
               <p className="copy-muted leading-7">
                 Specify the certificate type (Private, Commercial, Airline Transport) and aircraft category/class. Verify all prerequisite training is logged and the pilot meets all experience requirements before endorsing.

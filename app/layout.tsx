@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import AuthOnboardingGate from "@/components/auth/AuthOnboardingGate";
+import MobileAppNav from "@/components/ui/MobileAppNav";
 import SiteHeader from "@/components/ui/SiteHeader";
 import SiteNotificationBanner from "@/components/notifications/SiteNotificationBanner";
 import { getSiteUrl } from "@/lib/seo";
@@ -73,10 +74,12 @@ export default function RootLayout({
               <AuthOnboardingGate />
             </Suspense>
 
-            <div className="pb-16 pt-6 sm:pt-10">
+            <div className="app-main-content pb-16 pt-6 sm:pt-10">
               <SiteNotificationBanner />
               {children}
             </div>
+
+            <MobileAppNav />
 
             <footer className="app-footer-shell px-3 pb-10 pt-10">
               <div className="site-shell">

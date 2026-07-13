@@ -59,7 +59,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                This endorsement authorizes a student pilot to conduct solo flights within Class B airspace after completing special training on Class B operations. Name the specific Class B airspace (e.g., "Los Angeles Class B") and note any conditions or limitations.
+                This endorsement authorizes a student pilot to conduct solo flights within Class B airspace after completing special training on Class B operations. Name the specific Class B airspace (e.g., &quot;Los Angeles Class B&quot;) and note any conditions or limitations.
               </p>
               <p className="copy-muted leading-7">
                 Verify the student has received training on Class B operations, radar service requirements, communication procedures, and has demonstrated proficiency in the specific Class B area.

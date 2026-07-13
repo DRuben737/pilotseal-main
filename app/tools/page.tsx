@@ -43,13 +43,26 @@ export default function ToolsPage() {
 
   return (
     <main className="page-shell page-tools px-3">
-      <div className="site-shell page-stack">
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:gap-4">
+      <div className="site-shell page-stack space-y-4">
+        <section className="tools-mobile-hero">
+          <div>
+            <p className="tools-mobile-kicker">PilotSeal tools</p>
+            <h1 className="tools-mobile-title">Fast cockpit and training utilities.</h1>
+            <p className="tools-mobile-copy">
+              Start with the generator, brief a flight, calculate loading, or decode weather from one mobile-friendly hub.
+            </p>
+          </div>
+          <Link href="/tools/endorsement-generator" className="tools-mobile-cta">
+            New endorsement
+          </Link>
+        </section>
+
+        <section className="tools-mobile-list">
           {tools.map((tool) => (
             <Link
               key={tool.key}
               href={`/tools/${tool.key}`}
-              className="group relative overflow-hidden rounded-[16px] border border-slate-200/75 bg-white/78 xl:max-w-[340px]"
+              className="tools-mobile-tool-card group relative overflow-hidden rounded-[16px] border border-slate-200/75 bg-white/78 xl:max-w-[340px]"
             >
               <div className="relative overflow-hidden bg-slate-100 p-2">
                 <Image
@@ -66,6 +79,11 @@ export default function ToolsPage() {
                     {tool.title}
                   </h2>
                 </div>
+              </div>
+              <div className="tools-mobile-tool-copy">
+                <h2>{tool.title}</h2>
+                <p>{tool.description}</p>
+                <span>Open tool</span>
               </div>
             </Link>
           ))}

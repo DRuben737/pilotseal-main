@@ -62,7 +62,7 @@ Date: [Date]
                 The pre-solo knowledge test endorsement certifies that the student pilot has satisfactorily completed the required knowledge test for solo flight in the specific aircraft make and model. This is a mandatory gate before solo flight authorization under FAR § 61.87(b).
               </p>
               <p className="copy-muted leading-7">
-                The endorsement must be issued by a flight instructor and placed in the student's logbook before solo flight is authorized. Verify the student passed the knowledge test and record the specific aircraft make/model for which the test was completed.
+                The endorsement must be issued by a flight instructor and placed in the student&apos;s logbook before solo flight is authorized. Verify the student passed the knowledge test and record the specific aircraft make/model for which the test was completed.
               </p>
             </div>
           </div>

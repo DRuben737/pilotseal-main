@@ -232,7 +232,6 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
   } else if (chartType === "2d1p") {
     const hasTopView = topView.length >= 3;
     const hasSideView = sideView.length >= 3;
-    const hasNormalAs2d = profile.envelopeSet.normal.length >= 3;
     const primaryTwoDimensionalEnvelope = hasTopView
       ? topView
       : hasSideView
@@ -339,7 +338,7 @@ function getAircraftType(profile) {
   return profile?.category === "helicopter" ? "helicopter" : "airplane";
 }
 
-function shouldRenderStation(station, aircraftType) {
+function shouldRenderStation() {
   return true;
 }
 

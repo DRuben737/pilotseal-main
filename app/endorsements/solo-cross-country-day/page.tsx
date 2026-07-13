@@ -59,10 +59,10 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                This endorsement documents the CFI's review and approval of the student's specific cross-country flight plan before each flight. It must be issued within 2 calendar months preceding the cross-country flight and placed in the student's logbook.
+                This endorsement documents the CFI&apos;s review and approval of the student&apos;s specific cross-country flight plan before each flight. It must be issued within 2 calendar months preceding the cross-country flight and placed in the student&apos;s logbook.
               </p>
               <p className="copy-muted leading-7">
-                Record the departure airport, destination, all intermediate landing airports, the specific aircraft make and model, and the planned flight date. Review the student's flight planning for route, weather, fuel, and airspace compliance.
+                Record the departure airport, destination, all intermediate landing airports, the specific aircraft make and model, and the planned flight date. Review the student&apos;s flight planning for route, weather, fuel, and airspace compliance.
               </p>
             </div>
           </div>
