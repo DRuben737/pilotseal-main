@@ -12,7 +12,7 @@ export const endorsementTemplateDataVersion = {
 
 const rawTemplates = {
   "TSA U.S. Citizenship": `
-I certify that {studentName} has presented me a {citizenshipDocumentDescription} establishing that they are a U.S. citizen or national in accordance with 49 CFR § 1552.7(a).
+I certify that {studentName} has presented me a {citizenshipDocument}, {citizenshipDocumentNumber} establishing that they are a U.S. citizen or national in accordance with 49 CFR § 1552.7(a).
 ${SIGNATURE_BLOCK}`,
 
   "Practical Test Prereqs": `
@@ -321,12 +321,17 @@ const FIELD_LIBRARY = {
     ],
     placeholder: "Select the certificate or rating referenced in the endorsement.",
   },
-  citizenshipDocumentDescription: {
-    label: "Citizenship document details",
+  citizenshipDocument: {
+    label: "Citizenship document",
+    type: "select",
+    required: true,
+    options: ["U.S. birth certificate", "U.S. passport"],
+  },
+  citizenshipDocumentNumber: {
+    label: "Document control or sequential number",
     type: "text",
     required: true,
-    placeholder:
-      "Type of document presented, such as a U.S. birth certificate or U.S. passport, and the relevant control or sequential number on the document, if any.",
+    placeholder: "Relevant control or sequential number on the document, if any.",
   },
   flightInstructorKnowledgeTest: {
     label: "Instructor knowledge test",
@@ -494,10 +499,8 @@ const FIELD_LIBRARY = {
 };
 
 const REPLACEMENTS = [
-  [
-    /_{3,}\(U\.S\. birth certificate or U\.S\. passport, and the relevant control or sequential number on the document, if any\)/g,
-    "{citizenshipDocumentDescription}",
-  ],
+  [/_{3,}\(U\.S\. birth certificate or U\.S\. passport\)/g, "{citizenshipDocument}"],
+  [/_+\(the relevant control or sequential number on the document, if any\)/g, "{citizenshipDocumentNumber}"],
   [/issuance of _____ certificate/gi, "issuance of {certificateType} certificate"],
   [/for the __________\(make\s*&\s*model\)/gi, "for the {aircraft}"],
   [/to the __________\(make\s*&\s*model\)/gi, "to the {aircraft}"],

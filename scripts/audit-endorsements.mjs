@@ -17,11 +17,18 @@ const checks = [
     pass:
       templatesSource.includes("49 CFR § 1552.7(a)") &&
       templatesSource.includes(
-        "I certify that {studentName} has presented me a {citizenshipDocumentDescription} establishing that they are a U.S. citizen or national in accordance with 49 CFR § 1552.7(a)."
+        "I certify that {studentName} has presented me a {citizenshipDocument}, {citizenshipDocumentNumber} establishing that they are a U.S. citizen or national in accordance with 49 CFR § 1552.7(a)."
       ),
   },
   {
-    name: "TSA citizenship endorsement does not split document type and document number",
+    name: "TSA citizenship UI keeps document type and document number as separate fields",
+    pass:
+      templatesSource.includes("citizenshipDocument: {") &&
+      templatesSource.includes("citizenshipDocumentNumber: {") &&
+      generatorSource.includes("'citizenshipDocumentNumber'"),
+  },
+  {
+    name: "TSA citizenship endorsement does not use the old document-number wording",
     pass:
       !templatesSource.includes("document number {citizenshipDocumentNumber}") &&
       !templatesSource.includes("{citizenshipDocument}, document number"),
@@ -45,8 +52,8 @@ const checks = [
     pass: templatesSource.includes('"Instrument-Powered-Lift"'),
   },
   {
-    name: "Blank-template sizing recognizes citizenship document details",
-    pass: generatorSource.includes("'citizenshipDocumentDescription'"),
+    name: "Blank-template sizing recognizes citizenship document number",
+    pass: generatorSource.includes("'citizenshipDocumentNumber'"),
   },
   {
     name: "No duplicated CFR prefix or accidental duplicated required wording",

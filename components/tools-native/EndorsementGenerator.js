@@ -55,7 +55,7 @@ const BLANK_TEMPLATE_SHORT_FIELDS = new Set([
   'instructorCertExpDate',
 ]);
 const BLANK_TEMPLATE_MEDIUM_FIELDS = new Set([
-  'citizenshipDocumentDescription',
+  'citizenshipDocumentNumber',
   'instructorCertNumber',
   'studentCertNumber',
 ]);
