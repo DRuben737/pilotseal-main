@@ -12,7 +12,7 @@ export const endorsementTemplateDataVersion = {
 
 const rawTemplates = {
   "TSA U.S. Citizenship": `
-I certify that {studentName} has presented me a {citizenshipDocument}, document number {citizenshipDocumentNumber}, establishing that they are a U.S. citizen or national in accordance with 49 CFR § 1552.15(c).
+I certify that {studentName} has presented me a {citizenshipDocumentDescription} establishing that they are a U.S. citizen or national in accordance with 49 CFR § 1552.7(a).
 ${SIGNATURE_BLOCK}`,
 
   "Practical Test Prereqs": `
@@ -204,7 +204,7 @@ I certify that {studentName}, Pilot Certificate No. {studentCertNumber}, has sat
 ${SIGNATURE_BLOCK}`,
 
   "Helicopter Touchdown Autorotation": `
-I certify that {studentName} has received training in straight-in and 180-degree autorotations to include touchdown. I have determined that they are competent in instructional knowledge relating to the elements, common errors, performance, and correction of common errors related to straight-in and 180-degree autorotations.
+I certify that {studentName} has received training in straight-in autorotations in a single engine helicopter and autorotation with turns in a single engine helicopter to include touchdown. I have determined that they are competent in instructional knowledge relating to the elements, common errors, performance, and correction of common errors related to straight-in autorotations in a single engine helicopter and autorotation with turns in a single engine helicopter.
 ${SIGNATURE_BLOCK}`,
 
   "Flight review": `
@@ -321,17 +321,12 @@ const FIELD_LIBRARY = {
     ],
     placeholder: "Select the certificate or rating referenced in the endorsement.",
   },
-  citizenshipDocument: {
-    label: "Citizenship document",
-    type: "select",
-    required: true,
-    options: ["U.S. birth certificate", "U.S. passport"],
-  },
-  citizenshipDocumentNumber: {
-    label: "Document control or sequential number",
+  citizenshipDocumentDescription: {
+    label: "Citizenship document details",
     type: "text",
     required: true,
-    placeholder: "Used to identify the citizenship document reviewed.",
+    placeholder:
+      "Type of document presented, such as a U.S. birth certificate or U.S. passport, and the relevant control or sequential number on the document, if any.",
   },
   flightInstructorKnowledgeTest: {
     label: "Instructor knowledge test",
@@ -380,7 +375,7 @@ const FIELD_LIBRARY = {
     label: "Instrument rating sought",
     type: "select",
     required: true,
-    options: ["Instrument-Airplane", "Instrument-Helicopter"],
+    options: ["Instrument-Airplane", "Instrument-Helicopter", "Instrument-Powered-Lift"],
     placeholder: "Select the exact instrument rating named in the endorsement.",
   },
   knowledgeTestName: {
@@ -499,8 +494,10 @@ const FIELD_LIBRARY = {
 };
 
 const REPLACEMENTS = [
-  [/_{3,}\(U\.S\. birth certificate or U\.S\. passport\)/g, "{citizenshipDocument}"],
-  [/_+\(the relevant control or sequential number on the document, if any\)/g, "{citizenshipDocumentNumber}"],
+  [
+    /_{3,}\(U\.S\. birth certificate or U\.S\. passport, and the relevant control or sequential number on the document, if any\)/g,
+    "{citizenshipDocumentDescription}",
+  ],
   [/issuance of _____ certificate/gi, "issuance of {certificateType} certificate"],
   [/for the __________\(make\s*&\s*model\)/gi, "for the {aircraft}"],
   [/to the __________\(make\s*&\s*model\)/gi, "to the {aircraft}"],

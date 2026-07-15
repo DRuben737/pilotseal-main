@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "audit:endorsements": "node scripts/audit-endorsements.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
