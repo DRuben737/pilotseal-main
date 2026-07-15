@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function SoloFlightInitialPage() {
-  const endorsementText = `I certify that [Student Name] has received the required training to qualify for solo flying. I have determined they meet the applicable requirements of § 61.87(n) and are proficient to make solo flights in [Make/Model].
+  const endorsementText = `I certify that [Student Name] has received the required training to qualify for solo flying. I have determined they meet the applicable requirements of 14 CFR § 61.87(n) and are proficient to make solo flights in [Make/Model].
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Solo Flight Endorsement (Initial 90 Days)
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.87(n) that authorizes a student pilot to conduct solo flight. Valid for 90 calendar days.
+              This is the FAA required logbook endorsement under 14 CFR § 61.87(n) that authorizes a student pilot to conduct solo flight. Valid for 90 calendar days.
             </p>
           </div>
         </section>
@@ -59,7 +59,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                The solo flight endorsement authorizes the student pilot to conduct solo flying in the aircraft make and model specified. This endorsement is valid for 90 calendar days from the date issued. After 90 days, a new endorsement under § 61.87(p) is required.
+                The solo flight endorsement authorizes the student pilot to conduct solo flying in the aircraft make and model specified. This endorsement is valid for 90 calendar days from the date issued. After 90 days, a new endorsement under 14 CFR § 61.87(p) is required.
               </p>
               <p className="copy-muted leading-7">
                 Verify all prerequisite training is complete: pre-solo knowledge test, pre-solo flight maneuvers, and any special operations (night, Class B, etc.) the student plans to conduct solo.
@@ -74,11 +74,11 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.87(n)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.87(n)</p>
                 <p className="copy-muted text-sm mt-1">Initial solo flight endorsement requirement (first 90 calendar days).</p>
               </li>
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.87(p)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.87(p)</p>
                 <p className="copy-muted text-sm mt-1">Additional 90-day solo endorsement for continued solo flight beyond the initial period.</p>
               </li>
               <li className="reference-item">
@@ -125,7 +125,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal auto-fills student data, verifies the endorsement is current per § 61.87(n), and includes all required CFI identifiers.
+              PilotSeal auto-fills student data, verifies the endorsement is current per 14 CFR § 61.87(n), and includes all required CFI identifiers.
             </p>
             <Link
               href="/tools/endorsement-generator?type=solo-initial"

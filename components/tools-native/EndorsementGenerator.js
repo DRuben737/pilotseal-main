@@ -5,7 +5,7 @@ import Modal from 'react-modal';
 import { useRouter } from 'next/navigation';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import SignaturePad from 'signature_pad';
-import templates from './templates';
+import templates, { endorsementTemplateDataVersion } from './templates';
 import styles from './EndorsementGenerator.module.css';
 import { useAuthSession } from '@/components/auth/AuthSessionProvider';
 import {
@@ -212,6 +212,9 @@ function getTemplateCategory(title) {
     'Sport Pilot Practical Test': 'Sport Pilot',
     'LSA PIC VH <= 87 KCAS': 'Sport Pilot',
     'LSA PIC VH > 87 KCAS': 'Sport Pilot',
+    'Sport Pilot Night': 'Sport Pilot',
+    'Sport Pilot Retractable Gear PIC': 'Sport Pilot',
+    'Sport Pilot Controllable Pitch Propeller PIC': 'Sport Pilot',
     'PVT knowledge test': 'Private Pilot',
     'PVT Written Deficiencies': 'Private Pilot',
     'PVT Practical Test': 'Private Pilot',
@@ -248,6 +251,8 @@ function getTemplateCategory(title) {
     'High-Performance Airplane PIC': 'Other PIC',
     'High-Altitude Pressurized PIC': 'Other PIC',
     'Tailwheel Airplane PIC': 'Other PIC',
+    'Simplified Flight Controls PIC': 'Other PIC',
+    'Simplified Flight Controls Initial Cadre': 'Other PIC',
     'Night Vision Goggles': 'Other PIC',
     'NVG ground training': 'Other PIC',
     'NVG PIC': 'Other PIC',
@@ -2006,6 +2011,12 @@ function EndorsementGenerator() {
               </button>
             </div>
 
+            <div className={styles.dataVersionNotice}>
+              <span>Template data: {endorsementTemplateDataVersion.source}</span>
+              <span>Source date: {endorsementTemplateDataVersion.sourceDate}</span>
+              <span>Updated: {endorsementTemplateDataVersion.updatedAt}</span>
+            </div>
+
             <div className={styles.mobileWorkflowStatus} aria-label="Endorsement workflow status">
               <span>{generatorMode === 'blank' ? 'Blank' : 'Custom'}</span>
               <span>{selectedTemplates.length} selected</span>
@@ -2476,7 +2487,9 @@ function EndorsementGenerator() {
               placeholder="Search by endorsement title, category, or wording"
               className="endorsementModalSearch"
             />
-            <span className="endorsementResultCount">{visibleTemplates.length} results</span>
+            <span className="endorsementResultCount">
+              {visibleTemplates.length} results · {endorsementTemplateDataVersion.source} · Updated {endorsementTemplateDataVersion.updatedAt}
+            </span>
           </div>
 
           {selectedTemplates.length > 0 ? (

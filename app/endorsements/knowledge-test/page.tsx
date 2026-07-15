@@ -23,7 +23,7 @@ Date: [Date]
               Knowledge Test Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.35(a)(1) that certifies a pilot has completed the required knowledge training and is prepared for their written knowledge test.
+              This is the FAA required logbook endorsement under 14 CFR § 61.35(a)(1) that certifies a pilot has completed the required knowledge training and is prepared for their written knowledge test.
             </p>
           </div>
         </section>
@@ -74,7 +74,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.35(a)(1)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.35(a)(1)</p>
                 <p className="copy-muted text-sm mt-1">Knowledge test prerequisite training and endorsement requirements.</p>
               </li>
               <li className="reference-item">
@@ -116,7 +116,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal verifies § 61.35 compliance and ensures all required CFI identifiers are included.
+              PilotSeal verifies 14 CFR § 61.35 compliance and ensures all required CFI identifiers are included.
             </p>
             <Link
               href="/tools/endorsement-generator?type=knowledge-test"

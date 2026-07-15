@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function SoloClassBPage() {
-  const endorsementText = `I certify that [Student Name] has received the required training of § 61.95(a). I have determined they are proficient to conduct solo flights in [Name of Class B] airspace. [List any applicable conditions or limitations.]
+  const endorsementText = `I certify that [Student Name] has received the required training of 14 CFR § 61.95(a). I have determined they are proficient to conduct solo flights in [Name of Class B] airspace. [List any applicable conditions or limitations.]
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Solo Flight in Class B Airspace Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.95(a) that authorizes a student pilot to conduct solo flights within Class B airspace.
+              This is the FAA required logbook endorsement under 14 CFR § 61.95(a) that authorizes a student pilot to conduct solo flights within Class B airspace.
             </p>
           </div>
         </section>
@@ -74,7 +74,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.95(a)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.95(a)</p>
                 <p className="copy-muted text-sm mt-1">Solo flight in Class B airspace training and endorsement requirements.</p>
               </li>
               <li className="reference-item">
@@ -116,7 +116,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal ensures the correct Class B airspace name, verifies § 61.95(a) compliance, and includes all required limitations.
+              PilotSeal ensures the correct Class B airspace name, verifies 14 CFR § 61.95(a) compliance, and includes all required limitations.
             </p>
             <Link
               href="/tools/endorsement-generator?type=solo-class-b"

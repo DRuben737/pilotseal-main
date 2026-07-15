@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function SoloCrossCountryPage() {
-  const endorsementText = `I certify that [Student Name] has received the required solo cross-country training. I find they have met the applicable requirements of § 61.93 and are proficient to make solo cross-country flights in a [Make/Model] aircraft, [Aircraft Category].
+  const endorsementText = `I certify that [Student Name] has received the required solo cross-country training. I find they have met the applicable requirements of 14 CFR § 61.93 and are proficient to make solo cross-country flights in a [Make/Model] aircraft, [Aircraft Category].
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Solo Cross-Country Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.93 that certifies a student pilot has completed cross-country training and is proficient for solo cross-country flight.
+              This is the FAA required logbook endorsement under 14 CFR § 61.93 that certifies a student pilot has completed cross-country training and is proficient for solo cross-country flight.
             </p>
           </div>
         </section>
@@ -62,7 +62,7 @@ Date: [Date]
                 The solo cross-country endorsement certifies that the student pilot has completed the required cross-country training and is proficient to conduct solo cross-country flights. This is required before the student can fly solo more than 50 nautical miles from the home airport.
               </p>
               <p className="copy-muted leading-7">
-                Verify the student has completed cross-country training per § 61.93(b), understands navigation, fuel management, and airspace rules. Include the specific aircraft category/class.
+                Verify the student has completed cross-country training per 14 CFR § 61.93(b), understands navigation, fuel management, and airspace rules. Include the specific aircraft category/class.
               </p>
             </div>
           </div>
@@ -74,7 +74,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.93(b)(1)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.93(b)(1)</p>
                 <p className="copy-muted text-sm mt-1">Solo cross-country training requirements and proficiency endorsement criteria.</p>
               </li>
               <li className="reference-item">
@@ -116,7 +116,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal verifies the student is current and ready per § 61.93, includes all required identifiers, and ensures consistent formatting.
+              PilotSeal verifies the student is current and ready per 14 CFR § 61.93, includes all required identifiers, and ensures consistent formatting.
             </p>
             <Link
               href="/tools/endorsement-generator?type=solo-cross-country"

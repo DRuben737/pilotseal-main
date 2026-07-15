@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function InstrumentKnowledgeTestPage() {
-  const endorsementText = `I certify that [Pilot Name] has received the required training of § 61.65(b). I have determined that they are prepared for the Instrument-[Airplane, Helicopter, or Powered-Lift] knowledge test.
+  const endorsementText = `I certify that [Pilot Name] has received the required training of 14 CFR § 61.65(b). I have determined that they are prepared for the Instrument-[Airplane, Helicopter, or Powered-Lift] knowledge test.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Instrument Knowledge Test Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.65(b) certifying the pilot has completed the required knowledge training and is prepared for the instrument rating knowledge test.
+              This is the FAA required logbook endorsement under 14 CFR § 61.65(b) certifying the pilot has completed the required knowledge training and is prepared for the instrument rating knowledge test.
             </p>
           </div>
         </section>
@@ -59,7 +59,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                The instrument knowledge test endorsement certifies that the pilot has completed the required knowledge training under § 61.65(b) and is prepared to take the instrument rating knowledge test. Specify the aircraft category (Airplane or Helicopter).
+                The instrument knowledge test endorsement certifies that the pilot has completed the required knowledge training under 14 CFR § 61.65(b) and is prepared to take the instrument rating knowledge test. Specify the aircraft category (Airplane or Helicopter).
               </p>
               <p className="copy-muted leading-7">
                 Verify the pilot has completed all required knowledge training covering instrument systems, procedures, regulations, weather, and navigation before issuing this endorsement.
@@ -74,7 +74,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.65(b)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.65(b)</p>
                 <p className="copy-muted text-sm mt-1">Instrument rating knowledge test prerequisite training and endorsement requirements.</p>
               </li>
               <li className="reference-item">
@@ -116,7 +116,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal verifies § 61.65(b) compliance and includes the correct aircraft category designation.
+              PilotSeal verifies 14 CFR § 61.65(b) compliance and includes the correct aircraft category designation.
             </p>
             <Link
               href="/tools/endorsement-generator?type=instrument-knowledge"

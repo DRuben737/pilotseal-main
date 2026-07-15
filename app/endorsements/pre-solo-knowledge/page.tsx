@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function PreSoloKnowledgePage() {
-  const endorsementText = `I certify that [Student Name] has satisfactorily completed the pre-solo knowledge test of § 61.87(b) for the [Make/Model] aircraft.
+  const endorsementText = `I certify that [Student Name] has satisfactorily completed the pre-solo knowledge test of 14 CFR § 61.87(b) for the [Make/Model] aircraft.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Pre-Solo Knowledge Test Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.87(b) certifying the student pilot has passed the pre-solo knowledge test.
+              This is the FAA required logbook endorsement under 14 CFR § 61.87(b) certifying the student pilot has passed the pre-solo knowledge test.
             </p>
           </div>
         </section>
@@ -59,7 +59,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-4">When You Need This Endorsement</h2>
             <div className="space-y-4">
               <p className="copy-muted leading-7">
-                The pre-solo knowledge test endorsement certifies that the student pilot has satisfactorily completed the required knowledge test for solo flight in the specific aircraft make and model. This is a mandatory gate before solo flight authorization under FAR § 61.87(b).
+                The pre-solo knowledge test endorsement certifies that the student pilot has satisfactorily completed the required knowledge test for solo flight in the specific aircraft make and model. This is a mandatory gate before solo flight authorization under 14 CFR § 61.87(b).
               </p>
               <p className="copy-muted leading-7">
                 The endorsement must be issued by a flight instructor and placed in the student&apos;s logbook before solo flight is authorized. Verify the student passed the knowledge test and record the specific aircraft make/model for which the test was completed.
@@ -74,7 +74,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.87(b)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.87(b)</p>
                 <p className="copy-muted text-sm mt-1">Pre-solo knowledge test requirement and endorsement criteria.</p>
               </li>
               <li className="reference-item">

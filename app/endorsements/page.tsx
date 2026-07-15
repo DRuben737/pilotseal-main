@@ -1,5 +1,6 @@
 import Link from "next/link";
 import EndorsementDisclaimer from "@/components/legal/EndorsementDisclaimer";
+import { endorsementTemplateDataVersion } from "@/components/tools-native/templates";
 import { buildPageMetadata } from "@/lib/seo";
 import endorsementsHeroImage from "@/images/endorsements-hero-illustration.png";
 
@@ -104,6 +105,9 @@ export default function EndorsementsPage() {
               </h1>
               <p className="copy-muted mt-4 max-w-2xl leading-7">
                 Pick the scenario, scan the references, then draft.
+              </p>
+              <p className="copy-muted mt-3 max-w-2xl text-sm leading-6">
+                Template data: {endorsementTemplateDataVersion.source}; source date {endorsementTemplateDataVersion.sourceDate}; updated {endorsementTemplateDataVersion.updatedAt}.
               </p>
 
               <div className="mt-5 flex flex-wrap gap-3">

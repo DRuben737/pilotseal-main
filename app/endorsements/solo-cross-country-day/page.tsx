@@ -23,7 +23,7 @@ Date: [Date]
               Solo Cross-Country Day-of-Flight Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.93(c)(3) that CFIs use to approve each specific student cross-country flight before it departs.
+              This is the FAA required logbook endorsement under 14 CFR § 61.93(c)(3) that CFIs use to approve each specific student cross-country flight before it departs.
             </p>
           </div>
         </section>
@@ -74,7 +74,7 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.93(c)(3)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.93(c)(3)</p>
                 <p className="copy-muted text-sm mt-1">Requires CFI review and approval of each solo cross-country flight plan.</p>
               </li>
               <li className="reference-item">

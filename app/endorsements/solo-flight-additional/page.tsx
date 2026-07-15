@@ -23,7 +23,7 @@ export const metadata = buildPageMetadata({
 });
 
 export default function SoloFlightAdditionalPage() {
-  const endorsementText = `I certify that [Student Name] has received the required training to qualify for solo flying. I have determined that they meet the applicable requirements of § 61.87(p) and are proficient to make solo flights in [Make/Model].
+  const endorsementText = `I certify that [Student Name] has received the required training to qualify for solo flying. I have determined that they meet the applicable requirements of 14 CFR § 61.87(p) and are proficient to make solo flights in [Make/Model].
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -73,7 +73,7 @@ Date: [Date]
               Additional 90-Day Solo Flight Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.87(p) that extends solo authorization for an additional 90 calendar days after the initial solo endorsement expires.
+              This is the FAA required logbook endorsement under 14 CFR § 61.87(p) that extends solo authorization for an additional 90 calendar days after the initial solo endorsement expires.
             </p>
           </div>
         </section>
@@ -124,11 +124,11 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.87(p)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.87(p)</p>
                 <p className="copy-muted text-sm mt-1">Additional 90-day solo flight endorsement requirement and extension criteria.</p>
               </li>
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.87(n)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.87(n)</p>
                 <p className="copy-muted text-sm mt-1">Initial 90-day solo endorsement reference for context and progression.</p>
               </li>
               <li className="reference-item">
@@ -170,7 +170,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal ensures the correct § 61.87(p) wording, verifies expiration dates, and maintains endorsement history.
+              PilotSeal ensures the correct 14 CFR § 61.87(p) wording, verifies expiration dates, and maintains endorsement history.
             </p>
             <Link
               href="/tools/endorsement-generator?type=solo-additional"

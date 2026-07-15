@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function PreSoloFlightPage() {
-  const endorsementText = `I certify that [Student Name] has received and logged pre-solo flight training for the maneuvers and procedures that are appropriate to the [Make/Model] aircraft. I have determined they have demonstrated satisfactory proficiency and safety on the maneuvers and procedures required by § 61.87 in this or similar make and model of aircraft to be flown.
+  const endorsementText = `I certify that [Student Name] has received and logged pre-solo flight training for the maneuvers and procedures that are appropriate to the [Make/Model] aircraft. I have determined they have demonstrated satisfactory proficiency and safety on the maneuvers and procedures required by 14 CFR § 61.87 in this or similar make and model of aircraft to be flown.
 
 Date: [Date]
 [Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
@@ -23,7 +23,7 @@ Date: [Date]
               Pre-Solo Flight Training Endorsement
             </h1>
             <p className="copy-muted mt-3 max-w-2xl leading-7">
-              This is the FAA required logbook endorsement under FAR § 61.87 certifying the student pilot has completed pre-solo flight maneuvers and is proficient for solo flight.
+              This is the FAA required logbook endorsement under 14 CFR § 61.87 certifying the student pilot has completed pre-solo flight maneuvers and is proficient for solo flight.
             </p>
           </div>
         </section>
@@ -74,11 +74,11 @@ Date: [Date]
             <h2 className="section-title text-2xl font-semibold mb-6">FAA Reference</h2>
             <ul className="space-y-4">
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.87(b)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.87(b)</p>
                 <p className="copy-muted text-sm mt-1">Pre-solo flight training requirements and endorsement criteria.</p>
               </li>
               <li className="reference-item">
-                <p className="font-semibold text-[var(--foreground)]">FAR § 61.87(c)</p>
+                <p className="font-semibold text-[var(--foreground)]">14 CFR § 61.87(c)</p>
                 <p className="copy-muted text-sm mt-1">Specific maneuvers and procedures required before solo flight.</p>
               </li>
               <li className="reference-item">
