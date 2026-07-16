@@ -7,9 +7,15 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..");
 const templatesPath = path.join(root, "components", "tools-native", "templates.js");
 const generatorPath = path.join(root, "components", "tools-native", "EndorsementGenerator.js");
+const templateLibPath = path.join(root, "lib", "endorsement-templates.ts");
+const templateSqlPath = path.join(root, "supabase", "endorsement_templates.sql");
+const seedExporterPath = path.join(root, "scripts", "export-endorsement-template-seed.mjs");
 
 const templatesSource = fs.readFileSync(templatesPath, "utf8");
 const generatorSource = fs.readFileSync(generatorPath, "utf8");
+const templateLibSource = fs.readFileSync(templateLibPath, "utf8");
+const templateSqlSource = fs.readFileSync(templateSqlPath, "utf8");
+const seedExporterSource = fs.readFileSync(seedExporterPath, "utf8");
 
 const checks = [
   {
@@ -60,6 +66,42 @@ const checks = [
     pass:
       !templatesSource.includes("14 CFR §14 CFR") &&
       !templatesSource.includes("required training required"),
+  },
+  {
+    name: "Generator loads active Supabase templates with local fallback",
+    pass:
+      generatorSource.includes("fetchActiveEndorsementTemplates") &&
+      generatorSource.includes("fetchEndorsementTemplateSettings") &&
+      generatorSource.includes("fallbackTemplates") &&
+      generatorSource.includes("endorsementTemplatesToGeneratorMap"),
+  },
+  {
+    name: "Endorsement template data layer validates field shape",
+    pass:
+      templateLibSource.includes("validateEndorsementTemplateFields") &&
+      templateLibSource.includes("Fields must be a JSON array.") &&
+      templateLibSource.includes("Field ${key} must include options."),
+  },
+  {
+    name: "Endorsement templates table allows active public reads and admin writes",
+    pass:
+      templateSqlSource.includes("create table if not exists public.endorsement_templates") &&
+      templateSqlSource.includes("to anon, authenticated") &&
+      templateSqlSource.includes("profiles.role = 'admin'"),
+  },
+  {
+    name: "Endorsement source details are stored separately and editable by admins",
+    pass:
+      templateLibSource.includes("fetchEndorsementTemplateSettings") &&
+      templateLibSource.includes("updateEndorsementTemplateSettings") &&
+      templateSqlSource.includes("create table if not exists public.endorsement_template_settings") &&
+      templateSqlSource.includes("endorsement_template_settings_update_admin"),
+  },
+  {
+    name: "Seed exporter generates SQL from fallback template source",
+    pass:
+      seedExporterSource.includes("components\", \"tools-native\", \"templates.js") &&
+      seedExporterSource.includes("on conflict (key) do update set"),
   },
 ];
 

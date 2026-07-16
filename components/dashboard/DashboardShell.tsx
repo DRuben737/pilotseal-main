@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { resolveDisplayIdentity } from "@/lib/identity";
@@ -18,6 +18,7 @@ const dashboardLinks = [
   { href: "/dashboard/notifications", label: "Notifications" },
   { href: "/dashboard/account-settings", label: "Account" },
 ];
+const DASHBOARD_NAV_ITEM_STEP = 56;
 
 function DashboardIcon({ kind }: { kind: string }) {
   const common = "h-[18px] w-[18px]";
@@ -69,6 +70,16 @@ function DashboardIcon({ kind }: { kind: string }) {
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M2 13.5h7l5.2-7.2c.5-.7 1.5-.8 2.1-.3.5.4.7 1.1.4 1.7L15 13.5h5.2c.9 0 1.8.5 2.2 1.3l-.9.7H15l-1.4 4.1h-1.7l.2-4.1H8.7L7 18H5.4l.5-2.5H2v-2Z" />
+        </svg>
+      );
+    case "Endorsements":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <path d="M6.5 3.8h8.2L18 7.1V20a1.2 1.2 0 0 1-1.2 1.2H6.5A1.2 1.2 0 0 1 5.3 20V5a1.2 1.2 0 0 1 1.2-1.2Z" />
+          <path d="M14.3 4.2v3.4h3.3" />
+          <path d="M8.5 12h6.8" />
+          <path d="M8.5 15.2h6.8" />
+          <path d="M8.5 18.4h4.4" />
         </svg>
       );
     case "My Aircraft":
@@ -160,8 +171,70 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   const visibleDashboardLinks =
     profileRole === "admin"
-      ? [...dashboardLinks, { href: "/dashboard/admin/aircraft", label: "Aircraft" }]
+      ? [
+          ...dashboardLinks,
+          { href: "/dashboard/admin/aircraft", label: "Aircraft" },
+          { href: "/dashboard/admin/endorsements", label: "Endorsements" },
+        ]
       : dashboardLinks;
+  const isDashboardLinkActive = (href: string) =>
+    href === "/dashboard" ? pathname === "/dashboard" : pathname === href || pathname.startsWith(`${href}/`);
+  const activeDashboardIndex = visibleDashboardLinks.findIndex((item) => isDashboardLinkActive(item.href));
+  const [activeIndicatorMotion, setActiveIndicatorMotion] = useState({ y: 0, scaleX: 1, scaleY: 1 });
+  const activeIndicatorRef = useRef({ initialized: false, y: 0, scaleX: 1, scaleY: 1, frame: 0 });
+
+  useEffect(() => {
+    if (activeDashboardIndex < 0) {
+      return undefined;
+    }
+
+    const targetY = activeDashboardIndex * DASHBOARD_NAV_ITEM_STEP;
+    const motion = activeIndicatorRef.current;
+
+    if (!motion.initialized) {
+      motion.initialized = true;
+      motion.y = targetY;
+      motion.scaleX = 1;
+      motion.scaleY = 1;
+      setActiveIndicatorMotion({ y: targetY, scaleX: 1, scaleY: 1 });
+      return undefined;
+    }
+
+    cancelAnimationFrame(motion.frame);
+
+    const animate = () => {
+      const diff = targetY - motion.y;
+      const velocity = diff * 0.42;
+
+      motion.y += velocity;
+
+      const speed = Math.abs(velocity);
+      const stretch = 1 + Math.min(speed * 0.018, 0.36);
+      const squash = 1 / stretch;
+
+      motion.scaleY = motion.scaleY * 0.78 + stretch * 0.22;
+      motion.scaleX = motion.scaleX * 0.78 + squash * 0.22;
+
+      if (Math.abs(diff) < 0.08 && Math.abs(motion.scaleY - 1) < 0.008) {
+        motion.y = targetY;
+        motion.scaleX = 1;
+        motion.scaleY = 1;
+        setActiveIndicatorMotion({ y: targetY, scaleX: 1, scaleY: 1 });
+        return;
+      }
+
+      setActiveIndicatorMotion({
+        y: motion.y,
+        scaleX: motion.scaleX,
+        scaleY: motion.scaleY,
+      });
+      motion.frame = requestAnimationFrame(animate);
+    };
+
+    motion.frame = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(motion.frame);
+  }, [activeDashboardIndex]);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -183,10 +256,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className="site-shell page-stack">
         {loading || !session?.user ? null : (
           <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
-            <aside className="dashboard-sidebar group shrink-0 overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-2.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)] transition-[width] duration-200 w-[74px] sm:w-[78px] md:hover:w-[220px]">
-              <div className="sticky top-24">
+            <aside className="dashboard-sidebar group sticky top-4 max-h-[calc(100vh-2rem)] w-[82px] shrink-0 overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-2.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)] transition-[width] duration-200 md:hover:w-[220px]">
+              <div>
                 <div className="block">
-                  <div className="flex items-center justify-center gap-3 overflow-hidden md:justify-center md:group-hover:justify-start">
+                  <div className="flex items-center justify-center gap-0 overflow-hidden md:justify-center md:group-hover:justify-start md:group-hover:gap-3">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/12 bg-white/8 text-sm font-semibold">
                       PS
                     </div>
@@ -198,12 +271,19 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <div className="mt-5 h-px w-full bg-white/10" />
                 </div>
 
-                <nav aria-label="Dashboard navigation" className="mt-4 grid gap-2">
+                <nav aria-label="Dashboard navigation" className="relative mt-4 grid gap-2">
+                  {activeDashboardIndex >= 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-x-0 top-0 h-12 rounded-[16px] bg-[linear-gradient(135deg,rgba(96,165,250,0.96),rgba(37,99,235,0.94))] shadow-[0_16px_34px_rgba(59,130,214,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] will-change-transform"
+                      style={{
+                        transform: `translate3d(0, ${activeIndicatorMotion.y}px, 0) scaleX(${activeIndicatorMotion.scaleX}) scaleY(${activeIndicatorMotion.scaleY})`,
+                        transformOrigin: "center center",
+                      }}
+                    />
+                  ) : null}
                   {visibleDashboardLinks.map((item) => {
-                    const active =
-                      item.href === "/dashboard"
-                        ? pathname === "/dashboard"
-                        : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const active = isDashboardLinkActive(item.href);
 
                     return (
                       <Link
@@ -211,16 +291,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                         href={item.href}
                         aria-label={item.label}
                         title={item.label}
-                        className={`relative flex h-12 items-center justify-center overflow-hidden rounded-[16px] transition md:w-full md:justify-start ${
+                        className={`relative z-10 flex h-12 items-center justify-center overflow-hidden rounded-[16px] transition-colors duration-300 md:w-full md:justify-center md:group-hover:justify-start ${
                           active
-                            ? "bg-[#3b82d6] text-white"
+                            ? "text-white"
                             : "text-white/72 hover:bg-white/8 hover:text-white"
                         }`}
                       >
-                        <span className="flex h-12 w-5 shrink-0 items-center justify-center md:ml-4">
+                        <span className="flex h-12 w-full shrink-0 items-center justify-center md:group-hover:ml-4 md:group-hover:w-5">
                           <DashboardIcon kind={item.label} />
                         </span>
-                        <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-3 text-sm font-medium opacity-0 transition-[max-width,opacity,transform] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:opacity-100">
+                        <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-0 text-sm font-medium opacity-0 transition-[max-width,opacity,transform,padding] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:pl-3 md:group-hover:opacity-100">
                           {item.label}
                         </span>
                       </Link>
@@ -233,12 +313,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     href="/tools/endorsement-generator"
                     aria-label="New endorsement"
                     title="New endorsement"
-                    className="relative flex h-12 items-center justify-center overflow-hidden rounded-[16px] text-white/72 transition hover:bg-white/8 hover:text-white md:w-full md:justify-start"
+                    className="relative flex h-12 items-center justify-center overflow-hidden rounded-[16px] text-white/72 transition hover:bg-white/8 hover:text-white md:w-full md:justify-center md:group-hover:justify-start"
                   >
-                    <span className="flex h-12 w-5 shrink-0 items-center justify-center md:ml-4">
+                    <span className="flex h-12 w-full shrink-0 items-center justify-center md:group-hover:ml-4 md:group-hover:w-5">
                       <DashboardIcon kind="new" />
                     </span>
-                    <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-3 text-sm font-medium opacity-0 transition-[max-width,opacity,transform] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:opacity-100">
+                    <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-0 text-sm font-medium opacity-0 transition-[max-width,opacity,transform,padding] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:pl-3 md:group-hover:opacity-100">
                       New endorsement
                     </span>
                   </Link>
@@ -246,14 +326,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     type="button"
                     aria-label="Sign out"
                     title={`Sign out ${identityLabel}`}
-                    className="relative flex h-12 items-center justify-center overflow-hidden rounded-[16px] text-white/72 transition hover:bg-white/8 hover:text-white disabled:opacity-60 md:w-full md:justify-start"
+                    className="relative flex h-12 items-center justify-center overflow-hidden rounded-[16px] text-white/72 transition hover:bg-white/8 hover:text-white disabled:opacity-60 md:w-full md:justify-center md:group-hover:justify-start"
                     disabled={!session?.user || signingOut}
                     onClick={handleSignOut}
                   >
-                    <span className="flex h-12 w-5 shrink-0 items-center justify-center md:ml-4">
+                    <span className="flex h-12 w-full shrink-0 items-center justify-center md:group-hover:ml-4 md:group-hover:w-5">
                       <DashboardIcon kind="signout" />
                     </span>
-                    <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-3 text-sm font-medium opacity-0 transition-[max-width,opacity,transform] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:opacity-100">
+                    <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-0 text-sm font-medium opacity-0 transition-[max-width,opacity,transform,padding] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:pl-3 md:group-hover:opacity-100">
                       {signingOut ? "Signing out..." : "Sign out"}
                     </span>
                   </button>

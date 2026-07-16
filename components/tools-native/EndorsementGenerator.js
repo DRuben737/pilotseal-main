@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useRouter } from 'next/navigation';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import SignaturePad from 'signature_pad';
-import templates, { endorsementTemplateDataVersion } from './templates';
+import fallbackTemplates, { endorsementTemplateDataVersion as fallbackEndorsementTemplateDataVersion } from './templates';
 import styles from './EndorsementGenerator.module.css';
 import { useAuthSession } from '@/components/auth/AuthSessionProvider';
 import {
@@ -20,6 +20,15 @@ import { fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people
 import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
 import { createUuid } from '@/lib/uuid';
+import {
+  endorsementTemplatesToGeneratorMap,
+  fetchActiveEndorsementTemplates,
+  fetchEndorsementTemplateSettings,
+} from '@/lib/endorsement-templates';
+import {
+  ENDORSEMENT_TEMPLATE_CATEGORY_ORDER,
+  getEndorsementTemplateCategory,
+} from '@/lib/endorsement-template-categories';
 
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
@@ -69,25 +78,6 @@ const AVERY_5163_LABELS_PER_PAGE = AVERY_5163_COLUMNS * AVERY_5163_ROWS;
 const AVERY_5163_SIDE_MARGIN = 11.25;
 const AVERY_5163_TOP_MARGIN = 36;
 const AVERY_5163_COLUMN_GAP = 13.5;
-const TEMPLATE_CATEGORY_ORDER = [
-  'Solo Endorsements',
-  'Other Solo',
-  'Solo Cross-Country',
-  'Private Pilot',
-  'Instrument Rating',
-  'Commercial Pilot',
-  'CFI',
-  'CFII',
-  'Sport Pilot',
-  'Add Category / Class',
-  'Additional Category / Class',
-  'Retest / Recurrent / IPC',
-  'Aircraft & Operating Endorsements',
-  'Other PIC',
-];
-
-const templateEntries = Object.entries(templates);
-
 function getInstructorExpirationDate(certificate, person) {
   if (person.cert_exp_date) {
     return person.cert_exp_date;
@@ -182,104 +172,6 @@ function splitTextIntoLines(text, font, fontSize, maxWidth) {
   });
 
   return lines.at(-1) === '' ? lines.slice(0, -1) : lines;
-}
-
-function getTemplateCategory(title) {
-  const normalizedTitle = String(title || '').trim().replace(/\s+/g, ' ');
-  const explicitCategoryMap = {
-    'TSA U.S. Citizenship': null,
-    'Practical Test Prereqs': 'Retest / Recurrent / IPC',
-    'Pre-Solo Written': 'Solo Endorsements',
-    'Pre-Solo Flight Training': 'Solo Endorsements',
-    'Pre-Solo Night Training': 'Other Solo',
-    'Solo Flight Initial 90 Days': 'Solo Endorsements',
-    'Solo Flight Additional 90 Days': 'Solo Endorsements',
-    'Solo in other airport': 'Other Solo',
-    'Solo airport inside Class B': 'Other Solo',
-    'Solo in Class B': 'Other Solo',
-    'Solo Flight in Class B/C/D': 'Other Solo',
-    'Solo Ops at Towered/Class B/C/D Airport': 'Other Solo',
-    'Solo cross-country training': 'Solo Cross-Country',
-    'Solo cross-country plan review': 'Solo Cross-Country',
-    'Solo cross-country day': 'Solo Cross-Country',
-    'Repeated Solo XC Within 50 NM': 'Solo Cross-Country',
-    'PIC Solo Outside Rating': 'Add Category / Class',
-    'PVT addon- deficiency': 'Add Category / Class',
-    'PVT addon-checkride': 'Add Category / Class',
-    'IR addon': 'Add Category / Class',
-    'COM addon': 'Add Category / Class',
-    'Sport Pilot Proficiency Check': 'Sport Pilot',
-    'Sport Pilot Practical Test': 'Sport Pilot',
-    'LSA PIC VH <= 87 KCAS': 'Sport Pilot',
-    'LSA PIC VH > 87 KCAS': 'Sport Pilot',
-    'Sport Pilot Night': 'Sport Pilot',
-    'Sport Pilot Retractable Gear PIC': 'Sport Pilot',
-    'Sport Pilot Controllable Pitch Propeller PIC': 'Sport Pilot',
-    'PVT knowledge test': 'Private Pilot',
-    'PVT Written Deficiencies': 'Private Pilot',
-    'PVT Practical Test': 'Private Pilot',
-    'PVT 2-Month Review': 'Private Pilot',
-    'COM knowledge test': 'Commercial Pilot',
-    'COM Written Deficiencies': 'Commercial Pilot',
-    'COM Practical Test': 'Commercial Pilot',
-    'COM 2-Month Review': 'Commercial Pilot',
-    'IR knowledge test': 'Instrument Rating',
-    'IR Written Deficiencies': 'Instrument Rating',
-    'IR Practical Test': 'Instrument Rating',
-    'IR 2-Month Review': 'Instrument Rating',
-    'FOI knowledge test': 'CFI',
-    'CFI Knowledge Test': 'CFI',
-    'CFI Knowledge Test Deficiencies': 'CFI',
-    'CFII Written Deficiency': 'CFII',
-    'CFI required training': 'CFI',
-    'Spin training': 'CFI',
-    'Helicopter Touchdown Autorotation': 'CFI',
-    'CFII Practical Test': 'CFII',
-    'Flight review': 'Retest / Recurrent / IPC',
-    'Instrument proficiency check': 'Retest / Recurrent / IPC',
-    'Ground Instructor Recency': 'Retest / Recurrent / IPC',
-    'Written Retest': 'Retest / Recurrent / IPC',
-    'Practical Test Retest': 'Retest / Recurrent / IPC',
-    'R-22/R-44 Awareness': 'Solo Endorsements',
-    'R-22 solo endorsement': 'Solo Endorsements',
-    'R-22 PIC': 'Other PIC',
-    'R-22 Flight Review': 'Retest / Recurrent / IPC',
-    'R-44 solo endorsement': 'Solo Endorsements',
-    'R-44 PIC': 'Other PIC',
-    'R-44 Flight Review': 'Retest / Recurrent / IPC',
-    'Complex Airplane PIC': 'Other PIC',
-    'High-Performance Airplane PIC': 'Other PIC',
-    'High-Altitude Pressurized PIC': 'Other PIC',
-    'Tailwheel Airplane PIC': 'Other PIC',
-    'Simplified Flight Controls PIC': 'Other PIC',
-    'Simplified Flight Controls Initial Cadre': 'Other PIC',
-    'Night Vision Goggles': 'Other PIC',
-    'NVG ground training': 'Other PIC',
-    'NVG PIC': 'Other PIC',
-  };
-
-  if (
-    /pre-solo night training/i.test(normalizedTitle) ||
-    /solo airport inside class b/i.test(normalizedTitle) ||
-    /solo in class b/i.test(normalizedTitle) ||
-    /solo in other airport/i.test(normalizedTitle)
-  ) {
-    return 'Other Solo';
-  }
-
-  if (explicitCategoryMap[normalizedTitle]) {
-    return explicitCategoryMap[normalizedTitle];
-  }
-
-  if (normalizedTitle in explicitCategoryMap && explicitCategoryMap[normalizedTitle] === null) {
-    return null;
-  }
-
-  if (/additional category|additional class|category\/class|category and class/i.test(normalizedTitle)) {
-    return 'Additional Category / Class';
-  }
-
-  return 'Aircraft & Operating Endorsements';
 }
 
 function buildPreviewText(body) {
@@ -676,6 +568,8 @@ async function requestFullscreenAndLandscape(element) {
 function EndorsementGenerator() {
   const router = useRouter();
   const { session } = useAuthSession();
+  const [templateCatalog, setTemplateCatalog] = useState(fallbackTemplates);
+  const [templateDataVersion, setTemplateDataVersion] = useState(fallbackEndorsementTemplateDataVersion);
   const [formData, setFormData] = useState(() => ({
     ...INITIAL_FORM_DATA,
     date: getTodayUsDate(),
@@ -719,6 +613,8 @@ function EndorsementGenerator() {
   const printFrameRef = useRef(null);
   const defaultCfiAppliedRef = useRef(false);
 
+  const templateEntries = useMemo(() => Object.entries(templateCatalog), [templateCatalog]);
+
   const resetGeneratedPdf = useCallback(() => {
     if (printablePdfIsTemporaryRef.current && printablePdfUrlRef.current) {
       URL.revokeObjectURL(printablePdfUrlRef.current);
@@ -737,6 +633,43 @@ function EndorsementGenerator() {
   useEffect(() => {
     Modal.setAppElement(document.body);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRemoteTemplates() {
+      try {
+        const [remoteTemplates, templateSettings] = await Promise.all([
+          fetchActiveEndorsementTemplates(),
+          fetchEndorsementTemplateSettings(),
+        ]);
+
+        if (cancelled || remoteTemplates.length === 0) {
+          return;
+        }
+
+        setTemplateCatalog(endorsementTemplatesToGeneratorMap(remoteTemplates));
+        setTemplateDataVersion({
+          source: templateSettings.source || fallbackEndorsementTemplateDataVersion.source,
+          sourceDate: templateSettings.source_date || fallbackEndorsementTemplateDataVersion.sourceDate,
+          updatedAt: templateSettings.updated_date || fallbackEndorsementTemplateDataVersion.updatedAt,
+          sourceFile: 'Supabase endorsement_template_settings',
+        });
+      } catch (error) {
+        console.warn('Using fallback endorsement templates:', error);
+      }
+    }
+
+    void loadRemoteTemplates();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedTemplates((current) => current.filter((templateKey) => templateCatalog[templateKey]));
+  }, [templateCatalog]);
 
   useEffect(() => {
     const query = window.matchMedia('(hover: none), (pointer: coarse)');
@@ -982,9 +915,10 @@ function EndorsementGenerator() {
     .map(([title, template]) => ({
       title,
       template,
-      category: getTemplateCategory(title),
+      category: template.category ?? getEndorsementTemplateCategory(title),
       preview: buildPreviewText(template.text),
       selected: selectedTemplates.includes(title),
+      sortOrder: Number.isFinite(Number(template.sortOrder)) ? Number(template.sortOrder) : 0,
     }))
     .filter((template) => {
       if (!searchTerm.trim()) {
@@ -1002,6 +936,9 @@ function EndorsementGenerator() {
       if (left.selected !== right.selected) {
         return left.selected ? -1 : 1;
       }
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder;
+      }
       return left.title.localeCompare(right.title);
     });
 
@@ -1018,19 +955,19 @@ function EndorsementGenerator() {
     return accumulator;
   }, {});
 
-  const orderedTemplateGroups = TEMPLATE_CATEGORY_ORDER
+  const orderedTemplateGroups = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER
     .map((category) => [category, groupedVisibleTemplates[category] || []])
     .filter(([, templatesForCategory]) => templatesForCategory.length > 0);
 
   const selectedTemplateDetails = selectedTemplates.map((title) => {
     return {
       title,
-      fields: templates[title]?.fields ?? [],
+      fields: templateCatalog[title]?.fields ?? [],
     };
   });
 
   const selectedTemplateFields = selectedTemplates.reduce((accumulator, templateKey) => {
-    const template = templates[templateKey];
+    const template = templateCatalog[templateKey];
     if (!template) {
       return accumulator;
     }
@@ -1051,7 +988,7 @@ function EndorsementGenerator() {
 
   const getFieldsForTemplates = (templateKeys) =>
     templateKeys.reduce((accumulator, templateKey) => {
-      const template = templates[templateKey];
+      const template = templateCatalog[templateKey];
       if (!template) {
         return accumulator;
       }
@@ -1390,7 +1327,7 @@ function EndorsementGenerator() {
       ),
     };
 
-    const template = templates[templateKey];
+    const template = templateCatalog[templateKey];
     const nextMappedData = generatorMode === 'blank' ? blankTemplateMappedData : mappedData;
 
     return sanitizeText(
@@ -2012,9 +1949,9 @@ function EndorsementGenerator() {
             </div>
 
             <div className={styles.dataVersionNotice}>
-              <span>Template data: {endorsementTemplateDataVersion.source}</span>
-              <span>Source date: {endorsementTemplateDataVersion.sourceDate}</span>
-              <span>Updated: {endorsementTemplateDataVersion.updatedAt}</span>
+              <span>Template data: {templateDataVersion.source}</span>
+              <span>Source date: {templateDataVersion.sourceDate}</span>
+              <span>Updated: {templateDataVersion.updatedAt}</span>
             </div>
 
             <div className={styles.mobileWorkflowStatus} aria-label="Endorsement workflow status">
@@ -2488,7 +2425,7 @@ function EndorsementGenerator() {
               className="endorsementModalSearch"
             />
             <span className="endorsementResultCount">
-              {visibleTemplates.length} results · {endorsementTemplateDataVersion.source} · Updated {endorsementTemplateDataVersion.updatedAt}
+              {visibleTemplates.length} results · {templateDataVersion.source} · Updated {templateDataVersion.updatedAt}
             </span>
           </div>
 

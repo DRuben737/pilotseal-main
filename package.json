@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "audit:endorsements": "node scripts/audit-endorsements.mjs"
+    "audit:endorsements": "node scripts/audit-endorsements.mjs",
+    "seed:endorsements:sql": "node scripts/export-endorsement-template-seed.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
