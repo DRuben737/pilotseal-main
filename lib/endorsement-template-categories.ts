@@ -1,115 +1,65 @@
 export const ENDORSEMENT_TEMPLATE_CATEGORY_ORDER = [
-  "Solo Endorsements",
-  "Other Solo",
-  "Solo Cross-Country",
-  "Private Pilot",
-  "Instrument Rating",
-  "Commercial Pilot",
-  "CFI",
-  "CFII",
-  "Sport Pilot",
-  "Add Category / Class",
-  "Additional Category / Class",
-  "Retest / Recurrent / IPC",
-  "Aircraft & Operating Endorsements",
-  "Other PIC",
+  "TSA / Citizenship",
+  "Student Solo",
+  "Solo Cross-Country & Airspace",
+  "Checkride / Common Requirements",
+  "Checkride / Private Pilot",
+  "Checkride / Commercial Pilot",
+  "Checkride / Instrument Rating",
+  "Checkride / ATP",
+  "Checkride / Flight Instructor",
+  "Checkride / Sport CFI",
+  "Checkride / Add-on & Type Ratings",
+  "Checkride / Retest",
+  "Checkride / Recreational Pilot",
+  "Checkride / Sport Pilot",
+  "Flight Review, IPC & Currency",
+  "Aircraft Operating Privileges",
+  "Add-on Ratings & Type Ratings",
+  "Flight Instructor",
+  "Robinson Helicopter SFAR 73",
+  "Glider, Towing & Ultralight",
+  "NVG, EFVS & Special Systems",
 ];
 
-const explicitCategoryMap: Record<string, string | null> = {
-  "TSA U.S. Citizenship": null,
-  "Practical Test Prereqs": "Retest / Recurrent / IPC",
-  "Pre-Solo Written": "Solo Endorsements",
-  "Pre-Solo Flight Training": "Solo Endorsements",
-  "Pre-Solo Night Training": "Other Solo",
-  "Solo Flight Initial 90 Days": "Solo Endorsements",
-  "Solo Flight Additional 90 Days": "Solo Endorsements",
-  "Solo in other airport": "Other Solo",
-  "Solo airport inside Class B": "Other Solo",
-  "Solo in Class B": "Other Solo",
-  "Solo Flight in Class B/C/D": "Other Solo",
-  "Solo Ops at Towered/Class B/C/D Airport": "Other Solo",
-  "Solo cross-country training": "Solo Cross-Country",
-  "Solo cross-country plan review": "Solo Cross-Country",
-  "Solo cross-country day": "Solo Cross-Country",
-  "Repeated Solo XC Within 50 NM": "Solo Cross-Country",
-  "PIC Solo Outside Rating": "Add Category / Class",
-  "PVT addon- deficiency": "Add Category / Class",
-  "PVT addon-checkride": "Add Category / Class",
-  "IR addon": "Add Category / Class",
-  "COM addon": "Add Category / Class",
-  "Sport Pilot Proficiency Check": "Sport Pilot",
-  "Sport Pilot Practical Test": "Sport Pilot",
-  "LSA PIC VH <= 87 KCAS": "Sport Pilot",
-  "LSA PIC VH > 87 KCAS": "Sport Pilot",
-  "Sport Pilot Night": "Sport Pilot",
-  "Sport Pilot Retractable Gear PIC": "Sport Pilot",
-  "Sport Pilot Controllable Pitch Propeller PIC": "Sport Pilot",
-  "PVT knowledge test": "Private Pilot",
-  "PVT Written Deficiencies": "Private Pilot",
-  "PVT Practical Test": "Private Pilot",
-  "PVT 2-Month Review": "Private Pilot",
-  "COM knowledge test": "Commercial Pilot",
-  "COM Written Deficiencies": "Commercial Pilot",
-  "COM Practical Test": "Commercial Pilot",
-  "COM 2-Month Review": "Commercial Pilot",
-  "IR knowledge test": "Instrument Rating",
-  "IR Written Deficiencies": "Instrument Rating",
-  "IR Practical Test": "Instrument Rating",
-  "IR 2-Month Review": "Instrument Rating",
-  "FOI knowledge test": "CFI",
-  "CFI Knowledge Test": "CFI",
-  "CFI Knowledge Test Deficiencies": "CFI",
-  "CFII Written Deficiency": "CFII",
-  "CFI required training": "CFI",
-  "Spin training": "CFI",
-  "Helicopter Touchdown Autorotation": "CFI",
-  "CFII Practical Test": "CFII",
-  "Flight review": "Retest / Recurrent / IPC",
-  "Instrument proficiency check": "Retest / Recurrent / IPC",
-  "Ground Instructor Recency": "Retest / Recurrent / IPC",
-  "Written Retest": "Retest / Recurrent / IPC",
-  "Practical Test Retest": "Retest / Recurrent / IPC",
-  "R-22/R-44 Awareness": "Solo Endorsements",
-  "R-22 solo endorsement": "Solo Endorsements",
-  "R-22 PIC": "Other PIC",
-  "R-22 Flight Review": "Retest / Recurrent / IPC",
-  "R-44 solo endorsement": "Solo Endorsements",
-  "R-44 PIC": "Other PIC",
-  "R-44 Flight Review": "Retest / Recurrent / IPC",
-  "Complex Airplane PIC": "Other PIC",
-  "High-Performance Airplane PIC": "Other PIC",
-  "High-Altitude Pressurized PIC": "Other PIC",
-  "Tailwheel Airplane PIC": "Other PIC",
-  "Simplified Flight Controls PIC": "Other PIC",
-  "Simplified Flight Controls Initial Cadre": "Other PIC",
-  "Night Vision Goggles": "Other PIC",
-  "NVG ground training": "Other PIC",
-  "NVG PIC": "Other PIC",
-};
+export function getEndorsementTemplateCategory(title: string, referenceNumber?: string | null) {
+  const number = Number(String(referenceNumber ?? "").replace(/^A/i, ""));
 
-export function getEndorsementTemplateCategory(title: string) {
-  const normalizedTitle = String(title || "").trim().replace(/\s+/g, " ");
-
-  if (
-    /pre-solo night training/i.test(normalizedTitle) ||
-    /solo airport inside class b/i.test(normalizedTitle) ||
-    /solo in class b/i.test(normalizedTitle) ||
-    /solo in other airport/i.test(normalizedTitle)
-  ) {
-    return "Other Solo";
+  if (number >= 1 && number <= 96) {
+    if (number === 14) return "TSA / Citizenship";
+    if ((number >= 3 && number <= 8) || number === 34) return "Student Solo";
+    if ([9, 10, 11, 12, 13, 15, 16, 23, 35].includes(number)) return "Solo Cross-Country & Airspace";
+    if ([1, 2].includes(number)) return "Checkride / Common Requirements";
+    if ([17, 18, 19, 20, 21, 22].includes(number)) return "Checkride / Sport Pilot";
+    if ([29, 30].includes(number)) return "Checkride / Recreational Pilot";
+    if ([36, 37].includes(number)) return "Checkride / Private Pilot";
+    if ([38, 39].includes(number)) return "Checkride / Commercial Pilot";
+    if ([42, 43, 44].includes(number)) return "Checkride / Instrument Rating";
+    if ([40, 41].includes(number)) return "Checkride / ATP";
+    if ([45, 46, 47, 48].includes(number)) return "Checkride / Flight Instructor";
+    if ([51, 52, 53, 54, 55, 56].includes(number)) return "Checkride / Sport CFI";
+    if ([77].includes(number)) return "Checkride / Retest";
+    if ([78, 79, 80, 81, 82].includes(number)) return "Checkride / Add-on & Type Ratings";
+    if ([24, 25, 26, 27, 28, 31, 32, 72, 73, 74, 75, 76, 95, 96].includes(number)) {
+      return "Aircraft Operating Privileges";
+    }
+    if ([33, 59, 69, 70, 71].includes(number)) return "Flight Review, IPC & Currency";
+    if (number >= 60 && number <= 68) return "Robinson Helicopter SFAR 73";
+    if ([83, 84, 85, 87].includes(number)) return "Glider, Towing & Ultralight";
+    if ([49, 50, 57, 58].includes(number)) return "Flight Instructor";
+    if ([86].includes(number)) return "Checkride / Common Requirements";
+    if (number >= 88 && number <= 94) return "NVG, EFVS & Special Systems";
   }
 
-  if (explicitCategoryMap[normalizedTitle]) {
-    return explicitCategoryMap[normalizedTitle];
-  }
-
-  if (normalizedTitle in explicitCategoryMap && explicitCategoryMap[normalizedTitle] === null) {
-    return null;
-  }
-
-  if (/additional category|additional class|category\/class|category and class/i.test(normalizedTitle)) {
-    return "Additional Category / Class";
-  }
-
-  return "Aircraft & Operating Endorsements";
+  const normalizedTitle = String(title || "").trim();
+  if (/solo|pre-solo/i.test(normalizedTitle)) return "Student Solo";
+  if (/TSA|citizenship/i.test(normalizedTitle)) return "TSA / Citizenship";
+  if (/knowledge|practical|checkride|test/i.test(normalizedTitle)) return "Checkride / Common Requirements";
+  if (/flight instructor|CFI|CFII|spin/i.test(normalizedTitle)) return "Flight Instructor";
+  if (/flight review|IPC|currency|WINGS|recurrent/i.test(normalizedTitle)) return "Flight Review, IPC & Currency";
+  if (/retest/i.test(normalizedTitle)) return "Checkride / Retest";
+  if (/R-22|R-44|Robinson/i.test(normalizedTitle)) return "Robinson Helicopter SFAR 73";
+  if (/glider|ultralight|towing/i.test(normalizedTitle)) return "Glider, Towing & Ultralight";
+  if (/NVG|EFVS|night vision/i.test(normalizedTitle)) return "NVG, EFVS & Special Systems";
+  return "Aircraft Operating Privileges";
 }

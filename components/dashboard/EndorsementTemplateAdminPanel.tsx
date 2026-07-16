@@ -24,12 +24,11 @@ import { fetchCurrentProfile } from "@/lib/profile";
 type TemplateFormState = {
   id: string | null;
   key: string;
+  reference_number: string;
   title: string;
   body: string;
   fieldsJson: string;
   category: string;
-  source: string;
-  source_date: string;
   status: EndorsementTemplateStatus;
   sort_order: string;
 };
@@ -43,12 +42,11 @@ type SourceFormState = {
 const emptyForm: TemplateFormState = {
   id: null,
   key: "",
+  reference_number: "",
   title: "",
   body: "",
   fieldsJson: "[]",
   category: "",
-  source: endorsementTemplateDataVersion.source,
-  source_date: endorsementTemplateDataVersion.sourceDate,
   status: "inactive",
   sort_order: "0",
 };
@@ -67,28 +65,51 @@ const sampleValues: Record<string, string> = {
   airportPair: "KABC and KXYZ",
   annualReviewDueDate: "12/31/2026",
   categoryClass: "Airplane Single-Engine Land",
-  certificateType: "Private Pilot",
+  certificateType: "Private Pilot certificate with Airplane Single-Engine Land rating",
   citizenshipDocument: "U.S. passport",
   citizenshipDocumentNumber: "123456789",
+  categoryClassModel: "Airplane Single-Engine Land, Cessna 172",
+  categoryClassType: "Airplane Single-Engine Land",
+  certificateCategoryClass: "Airplane Single-Engine Land",
+  certificateLevel: "Private Pilot",
+  certificateRatingPrivilege: "Private Pilot",
+  commercialPilotPracticalCategory: "Airplane Single-Engine Land",
+  commercialPilotTestCategory: "Airplane",
   date: "07/16/2026",
+  efvsOperationRule: "14 CFR § 91.176(a)",
   eventDate: "07/16/2026",
+  flightInstructorKnowledgeTest: "Airplane",
+  gliderLaunchMethod: "aerotow",
   instructorCertExpDate: "12/31/2027",
   instructorCertNumber: "9876543CFI",
   instructorName: "Alex Instructor",
+  instrumentRatingCategory: "airplane",
   knowledgeTestName: "Private Pilot Airplane",
   limitations: "day VFR only",
   localConditions: "No additional limitations.",
   pilotCertificateGrade: "Student",
   practicalTestCertificate: "Private Pilot",
-  practicalTestType: "Private Pilot practical test",
+  practicalTestType: "Private Pilot Airplane Single-Engine Land practical test",
+  privatePilotPracticalCategory: "Airplane Single-Engine Land",
+  privatePilotTestCategory: "Airplane",
+  recreationalPilotTestCategory: "Airplane Single-Engine Land",
   routeDescription: "direct",
   routeFrom: "KABC",
   routeLandings: "KDEF",
   routeStudentName: "Jordan Pilot",
   routeTo: "KXYZ",
+  retestTestName: "Private Pilot practical test",
+  spinAircraftCategory: "airplane",
+  sportCfiKnowledgeTest: "Airplane",
+  sportPilotPracticalCategory: "Airplane Single-Engine Land",
+  sportPilotTestCategory: "Airplane",
   studentCertNumber: "1234567",
   studentName: "Jordan Pilot",
   trainingAircraft: "Cessna 172",
+  trainingType: "flight",
+  typeRating: "CE-525",
+  wingsLevel: "Basic",
+  wingsPhaseNumber: "1",
 };
 
 function slugifyTemplateKey(title: string) {
@@ -138,12 +159,11 @@ function createFormFromTemplate(template: EndorsementTemplate): TemplateFormStat
   return {
     id: template.id,
     key: template.key,
+    reference_number: template.reference_number ?? "",
     title: template.title,
     body: template.body,
     fieldsJson: JSON.stringify(template.fields, null, 2),
     category: template.category ?? "",
-    source: template.source ?? "",
-    source_date: template.source_date ?? "",
     status: template.status,
     sort_order: String(template.sort_order),
   };
@@ -160,12 +180,11 @@ function parseFieldsJson(fieldsJson: string) {
 function getFormInput(form: TemplateFormState, userId: string | null | undefined) {
   return {
     key: form.key,
+    reference_number: form.reference_number,
     title: form.title,
     body: form.body,
     fields: parseFieldsJson(form.fieldsJson),
     category: form.category,
-    source: form.source,
-    source_date: form.source_date,
     status: form.status,
     sort_order: Number.parseInt(form.sort_order, 10),
     userId,
@@ -203,7 +222,7 @@ function getPreviewState(form: TemplateFormState) {
 }
 
 function getDisplayCategory(template: EndorsementTemplate) {
-  return template.category || getEndorsementTemplateCategory(template.title) || "Other endorsements";
+  return template.category || getEndorsementTemplateCategory(template.title, template.reference_number) || "Other endorsements";
 }
 
 function createSourceFormFromSettings(settings: EndorsementTemplateSettings): SourceFormState {
@@ -251,8 +270,8 @@ export default function EndorsementTemplateAdminPanel() {
       [
         template.title,
         template.key,
+        template.reference_number,
         template.category,
-        template.source,
         template.status,
         template.body,
       ]
@@ -504,7 +523,10 @@ export default function EndorsementTemplateAdminPanel() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-slate-950">{template.title}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {template.reference_number ? <span className="saas-pill">{template.reference_number}</span> : null}
+                            <p className="text-sm font-semibold text-slate-950">{template.title}</p>
+                          </div>
                           <p className="mt-1 text-xs text-slate-500">Short name: {template.key}</p>
                         </div>
                         <span className="saas-pill">{getVisibilityLabel(template.status)}</span>
@@ -526,13 +548,15 @@ export default function EndorsementTemplateAdminPanel() {
 
       {previewTemplate
         ? renderOverlay(
-            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
               <div className="max-h-[86vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="eyebrow">Preview endorsement</p>
                     <h2 className="text-xl font-semibold text-slate-950">{previewTemplate.title}</h2>
-                    <p className="mt-1 text-sm text-slate-500">{getDisplayCategory(previewTemplate)}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {[previewTemplate.reference_number, getDisplayCategory(previewTemplate)].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                   <button type="button" className="secondary-button" onClick={() => setPreviewTemplate(null)}>
                     Close
@@ -547,6 +571,7 @@ export default function EndorsementTemplateAdminPanel() {
 
                 <div className="mt-4 grid gap-2 text-sm text-slate-600">
                   <span>Short name: {previewTemplate.key}</span>
+                  {previewTemplate.reference_number ? <span>AC number: {previewTemplate.reference_number}</span> : null}
                   <span>Where it appears: {getVisibilityLabel(previewTemplate.status)}</span>
                 </div>
 
@@ -570,7 +595,7 @@ export default function EndorsementTemplateAdminPanel() {
 
       {editorOpen
         ? renderOverlay(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -612,6 +637,18 @@ export default function EndorsementTemplateAdminPanel() {
                 </span>
               </label>
               <label className="grid gap-1 text-sm font-medium text-slate-700">
+                AC number
+                <input
+                  value={form.reference_number}
+                  onChange={(event) => updateForm("reference_number", event.target.value)}
+                  placeholder="A1"
+                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
+                />
+                <span className="text-xs font-normal text-slate-500">
+                  Use A1 through A96. Leave empty only for archived older copies.
+                </span>
+              </label>
+              <label className="grid gap-1 text-sm font-medium text-slate-700">
                 Group
                 <input
                   value={form.category}
@@ -630,22 +667,6 @@ export default function EndorsementTemplateAdminPanel() {
                   <option value="inactive">Hide for now</option>
                   <option value="archived">Archive</option>
                 </select>
-              </label>
-              <label className="grid gap-1 text-sm font-medium text-slate-700">
-                Reference
-                <input
-                  value={form.source}
-                  onChange={(event) => updateForm("source", event.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
-                />
-              </label>
-              <label className="grid gap-1 text-sm font-medium text-slate-700">
-                Reference date
-                <input
-                  value={form.source_date}
-                  onChange={(event) => updateForm("source_date", event.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
-                />
               </label>
               <label className="grid gap-1 text-sm font-medium text-slate-700">
                 List order
@@ -712,7 +733,7 @@ export default function EndorsementTemplateAdminPanel() {
 
       {sourceEditorOpen
         ? renderOverlay(
-            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
               <div className="max-h-[86vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -774,7 +795,7 @@ export default function EndorsementTemplateAdminPanel() {
 
       {guideOpen
         ? renderOverlay(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
           <div className="max-h-[86vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>

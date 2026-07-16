@@ -68,20 +68,21 @@ try {
   const templateModule = await import(pathToFileURL(tempPath).href);
   const categoryModule = await import(pathToFileURL(tempCategoryPath).href);
   const templates = templateModule.default;
-  const version = templateModule.endorsementTemplateDataVersion;
   const getCategory = categoryModule.getEndorsementTemplateCategory;
   const usedKeys = new Set();
   const rows = Object.entries(templates).map(([title, template], index) => {
+    const templateKey = template.key || createUniqueTemplateKey(title, usedKeys);
+    usedKeys.add(templateKey);
+
     return {
-      key: createUniqueTemplateKey(title, usedKeys),
+      key: templateKey,
+      reference_number: template.referenceNumber ?? null,
       title,
       body: template.text,
       fields: template.fields ?? [],
-      category: template.category ?? getCategory(title),
-      source: version.source,
-      source_date: version.sourceDate,
+      category: template.category ?? getCategory(title, template.referenceNumber),
       status: "active",
-      sort_order: index,
+      sort_order: Number.isFinite(Number(template.sortOrder)) ? Number(template.sortOrder) : index,
     };
   });
 
@@ -90,12 +91,11 @@ try {
       "  (",
       [
         sqlString(row.key),
+        sqlString(row.reference_number),
         sqlString(row.title),
         sqlString(row.body),
         sqlJson(row.fields),
         sqlString(row.category),
-        sqlString(row.source),
-        sqlString(row.source_date),
         sqlString(row.status),
         row.sort_order,
       ].join(", "),
@@ -117,16 +117,15 @@ try {
       console.log(`-- chunk ${index + 1} of ${chunks.length}`);
     }
     console.log("insert into public.endorsement_templates");
-    console.log("  (key, title, body, fields, category, source, source_date, status, sort_order)");
+    console.log("  (key, reference_number, title, body, fields, category, status, sort_order)");
     console.log("values");
     console.log(chunk.join(",\n"));
     console.log("on conflict (key) do update set");
+    console.log("  reference_number = excluded.reference_number,");
     console.log("  title = excluded.title,");
     console.log("  body = excluded.body,");
     console.log("  fields = excluded.fields,");
     console.log("  category = excluded.category,");
-    console.log("  source = excluded.source,");
-    console.log("  source_date = excluded.source_date,");
     console.log("  status = excluded.status,");
     console.log("  sort_order = excluded.sort_order;");
   });

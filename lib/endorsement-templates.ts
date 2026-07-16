@@ -15,12 +15,11 @@ export type EndorsementTemplateField = {
 export type EndorsementTemplate = {
   id: string;
   key: string;
+  reference_number: string | null;
   title: string;
   body: string;
   fields: EndorsementTemplateField[];
   category: string | null;
-  source: string | null;
-  source_date: string | null;
   status: EndorsementTemplateStatus;
   sort_order: number;
   created_at?: string | null;
@@ -40,12 +39,11 @@ export type EndorsementTemplateSettings = {
 
 export type EndorsementTemplateInput = {
   key: string;
+  reference_number?: string | null;
   title: string;
   body: string;
   fields: unknown;
   category?: string | null;
-  source?: string | null;
-  source_date?: string | null;
   status: EndorsementTemplateStatus;
   sort_order?: number | null;
   userId?: string | null;
@@ -65,11 +63,12 @@ export type EndorsementTemplateMap = Record<
     fields: EndorsementTemplateField[];
     category?: string | null;
     sortOrder?: number;
+    referenceNumber?: string | null;
   }
 >;
 
 const ENDORSEMENT_TEMPLATE_SELECT =
-  "id, key, title, body, fields, category, source, source_date, status, sort_order, created_at, updated_at, created_by, updated_by";
+  "id, key, reference_number, title, body, fields, category, status, sort_order, created_at, updated_at, created_by, updated_by";
 const ENDORSEMENT_TEMPLATE_SETTINGS_SELECT = "id, source, source_date, updated_date, updated_at, updated_by";
 
 const VALID_STATUSES = new Set(["active", "inactive", "archived"]);
@@ -82,6 +81,25 @@ function normalizeText(value: unknown) {
 function normalizeNullableText(value: unknown) {
   const normalized = normalizeText(value);
   return normalized || null;
+}
+
+function normalizeReferenceNumber(value: unknown) {
+  const normalized = normalizeText(value).toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const match = normalized.match(/^A([1-9][0-9]?)$/);
+  if (!match) {
+    throw new Error("AC number must look like A1 through A96.");
+  }
+
+  const number = Number(match[1]);
+  if (number < 1 || number > 96) {
+    throw new Error("AC number must be between A1 and A96.");
+  }
+
+  return `A${number}`;
 }
 
 function assertValidStatus(value: unknown): EndorsementTemplateStatus {
@@ -143,12 +161,11 @@ function normalizeTemplateRecord(record: Record<string, unknown>): EndorsementTe
   return {
     id: normalizeText(record.id),
     key: normalizeText(record.key),
+    reference_number: normalizeReferenceNumber(record.reference_number),
     title: normalizeText(record.title),
     body: String(record.body ?? ""),
     fields: validateEndorsementTemplateFields(record.fields ?? []),
     category: normalizeNullableText(record.category),
-    source: normalizeNullableText(record.source),
-    source_date: normalizeNullableText(record.source_date),
     status: assertValidStatus(record.status),
     sort_order: Number.isFinite(Number(record.sort_order)) ? Number(record.sort_order) : 0,
     created_at: normalizeNullableText(record.created_at),
@@ -193,12 +210,11 @@ export function normalizeEndorsementTemplateInput(input: EndorsementTemplateInpu
 
   return {
     key,
+    reference_number: normalizeReferenceNumber(input.reference_number),
     title,
     body,
     fields,
     category: normalizeNullableText(input.category),
-    source: normalizeNullableText(input.source),
-    source_date: normalizeNullableText(input.source_date),
     status: assertValidStatus(input.status),
     sort_order: Number.isFinite(Number(input.sort_order)) ? Number(input.sort_order) : 0,
     updated_by: input.userId || null,
@@ -241,6 +257,7 @@ export function endorsementTemplatesToGeneratorMap(
         fields: template.fields,
         category: template.category,
         sortOrder: template.sort_order,
+        referenceNumber: template.reference_number,
       },
     ])
   );
@@ -253,6 +270,7 @@ export async function fetchActiveEndorsementTemplates() {
     .select(ENDORSEMENT_TEMPLATE_SELECT)
     .eq("status", "active")
     .order("sort_order", { ascending: true })
+    .order("reference_number", { ascending: true })
     .order("title", { ascending: true });
 
   if (error) {
@@ -268,6 +286,7 @@ export async function fetchAdminEndorsementTemplates() {
     .from("endorsement_templates")
     .select(ENDORSEMENT_TEMPLATE_SELECT)
     .order("sort_order", { ascending: true })
+    .order("reference_number", { ascending: true })
     .order("title", { ascending: true });
 
   if (error) {

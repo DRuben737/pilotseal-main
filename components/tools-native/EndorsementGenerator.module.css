@@ -828,6 +828,37 @@
   cursor: pointer;
 }
 
+.templateCategoryBody {
+  display: grid;
+  gap: 1rem;
+}
+
+.templateSubcategory {
+  border-left: 2px solid rgba(37, 99, 235, 0.16);
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.templateSubcategoryHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.templateSubcategoryHeader h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.templateSubcategoryHeader span {
+  color: #64748b;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 @media (max-width: 960px) {
   .workspace {
     grid-template-columns: 1fr;

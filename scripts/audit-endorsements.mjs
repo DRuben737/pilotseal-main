@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +16,14 @@ const generatorSource = fs.readFileSync(generatorPath, "utf8");
 const templateLibSource = fs.readFileSync(templateLibPath, "utf8");
 const templateSqlSource = fs.readFileSync(templateSqlPath, "utf8");
 const seedExporterSource = fs.readFileSync(seedExporterPath, "utf8");
+const templateModule = await import(pathToFileURL(templatesPath).href);
+const fallbackTemplates = templateModule.default;
+const fallbackTemplateRows = Object.values(fallbackTemplates);
+const fallbackReferenceNumbers = fallbackTemplateRows
+  .map((template) => template.referenceNumber)
+  .filter(Boolean)
+  .sort((left, right) => Number(left.slice(1)) - Number(right.slice(1)));
+const expectedReferenceNumbers = Array.from({ length: 96 }, (_, index) => `A${index + 1}`);
 
 const checks = [
   {
@@ -29,8 +37,8 @@ const checks = [
   {
     name: "TSA citizenship UI keeps document type and document number as separate fields",
     pass:
-      templatesSource.includes("citizenshipDocument: {") &&
-      templatesSource.includes("citizenshipDocumentNumber: {") &&
+      templatesSource.includes('"citizenshipDocument": {') &&
+      templatesSource.includes('"citizenshipDocumentNumber": {') &&
       generatorSource.includes("'citizenshipDocumentNumber'"),
   },
   {
@@ -54,12 +62,18 @@ const checks = [
       ),
   },
   {
-    name: "Instrument rating endorsements include powered-lift",
-    pass: templatesSource.includes('"Instrument-Powered-Lift"'),
+    name: "Fallback templates cover AC A1 through A96 once",
+    pass:
+      fallbackTemplateRows.length === 96 &&
+      new Set(fallbackReferenceNumbers).size === 96 &&
+      expectedReferenceNumbers.every((referenceNumber, index) => fallbackReferenceNumbers[index] === referenceNumber),
   },
   {
-    name: "Blank-template sizing recognizes citizenship document number",
-    pass: generatorSource.includes("'citizenshipDocumentNumber'"),
+    name: "Generator can search and show AC numbers",
+    pass:
+      generatorSource.includes("referenceNumber") &&
+      generatorSource.includes("template.referenceNumber") &&
+      generatorSource.includes("getEndorsementTemplateCategory(title, template.referenceNumber)"),
   },
   {
     name: "No duplicated CFR prefix or accidental duplicated required wording",
@@ -83,11 +97,25 @@ const checks = [
       templateLibSource.includes("Field ${key} must include options."),
   },
   {
+    name: "Endorsement template data layer validates AC numbers",
+    pass:
+      templateLibSource.includes("normalizeReferenceNumber") &&
+      templateLibSource.includes("AC number must look like A1 through A96.") &&
+      templateLibSource.includes("reference_number"),
+  },
+  {
     name: "Endorsement templates table allows active public reads and admin writes",
     pass:
       templateSqlSource.includes("create table if not exists public.endorsement_templates") &&
       templateSqlSource.includes("to anon, authenticated") &&
       templateSqlSource.includes("profiles.role = 'admin'"),
+  },
+  {
+    name: "Endorsement templates table stores unique AC numbers",
+    pass:
+      templateSqlSource.includes("reference_number text") &&
+      templateSqlSource.includes("endorsement_templates_reference_number_check") &&
+      templateSqlSource.includes("endorsement_templates_reference_number_key"),
   },
   {
     name: "Endorsement source details are stored separately and editable by admins",
@@ -98,9 +126,18 @@ const checks = [
       templateSqlSource.includes("endorsement_template_settings_update_admin"),
   },
   {
+    name: "Individual endorsement rows do not store duplicate source details",
+    pass:
+      !templateSqlSource.includes("source text,") &&
+      !templateSqlSource.includes("source_date text,") &&
+      !seedExporterSource.includes("source_date = excluded.source_date") &&
+      !seedExporterSource.includes("(key, title, body, fields, category, source, source_date"),
+  },
+  {
     name: "Seed exporter generates SQL from fallback template source",
     pass:
       seedExporterSource.includes("components\", \"tools-native\", \"templates.js") &&
+      seedExporterSource.includes("reference_number") &&
       seedExporterSource.includes("on conflict (key) do update set"),
   },
 ];

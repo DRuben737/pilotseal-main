@@ -179,7 +179,15 @@ function buildPreviewText(body) {
 }
 
 function getFieldHelperText(field) {
-  return field.placeholder || `Used to complete the ${field.label.toLowerCase()} portion of the selected endorsement.`;
+  if (field.placeholder) {
+    return field.placeholder;
+  }
+
+  if (field.type === 'select' || field.type === 'multi-select') {
+    return `Choose ${field.label.toLowerCase()}.`;
+  }
+
+  return `Enter ${field.label.toLowerCase()}.`;
 }
 
 function getFieldSelectPrompt(field) {
@@ -188,6 +196,25 @@ function getFieldSelectPrompt(field) {
   }
 
   return field.required ? 'Select' : 'Optional';
+}
+
+function splitTemplateCategory(category) {
+  const [parent, ...childParts] = String(category || '').split(' / ');
+  return {
+    parent: parent || 'Other endorsements',
+    child: childParts.join(' / ') || null,
+  };
+}
+
+function getTemplateDisplayPriority(template) {
+  const searchable = `${template.title} ${template.category || ''}`.toLowerCase();
+  if (searchable.includes('recreational')) {
+    return 2;
+  }
+  if (searchable.includes('sport')) {
+    return 3;
+  }
+  return 1;
 }
 
 function hasFieldValue(value) {
@@ -915,7 +942,8 @@ function EndorsementGenerator() {
     .map(([title, template]) => ({
       title,
       template,
-      category: template.category ?? getEndorsementTemplateCategory(title),
+      referenceNumber: template.referenceNumber ?? null,
+      category: template.category ?? getEndorsementTemplateCategory(title, template.referenceNumber),
       preview: buildPreviewText(template.text),
       selected: selectedTemplates.includes(title),
       sortOrder: Number.isFinite(Number(template.sortOrder)) ? Number(template.sortOrder) : 0,
@@ -928,6 +956,7 @@ function EndorsementGenerator() {
       const query = searchTerm.trim().toLowerCase();
       return (
         template.title.toLowerCase().includes(query) ||
+        String(template.referenceNumber || '').toLowerCase().includes(query) ||
         String(template.category || '').toLowerCase().includes(query) ||
         template.preview.toLowerCase().includes(query)
       );
@@ -935,6 +964,11 @@ function EndorsementGenerator() {
     .sort((left, right) => {
       if (left.selected !== right.selected) {
         return left.selected ? -1 : 1;
+      }
+      const leftPriority = getTemplateDisplayPriority(left);
+      const rightPriority = getTemplateDisplayPriority(right);
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
       }
       if (left.sortOrder !== right.sortOrder) {
         return left.sortOrder - right.sortOrder;
@@ -955,9 +989,33 @@ function EndorsementGenerator() {
     return accumulator;
   }, {});
 
-  const orderedTemplateGroups = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER
-    .map((category) => [category, groupedVisibleTemplates[category] || []])
-    .filter(([, templatesForCategory]) => templatesForCategory.length > 0);
+  const parentCategoryOrder = Array.from(
+    new Set(ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.map((category) => splitTemplateCategory(category).parent))
+  );
+  const orderedTemplateGroups = parentCategoryOrder
+    .map((parentCategory) => {
+      const childGroups = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER
+        .filter((category) => splitTemplateCategory(category).parent === parentCategory)
+        .map((category) => ({
+          category,
+          title: splitTemplateCategory(category).child,
+          templates: groupedVisibleTemplates[category] || [],
+        }))
+        .filter((group) => group.title && group.templates.length > 0);
+      const directTemplates = groupedVisibleTemplates[parentCategory] || [];
+      const templates = [
+        ...directTemplates,
+        ...childGroups.flatMap((group) => group.templates),
+      ];
+
+      return {
+        category: parentCategory,
+        directTemplates,
+        childGroups,
+        templates,
+      };
+    })
+    .filter((group) => group.templates.length > 0);
 
   const selectedTemplateDetails = selectedTemplates.map((title) => {
     return {
@@ -1242,14 +1300,15 @@ function EndorsementGenerator() {
   };
 
   const toggleTemplateCategory = (category) => {
-    setTemplateCategoryOpen((prev) => ({
-      ...prev,
-      [category]: !prev[category],
-    }));
+    setTemplateCategoryOpen((prev) => (prev[category] ? {} : { [category]: true }));
   };
 
   const handleTemplateCategorySelectAll = (category) => {
-    const categoryTitles = (groupedVisibleTemplates[category] || []).map((template) => template.title);
+    const categoryTitles = (
+      orderedTemplateGroups.find((group) => group.category === category)?.templates ||
+      groupedVisibleTemplates[category] ||
+      []
+    ).map((template) => template.title);
     resetGeneratedPdf();
     setSelectedTemplates((prev) => Array.from(new Set([...prev, ...categoryTitles])));
     setErrors((prev) => ({ ...prev, selectedTemplates: undefined }));
@@ -1257,7 +1316,11 @@ function EndorsementGenerator() {
 
   const handleTemplateCategoryClear = (category) => {
     const categoryTitles = new Set(
-      (groupedVisibleTemplates[category] || []).map((template) => template.title)
+      (
+        orderedTemplateGroups.find((group) => group.category === category)?.templates ||
+        groupedVisibleTemplates[category] ||
+        []
+      ).map((template) => template.title)
     );
     resetGeneratedPdf();
     setSelectedTemplates((prev) => prev.filter((template) => !categoryTitles.has(template)));
@@ -2455,33 +2518,36 @@ function EndorsementGenerator() {
                   >
                     <div className="endorsementTemplateTop">
                       <span className="endorsementTemplateCategory">Priority</span>
+                      {template.referenceNumber ? (
+                        <span className="endorsementTemplateCategory">{template.referenceNumber}</span>
+                      ) : null}
                       <span className="endorsementTemplateToggle">{template.selected ? 'Selected' : 'Add'}</span>
                     </div>
                     <h3>{template.title}</h3>
-                    <p className="endorsementTemplatePreview">{template.preview.slice(0, 220)}...</p>
+                    <p className="endorsementTemplatePreview">{template.preview.slice(0, 145)}...</p>
                   </button>
                 ))}
               </div>
             ) : null}
 
             <div className={styles.templateCategoryStack}>
-              {orderedTemplateGroups.map(([category, categoryTemplates]) => {
-                const selectedCount = categoryTemplates.filter((template) => template.selected).length;
-                const isOpen = templateCategoryOpen[category] ?? false;
+              {orderedTemplateGroups.map((group) => {
+                const selectedCount = group.templates.filter((template) => template.selected).length;
+                const isOpen = templateCategoryOpen[group.category] ?? false;
 
                 return (
-                  <section key={category} className={styles.templateCategorySection}>
+                  <section key={group.category} className={styles.templateCategorySection}>
                     <div className={styles.templateCategoryHeader}>
                       <button
                         type="button"
                         className={styles.templateCategoryToggle}
-                        onClick={() => toggleTemplateCategory(category)}
+                        onClick={() => toggleTemplateCategory(group.category)}
                         aria-expanded={isOpen}
                       >
                         <div>
-                          <h3>{category}</h3>
+                          <h3>{group.category}</h3>
                           <p>
-                            {selectedCount} of {categoryTemplates.length} selected
+                            {selectedCount} of {group.templates.length} selected
                           </p>
                         </div>
                         <span className={`${styles.templateCategoryChevron} ${isOpen ? styles.templateCategoryChevronOpen : ''}`}>
@@ -2493,14 +2559,14 @@ function EndorsementGenerator() {
                         <button
                           type="button"
                           className={styles.templateCategoryAction}
-                          onClick={() => handleTemplateCategorySelectAll(category)}
+                          onClick={() => handleTemplateCategorySelectAll(group.category)}
                         >
                           Select all
                         </button>
                         <button
                           type="button"
                           className={styles.templateCategoryAction}
-                          onClick={() => handleTemplateCategoryClear(category)}
+                          onClick={() => handleTemplateCategoryClear(group.category)}
                         >
                           Clear
                         </button>
@@ -2508,23 +2574,62 @@ function EndorsementGenerator() {
                     </div>
 
                     {isOpen ? (
-                      <div className="endorsementTemplateGrid">
-                        {categoryTemplates.map((template) => (
-                          <button
-                            key={template.title}
-                            type="button"
-                            className={`endorsementTemplateCard ${template.selected ? 'endorsementTemplateCardSelected' : ''}`}
-                            onClick={() => handleTemplateSelection(template.title)}
-                            aria-pressed={template.selected}
-                          >
-                            <div className="endorsementTemplateTop">
-                              <span className="endorsementTemplateCategory">{template.category}</span>
-                              <span className="endorsementTemplateToggle">{template.selected ? 'Selected' : 'Add'}</span>
+                      <div className={styles.templateCategoryBody}>
+                        {group.directTemplates.length > 0 ? (
+                          <div className="endorsementTemplateGrid">
+                            {group.directTemplates.map((template) => (
+                              <button
+                                key={template.title}
+                                type="button"
+                                className={`endorsementTemplateCard ${template.selected ? 'endorsementTemplateCardSelected' : ''}`}
+                                onClick={() => handleTemplateSelection(template.title)}
+                                aria-pressed={template.selected}
+                              >
+                                <div className="endorsementTemplateTop">
+                                  <span className="endorsementTemplateCategory">{template.referenceNumber}</span>
+                                  <span className="endorsementTemplateToggle">{template.selected ? 'Selected' : 'Add'}</span>
+                                </div>
+                                <h3>{template.title}</h3>
+                                <p className="endorsementTemplatePreview">{template.preview.slice(0, 145)}...</p>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {group.childGroups.map((childGroup) => {
+                          const childSelectedCount = childGroup.templates.filter((template) => template.selected).length;
+
+                          return (
+                            <div key={childGroup.category} className={styles.templateSubcategory}>
+                              <div className={styles.templateSubcategoryHeader}>
+                                <h4>{childGroup.title}</h4>
+                                <span>
+                                  {childSelectedCount} of {childGroup.templates.length} selected
+                                </span>
+                              </div>
+                              <div className="endorsementTemplateGrid">
+                                {childGroup.templates.map((template) => (
+                                  <button
+                                    key={template.title}
+                                    type="button"
+                                    className={`endorsementTemplateCard ${template.selected ? 'endorsementTemplateCardSelected' : ''}`}
+                                    onClick={() => handleTemplateSelection(template.title)}
+                                    aria-pressed={template.selected}
+                                  >
+                                    <div className="endorsementTemplateTop">
+                                      {template.referenceNumber ? (
+                                        <span className="endorsementTemplateCategory">{template.referenceNumber}</span>
+                                      ) : null}
+                                      <span className="endorsementTemplateToggle">{template.selected ? 'Selected' : 'Add'}</span>
+                                    </div>
+                                    <h3>{template.title}</h3>
+                                    <p className="endorsementTemplatePreview">{template.preview.slice(0, 145)}...</p>
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <h3>{template.title}</h3>
-                            <p className="endorsementTemplatePreview">{template.preview.slice(0, 220)}...</p>
-                          </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : null}
                   </section>

@@ -1,12 +1,11 @@
 create table if not exists public.endorsement_templates (
   id uuid primary key default gen_random_uuid(),
   key text not null unique,
+  reference_number text,
   title text not null,
   body text not null,
   fields jsonb not null default '[]'::jsonb,
   category text,
-  source text,
-  source_date text,
   status text not null default 'inactive',
   sort_order integer not null default 0,
   created_by uuid references auth.users(id) on delete set null,
@@ -52,10 +51,39 @@ begin
       add constraint endorsement_templates_fields_array_check
       check (jsonb_typeof(fields) = 'array');
   end if;
+
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'endorsement_templates'
+      and column_name = 'reference_number'
+  ) then
+    alter table public.endorsement_templates
+      add column reference_number text;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'endorsement_templates_reference_number_check'
+      and conrelid = 'public.endorsement_templates'::regclass
+  ) then
+    alter table public.endorsement_templates
+      add constraint endorsement_templates_reference_number_check
+      check (
+        reference_number is null
+        or reference_number ~ '^A([1-9]|[1-8][0-9]|9[0-6])$'
+      );
+  end if;
 end $$;
 
 create index if not exists endorsement_templates_status_sort_idx
-on public.endorsement_templates (status, sort_order, title);
+on public.endorsement_templates (status, sort_order, reference_number, title);
+
+create unique index if not exists endorsement_templates_reference_number_key
+on public.endorsement_templates (reference_number)
+where reference_number is not null;
 
 create index if not exists endorsement_templates_category_idx
 on public.endorsement_templates (category);
