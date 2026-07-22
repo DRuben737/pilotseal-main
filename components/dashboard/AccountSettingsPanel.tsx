@@ -522,7 +522,7 @@ export default function AccountSettingsPanel() {
       const payload = (await response.json()) as { error?: string; success?: boolean };
 
       if (!response.ok || !payload.success) {
-        throw new Error("Account deletion failed. Please try again.");
+        throw new Error(payload.error || "Account deletion failed. Please try again.");
       }
 
       await supabase.auth.signOut();
@@ -530,7 +530,7 @@ export default function AccountSettingsPanel() {
       router.replace("/");
     } catch (error) {
       console.error(error);
-      setStatus("Account deletion failed. Please try again.");
+      setStatus(error instanceof Error ? error.message : "Account deletion failed. Please try again.");
       setDeleting(false);
       return;
     }

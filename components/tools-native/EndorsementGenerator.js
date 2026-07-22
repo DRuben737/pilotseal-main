@@ -29,6 +29,11 @@ import {
   ENDORSEMENT_TEMPLATE_CATEGORY_ORDER,
   getEndorsementTemplateCategory,
 } from '@/lib/endorsement-template-categories';
+import {
+  ACTIVE_ORGANIZATION_STORAGE_KEY,
+  fetchOrganizationStudents,
+  fetchUserOrganizations,
+} from '@/lib/organizations';
 
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
@@ -281,6 +286,10 @@ function getUniqueSavedPeopleByCertificateNumber(options) {
     seen.add(normalizedCertificateNumber);
     return true;
   });
+}
+
+function getStudentRecordPersonId(person) {
+  return person?.endorsement_record_person_id ?? person?.person_id ?? person?.id ?? '';
 }
 
 function formatTemplateFieldValue(key, value) {
@@ -622,6 +631,7 @@ function EndorsementGenerator() {
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [activeOrganizationId, setActiveOrganizationId] = useState('');
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signaturePreviewDataUrl, setSignaturePreviewDataUrl] = useState('');
@@ -839,10 +849,18 @@ function EndorsementGenerator() {
           return;
         }
 
-        const [allPeople, profile] = await Promise.all([
+        const [allPeople, profile, organizations] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchCurrentProfile(session.user.id),
+          fetchUserOrganizations().catch(() => []),
         ]);
+
+        const preferredOrganizationId = window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY) || '';
+        const activeOrganization = organizations.find((organization) => organization.id === preferredOrganizationId) || organizations[0] || null;
+        setActiveOrganizationId(activeOrganization?.id || '');
+        const organizationStudents = activeOrganization
+          ? await fetchOrganizationStudents(activeOrganization.id).catch(() => [])
+          : [];
 
         const certificates = await fetchPersonCertificates(session.user.id).catch((error) => {
           console.error('Unable to load person certificates:', error);
@@ -901,7 +919,17 @@ function EndorsementGenerator() {
         ));
 
         setSavedCfis(certificateCfis);
-        setSavedStudents([...certificatePilots, ...savedStudentPeople]);
+        const organizationStudentOptions = organizationStudents.map((student) => ({
+          id: `organization:${student.student_user_id}`,
+          person_id: student.person_id,
+          endorsement_record_person_id: student.person_id || '',
+          role: 'student',
+          display_name: student.display_name,
+          cert_number: student.certificate_number,
+          cert_exp_date: null,
+          is_default: false,
+        }));
+        setSavedStudents([...organizationStudentOptions, ...certificatePilots, ...savedStudentPeople]);
         setSessionIdentity(profile?.display_name || session.user.email || '');
 
         const defaultCertificateCfi = certificateCfis.find((person) => person.is_default);
@@ -1176,7 +1204,7 @@ function EndorsementGenerator() {
               ).trim().toLowerCase() === prev.studentCertNumber.trim().toLowerCase()
             );
 
-        setSelectedStudentId(selected?.person_id || selected?.id || '');
+        setSelectedStudentId(getStudentRecordPersonId(selected));
         if (selected && matchingCertificates.length === 1) {
           nextForm.studentCertNumber = selected.cert_number || '';
         } else if (matchingCertificates.length > 1 && !selected) {
@@ -1189,7 +1217,7 @@ function EndorsementGenerator() {
           (person) => (person.cert_number || '').trim().toLowerCase() === nextValue.trim().toLowerCase()
         );
 
-        setSelectedStudentId(selected?.person_id || selected?.id || '');
+        setSelectedStudentId(getStudentRecordPersonId(selected));
       }
 
       return nextForm;
@@ -1236,14 +1264,14 @@ function EndorsementGenerator() {
         const matchingCertificates = getSavedPeopleByName(savedStudents, nextName);
         const selected = matchingCertificates.length === 1 ? matchingCertificates[0] : null;
 
-        setSelectedStudentId(selected?.person_id || selected?.id || '');
+        setSelectedStudentId(getStudentRecordPersonId(selected));
         nextForm.studentCertNumber = selected?.cert_number || '';
       }
 
       if (field === 'studentCertNumber') {
         nextForm.studentName = person.display_name || nextForm.studentName;
         nextForm.studentCertNumber = person.cert_number || '';
-        setSelectedStudentId(person.person_id || person.id || '');
+        setSelectedStudentId(getStudentRecordPersonId(person));
       }
 
       return nextForm;
@@ -1623,12 +1651,13 @@ function EndorsementGenerator() {
     }
   };
 
-  const savePrintedRecord = async (pdfBlob) => {
+  const savePrintedRecord = async (pdfBlob, organizationId = activeOrganizationId) => {
     if (!session?.user?.id || !pdfBlob) {
       return;
     }
 
     setSavingRecord(true);
+    let uploadedStoragePath = '';
 
     try {
       const recordId = createUuid();
@@ -1645,10 +1674,12 @@ function EndorsementGenerator() {
       if (uploadError) {
         throw uploadError;
       }
+      uploadedStoragePath = storagePath;
 
       await createEndorsementRecord({
         id: recordId,
         userId: session.user.id,
+        organizationId: organizationId || null,
         studentId: selectedStudentId || null,
         studentName: formData.studentName.trim(),
         studentCertNumber: formData.studentCertNumber.trim() || null,
@@ -1660,10 +1691,17 @@ function EndorsementGenerator() {
         fileSizeBytes: pdfBlob.size,
       });
 
-      setStatusMessage('Print window opened. The PDF was saved to your dashboard records.');
+      setStatusMessage('The PDF was saved to your dashboard records.');
+      return true;
     } catch (error) {
       console.error('Error saving endorsement record:', error);
-      setStatusMessage('Print window opened, but the PDF could not be saved to your dashboard records.');
+      if (uploadedStoragePath) {
+        await getSupabaseClient().storage.from(ENDORSEMENT_RECORDS_BUCKET).remove([uploadedStoragePath]).catch(() => {});
+      }
+      setStatusMessage(organizationId
+        ? 'This organization requires a saved endorsement record. Printing was stopped because the record could not be saved.'
+        : 'The PDF could not be saved to your dashboard records.');
+      return false;
     } finally {
       setSavingRecord(false);
     }
@@ -1873,12 +1911,22 @@ function EndorsementGenerator() {
       return;
     }
 
+    if (generatorMode === 'customized' && session?.user?.id) {
+      let organizationId = activeOrganizationId;
+      if (!organizationId) {
+        const organizations = await fetchUserOrganizations().catch(() => []);
+        const preferredId = window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY) || '';
+        organizationId = organizations.find((organization) => organization.id === preferredId)?.id || organizations[0]?.id || '';
+        if (organizationId) setActiveOrganizationId(organizationId);
+      }
+      const saved = await savePrintedRecord(printablePdf.blob, organizationId);
+      if (organizationId && !saved) {
+        return;
+      }
+    }
+
     rememberPrintablePdf(printablePdf.url, printFormat === 'avery-5163');
     requestPrintDialog(printablePdf.url);
-
-    if (generatorMode === 'customized' && session?.user?.id) {
-      void savePrintedRecord(printablePdf.blob);
-    }
   };
 
   const handleOpenPrintablePdf = () => {

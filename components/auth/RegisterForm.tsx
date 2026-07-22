@@ -18,6 +18,8 @@ export default function RegisterForm({
   const { loading, session } = useAuthSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accountType, setAccountType] = useState<"personal" | "company">("personal");
+  const [companyName, setCompanyName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -39,6 +41,10 @@ export default function RegisterForm({
     try {
       const supabase = getSupabaseClient();
       const normalizedEmail = email.trim();
+      const normalizedCompanyName = companyName.trim();
+      if (accountType === "company" && normalizedCompanyName.length < 2) {
+        throw new Error("Enter a company name with at least 2 characters.");
+      }
       const emailRedirectTo =
         typeof window !== "undefined"
           ? `${window.location.origin}/login?next=${encodeURIComponent(redirectTo)}`
@@ -48,6 +54,10 @@ export default function RegisterForm({
         password,
         options: {
           emailRedirectTo,
+          data: {
+            account_type: accountType,
+            ...(accountType === "company" ? { company_name: normalizedCompanyName } : {}),
+          },
         },
       });
 
@@ -123,6 +133,46 @@ export default function RegisterForm({
       <h1 className="text-3xl font-semibold text-slate-950">Register</h1>
 
       <form className="grid gap-6" onSubmit={handleSubmit}>
+        <fieldset className="grid gap-3">
+          <legend className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            Account type
+          </legend>
+          <div className="grid grid-cols-2 gap-2 rounded-[16px] bg-slate-100 p-1">
+            {(["personal", "company"] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                className={`rounded-[12px] px-4 py-2.5 text-sm font-semibold transition ${
+                  accountType === type
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+                onClick={() => setAccountType(type)}
+              >
+                {type === "personal" ? "Personal" : "Company"}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        {accountType === "company" ? (
+          <label className="grid gap-2 border-b border-slate-200 pb-4">
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Company name
+            </span>
+            <input
+              type="text"
+              minLength={2}
+              maxLength={120}
+              value={companyName}
+              onChange={(event) => setCompanyName(event.target.value)}
+              placeholder="Flight school or company"
+              className="bg-transparent text-base text-slate-950 outline-none placeholder:text-slate-400"
+              required
+            />
+          </label>
+        ) : null}
+
         <label className="grid gap-2 border-b border-slate-200 pb-4">
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
             Email

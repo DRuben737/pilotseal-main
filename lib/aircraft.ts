@@ -31,6 +31,7 @@ export type AircraftStation = {
 
 export type AircraftModelRecord = {
   id: string;
+  organization_id?: string | null;
   name: string;
   category: string | null;
   chart_type?: AircraftChartType | string | null;
@@ -46,6 +47,8 @@ export type AircraftRecord = {
   tail_number: string;
   updated_at?: string | null;
   owner_user_id?: string | null;
+  organization_id?: string | null;
+  organization_name?: string | null;
   visibility?: "shared" | "private" | string | null;
   category?: string | null;
   empty_weight: number | null;
@@ -53,7 +56,7 @@ export type AircraftRecord = {
   empty_lat_arm?: number | null;
   max_weight?: number | null;
   model?: AircraftModelRecord | null;
-  source?: "shared" | "mine";
+  source?: "shared" | "mine" | "organization";
   is_saved?: boolean;
   hundred_hour_due_hours?: number | null;
   annual_due_date?: string | null;
@@ -68,6 +71,22 @@ export type SavedAircraftDueInput = {
   static_due_date?: string | null;
   transponder_due_date?: string | null;
   elt_due_date?: string | null;
+};
+
+export type OrganizationAircraftMaintenance = SavedAircraftDueInput & {
+  aircraft_id: string;
+  updated_by?: string | null;
+  updated_at?: string | null;
+};
+
+export type OrganizationAircraftInput = {
+  organization_id: string;
+  model_id: string;
+  tail_number: string;
+  empty_weight: number;
+  empty_arm: number;
+  empty_lat_arm?: number | null;
+  maintenance?: SavedAircraftDueInput;
 };
 
 export type AircraftUpdateRequestRecord = {
@@ -115,7 +134,7 @@ export type AttachAircraftSuccess = {
 
 export type AttachAircraftResult = AttachAircraftSuccess | AttachAircraftConflict;
 
-const AIRCRAFT_MODEL_SELECT = "id, name, category, chart_type, avg_fuel_burn_rate, stations, envelope";
+const AIRCRAFT_MODEL_SELECT = "id, organization_id, name, category, chart_type, avg_fuel_burn_rate, stations, envelope";
 const AIRCRAFT_MODEL_SELECT_LEGACY = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
   "id, model_id, name, tail_number, updated_at, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
@@ -145,13 +164,21 @@ const UPDATE_REQUEST_SELECT =
 const SAVED_AIRCRAFT_SELECT_WITH_DUE =
   "aircraft_id, is_default, hundred_hour_due_hours, annual_due_date, static_due_date, transponder_due_date, elt_due_date";
 const SAVED_AIRCRAFT_SELECT_LEGACY = "aircraft_id, is_default";
+const ORGANIZATION_AIRCRAFT_SELECT =
+  "id, model_id, name, tail_number, updated_at, owner_user_id, organization_id, visibility, empty_weight, empty_arm, empty_lat_arm";
+const ORGANIZATION_MAINTENANCE_SELECT =
+  "aircraft_id, hundred_hour_due_hours, annual_due_date, static_due_date, transponder_due_date, elt_due_date, updated_by, updated_at";
 
-export async function fetchAircraftModels() {
+export async function fetchAircraftModels(organizationId?: string | null) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("aircraft_models")
     .select(AIRCRAFT_MODEL_SELECT)
     .order("name", { ascending: true });
+  query = organizationId
+    ? query.or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+    : query.is("organization_id", null);
+  const { data, error } = await query;
 
   if (!error) {
     return normalizeAircraftModels(data ?? []);
@@ -180,8 +207,172 @@ export async function fetchSharedAircraft() {
   }
 
   return normalizeAircraftList(data ?? [], models, "shared", new Set()).filter(
-    (aircraft) => aircraft.visibility !== "private"
+    (aircraft) => aircraft.visibility === "shared"
   );
+}
+
+export async function fetchOrganizationAircraft(organizationId: string) {
+  const supabase = getSupabaseClient();
+  const [{ data, error }, models, organizationResult] = await Promise.all([
+    supabase
+      .from("aircraft")
+      .select(ORGANIZATION_AIRCRAFT_SELECT)
+      .eq("organization_id", organizationId)
+      .eq("visibility", "organization")
+      .order("tail_number", { ascending: true }),
+    fetchAircraftModels(organizationId).catch(() => [] as AircraftModelRecord[]),
+    supabase.from("organizations").select("id, name").eq("id", organizationId).maybeSingle(),
+  ]);
+
+  if (error) {
+    if (isMissingColumnError(error) || isMissingRelationError(error)) {
+      return [] as AircraftRecord[];
+    }
+    throw error;
+  }
+
+  const aircraftIds = (data ?? []).map((row) => String((row as Record<string, unknown>).id ?? ""));
+  let maintenanceRows: unknown[] = [];
+  if (aircraftIds.length > 0) {
+    const maintenanceResult = await supabase
+      .from("organization_aircraft_maintenance")
+      .select(ORGANIZATION_MAINTENANCE_SELECT)
+      .in("aircraft_id", aircraftIds);
+
+    if (maintenanceResult.error && !isMissingRelationError(maintenanceResult.error)) {
+      throw maintenanceResult.error;
+    }
+    maintenanceRows = maintenanceResult.data ?? [];
+  }
+
+  const maintenanceByAircraftId = new Map(
+    maintenanceRows.map((row) => {
+      const record = (row ?? {}) as Record<string, unknown>;
+      return [String(record.aircraft_id ?? ""), record as SavedAircraftDueInput];
+    })
+  );
+  const organizationName =
+    typeof organizationResult.data?.name === "string" ? organizationResult.data.name : null;
+
+  return normalizeAircraftList(
+    (data ?? []).map((row) => ({ ...(row as Record<string, unknown>), organization_name: organizationName })),
+    models,
+    "organization",
+    new Set(),
+    maintenanceByAircraftId
+  );
+}
+
+export async function fetchActiveOrganizationAircraft() {
+  if (typeof window === "undefined") {
+    return [] as AircraftRecord[];
+  }
+
+  const organizationId = window.localStorage.getItem("pilotseal.activeOrganizationId") ?? "";
+  return organizationId ? fetchOrganizationAircraft(organizationId) : [];
+}
+
+export async function createOrganizationAircraft(input: OrganizationAircraftInput) {
+  const supabase = getSupabaseClient();
+  const normalizedTail = normalizeTailNumber(input.tail_number);
+  if (!normalizedTail) {
+    throw new Error("Tail number is required.");
+  }
+
+  const { data, error } = await supabase
+    .from("aircraft")
+    .insert({
+      organization_id: input.organization_id,
+      owner_user_id: null,
+      visibility: "organization",
+      model_id: input.model_id,
+      name: normalizedTail,
+      tail_number: normalizedTail,
+      empty_weight: input.empty_weight,
+      empty_arm: input.empty_arm,
+      empty_lat_arm: input.empty_lat_arm ?? null,
+    })
+    .select(ORGANIZATION_AIRCRAFT_SELECT)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  if (input.maintenance) {
+    await updateOrganizationAircraftMaintenance(data.id, input.maintenance);
+  }
+
+  return normalizeAircraftRecord(data, null, "organization", false);
+}
+
+export async function updateOrganizationAircraft(
+  organizationId: string,
+  aircraftId: string,
+  input: Omit<OrganizationAircraftInput, "organization_id">
+) {
+  const supabase = getSupabaseClient();
+  const normalizedTail = normalizeTailNumber(input.tail_number);
+  if (!normalizedTail) {
+    throw new Error("Tail number is required.");
+  }
+
+  const { data, error } = await supabase
+    .from("aircraft")
+    .update({
+      model_id: input.model_id,
+      name: normalizedTail,
+      tail_number: normalizedTail,
+      empty_weight: input.empty_weight,
+      empty_arm: input.empty_arm,
+      empty_lat_arm: input.empty_lat_arm ?? null,
+    })
+    .eq("id", aircraftId)
+    .eq("organization_id", organizationId)
+    .eq("visibility", "organization")
+    .select(ORGANIZATION_AIRCRAFT_SELECT)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  await updateOrganizationAircraftMaintenance(aircraftId, input.maintenance ?? {});
+  return normalizeAircraftRecord(data, null, "organization", false);
+}
+
+export async function deleteOrganizationAircraft(organizationId: string, aircraftId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("aircraft")
+    .delete()
+    .eq("id", aircraftId)
+    .eq("organization_id", organizationId)
+    .eq("visibility", "organization");
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function updateOrganizationAircraftMaintenance(
+  aircraftId: string,
+  input: SavedAircraftDueInput
+) {
+  const supabase = getSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { error } = await supabase.from("organization_aircraft_maintenance").upsert({
+    aircraft_id: aircraftId,
+    ...normalizeSavedAircraftDueInput(input),
+    updated_by: user?.id ?? null,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function fetchMyAircraft(userId: string) {
@@ -254,6 +445,7 @@ export async function fetchAircraft() {
 }
 
 export async function createAircraftModel(input: {
+  organization_id?: string | null;
   name: string;
   category: string;
   avg_fuel_burn_rate?: number | null;
@@ -262,6 +454,7 @@ export async function createAircraftModel(input: {
 }) {
   const supabase = getSupabaseClient();
   const payload = {
+    organization_id: input.organization_id ?? null,
     name: input.name,
     category: input.category,
     avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
@@ -274,10 +467,12 @@ export async function createAircraftModel(input: {
     stations: input.stations,
     envelope: input.envelope,
   };
-  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = [
-    { payload, select: AIRCRAFT_MODEL_SELECT },
-    { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
-  ];
+  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = input.organization_id
+    ? [{ payload, select: AIRCRAFT_MODEL_SELECT }]
+    : [
+        { payload, select: AIRCRAFT_MODEL_SELECT },
+        { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
+      ];
 
   let lastError = null;
   for (const attempt of attempts) {
@@ -1067,7 +1262,7 @@ async function fetchProfilesMap() {
 function normalizeAircraftList(
   records: unknown[],
   models: AircraftModelRecord[],
-  source: "shared" | "mine",
+  source: "shared" | "mine" | "organization",
   savedAircraftIds: Set<string>,
   savedDetailsByAircraftId = new Map<string, SavedAircraftDueInput>()
 ) {
@@ -1103,6 +1298,7 @@ function normalizeAircraftModelRecord(value: unknown) {
 
   return {
     id: String(record.id ?? ""),
+    organization_id: typeof record.organization_id === "string" ? record.organization_id : null,
     name: String(record.name ?? ""),
     category: typeof record.category === "string" ? record.category : null,
     chart_type: typeof record.chart_type === "string" ? record.chart_type : null,
@@ -1115,7 +1311,7 @@ function normalizeAircraftModelRecord(value: unknown) {
 function normalizeAircraftRecord(
   value: unknown,
   fallbackModel: AircraftModelRecord | null = null,
-  source: "shared" | "mine" = "shared",
+  source: "shared" | "mine" | "organization" = "shared",
   isSaved = false
 ) {
   const record = (value ?? {}) as Record<string, unknown>;
@@ -1156,6 +1352,9 @@ function normalizeAircraftRecord(
     empty_lat_arm: toNumber(record.empty_lat_arm),
     max_weight: toNumber(record.max_weight),
     owner_user_id: typeof record.owner_user_id === "string" ? record.owner_user_id : null,
+    organization_id: typeof record.organization_id === "string" ? record.organization_id : null,
+    organization_name:
+      typeof record.organization_name === "string" ? record.organization_name : null,
     visibility: typeof record.visibility === "string" ? record.visibility : "shared",
     category: model?.category ?? null,
     model,

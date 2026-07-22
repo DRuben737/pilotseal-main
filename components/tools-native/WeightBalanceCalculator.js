@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
+  fetchActiveOrganizationAircraft,
   fetchMyAircraft,
   fetchSharedAircraft,
   parseAircraftEnvelopeSet,
@@ -367,7 +368,7 @@ function mergeAircraftOptions(sharedAircraft, myAircraft) {
       .filter((aircraft) => !myAircraftIds.has(aircraft.id))
       .map((aircraft) => ({
         ...aircraft,
-        source: "shared",
+        source: aircraft.source ?? "shared",
         is_saved: false,
       })),
   ];
@@ -446,15 +447,19 @@ export default function WeightBalanceCalculator({
           data: { session },
         } = await supabase.auth.getSession();
 
-        const [sharedAircraft, myAircraft, students, cfis] = await Promise.all([
+        const [sharedAircraft, organizationAircraft, myAircraft, students, cfis] = await Promise.all([
           fetchSharedAircraft(),
+          session?.user?.id ? fetchActiveOrganizationAircraft() : Promise.resolve([]),
           session?.user?.id ? fetchMyAircraft(session.user.id) : Promise.resolve([]),
           embedded && session?.user?.id ? fetchSavedPeople(session.user.id, "student") : Promise.resolve([]),
           embedded && session?.user?.id ? fetchSavedPeople(session.user.id, "cfi") : Promise.resolve([]),
         ]);
         const people = embedded && session?.user?.id ? await fetchSavedPeople(session.user.id) : [];
 
-        const mergedAircraft = mergeAircraftOptions(sharedAircraft, myAircraft);
+        const mergedAircraft = mergeAircraftOptions(
+          [...sharedAircraft, ...organizationAircraft],
+          myAircraft
+        );
 
         setAircraftOptions(mergedAircraft);
         setSavedStudents(students);

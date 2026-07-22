@@ -49,6 +49,20 @@ export type EndorsementTemplateInput = {
   userId?: string | null;
 };
 
+export type EndorsementTemplateChangeRequest = {
+  id: string;
+  organization_id: string;
+  template_id: string | null;
+  action: "create" | "update";
+  proposed_data: Omit<EndorsementTemplateInput, "userId">;
+  status: "pending" | "approved" | "rejected";
+  submitted_by: string;
+  reviewed_by: string | null;
+  review_note: string | null;
+  submitted_at: string;
+  reviewed_at: string | null;
+};
+
 export type EndorsementTemplateSettingsInput = {
   source: string;
   source_date: string;
@@ -70,6 +84,8 @@ export type EndorsementTemplateMap = Record<
 const ENDORSEMENT_TEMPLATE_SELECT =
   "id, key, reference_number, title, body, fields, category, status, sort_order, created_at, updated_at, created_by, updated_by";
 const ENDORSEMENT_TEMPLATE_SETTINGS_SELECT = "id, source, source_date, updated_date, updated_at, updated_by";
+const ENDORSEMENT_CHANGE_REQUEST_SELECT =
+  "id, organization_id, template_id, action, proposed_data, status, submitted_by, reviewed_by, review_note, submitted_at, reviewed_at";
 
 const VALID_STATUSES = new Set(["active", "inactive", "archived"]);
 const VALID_FIELD_TYPES = new Set(["text", "date", "select", "multi-select"]);
@@ -360,4 +376,49 @@ export async function updateEndorsementTemplate(id: string, input: EndorsementTe
   }
 
   return normalizeTemplateRecord(data as Record<string, unknown>);
+}
+
+export async function fetchEndorsementTemplateChangeRequests(organizationId?: string) {
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("endorsement_template_change_requests")
+    .select(ENDORSEMENT_CHANGE_REQUEST_SELECT)
+    .order("submitted_at", { ascending: false });
+  if (organizationId) query = query.eq("organization_id", organizationId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as EndorsementTemplateChangeRequest[];
+}
+
+export async function submitEndorsementTemplateChangeRequest(
+  organizationId: string,
+  templateId: string | null,
+  input: EndorsementTemplateInput
+) {
+  const supabase = getSupabaseClient();
+  const { updated_by, ...proposedData } = normalizeEndorsementTemplateInput(input);
+  void updated_by;
+  const { data, error } = await supabase.rpc("submit_endorsement_template_change_request", {
+    p_organization_id: organizationId,
+    p_template_id: templateId,
+    p_action: templateId ? "update" : "create",
+    p_proposed_data: proposedData,
+  });
+  if (error) throw error;
+  return data as EndorsementTemplateChangeRequest;
+}
+
+export async function reviewEndorsementTemplateChangeRequest(
+  requestId: string,
+  approve: boolean,
+  reviewNote?: string
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("review_endorsement_template_change_request", {
+    p_request_id: requestId,
+    p_approve: approve,
+    p_review_note: reviewNote?.trim() || null,
+  });
+  if (error) throw error;
+  return data as EndorsementTemplateChangeRequest;
 }

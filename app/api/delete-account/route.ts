@@ -11,18 +11,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Server configuration error." }, { status: 500 });
     }
 
-    const { userId } = (await request.json()) as { userId?: string };
-
-    if (!userId) {
-      return NextResponse.json({ error: "Missing userId." }, { status: 400 });
-    }
-
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
+
+    const accessToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    if (!accessToken) {
+      return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
+    }
+
+    const { data: userResult, error: userError } = await adminClient.auth.getUser(accessToken);
+    if (userError || !userResult.user) {
+      return NextResponse.json({ error: "Your session is not valid." }, { status: 401 });
+    }
+
+    const userId = userResult.user.id;
+    const { data: ownedOrganizations, error: ownershipError } = await adminClient
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", userId)
+      .eq("role", "owner")
+      .limit(1);
+
+    if (ownershipError && ownershipError.code !== "42P01") {
+      console.error("Delete account ownership check failed:", ownershipError);
+      return NextResponse.json({ error: "Unable to verify organization ownership." }, { status: 500 });
+    }
+
+    if ((ownedOrganizations ?? []).length > 0) {
+      return NextResponse.json(
+        { error: "Transfer organization ownership before deleting this account." },
+        { status: 409 }
+      );
+    }
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 

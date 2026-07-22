@@ -7,7 +7,12 @@ import { fetchPersonCertificates } from "@/lib/person-certificates";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
-import { fetchMyAircraft, fetchSharedAircraft, parseAircraftStations } from "@/lib/aircraft";
+import {
+  fetchActiveOrganizationAircraft,
+  fetchMyAircraft,
+  fetchSharedAircraft,
+  parseAircraftStations,
+} from "@/lib/aircraft";
 import WeightBalanceCalculator from "./WeightBalanceCalculator";
 
 /** ------------------ constants ------------------ */
@@ -62,7 +67,7 @@ function mergeAircraftOptions(sharedAircraft, myAircraft) {
       .filter((aircraft) => !myAircraftIds.has(aircraft.id))
       .map((aircraft) => ({
         ...aircraft,
-        source: "shared",
+        source: aircraft.source ?? "shared",
         is_saved: false,
       })),
   ];
@@ -1054,11 +1059,12 @@ export default function FlightBrief() {
           return;
         }
 
-        const [people, profile, certificates, sharedAircraft, myAircraft] = await Promise.all([
+        const [people, profile, certificates, sharedAircraft, organizationAircraft, myAircraft] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchCurrentProfile(session.user.id),
           fetchPersonCertificates(session.user.id).catch(() => []),
           fetchSharedAircraft().catch(() => []),
+          fetchActiveOrganizationAircraft().catch(() => []),
           fetchMyAircraft(session.user.id).catch(() => []),
         ]);
         const peopleById = new Map(people.map((person) => [person.id, person]));
@@ -1124,7 +1130,7 @@ export default function FlightBrief() {
             ...studentOptions,
             ...instructorOptions,
           ]));
-          setAircraftOptions(mergeAircraftOptions(sharedAircraft, myAircraft));
+          setAircraftOptions(mergeAircraftOptions([...sharedAircraft, ...organizationAircraft], myAircraft));
         }
       } catch {
         if (!cancelled) {

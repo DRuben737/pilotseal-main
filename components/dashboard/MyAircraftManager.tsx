@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   attachAircraftByTail,
   fetchAircraftModels,
   fetchMyAircraft,
+  fetchOrganizationAircraft,
   fetchSharedAircraft,
   removeMyAircraft,
   saveCurrentAircraftForUser,
@@ -136,12 +138,14 @@ function getDueSummary(aircraft: AircraftRecord) {
 
 export default function MyAircraftManager() {
   const { session } = useAuthSession();
+  const { activeOrganization } = useOrganization();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [models, setModels] = useState<AircraftModelRecord[]>([]);
   const [myAircraft, setMyAircraft] = useState<AircraftRecord[]>([]);
   const [sharedAircraft, setSharedAircraft] = useState<AircraftRecord[]>([]);
+  const [organizationAircraft, setOrganizationAircraft] = useState<AircraftRecord[]>([]);
   const [form, setForm] = useState<AircraftFormState>(emptyForm);
   const [editingAircraftId, setEditingAircraftId] = useState("");
   const [conflict, setConflict] = useState<AttachAircraftConflict | null>(null);
@@ -197,16 +201,20 @@ export default function MyAircraftManager() {
       setStatus("");
 
       try {
-        const [modelList, sharedList, attachedList] = await Promise.all([
+        const [modelList, sharedList, attachedList, organizationList] = await Promise.all([
           fetchAircraftModels(),
           fetchSharedAircraft(),
           fetchMyAircraft(session.user.id),
+          activeOrganization?.id
+            ? fetchOrganizationAircraft(activeOrganization.id)
+            : Promise.resolve([]),
         ]);
 
         if (!cancelled) {
           setModels(modelList);
           setSharedAircraft(sharedList);
           setMyAircraft(attachedList);
+          setOrganizationAircraft(organizationList);
         }
       } catch (error) {
         if (!cancelled) {
@@ -224,7 +232,7 @@ export default function MyAircraftManager() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [activeOrganization?.id, session?.user?.id]);
 
   useEffect(() => {
     if (showManager && showForm) {
@@ -248,13 +256,17 @@ export default function MyAircraftManager() {
       return;
     }
 
-    const [sharedList, attachedList] = await Promise.all([
+    const [sharedList, attachedList, organizationList] = await Promise.all([
       fetchSharedAircraft(),
       fetchMyAircraft(session.user.id),
+      activeOrganization?.id
+        ? fetchOrganizationAircraft(activeOrganization.id)
+        : Promise.resolve([]),
     ]);
 
     setSharedAircraft(sharedList);
     setMyAircraft(attachedList);
+    setOrganizationAircraft(organizationList);
   }
 
   function updateField<K extends keyof AircraftFormState>(key: K, value: AircraftFormState[K]) {
@@ -589,6 +601,56 @@ export default function MyAircraftManager() {
           )}
         </div>
       </section>
+
+      {activeOrganization ? (
+        <section className="saas-panel people-list-panel">
+          <div className="people-toolbar">
+            <div>
+              <p className="saas-kicker">Organization fleet</p>
+              <h3 className="saas-subsection-title">{activeOrganization.name}</h3>
+              <p className="saas-meta-text">{organizationAircraft.length} shared with this organization</p>
+            </div>
+          </div>
+
+          <div className="my-aircraft-table mt-4">
+            <div className="my-aircraft-table-head">
+              <span>Tail number</span>
+              <span>Model</span>
+              <span>W&amp;B / maintenance</span>
+              <span>Access</span>
+            </div>
+            {organizationAircraft.length === 0 ? (
+              <p className="saas-empty-state">No organization aircraft yet.</p>
+            ) : (
+              organizationAircraft.map((aircraft) => (
+                <div key={aircraft.id} className="my-aircraft-row">
+                  <div className="my-aircraft-cell my-aircraft-tail">
+                    <p className="my-aircraft-primary">{aircraft.tail_number}</p>
+                  </div>
+                  <div className="my-aircraft-cell my-aircraft-model">
+                    <p className="my-aircraft-secondary">
+                      {modelNameById.get(aircraft.model_id ?? "") ?? aircraft.model?.name ?? "Unknown model"}
+                    </p>
+                  </div>
+                  <div className="my-aircraft-cell my-aircraft-wb">
+                    <p className="my-aircraft-secondary">
+                      {aircraft.empty_weight ?? "--"} lbs · Arm {aircraft.empty_arm ?? "--"}
+                    </p>
+                    <p className="my-aircraft-secondary my-aircraft-muted-line">
+                      {getDueSummary(aircraft) || "No maintenance due dates recorded"}
+                    </p>
+                  </div>
+                  <div className="my-aircraft-cell my-aircraft-actions">
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                      Organization
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {showManager && portalRoot
         ? createPortal(

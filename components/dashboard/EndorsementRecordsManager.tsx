@@ -4,12 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   createEndorsementRecordSignedUrl,
   deleteEndorsementRecord,
   fetchEndorsementRecords,
+  fetchOrganizationEndorsementRecords,
+  updateEndorsementRecord,
   type EndorsementRecord,
 } from "@/lib/endorsement-records";
+import { canManageOrganization } from "@/lib/organizations";
 
 function formatRecordDate(value: string) {
   if (!value) {
@@ -125,6 +129,8 @@ function ActionIcon({ kind }: { kind: "open" | "external" | "delete" | "close" |
 
 export default function EndorsementRecordsManager() {
   const { session } = useAuthSession();
+  const { activeOrganization } = useOrganization();
+  const canViewOrganizationRecords = canManageOrganization(activeOrganization?.member_role);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -134,6 +140,7 @@ export default function EndorsementRecordsManager() {
   const [activePdfUrl, setActivePdfUrl] = useState("");
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [expandedStudent, setExpandedStudent] = useState("");
+  const [editingRecord, setEditingRecord] = useState<EndorsementRecord | null>(null);
 
   useEffect(() => {
     setPortalRoot(document.body);
@@ -154,7 +161,15 @@ export default function EndorsementRecordsManager() {
       try {
         setLoading(true);
         setStatus("");
-        const nextRecords = await fetchEndorsementRecords(session.user.id);
+        const [ownRecords, organizationRecords] = await Promise.all([
+          fetchEndorsementRecords(session.user.id),
+          activeOrganization?.id && canViewOrganizationRecords
+            ? fetchOrganizationEndorsementRecords(activeOrganization.id)
+            : Promise.resolve([]),
+        ]);
+        const nextRecords = Array.from(
+          new Map([...ownRecords, ...organizationRecords].map((record) => [record.id, record])).values()
+        );
         if (!cancelled) {
           setRecords(nextRecords);
         }
@@ -174,7 +189,7 @@ export default function EndorsementRecordsManager() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [activeOrganization?.id, canViewOrganizationRecords, session?.user?.id]);
 
   const filteredRecords = useMemo(
     () => records.filter((record) => matchesRecord(record, query)),
@@ -234,12 +249,40 @@ export default function EndorsementRecordsManager() {
     }
   }
 
+  async function handleEditSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingRecord || editingRecord.user_id !== session?.user?.id) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const form = new FormData(event.currentTarget);
+      const updated = await updateEndorsementRecord(editingRecord.id, {
+        student_name: String(form.get("student_name") ?? "").trim(),
+        student_cert_number: String(form.get("student_cert_number") ?? "").trim() || null,
+        instructor_name: String(form.get("instructor_name") ?? "").trim(),
+        instructor_cert_number: String(form.get("instructor_cert_number") ?? "").trim() || null,
+        endorsement_date: String(form.get("endorsement_date") ?? "").trim(),
+        template_titles: String(form.get("template_titles") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
+      });
+      setRecords((current) => current.map((record) => record.id === updated.id ? updated : record));
+      setEditingRecord(null);
+      setStatus("Endorsement record updated.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to update record.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <section className="saas-panel">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <h2 className="saas-section-title">Endorsement Records</h2>
+            {canViewOrganizationRecords && activeOrganization ? (
+              <p className="saas-meta-text">Your records and read-only records from {activeOrganization.name}</p>
+            ) : null}
           </div>
           <span className="saas-pill">{filteredRecords.length}</span>
         </div>
@@ -319,7 +362,12 @@ export default function EndorsementRecordsManager() {
                           >
                             <ActionIcon kind="open" />
                           </button>
-                          <button
+                          {record.user_id === session?.user?.id ? (
+                            <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingRecord(record)}>
+                              Edit
+                            </button>
+                          ) : null}
+                          {record.user_id === session?.user?.id ? <button
                             type="button"
                             className="danger-button icon-button"
                             aria-label="Delete endorsement record"
@@ -328,7 +376,7 @@ export default function EndorsementRecordsManager() {
                             onClick={() => void handleDelete(record)}
                           >
                             <ActionIcon kind="delete" />
-                          </button>
+                          </button> : null}
                         </div>
                       </article>
                     ))}
@@ -360,7 +408,7 @@ export default function EndorsementRecordsManager() {
                           <ActionIcon kind="external" />
                         </a>
                       ) : null}
-                      <button
+                      {activeRecord.user_id === session?.user?.id ? <button
                         type="button"
                         className="danger-button icon-button"
                         aria-label="Delete endorsement record"
@@ -369,7 +417,7 @@ export default function EndorsementRecordsManager() {
                         onClick={() => void handleDelete(activeRecord)}
                       >
                         <ActionIcon kind="delete" />
-                      </button>
+                      </button> : null}
                       <button
                         type="button"
                         className="ghost-button icon-button"
@@ -399,6 +447,37 @@ export default function EndorsementRecordsManager() {
             portalRoot
           )
         : null}
+      {editingRecord && portalRoot
+        ? createPortal(
+            <div className="Overlay" onClick={() => setEditingRecord(null)}>
+              <form className="Modal max-w-2xl" onSubmit={handleEditSave} onClick={(event) => event.stopPropagation()}>
+                <div className="grid gap-4 p-5 md:grid-cols-2">
+                  <h2 className="text-xl font-semibold text-slate-950 md:col-span-2">Edit endorsement record</h2>
+                  <RecordField label="Student name" name="student_name" defaultValue={editingRecord.student_name} required />
+                  <RecordField label="Student certificate" name="student_cert_number" defaultValue={editingRecord.student_cert_number ?? ""} />
+                  <RecordField label="Instructor name" name="instructor_name" defaultValue={editingRecord.instructor_name} required />
+                  <RecordField label="Instructor certificate" name="instructor_cert_number" defaultValue={editingRecord.instructor_cert_number ?? ""} />
+                  <RecordField label="Endorsement date" name="endorsement_date" defaultValue={editingRecord.endorsement_date} required />
+                  <RecordField label="Endorsements (comma separated)" name="template_titles" defaultValue={editingRecord.template_titles.join(", ")} required />
+                  <div className="flex gap-2 md:col-span-2">
+                    <button className="primary-button" disabled={busy}>{busy ? "Saving..." : "Save"}</button>
+                    <button type="button" className="ghost-button" onClick={() => setEditingRecord(null)}>Cancel</button>
+                  </div>
+                </div>
+              </form>
+            </div>,
+            portalRoot
+          )
+        : null}
     </>
+  );
+}
+
+function RecordField({ label, name, defaultValue, required = false }: { label: string; name: string; defaultValue: string; required?: boolean }) {
+  return (
+    <label className="grid gap-2 text-sm">
+      <span>{label}</span>
+      <input className="rounded-xl border border-slate-300 px-3 py-2" name={name} defaultValue={defaultValue} required={required} />
+    </label>
   );
 }

@@ -5,6 +5,7 @@ export const ENDORSEMENT_RECORDS_BUCKET = "endorsement-records";
 export type EndorsementRecord = {
   id: string;
   user_id: string;
+  organization_id: string | null;
   student_id: string | null;
   student_name: string;
   student_cert_number: string | null;
@@ -20,6 +21,7 @@ export type EndorsementRecord = {
 export type CreateEndorsementRecordInput = {
   id: string;
   userId: string;
+  organizationId?: string | null;
   studentId?: string | null;
   studentName: string;
   studentCertNumber?: string | null;
@@ -32,7 +34,7 @@ export type CreateEndorsementRecordInput = {
 };
 
 const ENDORSEMENT_RECORD_SELECTS = [
-  "id, user_id, student_id, student_name, student_cert_number, instructor_name, instructor_cert_number, endorsement_date, template_titles, storage_path, file_size_bytes, created_at",
+  "id, user_id, organization_id, student_id, student_name, student_cert_number, instructor_name, instructor_cert_number, endorsement_date, template_titles, storage_path, file_size_bytes, created_at, updated_at",
   "id, user_id, student_id, student_name, student_cert_number, instructor_name, endorsement_date, template_titles, storage_path, file_size_bytes, created_at",
 ];
 
@@ -45,6 +47,7 @@ function normalizeRecord(record: Record<string, unknown>): EndorsementRecord {
   return {
     id: String(record.id ?? ""),
     user_id: String(record.user_id ?? ""),
+    organization_id: typeof record.organization_id === "string" ? record.organization_id : null,
     student_id: typeof record.student_id === "string" ? record.student_id : null,
     student_name: String(record.student_name ?? ""),
     student_cert_number:
@@ -69,6 +72,7 @@ export async function createEndorsementRecord(input: CreateEndorsementRecordInpu
   const basePayload = {
     id: input.id,
     user_id: input.userId,
+    organization_id: input.organizationId ?? null,
     student_id: input.studentId || null,
     student_name: input.studentName.trim(),
     student_cert_number: normalizeText(input.studentCertNumber),
@@ -132,6 +136,32 @@ export async function fetchEndorsementRecords(userId: string) {
   }
 
   throw lastError;
+}
+
+export async function fetchOrganizationEndorsementRecords(organizationId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("endorsement_records")
+    .select(ENDORSEMENT_RECORD_SELECTS[0])
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeRecord);
+}
+
+export async function updateEndorsementRecord(
+  recordId: string,
+  input: Pick<EndorsementRecord, "student_name" | "student_cert_number" | "instructor_name" | "instructor_cert_number" | "endorsement_date" | "template_titles">
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("endorsement_records")
+    .update(input)
+    .eq("id", recordId)
+    .select(ENDORSEMENT_RECORD_SELECTS[0])
+    .single();
+  if (error) throw error;
+  return normalizeRecord(data as unknown as Record<string, unknown>);
 }
 
 export async function createEndorsementRecordSignedUrl(storagePath: string) {

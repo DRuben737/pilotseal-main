@@ -5,7 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { resolveDisplayIdentity } from "@/lib/identity";
+import { canManageOrganization } from "@/lib/organizations";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -34,6 +36,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "People":
+    case "Organization":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <circle cx="9" cy="8" r="3" />
@@ -113,6 +116,13 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const router = useRouter();
   const { loading, session } = useAuthSession();
+  const {
+    organizations,
+    activeOrganization,
+    activeOrganizationId,
+    loading: organizationsLoading,
+    setActiveOrganizationId,
+  } = useOrganization();
   const [signingOut, setSigningOut] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [defaultCfiName, setDefaultCfiName] = useState("");
@@ -169,14 +179,18 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     email: session?.user?.email,
   });
 
-  const visibleDashboardLinks =
-    profileRole === "admin"
+  const visibleDashboardLinks = [
+    ...dashboardLinks,
+    ...(activeOrganization && canManageOrganization(activeOrganization.member_role)
+      ? [{ href: "/dashboard/organization", label: "Organization" }]
+      : []),
+    ...(profileRole === "admin"
       ? [
-          ...dashboardLinks,
           { href: "/dashboard/admin/aircraft", label: "Aircraft" },
           { href: "/dashboard/admin/endorsements", label: "Endorsements" },
         ]
-      : dashboardLinks;
+      : []),
+  ];
   const isDashboardLinkActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname === href || pathname.startsWith(`${href}/`);
   const activeDashboardIndex = visibleDashboardLinks.findIndex((item) => isDashboardLinkActive(item.href));
@@ -355,6 +369,30 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <span>New</span>
                 </Link>
               </section>
+              {!organizationsLoading && organizations.length > 0 ? (
+                <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+                  <div>
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Current organization
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                      {activeOrganization?.name ?? "Select an organization"}
+                    </p>
+                  </div>
+                  <select
+                    aria-label="Current organization"
+                    className="max-w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                    value={activeOrganizationId}
+                    onChange={(event) => setActiveOrganizationId(event.target.value)}
+                  >
+                    {organizations.map((organization) => (
+                      <option key={organization.id} value={organization.id}>
+                        {organization.name}
+                      </option>
+                    ))}
+                  </select>
+                </section>
+              ) : null}
               {children}
             </div>
 

@@ -13,10 +13,13 @@ import {
   createEndorsementTemplate,
   fetchAdminEndorsementTemplates,
   fetchEndorsementTemplateSettings,
+  fetchEndorsementTemplateChangeRequests,
+  reviewEndorsementTemplateChangeRequest,
   updateEndorsementTemplate,
   updateEndorsementTemplateSettings,
   type EndorsementTemplate,
   type EndorsementTemplateSettings,
+  type EndorsementTemplateChangeRequest,
   type EndorsementTemplateStatus,
 } from "@/lib/endorsement-templates";
 import { fetchCurrentProfile } from "@/lib/profile";
@@ -257,6 +260,7 @@ export default function EndorsementTemplateAdminPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
+  const [changeRequests, setChangeRequests] = useState<EndorsementTemplateChangeRequest[]>([]);
 
   const isAdmin = profileRole === "admin";
   const previewState = useMemo(() => getPreviewState(form), [form]);
@@ -316,6 +320,10 @@ export default function EndorsementTemplateAdminPanel() {
     setSourceForm(createSourceFormFromSettings(nextSettings));
   }
 
+  async function reloadChangeRequests() {
+    setChangeRequests(await fetchEndorsementTemplateChangeRequests());
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -346,7 +354,7 @@ export default function EndorsementTemplateAdminPanel() {
           return;
         }
 
-        await Promise.all([reloadTemplates(), reloadSourceSettings()]);
+        await Promise.all([reloadTemplates(), reloadSourceSettings(), reloadChangeRequests()]);
       } catch (error) {
         if (!cancelled) {
           setStatus(getErrorMessage(error, "Unable to load endorsement wording right now."));
@@ -435,6 +443,26 @@ export default function EndorsementTemplateAdminPanel() {
     }
   }
 
+  async function handleReview(request: EndorsementTemplateChangeRequest, approve: boolean) {
+    if (!isAdmin) return;
+    const note = window.prompt(approve ? "Optional approval note" : "Reason for rejection") ?? "";
+    if (!approve && !note.trim()) {
+      setStatus("A rejection reason is required.");
+      return;
+    }
+    setSaving(true);
+    setStatus("");
+    try {
+      await reviewEndorsementTemplateChangeRequest(request.id, approve, note);
+      await Promise.all([reloadTemplates(), reloadChangeRequests()]);
+      setStatus(approve ? "Proposal approved and published." : "Proposal rejected.");
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to review this proposal."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return <div className="panel-card p-6">Loading endorsement wording...</div>;
   }
@@ -491,6 +519,22 @@ export default function EndorsementTemplateAdminPanel() {
         className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
       />
       {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
+
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div><h2 className="text-sm font-semibold text-slate-950">Organization change requests</h2><p className="mt-1 text-xs text-slate-500">Approval applies the proposed wording atomically to the live templates.</p></div>
+          <span className="saas-pill">{changeRequests.filter((request) => request.status === "pending").length} pending</span>
+        </div>
+        <div className="mt-3 grid gap-3">
+          {changeRequests.filter((request) => request.status === "pending").length === 0 ? <p className="text-sm text-slate-500">No pending organization proposals.</p> : changeRequests.filter((request) => request.status === "pending").map((request) => (
+            <div key={request.id} className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-950">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</p><p className="mt-1 text-xs text-slate-500">{request.action === "create" ? "Create" : "Update"} · Organization {request.organization_id}</p></div><span className="saas-pill">Pending</span></div>
+              <p className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">{request.proposed_data.body}</p>
+              <div className="mt-3 flex gap-2"><button type="button" className="primary-button" disabled={saving} onClick={() => void handleReview(request, true)}>Approve & publish</button><button type="button" className="danger-button-compact" disabled={saving} onClick={() => void handleReview(request, false)}>Reject</button></div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="mt-4 grid gap-3">
         {groupedTemplates.map(([category, categoryTemplates]) => {
