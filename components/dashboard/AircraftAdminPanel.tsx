@@ -80,6 +80,8 @@ type AircraftFormState = {
   empty_lat_arm: string;
 };
 
+type ModelFormErrors = Record<string, string>;
+
 const emptyModelForm: ModelFormState = {
   id: null,
   name: "",
@@ -206,6 +208,225 @@ function toOptionalNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function isValidNumber(value: string) {
+  return value.trim() !== "" && Number.isFinite(Number(value));
+}
+
+function validateOptionalNumber(
+  errors: ModelFormErrors,
+  key: string,
+  value: string,
+  message: string,
+  options: { positive?: boolean; nonNegative?: boolean } = {}
+) {
+  if (!value.trim()) {
+    return;
+  }
+
+  const parsed = Number(value);
+  if (
+    !Number.isFinite(parsed) ||
+    (options.positive && parsed <= 0) ||
+    (options.nonNegative && parsed < 0)
+  ) {
+    errors[key] = message;
+  }
+}
+
+function validateModelForm(modelForm: ModelFormState) {
+  const errors: ModelFormErrors = {};
+
+  if (!modelForm.name.trim()) {
+    errors["model.name"] = "Enter the aircraft model name.";
+  }
+
+  validateOptionalNumber(
+    errors,
+    "model.avg_fuel_burn_rate",
+    modelForm.avg_fuel_burn_rate,
+    "Enter a fuel burn greater than 0.",
+    { positive: true }
+  );
+  validateOptionalNumber(
+    errors,
+    "model.max_weight",
+    modelForm.max_weight,
+    "Enter a maximum weight greater than 0.",
+    { positive: true }
+  );
+
+  const usedStationIds = new Map<string, string>();
+  let completeStationCount = 0;
+
+  for (const station of modelForm.stations) {
+    const prefix = `station.${station.clientKey}`;
+    const hasContent = [
+      station.id,
+      station.name,
+      station.arm,
+      station.latArm,
+      station.weightPerGallon,
+      station.fixedWeight,
+      station.maxWeight,
+      station.crewRole,
+    ].some((value) => value.trim() !== "");
+
+    if (!hasContent) {
+      continue;
+    }
+
+    if (!station.id.trim()) {
+      errors[`${prefix}.id`] = "Add a short name for this loading location.";
+    }
+    if (!station.name.trim()) {
+      errors[`${prefix}.name`] = "Add the name users will see.";
+    }
+    if (!isValidNumber(station.arm)) {
+      errors[`${prefix}.arm`] = "Enter the arm from the aircraft datum.";
+    }
+
+    validateOptionalNumber(
+      errors,
+      `${prefix}.latArm`,
+      station.latArm,
+      "Enter a valid left/right arm."
+    );
+    validateOptionalNumber(
+      errors,
+      `${prefix}.weightPerGallon`,
+      station.weightPerGallon,
+      "Enter a fuel weight greater than 0.",
+      { positive: true }
+    );
+    validateOptionalNumber(
+      errors,
+      `${prefix}.fixedWeight`,
+      station.fixedWeight,
+      "Enter 0 or a positive weight.",
+      { nonNegative: true }
+    );
+    validateOptionalNumber(
+      errors,
+      `${prefix}.maxWeight`,
+      station.maxWeight,
+      "Enter 0 or a positive weight.",
+      { nonNegative: true }
+    );
+
+    const normalizedId = station.id.trim().toLowerCase();
+    if (normalizedId) {
+      const existingKey = usedStationIds.get(normalizedId);
+      if (existingKey) {
+        errors[`${prefix}.id`] = "Use a different short name for each loading location.";
+        errors[existingKey] = "Use a different short name for each loading location.";
+      } else {
+        usedStationIds.set(normalizedId, `${prefix}.id`);
+      }
+    }
+
+    if (
+      station.id.trim() &&
+      station.name.trim() &&
+      isValidNumber(station.arm) &&
+      !Object.keys(errors).some((key) => key.startsWith(`${prefix}.`))
+    ) {
+      completeStationCount += 1;
+    }
+  }
+
+  if (completeStationCount < 1) {
+    errors.stations = "Add at least one complete loading location.";
+  }
+
+  const validatePoints = <T extends { clientKey: string }>(
+    points: T[],
+    sectionKey: string,
+    fields: Array<{ key: keyof T; label: string }>,
+    minimum: number,
+    required: boolean
+  ) => {
+    let completeCount = 0;
+    let hasAnyContent = false;
+
+    for (const point of points) {
+      const prefix = `${sectionKey}.${point.clientKey}`;
+      const values = fields.map(({ key }) => String(point[key] ?? ""));
+      const rowHasContent = values.some((value) => value.trim() !== "");
+      hasAnyContent ||= rowHasContent;
+
+      if (!rowHasContent) {
+        continue;
+      }
+
+      fields.forEach(({ key, label }, fieldIndex) => {
+        if (!isValidNumber(values[fieldIndex])) {
+          errors[`${prefix}.${String(key)}`] = `Enter a valid ${label}.`;
+        }
+      });
+
+      if (values.every(isValidNumber)) {
+        completeCount += 1;
+      }
+    }
+
+    if ((required || hasAnyContent) && completeCount < minimum) {
+      errors[sectionKey] = `Enter at least ${minimum} complete limit points.`;
+    }
+  };
+
+  if (modelForm.category === "helicopter") {
+    validatePoints(
+      modelForm.topView,
+      "topView",
+      [
+        { key: "x", label: "forward/aft CG" },
+        { key: "y", label: "left/right CG" },
+      ],
+      3,
+      true
+    );
+    validatePoints(
+      modelForm.sideView,
+      "sideView",
+      [
+        { key: "x", label: "forward/aft CG" },
+        { key: "y", label: "aircraft weight" },
+      ],
+      3,
+      false
+    );
+  } else {
+    validatePoints(
+      modelForm.envelope,
+      "envelope",
+      [
+        { key: "cg", label: "CG position" },
+        { key: "weight", label: "aircraft weight" },
+      ],
+      3,
+      true
+    );
+  }
+
+  return errors;
+}
+
+function fieldClass(hasError: boolean) {
+  return `rounded-xl border px-3 py-2 ${
+    hasError
+      ? "border-rose-500 bg-rose-50/40 outline-none ring-2 ring-rose-200"
+      : "border-slate-300"
+  }`;
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  return message ? (
+    <span id={id} className="text-xs font-medium text-rose-700">
+      {message}
+    </span>
+  ) : null;
+}
+
 function scrollEditorIntoView(
   targetId: string,
   scrollContainer: HTMLElement | null | undefined
@@ -265,6 +486,7 @@ export default function AircraftAdminPanel() {
   const [assigningAircraftId, setAssigningAircraftId] = useState("");
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
   const [modelForm, setModelForm] = useState<ModelFormState>(emptyModelForm);
+  const [modelErrors, setModelErrors] = useState<ModelFormErrors>({});
   const [aircraftForm, setAircraftForm] = useState<AircraftFormState>(emptyAircraftForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -454,6 +676,7 @@ export default function AircraftAdminPanel() {
 
   function openModelEditor(nextForm = emptyModelForm) {
     setModelForm(nextForm);
+    setModelErrors({});
     setShowModelForm(true);
     setShowModelsModal(true);
   }
@@ -478,6 +701,36 @@ export default function AircraftAdminPanel() {
 
   function updateModelField<K extends keyof ModelFormState>(key: K, value: ModelFormState[K]) {
     setModelForm((current) => ({ ...current, [key]: value }));
+    setModelErrors((current) => {
+      const next = { ...current };
+      delete next[`model.${String(key)}`];
+      const sectionKey =
+        key === "stations" || key === "envelope" || key === "topView" || key === "sideView"
+          ? key
+          : null;
+      if (sectionKey) {
+        for (const errorKey of Object.keys(next)) {
+          if (errorKey === sectionKey || errorKey.startsWith(`${sectionKey}.`)) {
+            delete next[errorKey];
+          }
+        }
+      }
+      if (key === "category") {
+        for (const errorKey of Object.keys(next)) {
+          if (
+            errorKey === "envelope" ||
+            errorKey.startsWith("envelope.") ||
+            errorKey === "topView" ||
+            errorKey.startsWith("topView.") ||
+            errorKey === "sideView" ||
+            errorKey.startsWith("sideView.")
+          ) {
+            delete next[errorKey];
+          }
+        }
+      }
+      return next;
+    });
   }
 
   function updateAircraftField<K extends keyof AircraftFormState>(
@@ -488,39 +741,75 @@ export default function AircraftAdminPanel() {
   }
 
   function updateStation(index: number, key: keyof ModelStationDraft, value: string) {
+    const stationKey = modelForm.stations[index]?.clientKey;
     setModelForm((current) => ({
       ...current,
       stations: current.stations.map((station, stationIndex) =>
         stationIndex === index ? { ...station, [key]: value } : station
       ),
     }));
+    if (stationKey) {
+      setModelErrors((current) => {
+        const next = { ...current };
+        delete next[`station.${stationKey}.${String(key)}`];
+        delete next.stations;
+        return next;
+      });
+    }
   }
 
   function updateEnvelope(index: number, key: keyof EnvelopePointDraft, value: string) {
+    const pointKey = modelForm.envelope[index]?.clientKey;
     setModelForm((current) => ({
       ...current,
       envelope: current.envelope.map((point, pointIndex) =>
         pointIndex === index ? { ...point, [key]: value } : point
       ),
     }));
+    if (pointKey) {
+      setModelErrors((current) => {
+        const next = { ...current };
+        delete next[`envelope.${pointKey}.${String(key)}`];
+        delete next.envelope;
+        return next;
+      });
+    }
   }
 
   function updateTopView(index: number, key: keyof PolygonPointDraft, value: string) {
+    const pointKey = modelForm.topView[index]?.clientKey;
     setModelForm((current) => ({
       ...current,
       topView: current.topView.map((point, pointIndex) =>
         pointIndex === index ? { ...point, [key]: value } : point
       ),
     }));
+    if (pointKey) {
+      setModelErrors((current) => {
+        const next = { ...current };
+        delete next[`topView.${pointKey}.${String(key)}`];
+        delete next.topView;
+        return next;
+      });
+    }
   }
 
   function updateSideView(index: number, key: keyof PolygonPointDraft, value: string) {
+    const pointKey = modelForm.sideView[index]?.clientKey;
     setModelForm((current) => ({
       ...current,
       sideView: current.sideView.map((point, pointIndex) =>
         pointIndex === index ? { ...point, [key]: value } : point
       ),
     }));
+    if (pointKey) {
+      setModelErrors((current) => {
+        const next = { ...current };
+        delete next[`sideView.${pointKey}.${String(key)}`];
+        delete next.sideView;
+        return next;
+      });
+    }
   }
 
   async function handleSaveModel() {
@@ -528,8 +817,14 @@ export default function AircraftAdminPanel() {
       return;
     }
 
-    if (!modelForm.name.trim()) {
-      setStatus("Model name is required.");
+    const validationErrors = validateModelForm(modelForm);
+    if (Object.keys(validationErrors).length > 0) {
+      setModelErrors(validationErrors);
+      setStatus("Review the highlighted aircraft model fields.");
+      window.requestAnimationFrame(() => {
+        const firstInvalidField = document.querySelector<HTMLElement>("[aria-invalid='true']");
+        firstInvalidField?.focus({ preventScroll: false });
+      });
       return;
     }
 
@@ -636,6 +931,7 @@ export default function AircraftAdminPanel() {
       );
       await reloadAll();
       setModelForm(emptyModelForm);
+      setModelErrors({});
       setShowModelForm(false);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to save aircraft model right now."));
@@ -860,6 +1156,7 @@ export default function AircraftAdminPanel() {
           className="ghost-button"
           onClick={() => {
             setModelForm(emptyModelForm);
+            setModelErrors({});
             setShowModelForm(false);
           }}
         >
@@ -872,14 +1169,31 @@ export default function AircraftAdminPanel() {
         records. Nothing changes until you save.
       </p>
 
+      {Object.keys(modelErrors).length > 0 ? (
+        <div
+          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+          role="alert"
+          aria-live="polite"
+        >
+          <p className="font-semibold">Some information needs attention.</p>
+          <p className="mt-1 text-rose-800">
+            Check the highlighted fields below. Incomplete rows will not be silently skipped.
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm">
-          <span>Model name</span>
+          <span>Model name <span className="text-rose-700">(required)</span></span>
           <input
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(modelErrors["model.name"]))}
+            id="aircraft-model-name"
             value={modelForm.name}
             onChange={(event) => updateModelField("name", event.target.value)}
+            aria-invalid={Boolean(modelErrors["model.name"])}
+            aria-describedby={modelErrors["model.name"] ? "aircraft-model-name-error" : undefined}
           />
+          <FieldError id="aircraft-model-name-error" message={modelErrors["model.name"]} />
         </label>
         <label className="grid gap-2 text-sm">
           <span>Aircraft type</span>
@@ -897,25 +1211,41 @@ export default function AircraftAdminPanel() {
         <label className="grid gap-2 text-sm md:col-span-2">
           <span>Typical fuel burn (gallons per hour)</span>
           <input
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(modelErrors["model.avg_fuel_burn_rate"]))}
             type="number"
             min="0"
             step="0.1"
             value={modelForm.avg_fuel_burn_rate}
             onChange={(event) => updateModelField("avg_fuel_burn_rate", event.target.value)}
             placeholder="e.g. 8.5"
+            aria-invalid={Boolean(modelErrors["model.avg_fuel_burn_rate"])}
+            aria-describedby={
+              modelErrors["model.avg_fuel_burn_rate"] ? "aircraft-model-fuel-burn-error" : undefined
+            }
+          />
+          <FieldError
+            id="aircraft-model-fuel-burn-error"
+            message={modelErrors["model.avg_fuel_burn_rate"]}
           />
         </label>
         <label className="grid gap-2 text-sm md:col-span-2">
           <span>Maximum takeoff weight (lb)</span>
           <input
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(modelErrors["model.max_weight"]))}
             type="number"
             min="0"
             step="0.1"
             value={modelForm.max_weight}
             onChange={(event) => updateModelField("max_weight", event.target.value)}
             placeholder="e.g. 2400"
+            aria-invalid={Boolean(modelErrors["model.max_weight"])}
+            aria-describedby={
+              modelErrors["model.max_weight"] ? "aircraft-model-max-weight-error" : undefined
+            }
+          />
+          <FieldError
+            id="aircraft-model-max-weight-error"
+            message={modelErrors["model.max_weight"]}
           />
         </label>
       </div>
@@ -925,8 +1255,10 @@ export default function AircraftAdminPanel() {
           <div>
             <h4 className="text-sm font-semibold text-slate-900">Loading locations</h4>
             <p className="saas-meta-text mt-1">
-              Add each seat, baggage area, fuel tank, or permanently installed item.
+              Add each seat, baggage area, fuel tank, or permanently installed item. At
+              least one complete location is required.
             </p>
+            <FieldError id="aircraft-model-stations-error" message={modelErrors.stations} />
           </div>
           <button
             type="button"
@@ -956,70 +1288,149 @@ export default function AircraftAdminPanel() {
           {modelForm.stations.map((station, index) => (
             <div
               key={station.clientKey}
-              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-2 lg:grid-cols-3"
+              className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-2 lg:grid-cols-3 ${
+                Object.keys(modelErrors).some((key) =>
+                  key.startsWith(`station.${station.clientKey}.`)
+                )
+                  ? "border-rose-300"
+                  : "border-[var(--border)]"
+              }`}
             >
               <label className="grid gap-2 text-sm">
-                <span>Short code</span>
+                <span>Short name <span className="text-rose-700">(required)</span></span>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClass(
+                    Boolean(modelErrors[`station.${station.clientKey}.id`])
+                  )}
                   value={station.id}
                   onChange={(event) => updateStation(index, "id", event.target.value)}
                   placeholder="e.g. pilot, baggage, mainFuel"
+                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.id`])}
+                  aria-describedby={
+                    modelErrors[`station.${station.clientKey}.id`]
+                      ? `station-${station.clientKey}-id-error`
+                      : undefined
+                  }
+                />
+                <span className="text-xs text-slate-500">
+                  A unique name used behind the scenes.
+                </span>
+                <FieldError
+                  id={`station-${station.clientKey}-id-error`}
+                  message={modelErrors[`station.${station.clientKey}.id`]}
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Name shown to users</span>
+                <span>Name users see <span className="text-rose-700">(required)</span></span>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClass(
+                    Boolean(modelErrors[`station.${station.clientKey}.name`])
+                  )}
                   value={station.name}
                   onChange={(event) => updateStation(index, "name", event.target.value)}
                   placeholder="e.g. Pilot seat"
+                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.name`])}
+                  aria-describedby={
+                    modelErrors[`station.${station.clientKey}.name`]
+                      ? `station-${station.clientKey}-name-error`
+                      : undefined
+                  }
+                />
+                <FieldError
+                  id={`station-${station.clientKey}-name-error`}
+                  message={modelErrors[`station.${station.clientKey}.name`]}
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Forward/aft arm (in)</span>
+                <span>Arm from datum (in) <span className="text-rose-700">(required)</span></span>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClass(
+                    Boolean(modelErrors[`station.${station.clientKey}.arm`])
+                  )}
                   type="number"
                   value={station.arm}
                   onChange={(event) => updateStation(index, "arm", event.target.value)}
+                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.arm`])}
+                  aria-describedby={
+                    modelErrors[`station.${station.clientKey}.arm`]
+                      ? `station-${station.clientKey}-arm-error`
+                      : undefined
+                  }
+                />
+                <FieldError
+                  id={`station-${station.clientKey}-arm-error`}
+                  message={modelErrors[`station.${station.clientKey}.arm`]}
                 />
               </label>
               <label className="grid gap-2 text-sm">
                 <span>Left/right arm (in, optional)</span>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClass(
+                    Boolean(modelErrors[`station.${station.clientKey}.latArm`])
+                  )}
                   type="number"
                   value={station.latArm}
                   onChange={(event) => updateStation(index, "latArm", event.target.value)}
+                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.latArm`])}
+                />
+                <FieldError
+                  id={`station-${station.clientKey}-lat-arm-error`}
+                  message={modelErrors[`station.${station.clientKey}.latArm`]}
                 />
               </label>
               <label className="grid gap-2 text-sm">
                 <span>Fuel weight (lb per gallon)</span>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClass(
+                    Boolean(modelErrors[`station.${station.clientKey}.weightPerGallon`])
+                  )}
                   type="number"
                   value={station.weightPerGallon}
                   onChange={(event) => updateStation(index, "weightPerGallon", event.target.value)}
                   placeholder={/fuel/i.test(station.id) || /fuel/i.test(station.name) ? "6" : ""}
+                  aria-invalid={Boolean(
+                    modelErrors[`station.${station.clientKey}.weightPerGallon`]
+                  )}
+                />
+                <FieldError
+                  id={`station-${station.clientKey}-fuel-weight-error`}
+                  message={modelErrors[`station.${station.clientKey}.weightPerGallon`]}
                 />
               </label>
               <label className="grid gap-2 text-sm">
                 <span>Always-loaded weight (lb)</span>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClass(
+                    Boolean(modelErrors[`station.${station.clientKey}.fixedWeight`])
+                  )}
                   type="number"
                   value={station.fixedWeight}
                   onChange={(event) => updateStation(index, "fixedWeight", event.target.value)}
+                  aria-invalid={Boolean(
+                    modelErrors[`station.${station.clientKey}.fixedWeight`]
+                  )}
+                />
+                <FieldError
+                  id={`station-${station.clientKey}-fixed-weight-error`}
+                  message={modelErrors[`station.${station.clientKey}.fixedWeight`]}
                 />
               </label>
               <label className="grid gap-2 text-sm">
                 <span>Maximum allowed load (lb)</span>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className={fieldClass(
+                    Boolean(modelErrors[`station.${station.clientKey}.maxWeight`])
+                  )}
                   type="number"
                   value={station.maxWeight}
                   onChange={(event) => updateStation(index, "maxWeight", event.target.value)}
+                  aria-invalid={Boolean(
+                    modelErrors[`station.${station.clientKey}.maxWeight`]
+                  )}
+                />
+                <FieldError
+                  id={`station-${station.clientKey}-max-weight-error`}
+                  message={modelErrors[`station.${station.clientKey}.maxWeight`]}
                 />
               </label>
               <label className="grid gap-2 text-sm">
@@ -1075,8 +1486,10 @@ export default function AircraftAdminPanel() {
                   CG limits — top view
                 </h4>
                 <p className="saas-meta-text mt-1">
-                  Enter each forward/aft and left/right CG boundary point.
+                  Enter at least three complete forward/aft and left/right CG boundary
+                  points.
                 </p>
+                <FieldError id="aircraft-model-top-view-error" message={modelErrors.topView} />
               </div>
               <button
                 type="button"
@@ -1095,24 +1508,44 @@ export default function AircraftAdminPanel() {
               {modelForm.topView.map((point, index) => (
                 <div
                   key={point.clientKey}
-                  className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                  className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] ${
+                    Object.keys(modelErrors).some((key) =>
+                      key.startsWith(`topView.${point.clientKey}.`)
+                    )
+                      ? "border-rose-300"
+                      : "border-[var(--border)]"
+                  }`}
                 >
                   <label className="grid gap-2 text-sm">
                     <span>Forward/aft CG (in)</span>
                     <input
-                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      className={fieldClass(
+                        Boolean(modelErrors[`topView.${point.clientKey}.x`])
+                      )}
                       type="number"
                       value={point.x}
                       onChange={(event) => updateTopView(index, "x", event.target.value)}
+                      aria-invalid={Boolean(modelErrors[`topView.${point.clientKey}.x`])}
+                    />
+                    <FieldError
+                      id={`top-view-${point.clientKey}-x-error`}
+                      message={modelErrors[`topView.${point.clientKey}.x`]}
                     />
                   </label>
                   <label className="grid gap-2 text-sm">
                     <span>Left/right CG (in)</span>
                     <input
-                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      className={fieldClass(
+                        Boolean(modelErrors[`topView.${point.clientKey}.y`])
+                      )}
                       type="number"
                       value={point.y}
                       onChange={(event) => updateTopView(index, "y", event.target.value)}
+                      aria-invalid={Boolean(modelErrors[`topView.${point.clientKey}.y`])}
+                    />
+                    <FieldError
+                      id={`top-view-${point.clientKey}-y-error`}
+                      message={modelErrors[`topView.${point.clientKey}.y`]}
                     />
                   </label>
                   <button
@@ -1139,8 +1572,9 @@ export default function AircraftAdminPanel() {
                   CG and weight limits
                 </h4>
                 <p className="saas-meta-text mt-1">
-                  Enter the approved forward/aft CG boundary at each aircraft weight.
+                  Optional. If used, enter at least three complete points.
                 </p>
+                <FieldError id="aircraft-model-side-view-error" message={modelErrors.sideView} />
               </div>
               <button
                 type="button"
@@ -1159,24 +1593,44 @@ export default function AircraftAdminPanel() {
               {modelForm.sideView.map((point, index) => (
                 <div
                   key={point.clientKey}
-                  className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                  className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] ${
+                    Object.keys(modelErrors).some((key) =>
+                      key.startsWith(`sideView.${point.clientKey}.`)
+                    )
+                      ? "border-rose-300"
+                      : "border-[var(--border)]"
+                  }`}
                 >
                   <label className="grid gap-2 text-sm">
                     <span>Forward/aft CG (in)</span>
                     <input
-                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      className={fieldClass(
+                        Boolean(modelErrors[`sideView.${point.clientKey}.x`])
+                      )}
                       type="number"
                       value={point.x}
                       onChange={(event) => updateSideView(index, "x", event.target.value)}
+                      aria-invalid={Boolean(modelErrors[`sideView.${point.clientKey}.x`])}
+                    />
+                    <FieldError
+                      id={`side-view-${point.clientKey}-x-error`}
+                      message={modelErrors[`sideView.${point.clientKey}.x`]}
                     />
                   </label>
                   <label className="grid gap-2 text-sm">
                     <span>Aircraft weight (lb)</span>
                     <input
-                      className="rounded-xl border border-slate-300 px-3 py-2"
+                      className={fieldClass(
+                        Boolean(modelErrors[`sideView.${point.clientKey}.y`])
+                      )}
                       type="number"
                       value={point.y}
                       onChange={(event) => updateSideView(index, "y", event.target.value)}
+                      aria-invalid={Boolean(modelErrors[`sideView.${point.clientKey}.y`])}
+                    />
+                    <FieldError
+                      id={`side-view-${point.clientKey}-y-error`}
+                      message={modelErrors[`sideView.${point.clientKey}.y`]}
                     />
                   </label>
                   <button
@@ -1204,8 +1658,9 @@ export default function AircraftAdminPanel() {
                 Weight-and-balance limits
               </h4>
               <p className="saas-meta-text mt-1">
-                Enter the approved CG boundary at each aircraft weight.
+                Enter at least three complete points from the approved CG envelope.
               </p>
+              <FieldError id="aircraft-model-envelope-error" message={modelErrors.envelope} />
             </div>
             <button
               type="button"
@@ -1224,24 +1679,46 @@ export default function AircraftAdminPanel() {
             {modelForm.envelope.map((point, index) => (
               <div
                 key={point.clientKey}
-                className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] ${
+                  Object.keys(modelErrors).some((key) =>
+                    key.startsWith(`envelope.${point.clientKey}.`)
+                  )
+                    ? "border-rose-300"
+                    : "border-[var(--border)]"
+                }`}
               >
                 <label className="grid gap-2 text-sm">
                   <span>CG position (in)</span>
                   <input
-                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    className={fieldClass(
+                      Boolean(modelErrors[`envelope.${point.clientKey}.cg`])
+                    )}
                     type="number"
                     value={point.cg}
                     onChange={(event) => updateEnvelope(index, "cg", event.target.value)}
+                    aria-invalid={Boolean(modelErrors[`envelope.${point.clientKey}.cg`])}
+                  />
+                  <FieldError
+                    id={`envelope-${point.clientKey}-cg-error`}
+                    message={modelErrors[`envelope.${point.clientKey}.cg`]}
                   />
                 </label>
                 <label className="grid gap-2 text-sm">
                   <span>Aircraft weight (lb)</span>
                   <input
-                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    className={fieldClass(
+                      Boolean(modelErrors[`envelope.${point.clientKey}.weight`])
+                    )}
                     type="number"
                     value={point.weight}
                     onChange={(event) => updateEnvelope(index, "weight", event.target.value)}
+                    aria-invalid={Boolean(
+                      modelErrors[`envelope.${point.clientKey}.weight`]
+                    )}
+                  />
+                  <FieldError
+                    id={`envelope-${point.clientKey}-weight-error`}
+                    message={modelErrors[`envelope.${point.clientKey}.weight`]}
                   />
                 </label>
                 <button
