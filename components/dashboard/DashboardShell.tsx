@@ -20,6 +20,7 @@ import {
 const dashboardLinks = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/my-aircraft", label: "My Aircraft" },
+  { href: "/dashboard/reports", label: "Reports" },
   { href: "/dashboard/saved-people", label: "People" },
   { href: "/dashboard/records", label: "Records" },
   { href: "/dashboard/notifications", label: "Notifications" },
@@ -69,6 +70,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Records":
+    case "Reports":
     case "Preflight Records":
     case "Audit Log":
       return (
