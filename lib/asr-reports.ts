@@ -205,11 +205,11 @@ const ASR_REPORT_SELECT = `
     maintenance_signed_name, maintenance_signed_title, maintenance_signed_at,
     safety_comments, hazard_log_reference, internal_investigation_reference,
     safety_signed_name, safety_signed_title, safety_signed_at,
-    asr_external_notifications (
+    asr_external_notifications!asr_external_notifications_report_id_fkey (
       id, agency, notified_on, contact_information, sort_order
     )
   ),
-  organization_report_events (
+  organization_report_events!organization_report_events_report_id_fkey (
     id, event_type, actor_user_id, actor_name, details, created_at
   )
 `;

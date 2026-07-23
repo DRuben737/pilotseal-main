@@ -15,6 +15,9 @@ alter table public.organization_reports
 create unique index if not exists organization_reports_reference_unique
 on public.organization_reports (reference_number)
 where reference_number is not null;
+create index if not exists organization_reports_supersedes_idx
+on public.organization_reports (supersedes_report_id)
+where supersedes_report_id is not null;
 
 alter table public.organization_report_events
   drop constraint if exists organization_report_events_event_type_check;
@@ -121,10 +124,15 @@ create table if not exists public.organization_report_links (
 
 create index if not exists asr_reports_aircraft_occurrence_idx
 on public.asr_reports (aircraft_id, occurrence_date desc);
+create index if not exists asr_reports_source_discrepancy_idx
+on public.asr_reports (source_discrepancy_report_id)
+where source_discrepancy_report_id is not null;
 create index if not exists asr_external_notifications_report_idx
 on public.asr_external_notifications (report_id, sort_order);
 create index if not exists report_reviewer_assignments_user_idx
 on public.organization_report_reviewer_assignments (user_id, organization_id);
+create index if not exists organization_report_links_related_idx
+on public.organization_report_links (related_report_id, report_id);
 
 alter table public.organization_report_reviewer_assignments enable row level security;
 alter table public.organization_asr_options enable row level security;
@@ -224,42 +232,42 @@ drop policy if exists report_reviewer_assignments_select_member
 on public.organization_report_reviewer_assignments;
 create policy report_reviewer_assignments_select_member
 on public.organization_report_reviewer_assignments for select to authenticated
-using ((select private.is_organization_member(organization_id, auth.uid())));
+using ((select private.is_organization_member(organization_id, (select auth.uid()))));
 
 drop policy if exists organization_asr_options_select_member on public.organization_asr_options;
 create policy organization_asr_options_select_member
 on public.organization_asr_options for select to authenticated
-using ((select private.is_organization_member(organization_id, auth.uid())));
+using ((select private.is_organization_member(organization_id, (select auth.uid()))));
 drop policy if exists organization_asr_options_insert_manager on public.organization_asr_options;
 create policy organization_asr_options_insert_manager
 on public.organization_asr_options for insert to authenticated
-with check ((select private.can_manage_organization(organization_id, auth.uid())));
+with check ((select private.can_manage_organization(organization_id, (select auth.uid()))));
 drop policy if exists organization_asr_options_update_manager on public.organization_asr_options;
 create policy organization_asr_options_update_manager
 on public.organization_asr_options for update to authenticated
-using ((select private.can_manage_organization(organization_id, auth.uid())))
-with check ((select private.can_manage_organization(organization_id, auth.uid())));
+using ((select private.can_manage_organization(organization_id, (select auth.uid()))))
+with check ((select private.can_manage_organization(organization_id, (select auth.uid()))));
 drop policy if exists organization_asr_options_delete_manager on public.organization_asr_options;
 create policy organization_asr_options_delete_manager
 on public.organization_asr_options for delete to authenticated
-using ((select private.can_manage_organization(organization_id, auth.uid())));
+using ((select private.can_manage_organization(organization_id, (select auth.uid()))));
 
 drop policy if exists asr_reports_select_authorized on public.asr_reports;
 create policy asr_reports_select_authorized
 on public.asr_reports for select to authenticated
-using ((select private.can_read_organization_report(report_id, auth.uid())));
+using ((select private.can_read_organization_report(report_id, (select auth.uid()))));
 drop policy if exists asr_external_notifications_select_authorized
 on public.asr_external_notifications;
 create policy asr_external_notifications_select_authorized
 on public.asr_external_notifications for select to authenticated
-using ((select private.can_read_organization_report(report_id, auth.uid())));
+using ((select private.can_read_organization_report(report_id, (select auth.uid()))));
 drop policy if exists organization_report_links_select_authorized
 on public.organization_report_links;
 create policy organization_report_links_select_authorized
 on public.organization_report_links for select to authenticated
 using (
-  (select private.can_read_organization_report(report_id, auth.uid()))
-  or (select private.can_read_organization_report(related_report_id, auth.uid()))
+  (select private.can_read_organization_report(report_id, (select auth.uid())))
+  or (select private.can_read_organization_report(related_report_id, (select auth.uid())))
 );
 
 create or replace function private.seed_organization_asr_options(p_organization_id uuid)

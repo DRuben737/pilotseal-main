@@ -66,6 +66,8 @@ create table if not exists public.organization_report_events (
 
 create index if not exists organization_reports_org_created_idx
 on public.organization_reports (organization_id, created_at desc);
+create index if not exists organization_reports_org_type_created_idx
+on public.organization_reports (organization_id, report_type, created_at desc);
 create index if not exists organization_reports_submitter_created_idx
 on public.organization_reports (submitted_by, created_at desc);
 create index if not exists aircraft_discrepancy_aircraft_idx
@@ -179,17 +181,17 @@ grant execute on function private.can_read_organization_report(uuid, uuid) to au
 drop policy if exists organization_reports_select_authorized on public.organization_reports;
 create policy organization_reports_select_authorized
 on public.organization_reports for select to authenticated
-using ((select private.can_read_organization_report(id, auth.uid())));
+using ((select private.can_read_organization_report(id, (select auth.uid()))));
 
 drop policy if exists aircraft_discrepancy_reports_select_authorized on public.aircraft_discrepancy_reports;
 create policy aircraft_discrepancy_reports_select_authorized
 on public.aircraft_discrepancy_reports for select to authenticated
-using ((select private.can_read_organization_report(report_id, auth.uid())));
+using ((select private.can_read_organization_report(report_id, (select auth.uid()))));
 
 drop policy if exists organization_report_events_select_authorized on public.organization_report_events;
 create policy organization_report_events_select_authorized
 on public.organization_report_events for select to authenticated
-using ((select private.can_read_organization_report(report_id, auth.uid())));
+using ((select private.can_read_organization_report(report_id, (select auth.uid()))));
 
 create or replace function public.list_organization_report_people(p_organization_id uuid)
 returns table (

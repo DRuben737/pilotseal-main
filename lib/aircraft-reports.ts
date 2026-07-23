@@ -120,7 +120,7 @@ export type ProcessAircraftDiscrepancyInput = {
 const REPORT_SELECT = `
   id, organization_id, status, submitted_by, submitted_by_name,
   created_at, updated_at, closed_at,
-  aircraft_discrepancy_reports (
+  aircraft_discrepancy_reports!aircraft_discrepancy_reports_report_id_fkey (
     aircraft_id, aircraft_tail_number, report_date,
     student_person_id, student_name, instructor_person_id, instructor_name,
     flight_hobbs_end, maintenance_hobbs_end, flight_duration,
@@ -129,7 +129,7 @@ const REPORT_SELECT = `
     instructor_signed_at, processed_by, processed_by_name,
     credit_authorized_by, credit_authorized_name, credit_authorized_at
   ),
-  organization_report_events (
+  organization_report_events!organization_report_events_report_id_fkey (
     id, event_type, actor_user_id, actor_name, details, created_at
   )
 `;
