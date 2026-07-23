@@ -43,6 +43,8 @@ type ProcessingForm = {
   creditAuthorized: boolean;
 };
 
+type ReportStatusFilter = "all" | "open" | OrganizationReportStatus;
+
 const emptyReportForm = (): ReportForm => ({
   aircraftId: "",
   reportDate: new Date().toISOString().slice(0, 10),
@@ -70,15 +72,36 @@ export default function AircraftReportsManager() {
   const [clientRequestId, setClientRequestId] = useState("");
   const [processingForm, setProcessingForm] = useState<ProcessingForm | null>(null);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | OrganizationReportStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("open");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const activeReport = reports.find((report) => report.id === activeReportId) ?? null;
+  const aircraftById = useMemo(
+    () => new Map(aircraft.map((item) => [item.id, item])),
+    [aircraft]
+  );
+  const activeAircraft = activeReport ? aircraftById.get(activeReport.aircraft_id) ?? null : null;
   const students = people.filter((person) => person.teaching_role === "student");
   const instructors = people.filter((person) => person.teaching_role === "instructor");
+  const reportStats = useMemo(
+    () => ({
+      open: reports.filter((report) => report.status !== "closed").length,
+      submitted: reports.filter((report) => report.status === "submitted").length,
+      signaturePending: reports.filter(
+        (report) =>
+          report.status !== "closed" &&
+          Boolean(report.instructor_name) &&
+          !report.instructor_signed_at
+      ).length,
+      groundedAircraft: aircraft.filter(
+        (item) => item.operational_status === "grounded"
+      ).length,
+    }),
+    [aircraft, reports]
+  );
 
   async function loadData(preferredReportId = "") {
     if (!activeOrganization?.id) {
@@ -141,7 +164,11 @@ export default function AircraftReportsManager() {
   const filteredReports = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return reports.filter((report) => {
-      if (statusFilter !== "all" && report.status !== statusFilter) return false;
+      if (statusFilter === "open") {
+        if (report.status === "closed") return false;
+      } else if (statusFilter !== "all" && report.status !== statusFilter) {
+        return false;
+      }
       if (!needle) return true;
       return [
         report.aircraft_tail_number,
@@ -156,6 +183,12 @@ export default function AircraftReportsManager() {
         .includes(needle);
     });
   }, [query, reports, statusFilter]);
+
+  const activeReportNextSteps = activeReport
+    ? getReportNextSteps(activeReport, activeAircraft, canManage)
+    : [];
+  const activeAircraftGrounded =
+    activeAircraft?.operational_status === "grounded";
 
   function startReport() {
     const defaultAircraft = aircraft.find((item) => item.operational_status !== "grounded") ?? aircraft[0];
@@ -321,6 +354,17 @@ export default function AircraftReportsManager() {
             {error}
           </p>
         ) : null}
+
+        <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ReportStat label="Open reports" value={reportStats.open} />
+          <ReportStat label="Waiting for review" value={reportStats.submitted} />
+          <ReportStat label="Signatures pending" value={reportStats.signaturePending} />
+          <ReportStat
+            label="Aircraft grounded now"
+            value={reportStats.groundedAircraft}
+            tone={reportStats.groundedAircraft > 0 ? "danger" : "neutral"}
+          />
+        </dl>
       </div>
 
       {showForm ? (
@@ -401,6 +445,7 @@ export default function AircraftReportsManager() {
         <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aircraft, person, type, or description" />
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+            <option value="open">Open reports</option>
             <option value="all">All statuses</option>
             <option value="submitted">Submitted</option>
             <option value="in_review">In review</option>
@@ -410,40 +455,66 @@ export default function AircraftReportsManager() {
 
         {loading ? <p className="saas-empty-state mt-5">Loading reports…</p> : null}
         {!loading && filteredReports.length === 0 ? (
-          <p className="saas-empty-state mt-5">No matching aircraft reports.</p>
+          <div className="saas-empty-state mt-5">
+            <p>
+              {statusFilter === "open" && !query.trim()
+                ? "No open aircraft reports."
+                : "No aircraft reports match these filters."}
+            </p>
+            {statusFilter !== "all" ? (
+              <button
+                className="ghost-button mt-3"
+                type="button"
+                onClick={() => setStatusFilter("all")}
+              >
+                Show all reports
+              </button>
+            ) : null}
+          </div>
         ) : null}
         <div className="mt-5 grid gap-3">
-          {filteredReports.map((report) => (
-            <button
-              key={report.id}
-              type="button"
-              onClick={() => setActiveReportId(report.id)}
-              className={`w-full rounded-2xl border p-4 text-left transition ${
-                activeReportId === report.id
-                  ? "border-blue-400 bg-blue-50"
-                  : "border-slate-200 bg-white hover:border-slate-300"
-              }`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-950">
-                    {report.aircraft_tail_number} · {report.discrepancy_type}
-                  </p>
-                  <p className="saas-meta-text mt-1">
-                    {report.report_date} · Submitted by {report.submitted_by_name}
-                  </p>
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-700">{report.description}</p>
+          {filteredReports.map((report) => {
+            const reportAircraft = aircraftById.get(report.aircraft_id) ?? null;
+            const fleetGrounded = reportAircraft?.operational_status === "grounded";
+            return (
+              <button
+                key={report.id}
+                type="button"
+                onClick={() => setActiveReportId(report.id)}
+                aria-pressed={activeReportId === report.id}
+                className={`w-full rounded-2xl border p-4 text-left transition-colors duration-200 ${
+                  activeReportId === report.id
+                    ? "border-blue-400 bg-blue-50"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-950">
+                      {report.aircraft_tail_number} · {report.discrepancy_type}
+                    </p>
+                    <p className="saas-meta-text mt-1">
+                      {report.report_date} · Submitted by {report.submitted_by_name}
+                    </p>
+                    <p className="mt-2 line-clamp-2 text-sm text-slate-700">{report.description}</p>
+                    <p className="mt-3 text-xs font-semibold text-slate-600">
+                      Next: {getReportListNextStep(report, canManage)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {fleetGrounded ? <Badge tone="danger">Grounded in fleet</Badge> : null}
+                    {report.aircraft_down === true && !fleetGrounded ? (
+                      <Badge tone="warning">Report says aircraft down</Badge>
+                    ) : null}
+                    {!report.instructor_signed_at && report.instructor_name ? <Badge tone="warning">Signature pending</Badge> : null}
+                    <Badge tone={report.status === "closed" ? "neutral" : report.status === "in_review" ? "warning" : "info"}>
+                      {formatReportStatus(report.status)}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {report.aircraft_down === true ? <Badge tone="danger">Aircraft down</Badge> : null}
-                  {!report.instructor_signed_at && report.instructor_name ? <Badge tone="warning">Signature pending</Badge> : null}
-                  <Badge tone={report.status === "closed" ? "neutral" : report.status === "in_review" ? "warning" : "info"}>
-                    {formatReportStatus(report.status)}
-                  </Badge>
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -456,6 +527,37 @@ export default function AircraftReportsManager() {
               <p className="saas-meta-text mt-2">Submitted {formatDateTime(activeReport.created_at)} by {activeReport.submitted_by_name}</p>
             </div>
             <button className="ghost-button" type="button" onClick={() => setActiveReportId("")}>Close detail</button>
+          </div>
+
+          <div
+            className={`mt-5 rounded-2xl border p-4 ${
+              activeAircraftGrounded ||
+              (activeReport.aircraft_down === true && !activeAircraftGrounded)
+                ? "border-rose-200 bg-rose-50 text-rose-950"
+                : "border-blue-200 bg-blue-50 text-blue-950"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-semibold">What happens next</h3>
+              <Badge
+                tone={
+                  activeAircraftGrounded ? "danger" : "neutral"
+                }
+              >
+                Fleet status:{" "}
+                {activeAircraft
+                  ? formatAircraftStatus(activeAircraft.operational_status)
+                  : "Unavailable"}
+              </Badge>
+            </div>
+            <ul className="mt-3 grid gap-2 text-sm">
+              {activeReportNextSteps.map((step) => (
+                <li key={step} className="flex gap-2">
+                  <span aria-hidden="true">•</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -475,7 +577,7 @@ export default function AircraftReportsManager() {
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Detail label="ASR Submitted" value={formatTriState(activeReport.asr_submitted)} />
             <Detail label="Deferrable" value={formatTriState(activeReport.deferrable)} />
-            <Detail label="Aircraft Down" value={formatTriState(activeReport.aircraft_down)} />
+            <Detail label="Report says aircraft down" value={formatTriState(activeReport.aircraft_down)} />
             <Detail label="Credit Applied" value={formatTriState(activeReport.credit_applied)} />
             <Detail label="Processed By" value={activeReport.processed_by_name ?? "Not processed"} />
             <Detail
@@ -520,14 +622,18 @@ export default function AircraftReportsManager() {
                     </Field>
                     <TriStateField label="ASR Submitted" value={processingForm.asrSubmitted} onChange={(value) => setProcessingForm({ ...processingForm, asrSubmitted: value })} />
                     <TriStateField label="Deferrable" value={processingForm.deferrable} onChange={(value) => setProcessingForm({ ...processingForm, deferrable: value })} />
-                    <TriStateField label="Aircraft Down" value={processingForm.aircraftDown} onChange={(value) => setProcessingForm({ ...processingForm, aircraftDown: value })} />
+                    <TriStateField label="Report assessment: Aircraft down" value={processingForm.aircraftDown} onChange={(value) => setProcessingForm({ ...processingForm, aircraftDown: value })} />
                     <TriStateField label="Credit Applied" value={processingForm.creditApplied} onChange={(value) => setProcessingForm({ ...processingForm, creditApplied: value })} />
                   </div>
                   <label className="mt-4 flex items-center gap-3 text-sm text-slate-800">
                     <input type="checkbox" checked={processingForm.creditAuthorized} onChange={(event) => setProcessingForm({ ...processingForm, creditAuthorized: event.target.checked })} />
                     Authorize credit as the current administrator
                   </label>
-                  <p className="saas-meta-text mt-3">Closing this report does not change the aircraft’s Fleet & MX operational status.</p>
+                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    This Aircraft Down field documents the report only. To ground or
+                    return the aircraft to service, update its operational status in
+                    Fleet &amp; MX.
+                  </p>
                   <button className="primary-button mt-4" type="button" disabled={busy} onClick={() => void handleProcess()}>
                     {busy ? "Saving…" : processingForm.status === "closed" ? "Save & Close Report" : "Save Processing"}
                   </button>
@@ -569,9 +675,122 @@ function Detail({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-3"><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</dt><dd className="mt-1 text-sm text-slate-800">{value}</dd></div>;
 }
 
+function ReportStat({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "danger";
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        tone === "danger"
+          ? "border-rose-200 bg-rose-50"
+          : "border-slate-200 bg-white"
+      }`}
+    >
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
+      <dd
+        className={`mt-1 text-2xl font-semibold ${
+          tone === "danger" ? "text-rose-800" : "text-slate-950"
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function Badge({ tone, children }: { tone: "danger" | "warning" | "neutral" | "info"; children: React.ReactNode }) {
   const className = tone === "danger" ? "bg-rose-100 text-rose-800" : tone === "warning" ? "bg-amber-100 text-amber-800" : tone === "info" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700";
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{children}</span>;
+}
+
+function getReportListNextStep(
+  report: AircraftDiscrepancyReport,
+  canManage: boolean
+) {
+  if (report.status === "closed") return "No report action remains";
+  if (!report.instructor_person_id) {
+    return canManage
+      ? "Assign an instructor"
+      : "Waiting for an instructor assignment";
+  }
+  if (!report.instructor_signed_at) {
+    return `Waiting for ${report.instructor_name ?? "the instructor"} to sign`;
+  }
+  if (report.status === "submitted") {
+    return canManage
+      ? "Review the report and record the disposition"
+      : "Waiting for organization review";
+  }
+  return canManage
+    ? "Finish the disposition and close the report"
+    : "Organization review is in progress";
+}
+
+function getReportNextSteps(
+  report: AircraftDiscrepancyReport,
+  aircraft: AircraftRecord | null,
+  canManage: boolean
+) {
+  const steps: string[] = [];
+  const fleetStatus = aircraft
+    ? formatAircraftStatus(aircraft.operational_status)
+    : "unavailable";
+  const fleetGrounded = aircraft?.operational_status === "grounded";
+
+  if (fleetGrounded) {
+    steps.push(
+      "This aircraft is grounded in Fleet & MX. Only an organization owner or administrator should return it to service after the discrepancy is resolved."
+    );
+  } else if (report.aircraft_down === true) {
+    steps.push(
+      `This report is marked Aircraft Down, but the current Fleet & MX status is ${fleetStatus}. Update Fleet & MX separately if the aircraft must not be dispatched.`
+    );
+  }
+
+  if (report.status === "closed") {
+    steps.push(
+      "This report is closed. Closing a report does not change the aircraft's Fleet & MX operational status."
+    );
+    return steps;
+  }
+
+  if (!report.instructor_person_id) {
+    steps.push(
+      canManage
+        ? "Assign an instructor if an instructor signature is required."
+        : "An organization owner or administrator must assign an instructor before a signature can be collected."
+    );
+  } else if (!report.instructor_signed_at) {
+    steps.push(
+      `Waiting for ${report.instructor_name ?? "the assigned instructor"} to confirm the instructor signature.`
+    );
+  } else {
+    steps.push("The instructor signature has been recorded.");
+  }
+
+  if (report.status === "submitted") {
+    steps.push(
+      canManage
+        ? "Review the discrepancy, record the disposition fields, and move the report to In review."
+        : "Waiting for an organization owner or administrator to review the discrepancy."
+    );
+  } else {
+    steps.push(
+      canManage
+        ? "Finish the disposition, confirm any credit decision, and close the report when the record is complete."
+        : "The organization is reviewing the discrepancy and will close the report when the record is complete."
+    );
+  }
+
+  return steps;
 }
 
 function optionalNonNegativeNumber(value: string, label: string) {
