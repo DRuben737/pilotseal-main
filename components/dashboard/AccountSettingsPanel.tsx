@@ -4,6 +4,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import {
+  getAuthErrorMessage,
+  getPasswordValidationError,
+  PASSWORD_HELP_TEXT,
+  PASSWORD_MIN_LENGTH,
+} from "@/components/auth/auth-errors";
 import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
 import { getDeterministicGreeting } from "@/lib/greetings";
 import {
@@ -883,13 +889,9 @@ export default function AccountSettingsPanel() {
       return;
     }
 
-    if (password.length < 8) {
-      setPasswordStatus("Password must be at least 8 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setPasswordStatus("Passwords do not match.");
+    const passwordError = getPasswordValidationError(password, confirmPassword);
+    if (passwordError) {
+      setPasswordStatus(passwordError);
       return;
     }
 
@@ -910,7 +912,7 @@ export default function AccountSettingsPanel() {
       setPasswordStatus("Password updated.");
     } catch (error) {
       console.error(error);
-      setPasswordStatus(error instanceof Error ? error.message : "Failed to update password.");
+      setPasswordStatus(getAuthErrorMessage(error, "Failed to update password.", "password"));
     } finally {
       setSavingPassword(false);
     }
@@ -1045,21 +1047,31 @@ export default function AccountSettingsPanel() {
               <span>New password</span>
               <input
                 type="password"
+                minLength={PASSWORD_MIN_LENGTH}
+                autoComplete="new-password"
+                aria-describedby="account-password-help"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="At least 8 characters"
               />
+              <span id="account-password-help">{PASSWORD_HELP_TEXT}</span>
             </label>
             <label className="saas-field">
               <span>Confirm password</span>
               <input
                 type="password"
+                minLength={PASSWORD_MIN_LENGTH}
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 placeholder="Repeat new password"
               />
             </label>
-            {passwordStatus ? <p className="saas-meta-text">{passwordStatus}</p> : null}
+            {passwordStatus ? (
+              <p className="saas-meta-text" role="status" aria-live="polite">
+                {passwordStatus}
+              </p>
+            ) : null}
             <button
               type="button"
               className="primary-button icon-button"

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import AuthShell from "@/components/auth/AuthShell";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { getAuthErrorMessage } from "@/components/auth/auth-errors";
 import { getSupabaseClient } from "@/lib/supabase";
 
 const USERNAME_EMAIL_DOMAIN = "pilotseal.com";
@@ -59,11 +60,7 @@ export default function LoginForm({
       setPassword("");
       setStatus("Session updated. Redirecting to your dashboard...");
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Authentication failed. Please try again."
-      );
+      setError(getAuthErrorMessage(submitError, "Authentication failed. Please try again.", "login"));
       setStatus("");
     } finally {
       setSubmitting(false);
@@ -144,6 +141,7 @@ export default function LoginForm({
           </span>
           <input
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="Enter your password"
@@ -152,8 +150,16 @@ export default function LoginForm({
           />
         </label>
 
-        {status ? <p className="text-sm leading-7 text-slate-500">{status}</p> : null}
-        {error ? <p className="text-sm leading-7 text-rose-700">{error}</p> : null}
+        {status ? (
+          <p className="text-sm leading-7 text-slate-500" role="status" aria-live="polite">
+            {status}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="text-sm leading-7 text-rose-700" role="alert">
+            {error}
+          </p>
+        ) : null}
 
         <div className="grid gap-3">
           <button

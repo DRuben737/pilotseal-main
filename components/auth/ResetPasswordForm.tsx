@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import AuthShell from "@/components/auth/AuthShell";
+import {
+  getAuthErrorMessage,
+  getPasswordValidationError,
+  PASSWORD_HELP_TEXT,
+  PASSWORD_MIN_LENGTH,
+} from "@/components/auth/auth-errors";
 import { getSupabaseClient } from "@/lib/supabase";
 
 export default function ResetPasswordForm({
@@ -77,13 +83,9 @@ export default function ResetPasswordForm({
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    const passwordError = getPasswordValidationError(password, confirmPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -104,9 +106,11 @@ export default function ResetPasswordForm({
       );
     } catch (updateError) {
       setError(
-        updateError instanceof Error
-          ? updateError.message
-          : "Failed to update password. Request a new reset link and try again."
+        getAuthErrorMessage(
+          updateError,
+          "Failed to update password. Request a new reset link and try again.",
+          "password"
+        )
       );
       setStatus("");
     } finally {
@@ -127,13 +131,18 @@ export default function ResetPasswordForm({
           </span>
           <input
             type="password"
-            minLength={8}
+            minLength={PASSWORD_MIN_LENGTH}
+            autoComplete="new-password"
+            aria-describedby="reset-password-help"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="Enter a new password"
             className="bg-transparent text-base text-slate-950 outline-none placeholder:text-slate-400"
             required
           />
+          <span id="reset-password-help" className="text-sm leading-6 text-slate-500">
+            {PASSWORD_HELP_TEXT}
+          </span>
         </label>
 
         <label className="grid gap-2 border-b border-slate-200 pb-4">
@@ -142,7 +151,8 @@ export default function ResetPasswordForm({
           </span>
           <input
             type="password"
-            minLength={8}
+            minLength={PASSWORD_MIN_LENGTH}
+            autoComplete="new-password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Confirm your new password"
@@ -151,8 +161,16 @@ export default function ResetPasswordForm({
           />
         </label>
 
-        {status ? <p className="text-sm leading-7 text-slate-500">{status}</p> : null}
-        {error ? <p className="text-sm leading-7 text-rose-700">{error}</p> : null}
+        {status ? (
+          <p className="text-sm leading-7 text-slate-500" role="status" aria-live="polite">
+            {status}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="text-sm leading-7 text-rose-700" role="alert">
+            {error}
+          </p>
+        ) : null}
 
         <div className="grid gap-3">
           <button

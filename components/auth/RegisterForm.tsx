@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { isExistingAccountError } from "@/components/auth/auth-errors";
+import {
+  getAuthErrorMessage,
+  getPasswordValidationError,
+  isExistingAccountError,
+  PASSWORD_HELP_TEXT,
+  PASSWORD_MIN_LENGTH,
+} from "@/components/auth/auth-errors";
 import AuthShell from "@/components/auth/AuthShell";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -44,6 +50,10 @@ export default function RegisterForm({
       const normalizedCompanyName = companyName.trim();
       if (accountType === "company" && normalizedCompanyName.length < 2) {
         throw new Error("Enter a company name with at least 2 characters.");
+      }
+      const passwordError = getPasswordValidationError(password);
+      if (passwordError) {
+        throw new Error(passwordError);
       }
       const emailRedirectTo =
         typeof window !== "undefined"
@@ -87,11 +97,7 @@ export default function RegisterForm({
       setStatus("Account created. Please sign in.");
       router.replace(`/login?next=${encodeURIComponent(redirectTo)}`);
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Registration failed. Please try again."
-      );
+      setError(getAuthErrorMessage(submitError, "Registration failed. Please try again.", "password"));
       setStatus("");
     } finally {
       setSubmitting(false);
@@ -179,6 +185,7 @@ export default function RegisterForm({
           </span>
           <input
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="cfi@pilotseal.com"
@@ -193,17 +200,30 @@ export default function RegisterForm({
           </span>
           <input
             type="password"
-            minLength={8}
+            minLength={PASSWORD_MIN_LENGTH}
+            autoComplete="new-password"
+            aria-describedby="register-password-help"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="Create a password"
             className="bg-transparent text-base text-slate-950 outline-none placeholder:text-slate-400"
             required
           />
+          <span id="register-password-help" className="text-sm leading-6 text-slate-500">
+            {PASSWORD_HELP_TEXT}
+          </span>
         </label>
 
-        {status ? <p className="text-sm leading-7 text-slate-500">{status}</p> : null}
-        {error ? <p className="text-sm leading-7 text-rose-700">{error}</p> : null}
+        {status ? (
+          <p className="text-sm leading-7 text-slate-500" role="status" aria-live="polite">
+            {status}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="text-sm leading-7 text-rose-700" role="alert">
+            {error}
+          </p>
+        ) : null}
 
         <div className="grid gap-3">
           <button
