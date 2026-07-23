@@ -193,7 +193,7 @@ const ASR_REPORT_SELECT = `
   id, organization_id, status, reference_number, revision_number,
   supersedes_report_id, submitted_by, submitted_by_name,
   created_at, updated_at, closed_at,
-  asr_reports (
+  asr_reports!asr_reports_report_id_fkey (
     source_discrepancy_report_id, aircraft_id, aircraft_tail_number,
     aircraft_type, occurrence_date, occurrence_local_time,
     type_of_occurrence, description, report_data, reporter_title,
