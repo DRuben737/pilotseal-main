@@ -417,6 +417,7 @@ declare
   maintenance_row public.organization_aircraft_maintenance;
   result public.flight_briefs;
   custom_items jsonb := '[]'::jsonb;
+  status_label text;
 begin
   if auth.uid() is null then
     raise exception 'Authentication is required.' using errcode = '42501';
@@ -460,6 +461,23 @@ begin
       on conflict (aircraft_id) do nothing;
     select * into maintenance_row from public.organization_aircraft_maintenance
       where aircraft_id = target.aircraft_id for update;
+
+    if maintenance_row.operational_status <> 'available' then
+      status_label := case maintenance_row.operational_status
+        when 'grounded' then 'grounded'
+        when 'in_maintenance' then 'in maintenance'
+        when 'away' then 'away or unavailable'
+        else 'unavailable'
+      end;
+      raise exception 'This aircraft cannot be dispatched because it is %. %',
+        status_label,
+        case
+          when nullif(btrim(coalesce(maintenance_row.operational_status_note, '')), '') is null
+            then 'Choose another aircraft or ask an organization admin to return it to service.'
+          else btrim(maintenance_row.operational_status_note)
+        end
+        using errcode = '55000';
+    end if;
 
     if maintenance_row.current_meter_value is not null and p_meter_value < maintenance_row.current_meter_value then
       raise exception 'The meter reading is lower than the current MX value (%).', maintenance_row.current_meter_value
@@ -518,6 +536,7 @@ begin
       'adsb_due_date', maintenance_row.adsb_due_date,
       'registration_due_date', maintenance_row.registration_due_date,
       'operational_status', maintenance_row.operational_status,
+      'operational_status_note', maintenance_row.operational_status_note,
       'maintenance_updated_at', maintenance_row.updated_at,
       'custom_inspections', custom_items
     );

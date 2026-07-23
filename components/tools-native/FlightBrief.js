@@ -157,6 +157,19 @@ function getTodayUtcMs(referenceDate) {
   return Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
+function getOperationalStatusCopy(status) {
+  switch (status) {
+    case "grounded":
+      return "Grounded";
+    case "in_maintenance":
+      return "In maintenance";
+    case "away":
+      return "Away or unavailable";
+    default:
+      return "Unavailable";
+  }
+}
+
 function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
   if (!aircraft || (!aircraft.is_saved && aircraft.source !== "organization")) {
     return {
@@ -164,6 +177,8 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
       detail: "Select a saved aircraft",
       ok: null,
       report: "(none saved)",
+      dispatchBlocked: false,
+      blockingReason: "",
     };
   }
 
@@ -171,14 +186,16 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
   const items = [];
   let hasExpired = false;
   let needsMxTime = false;
+  let dispatchBlocked = false;
+  let blockingReason = "";
 
   if (aircraft.operational_status && aircraft.operational_status !== "available") {
     hasExpired = true;
-    const statusLabel = String(aircraft.operational_status).replaceAll("_", " ");
+    dispatchBlocked = true;
+    const statusLabel = getOperationalStatusCopy(aircraft.operational_status);
     const statusNote = String(aircraft.operational_status_note ?? "").trim();
-    items.push(
-      `Aircraft status ${statusLabel}${statusNote ? ` — ${statusNote}` : ""}`
-    );
+    blockingReason = `${statusLabel}${statusNote ? ` — ${statusNote}` : ""}`;
+    items.push(blockingReason);
   }
 
   if (aircraft.hundred_hour_due_hours != null) {
@@ -217,14 +234,24 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
       detail: "No due info saved",
       ok: null,
       report: "(none saved)",
+      dispatchBlocked: false,
+      blockingReason: "",
     };
   }
 
   return {
-    label: hasExpired ? "Not available" : needsMxTime ? "Check MX time" : "Available",
+    label: dispatchBlocked
+      ? "Do not fly"
+      : hasExpired
+        ? "Review required"
+        : needsMxTime
+          ? "Enter current time"
+          : "Ready",
     detail: items.join(" · "),
     ok: hasExpired ? false : needsMxTime ? null : true,
     report: items.join("; "),
+    dispatchBlocked,
+    blockingReason,
   };
 }
 
@@ -1991,6 +2018,14 @@ ${riskComments}
         setRecordStatus("Select the organization that owns this aircraft before finalizing.");
         return;
       }
+      if (selectedAircraftDueMeta.dispatchBlocked) {
+        setRecordStatus(
+          `This aircraft cannot be dispatched: ${selectedAircraftDueMeta.blockingReason}. Choose another aircraft or ask an organization admin to return it to service.`
+        );
+        setCurrentStep(1);
+        scrollToTop();
+        return;
+      }
       if (!Number.isFinite(meterValue) || meterValue < 0) {
         setRecordStatus("Enter the current Hobbs or Tach reading.");
         return;
@@ -2132,8 +2167,20 @@ ${riskComments}
         </div>
       </div>
       {recordStatus ? (
-        <div className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+        <div className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700" role="status" aria-live="polite">
           {recordStatus}
+        </div>
+      ) : null}
+      {selectedSavedAircraft?.source === "organization" && selectedAircraftDueMeta.dispatchBlocked ? (
+        <div
+          id="aircraft-dispatch-block"
+          className="mx-3 mb-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+          role="alert"
+        >
+          <p className="font-semibold">This aircraft cannot be dispatched.</p>
+          <p className="mt-1">
+            {selectedAircraftDueMeta.blockingReason}. Choose another aircraft or ask an organization admin to return it to service.
+          </p>
         </div>
       ) : null}
 
@@ -3276,7 +3323,13 @@ ${riskComments}
           <strong>{steps[currentStep].title}</strong>
         </div>
         {isLastStep ? (
-          <button type="button" className="flightbrief-navButton primary" onClick={handleGenerateReport} disabled={recordSaving}>
+          <button
+            type="button"
+            className="flightbrief-navButton primary"
+            onClick={handleGenerateReport}
+            disabled={recordSaving}
+            aria-describedby={selectedAircraftDueMeta.dispatchBlocked ? "aircraft-dispatch-block" : undefined}
+          >
             <span className="flightbrief-navButtonDesktop">{recordSaving ? "Finalizing..." : "Finalize & Generate Report"}</span>
             <span className="flightbrief-navButtonMobile" aria-hidden="true">✓</span>
           </button>
