@@ -29,7 +29,7 @@ const dashboardLinks = [
 const organizationLinks = [
   { href: "/dashboard/organization/overview", label: "Overview" },
   { href: "/dashboard/organization/people", label: "People" },
-  { href: "/dashboard/organization/fleet", label: "Fleet & MX" },
+  { href: "/dashboard/organization/fleet", label: "Aircraft & Maintenance" },
   { href: "/dashboard/organization/briefs", label: "Preflight Records" },
   { href: "/dashboard/organization/endorsements", label: "Endorsements" },
   { href: "/dashboard/organization/messages", label: "Messages" },
@@ -98,7 +98,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Aircraft":
-    case "Fleet & MX":
+    case "Aircraft & Maintenance":
     case "Platform Fleet":
     case "Aircraft Assignments":
       return (

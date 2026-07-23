@@ -630,7 +630,7 @@ const STATIC_RISKS = [
   { id: "static-last-night-30", label: "Last NIGHT flight > 30 days", value: 1 },
   { id: "static-solo-flight", label: "SOLO flight", value: 2 },
   { id: "static-last-solo-30", label: "Last SOLO flight > 30 days (SOLO)", value: 2 },
-  { id: "static-prior-mx", label: "Prior MX but released, nothing found / Recurrent MX", value: 1 },
+  { id: "static-prior-mx", label: "Previous maintenance issue returned or was not duplicated", value: 1 },
   { id: "static-inspection-under-20", label: "Aircraft < 20 hrs to next required inspection", value: 1 },
   {
     id: "static-secondary-aircraft-type",
@@ -978,7 +978,7 @@ export default function FlightBrief() {
 
   const mxRemainingMeta = useMemo(() => {
     if (mxRemaining === null) {
-      return { label: "--", detail: "Enter MX times", ok: null };
+      return { label: "--", detail: "Enter the current and next-due readings", ok: null };
     }
 
     const expectedIncrease = parseFloat(String(plannedMeterIncrease));
@@ -1924,11 +1924,11 @@ ${riskComments}
     }
 
     if (stepIndex === 1) {
-      if (!String(mxNow).trim()) missing.push("MX time now");
+      if (!String(mxNow).trim()) missing.push("Current Hobbs or tachometer reading");
       if (
         !String(mxDue).trim() &&
         !(selectedSavedAircraft?.source === "organization" && selectedSavedAircraft.hundred_hour_due_hours == null)
-      ) missing.push("Next MX due");
+      ) missing.push("Reading when the next maintenance is due");
       if (selectedSavedAircraft?.source === "organization" && !meterObservedAt) {
         missing.push("Meter observation time");
       }
@@ -2039,7 +2039,7 @@ ${riskComments}
         meterValue < Number(selectedSavedAircraft.current_meter_value)
       ) {
         setRecordStatus(
-          `The entered reading is lower than the current MX value (${selectedSavedAircraft.current_meter_value}). Correct it before finalizing.`
+          `The entered reading is lower than the saved aircraft reading (${selectedSavedAircraft.current_meter_value}). Correct it before finalizing.`
         );
         return;
       }
@@ -2478,8 +2478,8 @@ ${riskComments}
                   <small>{fuelTimeMeta.detail}</small>
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="mx-now">Observed Meter Reading:</label>
-                  <input type="number" min="0" step="any" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder={selectedSavedAircraft?.current_meter_value == null ? "Check aircraft" : `MX currently ${selectedSavedAircraft.current_meter_value}`} />
+                  <label className="label" htmlFor="mx-now">Current Meter Reading:</label>
+                  <input type="number" min="0" step="any" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder={selectedSavedAircraft?.current_meter_value == null ? "Check the aircraft meter" : `Saved reading ${selectedSavedAircraft.current_meter_value}`} />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="meter-type">Meter Type:</label>
@@ -2489,26 +2489,26 @@ ${riskComments}
                   </select>
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="meter-observed-at">Observed At:</label>
+                  <label className="label" htmlFor="meter-observed-at">Reading Checked At:</label>
                   <input type="datetime-local" id="meter-observed-at" className="input-field" value={meterObservedAt} onChange={(e) => setMeterObservedAt(e.target.value)} />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="mx-due">Next Mx Due:</label>
+                  <label className="label" htmlFor="mx-due">Next Maintenance Due At:</label>
                   <input type="number" id="mx-due" className="input-field" readOnly={selectedSavedAircraft?.source === "organization"} value={mxDue} onChange={(e) => handleMxDueChange(e.target.value)} placeholder={selectedSavedAircraft?.source === "organization" ? "Managed by organization" : ""} />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="planned-meter-increase">Expected Meter Increase (optional):</label>
+                  <label className="label" htmlFor="planned-meter-increase">Expected Increase During This Flight (optional):</label>
                   <input type="number" min="0" step="any" id="planned-meter-increase" className="input-field" value={plannedMeterIncrease} onChange={(e) => setPlannedMeterIncrease(e.target.value)} placeholder="Not the same as ETE" />
                 </div>
                 <div className="flightbrief-kpi">
-                  <span>MX Remaining</span>
+                  <span>Time Until Maintenance</span>
                   <strong className={mxRemainingMeta.ok === false ? "is-alert" : mxRemainingMeta.ok === true ? "is-ok" : ""}>
                     {mxRemainingMeta.label}
                   </strong>
                   <small>{mxRemainingMeta.detail}</small>
                 </div>
                 <div className="flightbrief-kpi flightbrief-maintenance-due">
-                  <span>Saved due</span>
+                  <span>Saved Maintenance Status</span>
                   <strong
                     className={
                       selectedAircraftDueMeta.ok === false

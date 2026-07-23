@@ -598,7 +598,7 @@ export default function AircraftReportsManager() {
               </p>
               <p className="mt-1 text-sm text-slate-600">
                 Records the discrepancy without changing the aircraft&apos;s
-                Fleet &amp; MX status.
+                aircraft availability or maintenance status.
               </p>
             </div>
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
@@ -802,22 +802,22 @@ export default function AircraftReportsManager() {
                         {instructors.map((person) => <option key={person.person_id} value={person.person_id}>{person.display_name}{person.status === "pending" ? " · account not linked" : ""}</option>)}
                       </select>
                     </Field>
-                    <TriStateField label="ASR Submitted" value={processingForm.asrSubmitted} onChange={(value) => setProcessingForm({ ...processingForm, asrSubmitted: value })} />
-                    <TriStateField label="Deferrable" value={processingForm.deferrable} onChange={(value) => setProcessingForm({ ...processingForm, deferrable: value })} />
+                    <TriStateField label="Was an ASR submitted?" value={processingForm.asrSubmitted} onChange={(value) => setProcessingForm({ ...processingForm, asrSubmitted: value })} />
+                    <TriStateField label="Can this discrepancy be deferred?" value={processingForm.deferrable} onChange={(value) => setProcessingForm({ ...processingForm, deferrable: value })} />
                     <TriStateField label="Report assessment: Aircraft down" value={processingForm.aircraftDown} onChange={(value) => setProcessingForm({ ...processingForm, aircraftDown: value })} />
-                    <TriStateField label="Credit Applied" value={processingForm.creditApplied} onChange={(value) => setProcessingForm({ ...processingForm, creditApplied: value })} />
+                    <TriStateField label="Apply flight credit?" value={processingForm.creditApplied} onChange={(value) => setProcessingForm({ ...processingForm, creditApplied: value })} />
                   </div>
                   <label className="mt-4 flex items-center gap-3 text-sm text-slate-800">
                     <input type="checkbox" checked={processingForm.creditAuthorized} onChange={(event) => setProcessingForm({ ...processingForm, creditAuthorized: event.target.checked })} />
-                    Authorize credit as the current administrator
+                    I authorize this flight credit
                   </label>
                   <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                     This Aircraft Down field documents the report only. To ground or
-                    return the aircraft to service, update its operational status in
-                    Fleet &amp; MX.
+                    return the aircraft to service, update its aircraft status in
+                    Aircraft &amp; Maintenance.
                   </p>
                   <button className="primary-button mt-4" type="button" disabled={busy} onClick={() => void handleProcess()}>
-                    {busy ? "Saving…" : processingForm.status === "closed" ? "Save & Close Report" : "Save Processing"}
+                    {busy ? "Saving…" : processingForm.status === "closed" ? "Save and close report" : "Save review"}
                   </button>
                 </>
               )}
@@ -981,17 +981,17 @@ function getReportNextSteps(
 
   if (fleetGrounded) {
     steps.push(
-      "This aircraft is grounded in Fleet & MX. Only an organization owner or administrator should return it to service after the discrepancy is resolved."
+      "This aircraft is grounded in Aircraft & Maintenance. Only an organization owner or administrator should return it to service after the discrepancy is resolved."
     );
   } else if (report.aircraft_down === true) {
     steps.push(
-      `This report is marked Aircraft Down, but the current Fleet & MX status is ${fleetStatus}. Update Fleet & MX separately if the aircraft must not be dispatched.`
+      `This report is marked Aircraft Down, but the current aircraft status is ${fleetStatus}. Open Aircraft & Maintenance if the aircraft must not be dispatched.`
     );
   }
 
   if (report.status === "closed") {
     steps.push(
-      "This report is closed. Closing a report does not change the aircraft's Fleet & MX operational status."
+      "This report is closed. Closing a report does not change the aircraft's availability status in Aircraft & Maintenance."
     );
     return steps;
   }

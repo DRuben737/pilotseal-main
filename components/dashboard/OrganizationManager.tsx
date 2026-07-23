@@ -949,7 +949,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       {view === "overview" ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <OverviewLink href="/dashboard/organization/people" label="People" value={members.length + pendingPeople.length} detail={`${pendingPeople.length} pending`} />
-          <OverviewLink href="/dashboard/organization/fleet" label="Fleet & MX" value={aircraft.length} detail={`${models.length} available models`} />
+          <OverviewLink href="/dashboard/organization/fleet" label="Aircraft & Maintenance" value={aircraft.length} detail={`${models.length} aircraft models`} />
           <OverviewLink href="/dashboard/organization/briefs" label="Preflight Records" value="Open" detail="Finalized student briefs" />
           <OverviewLink href="/dashboard/organization/endorsements" label="Endorsements" value="Review" detail="Organization change requests" />
         </section>
@@ -1405,11 +1405,11 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         {showAircraftForm ? (
           <form className="mt-5 grid gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4 md:grid-cols-2" onSubmit={handleSaveAircraft}>
             <h3 className="text-sm font-semibold text-slate-900 md:col-span-2">
-              {editingAssignedAircraft ? "Edit assigned aircraft MX" : editingAircraftId ? "Edit organization aircraft" : "New organization aircraft"}
+              {editingAssignedAircraft ? "Edit assigned aircraft maintenance" : editingAircraftId ? "Edit organization aircraft" : "New organization aircraft"}
             </h3>
             {editingAssignedAircraft ? (
               <p className="saas-meta-text md:col-span-2">
-                This aircraft is assigned by a Platform Super Admin. Its model, tail number, empty weight, and arms are read-only; organization managers share one MX record.
+                This aircraft is assigned by a platform administrator. Its model, tail number, empty weight, and balance distances are read-only; organization managers share one maintenance record.
               </p>
             ) : null}
             {aircraftError ? (
@@ -1526,7 +1526,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                   ) : null}
                 </div>
                 <div className="flex gap-2">
-                  <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>{item.organization_access === "assigned" ? "Manage MX" : "Edit"}</button>
+                  <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>{item.organization_access === "assigned" ? "Manage maintenance" : "Edit"}</button>
                   {item.organization_access !== "assigned" ? <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleDeleteAircraft(item)}>Delete</button> : null}
                 </div>
               </div>
@@ -1569,7 +1569,7 @@ function OverviewLink({ href, label, value, detail }: { href: string; label: str
 }
 
 function organizationViewTitle(view: OrganizationManagerView) {
-  return ({ overview: "Overview", people: "People", fleet: "Fleet & MX", messages: "Messages", endorsements: "Endorsements" })[view];
+  return ({ overview: "Overview", people: "People", fleet: "Aircraft & Maintenance", messages: "Messages", endorsements: "Endorsements" })[view];
 }
 
 function organizationViewDescription(view: OrganizationManagerView) {

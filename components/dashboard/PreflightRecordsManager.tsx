@@ -155,13 +155,13 @@ export default function PreflightRecordsManager() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-base font-semibold text-slate-900">Preflight record detail</h3>
-              <p className="saas-meta-text">Finalized {formatDateTime(activeRecord.finalized_at)} · Immutable snapshot</p>
+              <p className="saas-meta-text">Finalized {formatDateTime(activeRecord.finalized_at)} · Saved record cannot be changed</p>
             </div>
             <button className="ghost-button" type="button" onClick={() => setActiveRecord(null)}>Close</button>
           </div>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Snapshot title="Flight brief" value={activeRecord.brief_data} />
-            <Snapshot title="MX / Dispatch" value={activeRecord.mx_snapshot} />
+            <Snapshot title="Maintenance & flight status" value={activeRecord.mx_snapshot} />
             <Snapshot title="Weight & Balance" value={activeRecord.wb_snapshot} />
             <Snapshot title="Weather" value={activeRecord.weather_snapshot} />
             <div className="lg:col-span-2"><Snapshot title="NOTAMs" value={activeRecord.notam_snapshot} /></div>
@@ -177,7 +177,7 @@ export default function PreflightRecordsManager() {
 
 function Snapshot({ title, value }: { title: string; value: Record<string, unknown> }) {
   return (
-    <details className="rounded-xl border border-slate-200 bg-white p-3" open={title === "Flight brief" || title === "MX / Dispatch"}>
+    <details className="rounded-xl border border-slate-200 bg-white p-3" open={title === "Flight brief" || title === "Maintenance & flight status"}>
       <summary className="cursor-pointer text-sm font-semibold text-slate-900">{title}</summary>
       <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-700">
         {JSON.stringify(value, null, 2)}
