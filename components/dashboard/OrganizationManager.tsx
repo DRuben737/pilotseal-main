@@ -1538,9 +1538,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       {view === "fleet" && canManageFleet ? (
         <AdminCollapsibleSection
           id="custom-inspections"
-          title="Custom inspections"
-          description="Organization-specific AD and interval definitions with aircraft assignments."
-          summary="Definitions and due limits"
+          title="Additional maintenance requirements"
+          description="Track Airworthiness Directives (ADs), recurring inspections, and their next due limits by aircraft."
+          summary="Maintenance items and aircraft due limits"
           open={openSections.has("inspections")}
           onToggle={() => toggleSection("inspections")}
         >
