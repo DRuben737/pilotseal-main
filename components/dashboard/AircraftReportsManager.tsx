@@ -1044,8 +1044,9 @@ function validateReportForm(form: ReportForm): ReportFormErrors {
   } else if (form.reportDate > today) {
     errors.reportDate = "The report date cannot be in the future.";
   }
-  if (!form.description.trim()) {
-    errors.description = "Describe what happened.";
+  const descriptionLength = form.description.trim().length;
+  if (descriptionLength < 3) {
+    errors.description = "Describe what happened using at least 3 characters.";
   }
 
   const flightHobbsError = validateOptionalNonNegativeNumber(
