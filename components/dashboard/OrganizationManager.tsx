@@ -7,15 +7,13 @@ import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   createAircraftModel,
-  createOrganizationAircraft,
   deleteAircraftModel,
   deleteOrganizationAircraft,
   fetchAircraftModels,
   fetchOrganizationAircraft,
   parseAircraftEnvelopeSet,
   parseAircraftStations,
-  updateOrganizationAircraft,
-  updateOrganizationAircraftMaintenance,
+  saveOrganizationAircraftAtomic,
   updateAircraftModel,
   type AircraftMeterType,
   type AircraftModelRecord,
@@ -45,7 +43,6 @@ import {
   type NotificationPriority,
 } from "@/lib/notifications";
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
-import { correctAircraftMeter } from "@/lib/preflight";
 import {
   AdminCollapsibleSection,
   AdminPageHeader,
@@ -141,6 +138,7 @@ type AircraftForm = {
   adsb_due_date: string;
   registration_due_date: string;
   operational_status: AircraftOperationalStatus;
+  operational_status_note: string;
   current_meter_type: AircraftMeterType;
   current_meter_value: string;
   meter_observed_at: string;
@@ -161,6 +159,7 @@ const emptyAircraftForm: AircraftForm = {
   adsb_due_date: "",
   registration_due_date: "",
   operational_status: "available",
+  operational_status_note: "",
   current_meter_type: "hobbs",
   current_meter_value: "",
   meter_observed_at: "",
@@ -199,6 +198,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [editingAircraftId, setEditingAircraftId] = useState("");
   const [showAircraftForm, setShowAircraftForm] = useState(false);
   const [aircraftForm, setAircraftForm] = useState<AircraftForm>(emptyAircraftForm);
+  const [aircraftError, setAircraftError] = useState("");
   const [editingModelId, setEditingModelId] = useState("");
   const [showModelForm, setShowModelForm] = useState(false);
   const [modelForm, setModelForm] = useState<ModelForm>(emptyModelForm);
@@ -455,12 +455,14 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   function updateAircraftField<K extends keyof AircraftForm>(key: K, value: AircraftForm[K]) {
+    setAircraftError("");
     setAircraftForm((current) => ({ ...current, [key]: value }));
   }
 
   function startCreateAircraft() {
     setEditingAircraftId("");
     setAircraftForm(emptyAircraftForm);
+    setAircraftError("");
     setShowAircraftForm(true);
   }
 
@@ -481,11 +483,13 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       adsb_due_date: item.adsb_due_date ?? "",
       registration_due_date: item.registration_due_date ?? "",
       operational_status: item.operational_status ?? "available",
+      operational_status_note: item.operational_status_note ?? "",
       current_meter_type: item.current_meter_type ?? "hobbs",
       current_meter_value: item.current_meter_value == null ? "" : String(item.current_meter_value),
       meter_observed_at: toDateTimeLocal(item.meter_observed_at),
       meter_change_reason: "",
     });
+    setAircraftError("");
     setShowAircraftForm(true);
   }
 
@@ -494,9 +498,67 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     if (!activeOrganization?.id) return;
     setSaving(true);
     setStatus("");
+    setAircraftError("");
     try {
+      const canEditIdentity = !editingAssignedAircraft;
+      const normalizedTail = aircraftForm.tail_number.trim().toUpperCase();
+      const selectedModel = models.find((model) => model.id === aircraftForm.model_id) ?? null;
+      const emptyWeight = canEditIdentity
+        ? requiredPositiveNumber(aircraftForm.empty_weight, "Basic empty weight")
+        : editingAircraft?.empty_weight ?? 0;
+      const emptyArm = canEditIdentity
+        ? requiredNumber(aircraftForm.empty_arm, "Basic empty-weight arm")
+        : editingAircraft?.empty_arm ?? 0;
+      const emptyLatArm = canEditIdentity
+        ? optionalNumber(aircraftForm.empty_lat_arm)
+        : editingAircraft?.empty_lat_arm ?? null;
+
+      if (canEditIdentity && !aircraftForm.model_id) {
+        throw new Error("Choose an aircraft model.");
+      }
+      if (canEditIdentity && !normalizedTail) {
+        throw new Error("Enter the registration or tail number.");
+      }
+      if (
+        canEditIdentity &&
+        aircraft.some(
+          (item) =>
+            item.id !== editingAircraftId &&
+            item.tail_number.trim().toUpperCase() === normalizedTail
+        )
+      ) {
+        throw new Error("This tail number is already in the organization fleet.");
+      }
+      if (
+        canEditIdentity &&
+        selectedModel?.max_weight != null &&
+        emptyWeight > selectedModel.max_weight
+      ) {
+        throw new Error(
+          `Basic empty weight cannot exceed this model's ${selectedModel.max_weight.toLocaleString()} lb maximum weight.`
+        );
+      }
+      if (
+        canEditIdentity &&
+        selectedModel?.category?.toLowerCase() === "helicopter" &&
+        emptyLatArm == null
+      ) {
+        throw new Error(
+          "Enter the helicopter's empty-weight left/right distance. Use 0 if it is on the centerline."
+        );
+      }
+
+      const hundredHourDue = optionalNonNegativeNumber(
+        aircraftForm.hundred_hour_due_hours,
+        "Next 100-hour due reading"
+      );
+      const statusNote = aircraftForm.operational_status_note.trim();
+      if (aircraftForm.operational_status === "grounded" && statusNote.length < 3) {
+        throw new Error("Enter why this aircraft is grounded.");
+      }
+
       const maintenance: OrganizationAircraftMaintenanceInput = {
-        hundred_hour_due_hours: optionalNumber(aircraftForm.hundred_hour_due_hours),
+        hundred_hour_due_hours: hundredHourDue,
         annual_due_date: aircraftForm.annual_due_date || null,
         static_due_date: aircraftForm.static_due_date || null,
         transponder_due_date: aircraftForm.transponder_due_date || null,
@@ -504,56 +566,58 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         adsb_due_date: aircraftForm.adsb_due_date || null,
         registration_due_date: aircraftForm.registration_due_date || null,
         operational_status: aircraftForm.operational_status,
+        operational_status_note: statusNote || null,
       };
-      const input = {
-        model_id: aircraftForm.model_id,
-        tail_number: aircraftForm.tail_number,
-        empty_weight: requiredNumber(aircraftForm.empty_weight, "Empty weight"),
-        empty_arm: requiredNumber(aircraftForm.empty_arm, "Empty arm"),
-        empty_lat_arm: optionalNumber(aircraftForm.empty_lat_arm),
-        maintenance,
-      };
-
-      if (!input.model_id) throw new Error("Select an aircraft model.");
-      let savedAircraft: AircraftRecord;
-      if (editingAircraftId) {
-        if (editingAssignedAircraft && editingAircraft) {
-          await updateOrganizationAircraftMaintenance(editingAircraftId, maintenance);
-          savedAircraft = editingAircraft;
-        } else {
-          savedAircraft = await updateOrganizationAircraft(activeOrganization.id, editingAircraftId, input);
-        }
-      } else {
-        savedAircraft = await createOrganizationAircraft({ organization_id: activeOrganization.id, ...input });
-      }
-
-      const meterValue = optionalNumber(aircraftForm.current_meter_value);
+      const meterValue = optionalNonNegativeNumber(
+        aircraftForm.current_meter_value,
+        "Current meter reading"
+      );
       const previousAircraft = aircraft.find((item) => item.id === editingAircraftId);
       const meterChanged =
         meterValue !== null &&
         (previousAircraft?.current_meter_value !== meterValue ||
           previousAircraft?.current_meter_type !== aircraftForm.current_meter_type);
+      let meterCorrection = null;
       if (meterValue !== null && (!editingAircraftId || meterChanged)) {
         if (!aircraftForm.meter_observed_at) throw new Error("Meter observation time is required.");
         if (aircraftForm.meter_change_reason.trim().length < 3) {
           throw new Error("Enter a reason for the initial or corrected meter reading.");
         }
-        await correctAircraftMeter({
-          aircraftId: savedAircraft.id,
-          meterType: aircraftForm.current_meter_type,
-          meterValue,
-          observedAt: new Date(aircraftForm.meter_observed_at).toISOString(),
+        const observedAt = new Date(aircraftForm.meter_observed_at);
+        if (Number.isNaN(observedAt.getTime())) {
+          throw new Error("Enter a valid meter observation time.");
+        }
+        if (observedAt.getTime() > Date.now() + 60_000) {
+          throw new Error("Meter observation time cannot be in the future.");
+        }
+        meterCorrection = {
+          meter_type: aircraftForm.current_meter_type,
+          meter_value: meterValue,
+          observed_at: observedAt.toISOString(),
           reason: aircraftForm.meter_change_reason,
-        });
+        };
       }
+
+      const wasEditing = Boolean(editingAircraftId);
+      await saveOrganizationAircraftAtomic({
+        organization_id: activeOrganization.id,
+        aircraft_id: editingAircraftId || null,
+        model_id: aircraftForm.model_id,
+        tail_number: normalizedTail,
+        empty_weight: emptyWeight,
+        empty_arm: emptyArm,
+        empty_lat_arm: emptyLatArm,
+        maintenance,
+        meter_correction: meterCorrection,
+      });
 
       setAircraft(await fetchOrganizationAircraft(activeOrganization.id));
       setShowAircraftForm(false);
       setEditingAircraftId("");
       setAircraftForm(emptyAircraftForm);
-      setStatus(editingAircraftId ? "Organization aircraft updated." : "Organization aircraft created.");
+      setStatus(wasEditing ? "Organization aircraft updated." : "Organization aircraft created.");
     } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to save this aircraft."));
+      setAircraftError(getErrorMessage(error, "Unable to save this aircraft."));
     } finally {
       setSaving(false);
     }
@@ -1348,38 +1412,89 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                 This aircraft is assigned by a Platform Super Admin. Its model, tail number, empty weight, and arms are read-only; organization managers share one MX record.
               </p>
             ) : null}
-            <Field label="Model">
-              <select disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.model_id} onChange={(event) => updateAircraftField("model_id", event.target.value)} required>
-                <option value="">Select a model</option>
-                {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Tail number"><input disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.tail_number} onChange={(event) => updateAircraftField("tail_number", event.target.value.toUpperCase())} required /></Field>
-            <Field label="Empty weight"><input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_weight} onChange={(event) => updateAircraftField("empty_weight", event.target.value)} required /></Field>
-            <Field label="Empty arm"><input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_arm} onChange={(event) => updateAircraftField("empty_arm", event.target.value)} required /></Field>
-            <Field label="Lateral arm"><input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_lat_arm} onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)} /></Field>
-            <Field label="100-hour due"><input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.hundred_hour_due_hours} onChange={(event) => updateAircraftField("hundred_hour_due_hours", event.target.value)} /></Field>
-            <Field label="Aircraft status">
-              <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.operational_status} onChange={(event) => updateAircraftField("operational_status", event.target.value as AircraftOperationalStatus)}>
-                <option value="available">Available</option>
-                <option value="away">Away</option>
-                <option value="in_maintenance">In maintenance</option>
-                <option value="grounded">Grounded</option>
-              </select>
-            </Field>
-            <Field label="Meter type">
-              <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_type} onChange={(event) => updateAircraftField("current_meter_type", event.target.value as AircraftMeterType)}>
-                <option value="hobbs">Hobbs</option>
-                <option value="tach">Tach</option>
-              </select>
-            </Field>
-            <Field label="Current meter"><input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_value} onChange={(event) => updateAircraftField("current_meter_value", event.target.value)} /></Field>
-            <Field label="Observed at"><input type="datetime-local" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_observed_at} onChange={(event) => updateAircraftField("meter_observed_at", event.target.value)} /></Field>
-            <Field label="Meter update reason"><input className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_change_reason} onChange={(event) => updateAircraftField("meter_change_reason", event.target.value)} placeholder="Initial reading, instrument replacement, correction..." /></Field>
-            <div />
-            {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date", "registration_due_date"] as const).map((key) => (
-              <Field key={key} label={formatDueLabel(key)}><input type="date" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm[key]} onChange={(event) => updateAircraftField(key, event.target.value)} /></Field>
-            ))}
+            {aircraftError ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 md:col-span-2" role="alert">
+                <p className="font-semibold">The aircraft was not saved.</p>
+                <p className="mt-1">{aircraftError}</p>
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
+              <h4 className="text-sm font-semibold text-slate-900 md:col-span-2">Aircraft identity and empty weight</h4>
+              <Field label="Aircraft model (required)">
+                <select disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.model_id} onChange={(event) => updateAircraftField("model_id", event.target.value)} required>
+                  <option value="">Choose a model</option>
+                  {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Registration or tail number (required)">
+                <input disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.tail_number} onChange={(event) => updateAircraftField("tail_number", event.target.value.toUpperCase())} placeholder="e.g. N5520X" required />
+              </Field>
+              <Field label="Basic empty weight (lb, required)">
+                <input disabled={editingAssignedAircraft} type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_weight} onChange={(event) => updateAircraftField("empty_weight", event.target.value)} required />
+              </Field>
+              <Field label="Empty-weight distance from datum (in, required)">
+                <input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_arm} onChange={(event) => updateAircraftField("empty_arm", event.target.value)} required />
+              </Field>
+              <Field label="Empty-weight left/right distance (in)">
+                <input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_lat_arm} onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)} placeholder="Use 0 for the centerline" />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:col-span-2 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <h4 className="text-sm font-semibold text-slate-900">Flight availability</h4>
+                <p className="saas-meta-text mt-1">Grounded aircraft are marked “Do not dispatch” throughout the organization workflow.</p>
+              </div>
+              <Field label="Current aircraft status">
+                <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.operational_status} onChange={(event) => updateAircraftField("operational_status", event.target.value as AircraftOperationalStatus)}>
+                  <option value="available">Available for flight</option>
+                  <option value="away">Away or temporarily unavailable</option>
+                  <option value="in_maintenance">In maintenance</option>
+                  <option value="grounded">Grounded — do not dispatch</option>
+                </select>
+              </Field>
+              {aircraftForm.operational_status !== "available" ? (
+                <Field label={aircraftForm.operational_status === "grounded" ? "Why is it grounded? (required)" : "Status note (optional)"}>
+                  <input className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.operational_status_note} onChange={(event) => updateAircraftField("operational_status_note", event.target.value)} placeholder={aircraftForm.operational_status === "grounded" ? "Describe the discrepancy or maintenance restriction" : "Add context for members"} required={aircraftForm.operational_status === "grounded"} />
+                </Field>
+              ) : null}
+            </div>
+
+            <details className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900">Meter reading used for maintenance tracking</summary>
+              <p className="saas-meta-text mt-1">A changed reading requires an observation time and audit reason.</p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field label="Meter type">
+                  <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_type} onChange={(event) => updateAircraftField("current_meter_type", event.target.value as AircraftMeterType)}>
+                    <option value="hobbs">Hobbs meter</option>
+                    <option value="tach">Tachometer time</option>
+                  </select>
+                </Field>
+                <Field label="Current meter reading">
+                  <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_value} onChange={(event) => updateAircraftField("current_meter_value", event.target.value)} />
+                </Field>
+                <Field label="Reading observed at">
+                  <input type="datetime-local" max={toDateTimeLocal(new Date().toISOString())} className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_observed_at} onChange={(event) => updateAircraftField("meter_observed_at", event.target.value)} />
+                </Field>
+                <Field label="Why is this reading being entered?">
+                  <input className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_change_reason} onChange={(event) => updateAircraftField("meter_change_reason", event.target.value)} placeholder="Initial reading, instrument replacement, correction…" />
+                </Field>
+              </div>
+            </details>
+
+            <details className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900">Inspection and registration due limits</summary>
+              <p className="saas-meta-text mt-1">Leave a field blank when the organization does not track that limit here.</p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field label="Next 100-hour inspection at meter reading">
+                  <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.hundred_hour_due_hours} onChange={(event) => updateAircraftField("hundred_hour_due_hours", event.target.value)} />
+                </Field>
+                {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date", "registration_due_date"] as const).map((key) => (
+                  <Field key={key} label={formatDueLabel(key)}><input type="date" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm[key]} onChange={(event) => updateAircraftField(key, event.target.value)} /></Field>
+                ))}
+              </div>
+            </details>
             <div className="flex gap-2 md:col-span-2">
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save aircraft"}</button>
               <button className="ghost-button" type="button" onClick={() => setShowAircraftForm(false)}>Cancel</button>
@@ -1396,7 +1511,19 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                   <p className="saas-meta-text">{modelNames.get(item.model_id ?? "") ?? "Unknown model"} · {item.empty_weight ?? "--"} lbs · Arm {item.empty_arm ?? "--"}</p>
                   <p className="saas-meta-text mt-1">{item.organization_access === "assigned" ? "Assigned by Platform Super Admin" : "Owned by this organization"}</p>
                   <p className="saas-meta-text mt-1">{maintenanceSummary(item)}</p>
-                  <p className="saas-meta-text mt-1">Status: {formatOperationalStatus(item.operational_status)} · {item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${item.current_meter_value ?? "--"}` : "No meter saved"}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <StatusBadge tone={aircraftStatusTone(item.operational_status)}>
+                      {formatOperationalStatus(item.operational_status)}
+                    </StatusBadge>
+                    <span className="saas-meta-text">
+                      {item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${item.current_meter_value ?? "--"}` : "No meter saved"}
+                    </span>
+                  </div>
+                  {item.operational_status_note ? (
+                    <p className="mt-2 text-sm font-medium text-slate-700">
+                      {item.operational_status_note}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex gap-2">
                   <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>{item.organization_access === "assigned" ? "Manage MX" : "Edit"}</button>
@@ -1577,7 +1704,21 @@ function toDateTimeLocal(value?: string | null) {
 }
 
 function formatOperationalStatus(value?: AircraftOperationalStatus) {
-  return (value ?? "available").replaceAll("_", " ");
+  return {
+    available: "Available for flight",
+    away: "Away or unavailable",
+    in_maintenance: "In maintenance",
+    grounded: "Grounded — do not dispatch",
+  }[value ?? "available"];
+}
+
+function aircraftStatusTone(
+  value?: AircraftOperationalStatus
+): "success" | "info" | "warning" | "danger" {
+  if (value === "grounded") return "danger";
+  if (value === "in_maintenance") return "warning";
+  if (value === "away") return "info";
+  return "success";
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -1599,12 +1740,12 @@ function formatTeachingRole(role: string) {
 
 function formatDueLabel(key: string) {
   return ({
-    annual_due_date: "Annual due",
-    static_due_date: "91.411 Static due",
-    transponder_due_date: "91.413 Transponder due",
-    elt_due_date: "ELT due",
-    adsb_due_date: "ADS-B due",
-    registration_due_date: "Registration due",
+    annual_due_date: "Annual inspection due",
+    static_due_date: "Altimeter/static system inspection due (14 CFR 91.411)",
+    transponder_due_date: "Transponder inspection due (14 CFR 91.413)",
+    elt_due_date: "ELT inspection or battery due",
+    adsb_due_date: "ADS-B check due",
+    registration_due_date: "Aircraft registration expires",
   } as Record<string, string>)[key] ?? key;
 }
 

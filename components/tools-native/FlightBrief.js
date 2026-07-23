@@ -174,7 +174,11 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
 
   if (aircraft.operational_status && aircraft.operational_status !== "available") {
     hasExpired = true;
-    items.push(`Aircraft status ${String(aircraft.operational_status).replaceAll("_", " ")}`);
+    const statusLabel = String(aircraft.operational_status).replaceAll("_", " ");
+    const statusNote = String(aircraft.operational_status_note ?? "").trim();
+    items.push(
+      `Aircraft status ${statusLabel}${statusNote ? ` — ${statusNote}` : ""}`
+    );
   }
 
   if (aircraft.hundred_hour_due_hours != null) {

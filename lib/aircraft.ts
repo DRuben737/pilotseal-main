@@ -81,6 +81,7 @@ export type AircraftRecord = {
   meter_source?: string | null;
   meter_source_brief_id?: string | null;
   operational_status?: AircraftOperationalStatus;
+  operational_status_note?: string | null;
 };
 
 export type AircraftOrganizationAssignment = {
@@ -128,6 +129,7 @@ export type OrganizationAircraftMaintenanceInput = SavedAircraftDueInput & {
   adsb_due_date?: string | null;
   registration_due_date?: string | null;
   operational_status?: AircraftOperationalStatus;
+  operational_status_note?: string | null;
 };
 
 export type OrganizationAircraftMaintenance = OrganizationAircraftMaintenanceInput & {
@@ -149,6 +151,16 @@ export type OrganizationAircraftInput = {
   empty_arm: number;
   empty_lat_arm?: number | null;
   maintenance?: OrganizationAircraftMaintenanceInput;
+};
+
+export type OrganizationAircraftAtomicSaveInput = OrganizationAircraftInput & {
+  aircraft_id?: string | null;
+  meter_correction?: {
+    meter_type: AircraftMeterType;
+    meter_value: number;
+    observed_at: string;
+    reason: string;
+  } | null;
 };
 
 export type AircraftUpdateRequestRecord = {
@@ -229,7 +241,7 @@ const SAVED_AIRCRAFT_SELECT_LEGACY = "aircraft_id, is_default";
 const ORGANIZATION_AIRCRAFT_SELECT =
   "id, model_id, name, tail_number, updated_at, owner_user_id, organization_id, visibility, empty_weight, empty_arm, empty_lat_arm";
 const ORGANIZATION_MAINTENANCE_SELECT =
-  "aircraft_id, hundred_hour_due_hours, annual_due_date, static_due_date, transponder_due_date, elt_due_date, adsb_due_date, registration_due_date, current_meter_type, current_meter_value, meter_observed_at, meter_source, meter_source_brief_id, operational_status, updated_by, updated_at";
+  "aircraft_id, hundred_hour_due_hours, annual_due_date, static_due_date, transponder_due_date, elt_due_date, adsb_due_date, registration_due_date, current_meter_type, current_meter_value, meter_observed_at, meter_source, meter_source_brief_id, operational_status, operational_status_note, updated_by, updated_at";
 
 export async function fetchAircraftModels(organizationId?: string | null) {
   const supabase = getSupabaseClient();
@@ -424,6 +436,42 @@ export async function createOrganizationAircraft(input: OrganizationAircraftInpu
   }
 
   return normalizeAircraftRecord(data, null, "organization", false);
+}
+
+export async function saveOrganizationAircraftAtomic(
+  input: OrganizationAircraftAtomicSaveInput
+) {
+  const supabase = getSupabaseClient();
+  const maintenance = normalizeOrganizationMaintenanceInput(input.maintenance ?? {});
+  const meterCorrection = input.meter_correction ?? null;
+  const { data, error } = await supabase.rpc("save_organization_aircraft_atomic", {
+    p_organization_id: input.organization_id,
+    p_aircraft_id: input.aircraft_id ?? null,
+    p_model_id: input.model_id || null,
+    p_tail_number: normalizeTailNumber(input.tail_number),
+    p_empty_weight: input.empty_weight,
+    p_empty_arm: input.empty_arm,
+    p_empty_lat_arm: input.empty_lat_arm ?? null,
+    p_hundred_hour_due_hours: maintenance.hundred_hour_due_hours,
+    p_annual_due_date: maintenance.annual_due_date,
+    p_static_due_date: maintenance.static_due_date,
+    p_transponder_due_date: maintenance.transponder_due_date,
+    p_elt_due_date: maintenance.elt_due_date,
+    p_adsb_due_date: maintenance.adsb_due_date,
+    p_registration_due_date: maintenance.registration_due_date,
+    p_operational_status: maintenance.operational_status,
+    p_operational_status_note: maintenance.operational_status_note,
+    p_meter_type: meterCorrection?.meter_type ?? null,
+    p_meter_value: meterCorrection?.meter_value ?? null,
+    p_meter_observed_at: meterCorrection?.observed_at ?? null,
+    p_meter_reason: meterCorrection?.reason.trim() || null,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return String(data ?? "");
 }
 
 export async function updateOrganizationAircraft(
@@ -1509,6 +1557,10 @@ function normalizeAircraftRecord(
     operational_status: isAircraftOperationalStatus(record.operational_status)
       ? record.operational_status
       : "available",
+    operational_status_note:
+      typeof record.operational_status_note === "string"
+        ? record.operational_status_note
+        : null,
   } as AircraftRecord;
 }
 
@@ -1518,6 +1570,7 @@ function normalizeOrganizationMaintenanceInput(input: OrganizationAircraftMainte
     adsb_due_date: normalizeDateForStorage(input.adsb_due_date),
     registration_due_date: normalizeDateForStorage(input.registration_due_date),
     operational_status: input.operational_status ?? "available",
+    operational_status_note: String(input.operational_status_note ?? "").trim() || null,
   };
 }
 

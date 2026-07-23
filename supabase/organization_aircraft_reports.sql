@@ -347,12 +347,17 @@ begin
 
   if p_ground_aircraft then
     insert into public.organization_aircraft_maintenance (
-      aircraft_id, operational_status, updated_by, updated_at
+      aircraft_id, operational_status, operational_status_note, updated_by, updated_at
     ) values (
-      p_aircraft_id, 'grounded', auth.uid(), timezone('utc', now())
+      p_aircraft_id,
+      'grounded',
+      'Discrepancy report: ' || left(btrim(p_description), 500),
+      auth.uid(),
+      timezone('utc', now())
     )
     on conflict (aircraft_id) do update
       set operational_status = 'grounded',
+          operational_status_note = excluded.operational_status_note,
           updated_by = auth.uid(),
           updated_at = timezone('utc', now());
 
