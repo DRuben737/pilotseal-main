@@ -1725,8 +1725,8 @@ export default function FlightBrief() {
 
     const reportText = `=== PilotSeal Flight Brief Report ===
 
-PF: ${studentName}
-PIC: ${instructorName}
+Pilot: ${studentName}
+Co-Pilot: ${instructorName}
 Date: ${flightDate}
 Aircraft: ${aircraftId}
 Fuel: ${fuel}
@@ -1884,8 +1884,8 @@ ${riskComments}
     const missing = [];
 
     if (stepIndex === 0) {
-      if (!studentName.trim()) missing.push("Student name");
-      if (!instructorName.trim()) missing.push("Instructor name");
+      if (!studentName.trim()) missing.push("Pilot name");
+      if (!instructorName.trim()) missing.push("Co-Pilot name");
       if (!flightDate) missing.push("Flight date");
       if (!etd) missing.push("ETD");
       if (!eta) missing.push("ETA");
@@ -2189,7 +2189,7 @@ ${riskComments}
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">People</h3>
                   <EditableInfoRow
-                    label="Student"
+                    label="Pilot"
                     value={formatDisplayValue(studentName)}
                     rowKey="studentName"
                     editingKey={mobileEditingField}
@@ -2206,7 +2206,7 @@ ${riskComments}
                     )}
                   />
                   <EditableInfoRow
-                    label="Instructor"
+                    label="Co-Pilot"
                     value={formatDisplayValue(instructorName)}
                     rowKey="instructorName"
                     editingKey={mobileEditingField}
@@ -2322,7 +2322,7 @@ ${riskComments}
 
               <div className="flightbrief-desktop-form">
               <div className="inline-label-input">
-                <label className="label" htmlFor="studentName">Student Name(Pilot Flying):</label>
+                <label className="label" htmlFor="studentName">Pilot:</label>
                 <input
                   type="text"
                   id="studentName"
@@ -2335,7 +2335,7 @@ ${riskComments}
               </div>
 
               <div className="inline-label-input">
-                <label className="label" htmlFor="instructorName">Instructor Name(Pilot In Command):</label>
+                <label className="label" htmlFor="instructorName">Co-Pilot:</label>
                 <input
                   type="text"
                   id="instructorName"

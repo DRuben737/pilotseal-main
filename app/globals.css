@@ -5187,6 +5187,13 @@ summary:focus-visible {
   appearance: textfield;
 }
 
+.wb-field .wb-checkbox-input {
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
 .wb-results {
   display: grid;
   gap: 0.65rem;

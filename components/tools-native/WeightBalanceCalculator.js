@@ -105,7 +105,7 @@ function resolveAircraftProfile(selectedAircraft) {
     emptyWeight: toNumber(selectedAircraft.empty_weight),
     emptyArm: toNumber(selectedAircraft.empty_arm),
     emptyLatArm: toNumber(selectedAircraft.empty_lat_arm),
-    maxWeight: toNumber(selectedAircraft.max_weight),
+    maxWeight: toNumber(selectedAircraft.model.max_weight ?? selectedAircraft.max_weight),
     stations,
     envelopeSet,
   };
@@ -146,10 +146,20 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
 
   const stationBreakdown = profile.stations.map((station) => {
     const input = toNumber(inputs[station.id]);
+    const isCheckbox = station.inputType === "checkbox";
+    const isChecked =
+      inputs[station.id] === true ||
+      inputs[station.id] === "true" ||
+      inputs[station.id] === 1 ||
+      inputs[station.id] === "1";
     const usesEditableDefaultWeight =
       typeof station.fixedWeight === "number" && isEditableDefaultWeightStation(station);
     const weight =
-      typeof station.fixedWeight === "number" && !usesEditableDefaultWeight
+      isCheckbox
+        ? isChecked
+          ? toNumber(station.fixedWeight)
+          : 0
+        : typeof station.fixedWeight === "number" && !usesEditableDefaultWeight
         ? station.fixedWeight
         : typeof station.weightPerGallon === "number" && station.weightPerGallon > 0
           ? input * station.weightPerGallon
@@ -160,6 +170,7 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
     return {
       ...station,
       input,
+      isChecked,
       weight,
       longMoment: weight * station.arm,
       latMoment:
@@ -168,7 +179,12 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
           : null,
       isFuelStation:
         typeof station.weightPerGallon === "number" && station.weightPerGallon > 0,
-      isFixedWeight: typeof station.fixedWeight === "number" && !usesEditableDefaultWeight,
+      isFixedWeight:
+        !isCheckbox && typeof station.fixedWeight === "number" && !usesEditableDefaultWeight,
+      exceedsMax:
+        typeof station.maxWeight === "number" &&
+        station.maxWeight >= 0 &&
+        weight > station.maxWeight,
     };
   });
 
@@ -214,8 +230,13 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
   let insideTop = null;
   let insideSide = null;
   let insidePrimary2d = null;
+  const limitExceeded = stationBreakdown.filter((station) => station.exceedsMax);
 
-  if (chartType === "2d2p") {
+  if (profile.maxWeight > 0 && totalWeight > profile.maxWeight) {
+    status = "overweight";
+  } else if (limitExceeded.length > 0) {
+    status = "station_limit";
+  } else if (chartType === "2d2p") {
     insideTop =
       topView.length >= 3 && Number.isFinite(cgLat)
         ? isInsidePolygon({ x: cg, y: cgLat }, topView)
@@ -283,6 +304,8 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
     inside_top_view: insideTop,
     inside_side_view: insideSide,
     inside_primary_2d: insidePrimary2d,
+    max_weight: profile.maxWeight,
+    limit_exceeded: limitExceeded,
     envelope: activeEnvelope,
     envelopeMode,
     hasUtilityEnvelope: profile.envelopeSet.utility.length > 0,
@@ -302,36 +325,55 @@ function getStatusLabel(status) {
       return "Overweight";
     case "outside":
       return "Outside envelope";
+    case "station_limit":
+      return "Station limit exceeded";
     default:
       return "No result";
   }
 }
 
-function isPilotStation(station) {
-  return /pilot|left|front/i.test(station.id) || /pilot|left|front/i.test(station.name);
+function isPilotStation(station, category) {
+  if (station.crewRole === "pilot") {
+    return true;
+  }
+
+  return category === "helicopter"
+    ? /pilot|right/i.test(station.id) || /pilot|right/i.test(station.name)
+    : /pilot|left/i.test(station.id) || /pilot|left/i.test(station.name);
 }
 
-function isRightSeatStation(station) {
-  return /passenger|right|copilot/i.test(station.id) || /passenger|right|copilot/i.test(station.name);
+function isCoPilotStation(station, category) {
+  if (station.crewRole === "copilot") {
+    return true;
+  }
+
+  return category === "helicopter"
+    ? /copilot|co-pilot|left/i.test(station.id) || /copilot|co-pilot|left/i.test(station.name)
+    : /copilot|co-pilot|right|passenger/i.test(station.id) ||
+        /copilot|co-pilot|right|passenger/i.test(station.name);
 }
 
-function resolveCrewStations(stations) {
+function resolveCrewStations(stations, category) {
   const seatStations = stations.filter(
     (station) =>
+      station.inputType !== "checkbox" &&
       !(typeof station.weightPerGallon === "number" && station.weightPerGallon > 0) &&
       !/bag|baggage|cargo/i.test(station.id) &&
       !/bag|baggage|cargo/i.test(station.name)
   );
 
-  const leftStation = seatStations.find(isPilotStation) ?? seatStations[0] ?? null;
-  const rightStation =
+  const pilotStation =
+    seatStations.find((station) => isPilotStation(station, category)) ??
+    seatStations[0] ??
+    null;
+  const coPilotStation =
     seatStations.find(
-      (station) => station !== leftStation && isRightSeatStation(station)
+      (station) => station !== pilotStation && isCoPilotStation(station, category)
     ) ??
-    seatStations.find((station) => station !== leftStation) ??
+    seatStations.find((station) => station !== pilotStation) ??
     null;
 
-  return { leftStation, rightStation };
+  return { pilotStation, coPilotStation };
 }
 
 function getAircraftType(profile) {
@@ -583,14 +625,18 @@ export default function WeightBalanceCalculator({
       return new Set();
     }
 
-    const { leftStation, rightStation } = resolveCrewStations(renderedStations);
-    const isHelicopter = /helicopter/i.test(aircraftProfile.category ?? "");
-    const leftPerson = isHelicopter ? selectedInstructorPerson : selectedStudentPerson;
-    const rightPerson = isHelicopter ? selectedStudentPerson : selectedInstructorPerson;
+    const { pilotStation, coPilotStation } = resolveCrewStations(
+      renderedStations,
+      aircraftProfile.category
+    );
 
     return new Set([
-      ...(leftStation && typeof leftPerson?.weight_lbs === "number" ? [leftStation.id] : []),
-      ...(rightStation && typeof rightPerson?.weight_lbs === "number" ? [rightStation.id] : []),
+      ...(pilotStation && typeof selectedStudentPerson?.weight_lbs === "number"
+        ? [pilotStation.id]
+        : []),
+      ...(coPilotStation && typeof selectedInstructorPerson?.weight_lbs === "number"
+        ? [coPilotStation.id]
+        : []),
     ]);
   }, [
     aircraftProfile,
@@ -630,14 +676,12 @@ export default function WeightBalanceCalculator({
       return;
     }
 
-    const { leftStation, rightStation } = resolveCrewStations(renderedStations);
-    const isHelicopter = /helicopter/i.test(aircraftProfile.category ?? "");
-    const leftWeight = isHelicopter
-      ? selectedInstructorPerson?.weight_lbs ?? null
-      : selectedStudentPerson?.weight_lbs ?? null;
-    const rightWeight = isHelicopter
-      ? selectedStudentPerson?.weight_lbs ?? null
-      : selectedInstructorPerson?.weight_lbs ?? null;
+    const { pilotStation, coPilotStation } = resolveCrewStations(
+      renderedStations,
+      aircraftProfile.category
+    );
+    const pilotWeight = selectedStudentPerson?.weight_lbs ?? null;
+    const coPilotWeight = selectedInstructorPerson?.weight_lbs ?? null;
 
     setActiveWb((current) => {
       const currentInputs = current.inputs ?? DEFAULT_INPUTS;
@@ -645,16 +689,20 @@ export default function WeightBalanceCalculator({
         ...current,
         inputs: {
           ...currentInputs,
-          ...(leftStation
+          ...(pilotStation
             ? {
-                [leftStation.id]:
-                  typeof leftWeight === "number" ? String(leftWeight) : currentInputs[leftStation.id] ?? "",
+                [pilotStation.id]:
+                  typeof pilotWeight === "number"
+                    ? String(pilotWeight)
+                    : currentInputs[pilotStation.id] ?? "",
               }
             : {}),
-          ...(rightStation
+          ...(coPilotStation
             ? {
-                [rightStation.id]:
-                  typeof rightWeight === "number" ? String(rightWeight) : currentInputs[rightStation.id] ?? "",
+                [coPilotStation.id]:
+                  typeof coPilotWeight === "number"
+                    ? String(coPilotWeight)
+                    : currentInputs[coPilotStation.id] ?? "",
               }
             : {}),
         },
@@ -731,41 +779,79 @@ export default function WeightBalanceCalculator({
           ) : null}
 
           <div className="wb-input-grid">
-            {renderedStations.map((station) => (
-              <label key={station.id} className="wb-field">
-                <span>{station.name}</span>
-                <small>
-                  {briefManagedStationIds.has(station.id)
-                    ? "From Flight Brief"
-                    : typeof station.fixedWeight === "number" && !isEditableDefaultWeightStation(station)
-                    ? "Fixed weight"
-                    : typeof station.fixedWeight === "number" && isEditableDefaultWeightStation(station)
-                    ? "lbs"
-                    : typeof station.weightPerGallon === "number" && station.weightPerGallon > 0
-                    ? `Gallons (${station.weightPerGallon} lbs/gal)`
-                    : "lbs"}
-                </small>
-                <input
-                  className="wb-number-input"
-                  type="number"
-                  value={
-                    typeof station.fixedWeight === "number" && !isEditableDefaultWeightStation(station)
-                      ? station.fixedWeight
-                      : typeof station.fixedWeight === "number" &&
-                          isEditableDefaultWeightStation(station) &&
-                          String(inputs[station.id] ?? "").trim() === ""
+            {renderedStations.map((station) => {
+              const isFuel =
+                typeof station.weightPerGallon === "number" && station.weightPerGallon > 0;
+              const isFixed =
+                typeof station.fixedWeight === "number" &&
+                !isEditableDefaultWeightStation(station);
+              const inputMax =
+                typeof station.maxWeight === "number"
+                  ? isFuel
+                    ? station.maxWeight / station.weightPerGallon
+                    : station.maxWeight
+                  : undefined;
+
+              if (station.inputType === "checkbox") {
+                return (
+                  <label key={station.id} className="wb-field">
+                    <span>{station.name}</span>
+                    <small>
+                      {Math.abs(toNumber(station.fixedWeight)).toFixed(1)} lbs
+                      {" · "}
+                      Long {station.arm} in
+                      {typeof station.latArm === "number" ? ` · Lat ${station.latArm} in` : ""}
+                    </small>
+                    <input
+                      className="wb-checkbox-input"
+                      type="checkbox"
+                      checked={
+                        inputs[station.id] === true ||
+                        inputs[station.id] === "true" ||
+                        inputs[station.id] === 1 ||
+                        inputs[station.id] === "1"
+                      }
+                      onChange={(event) => handleInputChange(station.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              }
+
+              return (
+                <label key={station.id} className="wb-field">
+                  <span>{station.name}</span>
+                  <small>
+                    {briefManagedStationIds.has(station.id)
+                      ? "From Flight Brief"
+                      : isFixed
+                        ? "Fixed weight"
+                      : isFuel
+                        ? `Gallons (${station.weightPerGallon} lbs/gal)`
+                        : "lbs"}
+                    {typeof inputMax === "number"
+                      ? ` · Max ${inputMax.toFixed(isFuel ? 1 : 0)}${isFuel ? " gal" : " lbs"}`
+                      : ""}
+                  </small>
+                  <input
+                    className="wb-number-input"
+                    type="number"
+                    min="0"
+                    max={inputMax}
+                    value={
+                      isFixed
                         ? station.fixedWeight
-                      : inputs[station.id] ?? ""
-                  }
-                  onChange={(event) => handleInputChange(station.id, event.target.value)}
-                  readOnly={
-                    briefManagedStationIds.has(station.id) ||
-                    (typeof station.fixedWeight === "number" &&
-                      !isEditableDefaultWeightStation(station))
-                  }
-                />
-              </label>
-            ))}
+                        : typeof station.fixedWeight === "number" &&
+                      isEditableDefaultWeightStation(station) &&
+                      String(inputs[station.id] ?? "").trim() === ""
+                        ? station.fixedWeight
+                        : inputs[station.id] ?? ""
+                    }
+                    onChange={(event) => handleInputChange(station.id, event.target.value)}
+                    readOnly={briefManagedStationIds.has(station.id) || isFixed}
+                  />
+                </label>
+              );
+            })}
           </div>
         </section>
 
@@ -779,6 +865,12 @@ export default function WeightBalanceCalculator({
               >
                 {result ? getStatusLabel(result.status) : "Select aircraft and loading to begin"}
               </p>
+              {result?.limit_exceeded?.length > 0 ? (
+                <p className="copy-muted">
+                  Check maximum weight for{" "}
+                  {result.limit_exceeded.map((station) => station.name).join(", ")}.
+                </p>
+              ) : null}
             </div>
           </div>
 

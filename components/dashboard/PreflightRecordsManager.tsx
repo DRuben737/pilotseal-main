@@ -109,7 +109,7 @@ export default function PreflightRecordsManager() {
         className="mt-5 w-full rounded-xl border border-slate-300 px-3 py-2"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search student, instructor, aircraft, route, or date"
+        placeholder="Search pilot, co-pilot, aircraft, route, or date"
       />
       {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
 
@@ -126,13 +126,13 @@ export default function PreflightRecordsManager() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">
-                    {record.aircraft_tail_number || "Aircraft not linked"} · {record.student_name || "Student"}
+                    {record.aircraft_tail_number || "Aircraft not linked"} · {record.student_name || "Pilot"}
                   </p>
                   <p className="saas-meta-text">
                     {record.flight_date || "No date"} · {record.route || "No route"} · Revision {record.revision_number}
                   </p>
                   <p className="saas-meta-text">
-                    {formatStatus(record.status)}{isOwn ? " · Your brief" : " · Organization student brief"}
+                    {formatStatus(record.status)}{isOwn ? " · Your brief" : " · Organization flight brief"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

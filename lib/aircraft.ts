@@ -33,6 +33,8 @@ export type AircraftStation = {
   weightPerGallon?: number | null;
   fixedWeight?: number | null;
   maxWeight?: number | null;
+  inputType?: "number" | "checkbox" | null;
+  crewRole?: "pilot" | "copilot" | null;
 };
 
 export type AircraftModelRecord = {
@@ -42,6 +44,7 @@ export type AircraftModelRecord = {
   category: string | null;
   chart_type?: AircraftChartType | string | null;
   avg_fuel_burn_rate?: number | null;
+  max_weight?: number | null;
   stations: unknown;
   envelope: unknown;
 };
@@ -193,7 +196,7 @@ export type AttachAircraftSuccess = {
 
 export type AttachAircraftResult = AttachAircraftSuccess | AttachAircraftConflict;
 
-const AIRCRAFT_MODEL_SELECT = "id, organization_id, name, category, chart_type, avg_fuel_burn_rate, stations, envelope";
+const AIRCRAFT_MODEL_SELECT = "id, organization_id, name, category, chart_type, avg_fuel_burn_rate, max_weight, stations, envelope";
 const AIRCRAFT_MODEL_SELECT_LEGACY = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
   "id, model_id, name, tail_number, updated_at, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
@@ -566,6 +569,7 @@ export async function createAircraftModel(input: {
   name: string;
   category: string;
   avg_fuel_burn_rate?: number | null;
+  max_weight?: number | null;
   stations: AircraftStation[];
   envelope: unknown;
 }) {
@@ -575,6 +579,7 @@ export async function createAircraftModel(input: {
     name: input.name,
     category: input.category,
     avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
+    max_weight: input.max_weight ?? null,
     stations: input.stations,
     envelope: input.envelope,
   };
@@ -615,6 +620,7 @@ export async function updateAircraftModel(
     name: string;
     category: string;
     avg_fuel_burn_rate?: number | null;
+    max_weight?: number | null;
     stations: AircraftStation[];
     envelope: unknown;
   }
@@ -624,6 +630,7 @@ export async function updateAircraftModel(
     name: input.name,
     category: input.category,
     avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
+    max_weight: input.max_weight ?? null,
     stations: input.stations,
     envelope: input.envelope,
   };
@@ -1420,6 +1427,7 @@ function normalizeAircraftModelRecord(value: unknown) {
     category: typeof record.category === "string" ? record.category : null,
     chart_type: typeof record.chart_type === "string" ? record.chart_type : null,
     avg_fuel_burn_rate: toNumber(record.avg_fuel_burn_rate),
+    max_weight: toNumber(record.max_weight),
     stations: record.stations ?? [],
     envelope: record.envelope ?? [],
   } as AircraftModelRecord;
@@ -1447,6 +1455,7 @@ function normalizeAircraftRecord(
               ? String((rawModel as Record<string, unknown>).chart_type)
               : null,
           avg_fuel_burn_rate: toNumber((rawModel as Record<string, unknown>).avg_fuel_burn_rate),
+          max_weight: toNumber((rawModel as Record<string, unknown>).max_weight),
           stations: (rawModel as Record<string, unknown>).stations ?? [],
           envelope: (rawModel as Record<string, unknown>).envelope ?? [],
         } as AircraftModelRecord)
@@ -1666,6 +1675,13 @@ function normalizeStation(value: unknown) {
     weightPerGallon: toNumber(station.weightPerGallon) ?? toNumber(station.weight_per_gallon),
     fixedWeight: toNumber(station.fixedWeight) ?? toNumber(station.fixed_weight),
     maxWeight: toNumber(station.maxWeight) ?? toNumber(station.max_weight),
+    inputType: station.inputType === "checkbox" ? "checkbox" : "number",
+    crewRole:
+      station.crewRole === "pilot" || station.crew_role === "pilot"
+        ? "pilot"
+        : station.crewRole === "copilot" || station.crew_role === "copilot"
+          ? "copilot"
+          : null,
   };
 }
 

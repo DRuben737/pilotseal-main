@@ -42,6 +42,8 @@ type ModelStationDraft = {
   weightPerGallon: string;
   fixedWeight: string;
   maxWeight: string;
+  inputType: "number" | "checkbox";
+  crewRole: "" | "pilot" | "copilot";
 };
 
 type EnvelopePointDraft = {
@@ -59,6 +61,7 @@ type ModelFormState = {
   name: string;
   category: "airplane" | "helicopter";
   avg_fuel_burn_rate: string;
+  max_weight: string;
   stations: ModelStationDraft[];
   envelope: EnvelopePointDraft[];
   topView: PolygonPointDraft[];
@@ -79,7 +82,18 @@ const emptyModelForm: ModelFormState = {
   name: "",
   category: "airplane",
   avg_fuel_burn_rate: "",
-  stations: [{ id: "", name: "", arm: "", latArm: "", weightPerGallon: "", fixedWeight: "", maxWeight: "" }],
+  max_weight: "",
+  stations: [{
+    id: "",
+    name: "",
+    arm: "",
+    latArm: "",
+    weightPerGallon: "",
+    fixedWeight: "",
+    maxWeight: "",
+    inputType: "number",
+    crewRole: "",
+  }],
   envelope: [
     { cg: "", weight: "" },
     { cg: "", weight: "" },
@@ -117,6 +131,7 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
     category: model.category === "helicopter" ? "helicopter" : "airplane",
     avg_fuel_burn_rate:
       typeof model.avg_fuel_burn_rate === "number" ? String(model.avg_fuel_burn_rate) : "",
+    max_weight: typeof model.max_weight === "number" ? String(model.max_weight) : "",
     stations:
       stations.length > 0
         ? stations.map((station) => ({
@@ -127,6 +142,11 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
             weightPerGallon: station.weightPerGallon != null ? String(station.weightPerGallon) : "",
             fixedWeight: station.fixedWeight != null ? String(station.fixedWeight) : "",
             maxWeight: station.maxWeight != null ? String(station.maxWeight) : "",
+            inputType: station.inputType === "checkbox" ? "checkbox" : "number",
+            crewRole:
+              station.crewRole === "pilot" || station.crewRole === "copilot"
+                ? station.crewRole
+                : "",
           }))
         : emptyModelForm.stations,
     envelope:
@@ -520,6 +540,8 @@ export default function AircraftAdminPanel() {
           weightPerGallon,
           fixedWeight: toOptionalNumber(station.fixedWeight),
           maxWeight: toOptionalNumber(station.maxWeight),
+          inputType: station.inputType,
+          crewRole: station.crewRole || null,
         };
       });
 
@@ -585,6 +607,7 @@ export default function AircraftAdminPanel() {
         avg_fuel_burn_rate: modelForm.avg_fuel_burn_rate.trim()
           ? toNumber(modelForm.avg_fuel_burn_rate)
           : null,
+        max_weight: toOptionalNumber(modelForm.max_weight),
         stations,
         envelope: savedEnvelope,
       };
@@ -874,6 +897,18 @@ export default function AircraftAdminPanel() {
             placeholder="e.g. 8.5"
           />
         </label>
+        <label className="grid gap-2 text-sm md:col-span-2">
+          <span>Maximum gross weight (lbs)</span>
+          <input
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            type="number"
+            min="0"
+            step="0.1"
+            value={modelForm.max_weight}
+            onChange={(event) => updateModelField("max_weight", event.target.value)}
+            placeholder="e.g. 2400"
+          />
+        </label>
       </div>
 
       <div className="mt-6">
@@ -885,7 +920,17 @@ export default function AircraftAdminPanel() {
             onClick={() =>
               updateModelField("stations", [
                 ...modelForm.stations,
-                { id: "", name: "", arm: "", latArm: "", weightPerGallon: "", fixedWeight: "", maxWeight: "" },
+                {
+                  id: "",
+                  name: "",
+                  arm: "",
+                  latArm: "",
+                  weightPerGallon: "",
+                  fixedWeight: "",
+                  maxWeight: "",
+                  inputType: "number",
+                  crewRole: "",
+                },
               ])
             }
           >
@@ -959,6 +1004,33 @@ export default function AircraftAdminPanel() {
                   value={station.maxWeight}
                   onChange={(event) => updateStation(index, "maxWeight", event.target.value)}
                 />
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Input type</span>
+                <select
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  value={station.inputType}
+                  onChange={(event) =>
+                    updateStation(index, "inputType", event.target.value as "number" | "checkbox")
+                  }
+                >
+                  <option value="number">Number</option>
+                  <option value="checkbox">Checkbox</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span>Crew role</span>
+                <select
+                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  value={station.crewRole}
+                  onChange={(event) =>
+                    updateStation(index, "crewRole", event.target.value as "" | "pilot" | "copilot")
+                  }
+                >
+                  <option value="">Not crew</option>
+                  <option value="pilot">Pilot</option>
+                  <option value="copilot">Co-Pilot</option>
+                </select>
               </label>
               <button
                 type="button"
