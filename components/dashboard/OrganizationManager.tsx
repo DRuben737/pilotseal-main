@@ -84,6 +84,7 @@ type ModelForm = {
   name: string;
   category: "airplane" | "helicopter";
   avg_fuel_burn_rate: string;
+  max_weight: string;
   stations: LoadingLocationDraft[];
   envelope: WeightBalanceLimitDraft[];
   topView: HelicopterLimitDraft[];
@@ -94,6 +95,7 @@ const emptyModelForm: ModelForm = {
   name: "",
   category: "airplane",
   avg_fuel_burn_rate: "",
+  max_weight: "",
   stations: [
     {
       clientKey: "new-loading-location-1",
@@ -200,6 +202,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [editingModelId, setEditingModelId] = useState("");
   const [showModelForm, setShowModelForm] = useState(false);
   const [modelForm, setModelForm] = useState<ModelForm>(emptyModelForm);
+  const [modelError, setModelError] = useState("");
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set());
 
   const modelNames = useMemo(
@@ -578,6 +581,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   function startCreateModel() {
     setEditingModelId("");
     setModelForm(emptyModelForm);
+    setModelError("");
     setShowModelForm(true);
   }
 
@@ -589,6 +593,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       name: model.name,
       category: model.category?.toLowerCase() === "helicopter" ? "helicopter" : "airplane",
       avg_fuel_burn_rate: model.avg_fuel_burn_rate == null ? "" : String(model.avg_fuel_burn_rate),
+      max_weight: model.max_weight == null ? "" : String(model.max_weight),
       stations:
         stations.length > 0
           ? stations.map((station, index) => ({
@@ -633,6 +638,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             }))
           : emptyModelForm.sideView,
     });
+    setModelError("");
     setShowModelForm(true);
   }
 
@@ -641,6 +647,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     field: keyof LoadingLocationDraft,
     value: string
   ) {
+    setModelError("");
     setModelForm((current) => ({
       ...current,
       stations: current.stations.map((station) =>
@@ -654,6 +661,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     field: keyof WeightBalanceLimitDraft,
     value: string
   ) {
+    setModelError("");
     setModelForm((current) => ({
       ...current,
       envelope: current.envelope.map((point) =>
@@ -668,6 +676,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     field: "x" | "y",
     value: string
   ) {
+    setModelError("");
     setModelForm((current) => ({
       ...current,
       [section]: current[section].map((point) =>
@@ -681,8 +690,10 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     if (!activeOrganization?.id) return;
     setSaving(true);
     setStatus("");
+    setModelError("");
     try {
       const usedLocationIds = new Set<string>();
+      const usedCrewRoles = new Set<string>();
       const stations = modelForm.stations
         .filter((station) => station.name.trim() || station.arm.trim())
         .map((station, index) => {
@@ -694,16 +705,39 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             throw new Error("Give each loading location a different name.");
           }
           usedLocationIds.add(id.toLowerCase());
+          if (station.crewRole && usedCrewRoles.has(station.crewRole)) {
+            throw new Error(`Only one location can be assigned as the ${station.crewRole === "pilot" ? "pilot" : "co-pilot"} seat.`);
+          }
+          if (station.crewRole) {
+            usedCrewRoles.add(station.crewRole);
+          }
+          const latArm = optionalNumber(station.latArm);
+          if (modelForm.category === "helicopter" && latArm == null) {
+            throw new Error(`Enter the left/right distance for ${station.name.trim()}. Use 0 if it is on the centerline.`);
+          }
+          const fixedWeight = optionalNonNegativeNumber(
+            station.fixedWeight,
+            `${station.name.trim()} default or fixed weight`
+          );
+          if (station.inputType === "checkbox" && fixedWeight == null) {
+            throw new Error(`Enter the included weight for ${station.name.trim()}.`);
+          }
           return {
             id,
             name: station.name.trim(),
             arm: requiredNumber(station.arm, `${station.name || `Loading location ${index + 1}`} arm`),
-            latArm: optionalNumber(station.latArm),
+            latArm,
             weightPerGallon:
-              optionalNumber(station.weightPerGallon) ??
+              optionalPositiveNumber(
+                station.weightPerGallon,
+                `${station.name.trim()} fuel weight`
+              ) ??
               (/fuel/i.test(station.name) ? 6 : null),
-            fixedWeight: optionalNumber(station.fixedWeight),
-            maxWeight: optionalNumber(station.maxWeight),
+            fixedWeight,
+            maxWeight: optionalNonNegativeNumber(
+              station.maxWeight,
+              `${station.name.trim()} maximum load`
+            ),
             inputType: station.inputType,
             crewRole: station.crewRole || null,
           };
@@ -712,7 +746,10 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         .filter((point) => point.cg.trim() || point.weight.trim())
         .map((point, index) => ({
           cg: requiredNumber(point.cg, `Limit point ${index + 1} CG position`),
-          weight: requiredNumber(point.weight, `Limit point ${index + 1} aircraft weight`),
+          weight: requiredPositiveNumber(
+            point.weight,
+            `Limit point ${index + 1} aircraft weight`
+          ),
         }));
       if (stations.length < 1) {
         throw new Error("Add at least one seat, fuel tank, baggage area, or fixed item.");
@@ -727,7 +764,10 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         .filter((point) => point.x.trim() || point.y.trim())
         .map((point, index) => ({
           x: requiredNumber(point.x, `Weight-limit point ${index + 1} forward/aft CG`),
-          y: requiredNumber(point.y, `Weight-limit point ${index + 1} aircraft weight`),
+          y: requiredPositiveNumber(
+            point.y,
+            `Weight-limit point ${index + 1} aircraft weight`
+          ),
         }));
       if (modelForm.category === "helicopter" && topView.length < 3) {
         throw new Error("Add at least three complete top-view CG limit points.");
@@ -747,7 +787,14 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       const input = {
         name: modelForm.name.trim(),
         category: modelForm.category,
-        avg_fuel_burn_rate: optionalNumber(modelForm.avg_fuel_burn_rate),
+        avg_fuel_burn_rate: optionalPositiveNumber(
+          modelForm.avg_fuel_burn_rate,
+          "Typical fuel use"
+        ),
+        max_weight: optionalPositiveNumber(
+          modelForm.max_weight,
+          "Maximum takeoff weight"
+        ),
         stations,
         envelope,
       };
@@ -762,7 +809,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setEditingModelId("");
       setStatus(editingModelId ? "Organization model updated." : "Organization model created.");
     } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to save this aircraft model."));
+      setModelError(getErrorMessage(error, "Unable to save this aircraft model."));
     } finally {
       setSaving(false);
     }
@@ -898,18 +945,28 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               <p className="saas-meta-text mt-1">Use the approved aircraft flight manual or weight-and-balance records.</p>
             </div>
 
+            {modelError ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                <p className="font-semibold">Check the aircraft model information.</p>
+                <p className="mt-1">{modelError}</p>
+              </div>
+            ) : null}
+
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Aircraft model name">
-                <input className="rounded-xl border border-slate-300 px-3 py-2" value={modelForm.name} onChange={(event) => setModelForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Cessna 172S" required />
+                <input className="rounded-xl border border-slate-300 px-3 py-2" value={modelForm.name} onChange={(event) => { setModelError(""); setModelForm((current) => ({ ...current, name: event.target.value })); }} placeholder="e.g. Cessna 172S" required />
               </Field>
               <Field label="Aircraft type">
-                <select className="rounded-xl border border-slate-300 px-3 py-2" value={modelForm.category} onChange={(event) => setModelForm((current) => ({ ...current, category: event.target.value as ModelForm["category"] }))}>
+                <select className="rounded-xl border border-slate-300 px-3 py-2" value={modelForm.category} onChange={(event) => { setModelError(""); setModelForm((current) => ({ ...current, category: event.target.value as ModelForm["category"] })); }}>
                   <option value="airplane">Airplane</option>
                   <option value="helicopter">Helicopter</option>
                 </select>
               </Field>
               <Field label="Typical fuel use (gallons per hour)">
-                <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={modelForm.avg_fuel_burn_rate} onChange={(event) => setModelForm((current) => ({ ...current, avg_fuel_burn_rate: event.target.value }))} placeholder="e.g. 8.5" />
+                <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={modelForm.avg_fuel_burn_rate} onChange={(event) => { setModelError(""); setModelForm((current) => ({ ...current, avg_fuel_burn_rate: event.target.value })); }} placeholder="e.g. 8.5" />
+              </Field>
+              <Field label="Maximum takeoff weight (lb, optional)">
+                <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={modelForm.max_weight} onChange={(event) => { setModelError(""); setModelForm((current) => ({ ...current, max_weight: event.target.value })); }} placeholder="e.g. 2400" />
               </Field>
             </div>
 
@@ -960,6 +1017,32 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                   <Field label="Fuel weight (lb/gal, fuel only)">
                     <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.weightPerGallon} onChange={(event) => updateLoadingLocation(station.clientKey, "weightPerGallon", event.target.value)} placeholder={/fuel/i.test(station.name) ? "6" : ""} />
                   </Field>
+                  <details className="rounded-xl border border-slate-200 bg-white px-3 py-2 md:col-span-2 xl:col-span-4">
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                      More options for this location
+                    </summary>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <Field label="Left/right distance from centerline (in)">
+                        <input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.latArm} onChange={(event) => updateLoadingLocation(station.clientKey, "latArm", event.target.value)} placeholder={modelForm.category === "helicopter" ? "Required for lateral CG" : "Optional"} />
+                      </Field>
+                      <Field label="Default or fixed weight (lb)">
+                        <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.fixedWeight} onChange={(event) => updateLoadingLocation(station.clientKey, "fixedWeight", event.target.value)} placeholder="Optional" />
+                      </Field>
+                      <Field label="How this load is selected">
+                        <select className="rounded-xl border border-slate-300 px-3 py-2" value={station.inputType} onChange={(event) => updateLoadingLocation(station.clientKey, "inputType", event.target.value)}>
+                          <option value="number">Enter a weight or quantity</option>
+                          <option value="checkbox">Included / not included</option>
+                        </select>
+                      </Field>
+                      <Field label="Crew seat assignment">
+                        <select className="rounded-xl border border-slate-300 px-3 py-2" value={station.crewRole} onChange={(event) => updateLoadingLocation(station.clientKey, "crewRole", event.target.value)}>
+                          <option value="">Not a crew seat</option>
+                          <option value="pilot">Pilot seat</option>
+                          <option value="copilot">Co-pilot seat</option>
+                        </select>
+                      </Field>
+                    </div>
+                  </details>
                   <button
                     className="danger-button-compact justify-self-start xl:col-span-4"
                     type="button"
@@ -1445,10 +1528,34 @@ function requiredNumber(value: string, label: string) {
   return result;
 }
 
+function requiredPositiveNumber(value: string, label: string) {
+  const result = requiredNumber(value, label);
+  if (result <= 0) {
+    throw new Error(`${label} must be greater than 0.`);
+  }
+  return result;
+}
+
 function optionalNumber(value: string) {
   if (!value.trim()) return null;
   const result = Number.parseFloat(value);
   if (!Number.isFinite(result)) throw new Error("Enter a valid number.");
+  return result;
+}
+
+function optionalPositiveNumber(value: string, label: string) {
+  const result = optionalNumber(value);
+  if (result != null && result <= 0) {
+    throw new Error(`${label} must be greater than 0.`);
+  }
+  return result;
+}
+
+function optionalNonNegativeNumber(value: string, label: string) {
+  const result = optionalNumber(value);
+  if (result != null && result < 0) {
+    throw new Error(`${label} cannot be negative.`);
+  }
   return result;
 }
 
