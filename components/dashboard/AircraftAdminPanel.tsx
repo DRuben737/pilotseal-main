@@ -35,6 +35,7 @@ import {
 import { fetchCurrentProfile } from "@/lib/profile";
 
 type ModelStationDraft = {
+  clientKey: string;
   id: string;
   name: string;
   arm: string;
@@ -47,11 +48,13 @@ type ModelStationDraft = {
 };
 
 type EnvelopePointDraft = {
+  clientKey: string;
   cg: string;
   weight: string;
 };
 
 type PolygonPointDraft = {
+  clientKey: string;
   x: string;
   y: string;
 };
@@ -84,6 +87,7 @@ const emptyModelForm: ModelFormState = {
   avg_fuel_burn_rate: "",
   max_weight: "",
   stations: [{
+    clientKey: "new-station-1",
     id: "",
     name: "",
     arm: "",
@@ -95,19 +99,19 @@ const emptyModelForm: ModelFormState = {
     crewRole: "",
   }],
   envelope: [
-    { cg: "", weight: "" },
-    { cg: "", weight: "" },
-    { cg: "", weight: "" },
+    { clientKey: "new-envelope-1", cg: "", weight: "" },
+    { clientKey: "new-envelope-2", cg: "", weight: "" },
+    { clientKey: "new-envelope-3", cg: "", weight: "" },
   ],
   topView: [
-    { x: "", y: "" },
-    { x: "", y: "" },
-    { x: "", y: "" },
+    { clientKey: "new-top-view-1", x: "", y: "" },
+    { clientKey: "new-top-view-2", x: "", y: "" },
+    { clientKey: "new-top-view-3", x: "", y: "" },
   ],
   sideView: [
-    { x: "", y: "" },
-    { x: "", y: "" },
-    { x: "", y: "" },
+    { clientKey: "new-side-view-1", x: "", y: "" },
+    { clientKey: "new-side-view-2", x: "", y: "" },
+    { clientKey: "new-side-view-3", x: "", y: "" },
   ],
 };
 
@@ -134,7 +138,8 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
     max_weight: typeof model.max_weight === "number" ? String(model.max_weight) : "",
     stations:
       stations.length > 0
-        ? stations.map((station) => ({
+        ? stations.map((station, index) => ({
+            clientKey: `station-${model.id}-${index}`,
             id: station.id,
             name: station.name,
             arm: String(station.arm),
@@ -151,21 +156,24 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
         : emptyModelForm.stations,
     envelope:
       envelope.length > 0
-        ? envelope.map((point) => ({
+        ? envelope.map((point, index) => ({
+            clientKey: `envelope-${model.id}-${index}`,
             cg: String(point.cg),
             weight: String(point.weight),
           }))
         : emptyModelForm.envelope,
     topView:
       envelopeSet.topView.length > 0
-        ? envelopeSet.topView.map((point) => ({
+        ? envelopeSet.topView.map((point, index) => ({
+            clientKey: `top-view-${model.id}-${index}`,
             x: String(point.x),
             y: String(point.y),
           }))
         : emptyModelForm.topView,
     sideView:
       envelopeSet.sideView.length > 0
-        ? envelopeSet.sideView.map((point) => ({
+        ? envelopeSet.sideView.map((point, index) => ({
+            clientKey: `side-view-${model.id}-${index}`,
             x: String(point.x),
             y: String(point.y),
           }))
@@ -546,7 +554,7 @@ export default function AircraftAdminPanel() {
       });
 
     if (stations.length < 1) {
-      setStatus("Add at least one station.");
+      setStatus("Add at least one loading location.");
       return;
     }
 
@@ -845,7 +853,7 @@ export default function AircraftAdminPanel() {
     <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-slate-900">
-          {modelForm.id ? "Edit model" : "Add model"}
+          {modelForm.id ? "Edit aircraft model" : "Add aircraft model"}
         </h3>
         <button
           type="button"
@@ -860,12 +868,13 @@ export default function AircraftAdminPanel() {
       </div>
 
       <p className="saas-meta-text mt-3">
-        Changes here update saved aircraft model data after you save.
+        Enter the values from the aircraft flight manual or approved weight-and-balance
+        records. Nothing changes until you save.
       </p>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm">
-          <span>Name</span>
+          <span>Model name</span>
           <input
             className="rounded-xl border border-slate-300 px-3 py-2"
             value={modelForm.name}
@@ -873,7 +882,7 @@ export default function AircraftAdminPanel() {
           />
         </label>
         <label className="grid gap-2 text-sm">
-          <span>Category</span>
+          <span>Aircraft type</span>
           <select
             className="rounded-xl border border-slate-300 px-3 py-2"
             value={modelForm.category}
@@ -886,7 +895,7 @@ export default function AircraftAdminPanel() {
           </select>
         </label>
         <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Average fuel burn rate (GPH)</span>
+          <span>Typical fuel burn (gallons per hour)</span>
           <input
             className="rounded-xl border border-slate-300 px-3 py-2"
             type="number"
@@ -898,7 +907,7 @@ export default function AircraftAdminPanel() {
           />
         </label>
         <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Maximum gross weight (lbs)</span>
+          <span>Maximum takeoff weight (lb)</span>
           <input
             className="rounded-xl border border-slate-300 px-3 py-2"
             type="number"
@@ -913,7 +922,12 @@ export default function AircraftAdminPanel() {
 
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-slate-900">Stations</h4>
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900">Loading locations</h4>
+            <p className="saas-meta-text mt-1">
+              Add each seat, baggage area, fuel tank, or permanently installed item.
+            </p>
+          </div>
           <button
             type="button"
             className="ghost-button"
@@ -921,6 +935,7 @@ export default function AircraftAdminPanel() {
               updateModelField("stations", [
                 ...modelForm.stations,
                 {
+                  clientKey: crypto.randomUUID(),
                   id: "",
                   name: "",
                   arm: "",
@@ -934,33 +949,35 @@ export default function AircraftAdminPanel() {
               ])
             }
           >
-            Add station
+            Add loading location
           </button>
         </div>
         <div className="grid gap-3">
           {modelForm.stations.map((station, index) => (
             <div
-              key={`${station.id}-${index}`}
-              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_auto]"
+              key={station.clientKey}
+              className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-2 lg:grid-cols-3"
             >
               <label className="grid gap-2 text-sm">
-                <span>Key</span>
+                <span>Short code</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   value={station.id}
                   onChange={(event) => updateStation(index, "id", event.target.value)}
+                  placeholder="e.g. pilot, baggage, mainFuel"
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Name</span>
+                <span>Name shown to users</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   value={station.name}
                   onChange={(event) => updateStation(index, "name", event.target.value)}
+                  placeholder="e.g. Pilot seat"
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Long arm</span>
+                <span>Forward/aft arm (in)</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   type="number"
@@ -969,7 +986,7 @@ export default function AircraftAdminPanel() {
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Lat arm</span>
+                <span>Left/right arm (in, optional)</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   type="number"
@@ -978,7 +995,7 @@ export default function AircraftAdminPanel() {
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Weight / gallon</span>
+                <span>Fuel weight (lb per gallon)</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   type="number"
@@ -988,7 +1005,7 @@ export default function AircraftAdminPanel() {
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Fixed weight</span>
+                <span>Always-loaded weight (lb)</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   type="number"
@@ -997,7 +1014,7 @@ export default function AircraftAdminPanel() {
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Max weight</span>
+                <span>Maximum allowed load (lb)</span>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   type="number"
@@ -1006,7 +1023,7 @@ export default function AircraftAdminPanel() {
                 />
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Input type</span>
+                <span>How users enter the load</span>
                 <select
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   value={station.inputType}
@@ -1014,12 +1031,12 @@ export default function AircraftAdminPanel() {
                     updateStation(index, "inputType", event.target.value as "number" | "checkbox")
                   }
                 >
-                  <option value="number">Number</option>
-                  <option value="checkbox">Checkbox</option>
+                  <option value="number">Enter a weight or quantity</option>
+                  <option value="checkbox">Included / not included</option>
                 </select>
               </label>
               <label className="grid gap-2 text-sm">
-                <span>Crew role</span>
+                <span>Seat assignment</span>
                 <select
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   value={station.crewRole}
@@ -1027,9 +1044,9 @@ export default function AircraftAdminPanel() {
                     updateStation(index, "crewRole", event.target.value as "" | "pilot" | "copilot")
                   }
                 >
-                  <option value="">Not crew</option>
-                  <option value="pilot">Pilot</option>
-                  <option value="copilot">Co-Pilot</option>
+                  <option value="">Not a crew seat</option>
+                  <option value="pilot">Pilot seat</option>
+                  <option value="copilot">Co-pilot seat</option>
                 </select>
               </label>
               <button
@@ -1042,7 +1059,7 @@ export default function AircraftAdminPanel() {
                   )
                 }
               >
-                Remove
+                Remove location
               </button>
             </div>
           ))}
@@ -1053,28 +1070,35 @@ export default function AircraftAdminPanel() {
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <div>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h4 className="text-sm font-semibold text-slate-900">Top view envelope</h4>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900">
+                  CG limits — top view
+                </h4>
+                <p className="saas-meta-text mt-1">
+                  Enter each forward/aft and left/right CG boundary point.
+                </p>
+              </div>
               <button
                 type="button"
                 className="ghost-button"
                 onClick={() =>
                   updateModelField("topView", [
                     ...modelForm.topView,
-                    { x: "", y: "" },
+                    { clientKey: crypto.randomUUID(), x: "", y: "" },
                   ])
                 }
               >
-                Add point
+                Add limit point
               </button>
             </div>
             <div className="grid gap-3">
               {modelForm.topView.map((point, index) => (
                 <div
-                  key={`top-${point.x}-${point.y}-${index}`}
+                  key={point.clientKey}
                   className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                 >
                   <label className="grid gap-2 text-sm">
-                    <span>Longitudinal CG</span>
+                    <span>Forward/aft CG (in)</span>
                     <input
                       className="rounded-xl border border-slate-300 px-3 py-2"
                       type="number"
@@ -1083,7 +1107,7 @@ export default function AircraftAdminPanel() {
                     />
                   </label>
                   <label className="grid gap-2 text-sm">
-                    <span>Lateral CG</span>
+                    <span>Left/right CG (in)</span>
                     <input
                       className="rounded-xl border border-slate-300 px-3 py-2"
                       type="number"
@@ -1101,7 +1125,7 @@ export default function AircraftAdminPanel() {
                       )
                     }
                   >
-                    Remove
+                    Remove point
                   </button>
                 </div>
               ))}
@@ -1110,28 +1134,35 @@ export default function AircraftAdminPanel() {
 
           <div>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h4 className="text-sm font-semibold text-slate-900">Side view envelope</h4>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900">
+                  CG and weight limits
+                </h4>
+                <p className="saas-meta-text mt-1">
+                  Enter the approved forward/aft CG boundary at each aircraft weight.
+                </p>
+              </div>
               <button
                 type="button"
                 className="ghost-button"
                 onClick={() =>
                   updateModelField("sideView", [
                     ...modelForm.sideView,
-                    { x: "", y: "" },
+                    { clientKey: crypto.randomUUID(), x: "", y: "" },
                   ])
                 }
               >
-                Add point
+                Add limit point
               </button>
             </div>
             <div className="grid gap-3">
               {modelForm.sideView.map((point, index) => (
                 <div
-                  key={`side-${point.x}-${point.y}-${index}`}
+                  key={point.clientKey}
                   className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                 >
                   <label className="grid gap-2 text-sm">
-                    <span>Longitudinal CG</span>
+                    <span>Forward/aft CG (in)</span>
                     <input
                       className="rounded-xl border border-slate-300 px-3 py-2"
                       type="number"
@@ -1140,7 +1171,7 @@ export default function AircraftAdminPanel() {
                     />
                   </label>
                   <label className="grid gap-2 text-sm">
-                    <span>Weight</span>
+                    <span>Aircraft weight (lb)</span>
                     <input
                       className="rounded-xl border border-slate-300 px-3 py-2"
                       type="number"
@@ -1158,7 +1189,7 @@ export default function AircraftAdminPanel() {
                       )
                     }
                   >
-                    Remove
+                    Remove point
                   </button>
                 </div>
               ))}
@@ -1168,28 +1199,35 @@ export default function AircraftAdminPanel() {
       ) : (
         <div className="mt-6">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h4 className="text-sm font-semibold text-slate-900">Envelope</h4>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">
+                Weight-and-balance limits
+              </h4>
+              <p className="saas-meta-text mt-1">
+                Enter the approved CG boundary at each aircraft weight.
+              </p>
+            </div>
             <button
               type="button"
               className="ghost-button"
               onClick={() =>
                 updateModelField("envelope", [
                   ...modelForm.envelope,
-                  { cg: "", weight: "" },
+                  { clientKey: crypto.randomUUID(), cg: "", weight: "" },
                 ])
               }
             >
-              Add point
+              Add limit point
             </button>
           </div>
           <div className="grid gap-3">
             {modelForm.envelope.map((point, index) => (
               <div
-                key={`${point.cg}-${point.weight}-${index}`}
+                key={point.clientKey}
                 className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
               >
                 <label className="grid gap-2 text-sm">
-                  <span>CG</span>
+                  <span>CG position (in)</span>
                   <input
                     className="rounded-xl border border-slate-300 px-3 py-2"
                     type="number"
@@ -1198,7 +1236,7 @@ export default function AircraftAdminPanel() {
                   />
                 </label>
                 <label className="grid gap-2 text-sm">
-                  <span>Weight</span>
+                  <span>Aircraft weight (lb)</span>
                   <input
                     className="rounded-xl border border-slate-300 px-3 py-2"
                     type="number"
@@ -1216,7 +1254,7 @@ export default function AircraftAdminPanel() {
                     )
                   }
                 >
-                  Remove
+                  Remove point
                 </button>
               </div>
             ))}
@@ -1231,7 +1269,7 @@ export default function AircraftAdminPanel() {
           disabled={saving}
           onClick={() => void handleSaveModel()}
         >
-          {saving ? "Saving..." : modelForm.id ? "Save model" : "Create model"}
+          {saving ? "Saving..." : modelForm.id ? "Save changes" : "Add aircraft model"}
         </button>
       </div>
     </div>
@@ -1256,12 +1294,13 @@ export default function AircraftAdminPanel() {
       </div>
 
       <p className="saas-meta-text mt-3">
-        Changes here update saved aircraft data after you save.
+        Use the current weight-and-balance record for this aircraft. Nothing changes
+        until you save.
       </p>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Model</span>
+          <span>Aircraft model</span>
           <select
             className="rounded-xl border border-slate-300 px-3 py-2"
             value={aircraftForm.model_id}
@@ -1276,7 +1315,7 @@ export default function AircraftAdminPanel() {
           </select>
         </label>
         <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Tail number</span>
+          <span>Registration / tail number</span>
           <input
             className="rounded-xl border border-slate-300 px-3 py-2"
             value={aircraftForm.name}
@@ -1284,7 +1323,7 @@ export default function AircraftAdminPanel() {
           />
         </label>
         <label className="grid gap-2 text-sm">
-          <span>Empty weight</span>
+          <span>Basic empty weight (lb)</span>
           <input
             className="rounded-xl border border-slate-300 px-3 py-2"
             type="number"
@@ -1293,7 +1332,7 @@ export default function AircraftAdminPanel() {
           />
         </label>
         <label className="grid gap-2 text-sm">
-          <span>Empty arm</span>
+          <span>Empty-weight CG arm (in)</span>
           <input
             className="rounded-xl border border-slate-300 px-3 py-2"
             type="number"
@@ -1302,7 +1341,7 @@ export default function AircraftAdminPanel() {
           />
         </label>
         <label className="grid gap-2 text-sm">
-          <span>Empty lat arm</span>
+          <span>Empty-weight left/right arm (in, optional)</span>
           <input
             className="rounded-xl border border-slate-300 px-3 py-2"
             type="number"
@@ -1331,7 +1370,7 @@ export default function AircraftAdminPanel() {
         <section className="saas-panel">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="saas-subsection-title">Aircraft Models</h3>
+              <h3 className="saas-subsection-title">Aircraft Model Setup</h3>
               <p className="saas-meta-text mt-2">{models.length} saved</p>
             </div>
             <button
@@ -1339,7 +1378,7 @@ export default function AircraftAdminPanel() {
               className="secondary-button"
               onClick={() => setShowModelsModal(true)}
             >
-              Manage
+              View and edit
             </button>
           </div>
         </section>
@@ -1389,11 +1428,11 @@ export default function AircraftAdminPanel() {
                   <div className="tools-child-header">
                     <div>
                       <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Aircraft Models</h2>
+                      <h2 className="tools-child-title">Aircraft Model Setup</h2>
                     </div>
                     <div className="tools-child-actions">
                       <button type="button" className="ghost-button" onClick={() => openModelEditor()}>
-                        Add model
+                        Add aircraft model
                       </button>
                       <button
                         type="button"
@@ -1417,10 +1456,11 @@ export default function AircraftAdminPanel() {
                               <div>
                                 <p className="text-sm font-semibold text-slate-900">{model.name}</p>
                                 <p className="saas-meta-text">
-                                  {model.category ?? "Aircraft"} model · Avg burn{" "}
+                                  {model.category === "helicopter" ? "Helicopter" : "Airplane"}
+                                  {" · Typical fuel burn: "}
                                   {typeof model.avg_fuel_burn_rate === "number"
-                                    ? `${model.avg_fuel_burn_rate} GPH`
-                                    : "--"}
+                                    ? `${model.avg_fuel_burn_rate} gal/hr`
+                                    : "not entered"}
                                 </p>
                               </div>
                               <div className="flex flex-wrap justify-end gap-2">
@@ -1467,7 +1507,7 @@ export default function AircraftAdminPanel() {
                   <div className="tools-child-header">
                     <div>
                       <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Platform Aircraft</h2>
+                      <h2 className="tools-child-title">Aircraft Registry</h2>
                     </div>
                     <div className="tools-child-actions">
                       <button type="button" className="ghost-button" onClick={() => openAircraftEditor()}>
