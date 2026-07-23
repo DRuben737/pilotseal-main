@@ -81,6 +81,7 @@ type AircraftFormState = {
 };
 
 type ModelFormErrors = Record<string, string>;
+type AircraftFormErrors = Record<keyof Omit<AircraftFormState, "id">, string>;
 
 const emptyModelForm: ModelFormState = {
   id: null,
@@ -411,6 +412,61 @@ function validateModelForm(modelForm: ModelFormState) {
   return errors;
 }
 
+function validateAircraftForm(
+  aircraftForm: AircraftFormState,
+  models: AircraftModelRecord[],
+  aircraft: AircraftRecord[]
+) {
+  const errors: Partial<AircraftFormErrors> = {};
+  const tailNumber = aircraftForm.name.trim().toUpperCase();
+
+  if (!aircraftForm.model_id) {
+    errors.model_id = "Choose the aircraft model.";
+  }
+
+  if (!tailNumber) {
+    errors.name = "Enter the registration or tail number.";
+  } else {
+    const duplicate = aircraft.some(
+      (item) =>
+        item.id !== aircraftForm.id &&
+        String(item.tail_number ?? item.name ?? "")
+          .trim()
+          .toUpperCase() === tailNumber
+    );
+    if (duplicate) {
+      errors.name = "This aircraft is already in the fleet.";
+    }
+  }
+
+  const emptyWeight = Number(aircraftForm.empty_weight);
+  if (!isValidNumber(aircraftForm.empty_weight) || emptyWeight <= 0) {
+    errors.empty_weight = "Enter a basic empty weight greater than 0.";
+  }
+
+  if (!isValidNumber(aircraftForm.empty_arm)) {
+    errors.empty_arm = "Enter the empty-weight arm from the aircraft datum.";
+  }
+
+  if (
+    aircraftForm.empty_lat_arm.trim() &&
+    !isValidNumber(aircraftForm.empty_lat_arm)
+  ) {
+    errors.empty_lat_arm = "Enter a valid left/right arm or leave it blank.";
+  }
+
+  const selectedModel = models.find((model) => model.id === aircraftForm.model_id);
+  if (
+    selectedModel?.max_weight != null &&
+    Number.isFinite(emptyWeight) &&
+    emptyWeight > selectedModel.max_weight
+  ) {
+    errors.empty_weight = `Basic empty weight cannot exceed this model's ${selectedModel.max_weight.toLocaleString()} lb maximum weight.`;
+  }
+
+  return errors;
+}
+
 function fieldClass(hasError: boolean) {
   return `rounded-xl border px-3 py-2 ${
     hasError
@@ -488,6 +544,7 @@ export default function AircraftAdminPanel() {
   const [modelForm, setModelForm] = useState<ModelFormState>(emptyModelForm);
   const [modelErrors, setModelErrors] = useState<ModelFormErrors>({});
   const [aircraftForm, setAircraftForm] = useState<AircraftFormState>(emptyAircraftForm);
+  const [aircraftErrors, setAircraftErrors] = useState<Partial<AircraftFormErrors>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -640,6 +697,10 @@ export default function AircraftAdminPanel() {
     () => new Map(models.map((model) => [model.id, model.name])),
     [models]
   );
+  const selectedAircraftModel = useMemo(
+    () => models.find((model) => model.id === aircraftForm.model_id) ?? null,
+    [aircraftForm.model_id, models]
+  );
 
   async function reloadAll() {
     const [modelResult, sharedResult, myResult, requestResult, organizationResult] = await Promise.allSettled([
@@ -683,6 +744,7 @@ export default function AircraftAdminPanel() {
 
   function openAircraftEditor(nextForm = emptyAircraftForm) {
     setAircraftForm(nextForm);
+    setAircraftErrors({});
     setShowAircraftForm(true);
     setShowAircraftModal(true);
   }
@@ -738,6 +800,13 @@ export default function AircraftAdminPanel() {
     value: AircraftFormState[K]
   ) {
     setAircraftForm((current) => ({ ...current, [key]: value }));
+    if (key !== "id") {
+      setAircraftErrors((current) => {
+        const next = { ...current };
+        delete next[key as keyof AircraftFormErrors];
+        return next;
+      });
+    }
   }
 
   function updateStation(index: number, key: keyof ModelStationDraft, value: string) {
@@ -945,13 +1014,18 @@ export default function AircraftAdminPanel() {
       return;
     }
 
-    if (!aircraftForm.model_id) {
-      setStatus("Select a model.");
-      return;
-    }
-
-    if (!aircraftForm.name.trim()) {
-      setStatus("Tail number is required.");
+    const validationErrors = validateAircraftForm(aircraftForm, models, aircraft);
+    if (Object.keys(validationErrors).length > 0) {
+      setAircraftErrors(validationErrors);
+      setStatus("Review the highlighted aircraft fields.");
+      window.requestAnimationFrame(() => {
+        const editor = document.getElementById(
+          aircraftForm.id ? `aircraft-editor-${aircraftForm.id}` : "aircraft-editor-new"
+        );
+        editor?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus({
+          preventScroll: false,
+        });
+      });
       return;
     }
 
@@ -1004,6 +1078,7 @@ export default function AircraftAdminPanel() {
       );
       await reloadAll();
       setAircraftForm(emptyAircraftForm);
+      setAircraftErrors({});
       setShowAircraftForm(false);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to save aircraft right now."));
@@ -1763,6 +1838,7 @@ export default function AircraftAdminPanel() {
           className="ghost-button"
           onClick={() => {
             setAircraftForm(emptyAircraftForm);
+            setAircraftErrors({});
             setShowAircraftForm(false);
           }}
         >
@@ -1771,17 +1847,36 @@ export default function AircraftAdminPanel() {
       </div>
 
       <p className="saas-meta-text mt-3">
-        Use the current weight-and-balance record for this aircraft. Nothing changes
-        until you save.
+        Copy these values from the aircraft&apos;s current weight-and-balance record.
+        Nothing changes until you save.
       </p>
+
+      {Object.keys(aircraftErrors).length > 0 ? (
+        <div
+          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+          role="alert"
+          aria-live="polite"
+        >
+          <p className="font-semibold">Some aircraft information needs attention.</p>
+          <p className="mt-1 text-rose-800">
+            Check the highlighted fields before saving.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Aircraft model</span>
+          <span>
+            Aircraft model <span className="text-rose-700">(required)</span>
+          </span>
           <select
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(aircraftErrors.model_id))}
             value={aircraftForm.model_id}
             onChange={(event) => updateAircraftField("model_id", event.target.value)}
+            aria-invalid={Boolean(aircraftErrors.model_id)}
+            aria-describedby={
+              aircraftErrors.model_id ? "aircraft-model-selection-error" : undefined
+            }
           >
             <option value="">Select a model</option>
             {models.map((model) => (
@@ -1790,40 +1885,96 @@ export default function AircraftAdminPanel() {
               </option>
             ))}
           </select>
+          <FieldError
+            id="aircraft-model-selection-error"
+            message={aircraftErrors.model_id}
+          />
+          {aircraftForm.model_id ? (
+            <span className="text-xs text-slate-500">
+              {selectedAircraftModel?.max_weight != null
+                ? `This model's maximum weight is ${selectedAircraftModel.max_weight.toLocaleString()} lb.`
+                : "No maximum weight is saved for this model."}
+            </span>
+          ) : null}
         </label>
         <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Registration / tail number</span>
+          <span>
+            Registration / tail number <span className="text-rose-700">(required)</span>
+          </span>
           <input
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(aircraftErrors.name))}
             value={aircraftForm.name}
-            onChange={(event) => updateAircraftField("name", event.target.value)}
+            onChange={(event) =>
+              updateAircraftField("name", event.target.value.toUpperCase())
+            }
+            placeholder="e.g. N5520X"
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-invalid={Boolean(aircraftErrors.name)}
+            aria-describedby={
+              aircraftErrors.name ? "aircraft-tail-number-error" : undefined
+            }
           />
+          <FieldError id="aircraft-tail-number-error" message={aircraftErrors.name} />
         </label>
         <label className="grid gap-2 text-sm">
-          <span>Basic empty weight (lb)</span>
+          <span>
+            Basic empty weight (lb) <span className="text-rose-700">(required)</span>
+          </span>
           <input
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(aircraftErrors.empty_weight))}
             type="number"
+            min="0"
+            step="0.1"
             value={aircraftForm.empty_weight}
             onChange={(event) => updateAircraftField("empty_weight", event.target.value)}
+            placeholder="From the current W&B record"
+            aria-invalid={Boolean(aircraftErrors.empty_weight)}
+            aria-describedby={
+              aircraftErrors.empty_weight ? "aircraft-empty-weight-error" : undefined
+            }
+          />
+          <FieldError
+            id="aircraft-empty-weight-error"
+            message={aircraftErrors.empty_weight}
           />
         </label>
         <label className="grid gap-2 text-sm">
-          <span>Empty-weight CG arm (in)</span>
+          <span>
+            Empty-weight arm from datum (in){" "}
+            <span className="text-rose-700">(required)</span>
+          </span>
           <input
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(aircraftErrors.empty_arm))}
             type="number"
+            step="0.01"
             value={aircraftForm.empty_arm}
             onChange={(event) => updateAircraftField("empty_arm", event.target.value)}
+            placeholder="From the current W&B record"
+            aria-invalid={Boolean(aircraftErrors.empty_arm)}
+            aria-describedby={
+              aircraftErrors.empty_arm ? "aircraft-empty-arm-error" : undefined
+            }
           />
+          <FieldError id="aircraft-empty-arm-error" message={aircraftErrors.empty_arm} />
         </label>
         <label className="grid gap-2 text-sm">
           <span>Empty-weight left/right arm (in, optional)</span>
           <input
-            className="rounded-xl border border-slate-300 px-3 py-2"
+            className={fieldClass(Boolean(aircraftErrors.empty_lat_arm))}
             type="number"
+            step="0.01"
             value={aircraftForm.empty_lat_arm}
             onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)}
+            placeholder="Helicopters, when provided"
+            aria-invalid={Boolean(aircraftErrors.empty_lat_arm)}
+            aria-describedby={
+              aircraftErrors.empty_lat_arm ? "aircraft-empty-lateral-arm-error" : undefined
+            }
+          />
+          <FieldError
+            id="aircraft-empty-lateral-arm-error"
+            message={aircraftErrors.empty_lat_arm}
           />
         </label>
       </div>
@@ -1835,7 +1986,7 @@ export default function AircraftAdminPanel() {
           disabled={saving}
           onClick={() => void handleSaveAircraft()}
         >
-          {saving ? "Saving..." : aircraftForm.id ? "Save aircraft" : "Create aircraft"}
+          {saving ? "Saving..." : aircraftForm.id ? "Save aircraft" : "Add aircraft"}
         </button>
       </div>
     </div>
@@ -1847,7 +1998,7 @@ export default function AircraftAdminPanel() {
         <section className="saas-panel">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="saas-subsection-title">Aircraft Model Setup</h3>
+              <h3 className="saas-subsection-title">Aircraft Models</h3>
               <p className="saas-meta-text mt-2">{models.length} saved</p>
             </div>
             <button
@@ -1855,7 +2006,7 @@ export default function AircraftAdminPanel() {
               className="secondary-button"
               onClick={() => setShowModelsModal(true)}
             >
-              View and edit
+              Manage models
             </button>
           </div>
         </section>
@@ -1863,7 +2014,7 @@ export default function AircraftAdminPanel() {
         <section className="saas-panel">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="saas-subsection-title">Shared Aircraft Registry</h3>
+              <h3 className="saas-subsection-title">Fleet Aircraft</h3>
               <p className="saas-meta-text mt-2">{aircraft.length} aircraft</p>
             </div>
             <button
@@ -1871,7 +2022,7 @@ export default function AircraftAdminPanel() {
               className="secondary-button"
               onClick={() => setShowAircraftModal(true)}
             >
-              Manage
+              Manage aircraft
             </button>
           </div>
         </section>
@@ -1879,7 +2030,7 @@ export default function AircraftAdminPanel() {
         <section className="saas-panel md:col-span-2">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="saas-subsection-title">Pending Aircraft Updates</h3>
+              <h3 className="saas-subsection-title">Pending W&amp;B Changes</h3>
               <p className="saas-meta-text mt-2">
                 {updateRequests.filter((request) => request.status === "pending").length} pending
               </p>
@@ -1905,7 +2056,7 @@ export default function AircraftAdminPanel() {
                   <div className="tools-child-header">
                     <div>
                       <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Aircraft Model Setup</h2>
+                      <h2 className="tools-child-title">Aircraft Models</h2>
                     </div>
                     <div className="tools-child-actions">
                       <button type="button" className="ghost-button" onClick={() => openModelEditor()}>
@@ -2120,7 +2271,7 @@ export default function AircraftAdminPanel() {
                   <div className="tools-child-header">
                     <div>
                       <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Pending Aircraft Updates</h2>
+                      <h2 className="tools-child-title">Pending W&amp;B Changes</h2>
                     </div>
                     <div className="tools-child-actions">
                       <button
