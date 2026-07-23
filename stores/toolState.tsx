@@ -74,6 +74,11 @@ const DEFAULT_BRIEF = {
   withinLimitsConfirmed: false,
   mxNow: "",
   mxDue: "",
+  meterType: "hobbs",
+  meterObservedAt: "",
+  plannedMeterIncrease: "",
+  flightBriefDraftId: "",
+  finalizedFlightBriefId: "",
   staticChecked: {
     "static-student-under-50-type": false,
     "static-training-pre-solo": false,

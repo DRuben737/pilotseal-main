@@ -12,7 +12,7 @@ import {
   type EndorsementTemplateStatus,
 } from "@/lib/endorsement-templates";
 
-type Props = { organizationId: string };
+type Props = { organizationId: string; embedded?: boolean };
 type FormState = {
   template_id: string;
   key: string;
@@ -37,7 +37,7 @@ const emptyForm: FormState = {
   sort_order: "0",
 };
 
-export default function OrganizationEndorsementRequests({ organizationId }: Props) {
+export default function OrganizationEndorsementRequests({ organizationId, embedded = false }: Props) {
   const { session } = useAuthSession();
   const [templates, setTemplates] = useState<EndorsementTemplate[]>([]);
   const [requests, setRequests] = useState<EndorsementTemplateChangeRequest[]>([]);
@@ -104,7 +104,7 @@ export default function OrganizationEndorsementRequests({ organizationId }: Prop
       await reload();
       setForm(emptyForm);
       setOpen(false);
-      setMessage("Proposal submitted. It will not change the live endorsement until a platform administrator approves it.");
+      setMessage("Template change request submitted. It will not affect the live endorsement until a platform administrator approves it.");
     } catch (error) {
       setMessage(getErrorMessage(error, "Unable to submit this endorsement proposal."));
     } finally {
@@ -113,13 +113,13 @@ export default function OrganizationEndorsementRequests({ organizationId }: Prop
   }
 
   return (
-    <section className="saas-panel">
+    <section className={embedded ? "" : "saas-panel"}>
       <div className="people-toolbar">
         <div>
-          <h2 className="saas-subsection-title">Endorsement proposals</h2>
+          {!embedded ? <h2 className="saas-subsection-title">Endorsement template change requests</h2> : null}
           <p className="saas-meta-text">Organization administrators may propose wording changes. Platform approval is required before publication.</p>
         </div>
-        <button className="secondary-button" type="button" onClick={() => setOpen((value) => !value)}>{open ? "Close" : "Propose change"}</button>
+        <button className="secondary-button" type="button" onClick={() => setOpen((value) => !value)}>{open ? "Close" : "Request template change"}</button>
       </div>
       {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
 
@@ -134,12 +134,12 @@ export default function OrganizationEndorsementRequests({ organizationId }: Prop
           <Input label="Sort order" type="number" value={form.sort_order} onChange={(value) => setForm((current) => ({ ...current, sort_order: value }))} />
           <label className="grid gap-2 text-sm md:col-span-2"><span>Wording</span><textarea rows={7} className="rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs" value={form.body} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} required /></label>
           <label className="grid gap-2 text-sm md:col-span-2"><span>Fill-in fields (JSON)</span><textarea rows={7} className="rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs" value={form.fieldsJson} onChange={(event) => setForm((current) => ({ ...current, fieldsJson: event.target.value }))} required /></label>
-          <div className="md:col-span-2"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Submitting..." : "Submit for platform approval"}</button></div>
+          <div className="md:col-span-2"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Submitting..." : "Submit template change request"}</button></div>
         </form>
       ) : null}
 
       <div className="mt-5 grid gap-3">
-        {requests.length === 0 ? <p className="saas-empty-state">No endorsement proposals from this organization.</p> : requests.map((request) => (
+        {requests.length === 0 ? <p className="saas-empty-state">No endorsement template change requests from this organization.</p> : requests.map((request) => (
           <div key={request.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</p><p className="saas-meta-text">{request.action === "create" ? "New endorsement" : "Update"} · {new Date(request.submitted_at).toLocaleString()}</p></div><span className="saas-pill">{request.status}</span></div>
             {request.review_note ? <p className="mt-2 text-sm text-slate-600">Review note: {request.review_note}</p> : null}

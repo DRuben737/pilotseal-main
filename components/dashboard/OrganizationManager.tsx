@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -12,23 +13,45 @@ import {
   fetchAircraftModels,
   fetchOrganizationAircraft,
   updateOrganizationAircraft,
+  updateOrganizationAircraftMaintenance,
   updateAircraftModel,
+  type AircraftMeterType,
   type AircraftModelRecord,
+  type AircraftOperationalStatus,
   type AircraftRecord,
-  type SavedAircraftDueInput,
+  type OrganizationAircraftMaintenanceInput,
 } from "@/lib/aircraft";
 import {
-  addOrganizationMemberByEmail,
+  addOrganizationPerson,
+  archivePendingOrganizationPerson,
   canManageOrganization,
   canManageOrganizationAdmins,
   fetchOrganizationMembers,
+  fetchOrganizationPeople,
   removeOrganizationMember,
   setOrganizationMemberRole,
   setOrganizationMemberTeachingRole,
   transferOrganizationOwnership,
+  updateOrganizationPerson,
   type OrganizationMember,
+  type OrganizationPerson,
+  type OrganizationTeachingRole,
 } from "@/lib/organizations";
 import OrganizationEndorsementRequests from "@/components/dashboard/OrganizationEndorsementRequests";
+import {
+  createOrganizationNotification,
+  type NotificationPriority,
+} from "@/lib/notifications";
+import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
+import { correctAircraftMeter } from "@/lib/preflight";
+import {
+  AdminCollapsibleSection,
+  AdminPageHeader,
+  AdminSectionControls,
+  StatusBadge,
+} from "@/components/admin/AdminConsole";
+
+export type OrganizationManagerView = "overview" | "people" | "fleet" | "messages" | "endorsements";
 
 type ModelForm = {
   name: string;
@@ -57,6 +80,13 @@ type AircraftForm = {
   static_due_date: string;
   transponder_due_date: string;
   elt_due_date: string;
+  adsb_due_date: string;
+  registration_due_date: string;
+  operational_status: AircraftOperationalStatus;
+  current_meter_type: AircraftMeterType;
+  current_meter_value: string;
+  meter_observed_at: string;
+  meter_change_reason: string;
 };
 
 const emptyAircraftForm: AircraftForm = {
@@ -70,19 +100,42 @@ const emptyAircraftForm: AircraftForm = {
   static_due_date: "",
   transponder_due_date: "",
   elt_due_date: "",
+  adsb_due_date: "",
+  registration_due_date: "",
+  operational_status: "available",
+  current_meter_type: "hobbs",
+  current_meter_value: "",
+  meter_observed_at: "",
+  meter_change_reason: "",
 };
 
-export default function OrganizationManager() {
+export default function OrganizationManager({ view = "overview" }: { view?: OrganizationManagerView }) {
   const { session } = useAuthSession();
   const { activeOrganization, loading: organizationsLoading, refreshOrganizations } = useOrganization();
   const role = activeOrganization?.member_role;
   const canManage = canManageOrganization(role);
+  const canManageFleet = role === "owner" || role === "organization_admin";
   const canManageAdmins = canManageOrganizationAdmins(role);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
+  const [memberDisplayName, setMemberDisplayName] = useState("");
+  const [memberTeachingRole, setMemberTeachingRole] = useState<OrganizationTeachingRole | "">("");
+  const [memberInternalId, setMemberInternalId] = useState("");
+  const [memberNotes, setMemberNotes] = useState("");
+  const [messageTitle, setMessageTitle] = useState("");
+  const [messageBody, setMessageBody] = useState("");
+  const [messagePriority, setMessagePriority] = useState<NotificationPriority>("normal");
   const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [organizationPeople, setOrganizationPeople] = useState<OrganizationPerson[]>([]);
+  const [editingPersonId, setEditingPersonId] = useState("");
+  const [personDraft, setPersonDraft] = useState({
+    displayName: "",
+    teachingRole: "" as OrganizationTeachingRole | "",
+    internalId: "",
+    notes: "",
+  });
   const [models, setModels] = useState<AircraftModelRecord[]>([]);
   const [aircraft, setAircraft] = useState<AircraftRecord[]>([]);
   const [editingAircraftId, setEditingAircraftId] = useState("");
@@ -91,15 +144,51 @@ export default function OrganizationManager() {
   const [editingModelId, setEditingModelId] = useState("");
   const [showModelForm, setShowModelForm] = useState(false);
   const [modelForm, setModelForm] = useState<ModelForm>(emptyModelForm);
+  const [openSections, setOpenSections] = useState<Set<string>>(() => new Set());
 
   const modelNames = useMemo(
     () => new Map(models.map((model) => [model.id, model.name])),
     [models]
   );
+  const peopleByUserId = useMemo(
+    () => new Map(
+      organizationPeople
+        .filter((person) => person.user_id)
+        .map((person) => [person.user_id as string, person]),
+    ),
+    [organizationPeople],
+  );
+  const pendingPeople = organizationPeople.filter((person) => person.status === "pending");
+  const editingAircraft = aircraft.find((item) => item.id === editingAircraftId) ?? null;
+  const editingAssignedAircraft = editingAircraft?.organization_access === "assigned";
+  const activeSectionKeys = organizationSectionKeys(view);
+  const hasOpenSection = activeSectionKeys.some((key) => openSections.has(key));
+
+  function toggleSection(key: string) {
+    setOpenSections((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleAllSections() {
+    setOpenSections((current) => {
+      const next = new Set(current);
+      if (activeSectionKeys.some((key) => current.has(key))) {
+        activeSectionKeys.forEach((key) => next.delete(key));
+      } else {
+        activeSectionKeys.forEach((key) => next.add(key));
+      }
+      return next;
+    });
+  }
 
   async function loadOrganizationData() {
     if (!activeOrganization?.id) {
       setMembers([]);
+      setOrganizationPeople([]);
       setAircraft([]);
       setLoading(false);
       return;
@@ -108,14 +197,16 @@ export default function OrganizationManager() {
     setLoading(true);
     setStatus("");
     try {
-      const [aircraftList, modelList, memberList] = await Promise.all([
+      const [aircraftList, modelList, memberList, peopleList] = await Promise.all([
         fetchOrganizationAircraft(activeOrganization.id),
         fetchAircraftModels(activeOrganization.id),
         canManage ? fetchOrganizationMembers(activeOrganization.id) : Promise.resolve([]),
+        canManage ? fetchOrganizationPeople(activeOrganization.id) : Promise.resolve([]),
       ]);
       setAircraft(aircraftList);
       setModels(modelList);
       setMembers(memberList);
+      setOrganizationPeople(peopleList);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to load organization data."));
     } finally {
@@ -134,12 +225,103 @@ export default function OrganizationManager() {
     setSaving(true);
     setStatus("");
     try {
-      await addOrganizationMemberByEmail(activeOrganization.id, memberEmail);
+      const person = await addOrganizationPerson({
+        organizationId: activeOrganization.id,
+        email: memberEmail,
+        displayName: memberDisplayName,
+        teachingRole: memberTeachingRole || null,
+        internalId: memberInternalId,
+        notes: memberNotes,
+      });
       setMemberEmail("");
-      setMembers(await fetchOrganizationMembers(activeOrganization.id));
-      setStatus("Member added.");
+      setMemberDisplayName("");
+      setMemberTeachingRole("");
+      setMemberInternalId("");
+      setMemberNotes("");
+      const [nextMembers, nextPeople] = await Promise.all([
+        fetchOrganizationMembers(activeOrganization.id),
+        fetchOrganizationPeople(activeOrganization.id),
+      ]);
+      setMembers(nextMembers);
+      setOrganizationPeople(nextPeople);
+      setStatus(person.user_id ? "Registered account linked and added." : "Pending person added. They can link this organization after registering with the same verified email.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to add this member."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleArchivePendingPerson(person: OrganizationPerson) {
+    if (!window.confirm(`Remove pending person ${person.email}?`)) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await archivePendingOrganizationPerson(person.id);
+      setOrganizationPeople((current) => current.filter((item) => item.id !== person.id));
+      setStatus("Pending person removed.");
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to remove this pending person."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEditOrganizationPerson(person: OrganizationPerson) {
+    setEditingPersonId(person.id);
+    setPersonDraft({
+      displayName: person.organization_display_name ?? "",
+      teachingRole: person.teaching_role ?? "",
+      internalId: person.internal_id ?? "",
+      notes: person.notes ?? "",
+    });
+  }
+
+  async function handleSaveOrganizationPerson() {
+    if (!activeOrganization?.id || !editingPersonId) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await updateOrganizationPerson({
+        personId: editingPersonId,
+        displayName: personDraft.displayName,
+        teachingRole: personDraft.teachingRole || null,
+        internalId: personDraft.internalId,
+        notes: personDraft.notes,
+      });
+      const [nextMembers, nextPeople] = await Promise.all([
+        fetchOrganizationMembers(activeOrganization.id),
+        fetchOrganizationPeople(activeOrganization.id),
+      ]);
+      setMembers(nextMembers);
+      setOrganizationPeople(nextPeople);
+      setEditingPersonId("");
+      setStatus("Organization person details updated. Personal account information was not changed.");
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to update this organization person."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSendOrganizationMessage(event: React.FormEvent) {
+    event.preventDefault();
+    if (!activeOrganization?.id || !messageTitle.trim() || !messageBody.trim()) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      const recipientCount = await createOrganizationNotification({
+        organizationId: activeOrganization.id,
+        title: messageTitle,
+        message: messageBody,
+        priority: messagePriority,
+      });
+      setMessageTitle("");
+      setMessageBody("");
+      setMessagePriority("normal");
+      setStatus(`Organization message sent to ${recipientCount} member${recipientCount === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to send this organization message."));
     } finally {
       setSaving(false);
     }
@@ -167,7 +349,12 @@ export default function OrganizationManager() {
     setStatus("");
     try {
       await setOrganizationMemberTeachingRole(activeOrganization.id, member.user_id, teachingRole);
-      setMembers(await fetchOrganizationMembers(activeOrganization.id));
+      const [nextMembers, nextPeople] = await Promise.all([
+        fetchOrganizationMembers(activeOrganization.id),
+        fetchOrganizationPeople(activeOrganization.id),
+      ]);
+      setMembers(nextMembers);
+      setOrganizationPeople(nextPeople);
       setStatus(teachingRole ? `Teaching role set to ${teachingRole}.` : "Teaching role removed.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to change this teaching role."));
@@ -183,6 +370,7 @@ export default function OrganizationManager() {
     try {
       await removeOrganizationMember(activeOrganization.id, member.user_id);
       setMembers((current) => current.filter((item) => item.user_id !== member.user_id));
+      setOrganizationPeople((current) => current.filter((item) => item.user_id !== member.user_id));
       setStatus("Member removed. Their PilotSeal account was not changed.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to remove this member."));
@@ -231,6 +419,13 @@ export default function OrganizationManager() {
       static_due_date: item.static_due_date ?? "",
       transponder_due_date: item.transponder_due_date ?? "",
       elt_due_date: item.elt_due_date ?? "",
+      adsb_due_date: item.adsb_due_date ?? "",
+      registration_due_date: item.registration_due_date ?? "",
+      operational_status: item.operational_status ?? "available",
+      current_meter_type: item.current_meter_type ?? "hobbs",
+      current_meter_value: item.current_meter_value == null ? "" : String(item.current_meter_value),
+      meter_observed_at: toDateTimeLocal(item.meter_observed_at),
+      meter_change_reason: "",
     });
     setShowAircraftForm(true);
   }
@@ -241,12 +436,15 @@ export default function OrganizationManager() {
     setSaving(true);
     setStatus("");
     try {
-      const maintenance: SavedAircraftDueInput = {
+      const maintenance: OrganizationAircraftMaintenanceInput = {
         hundred_hour_due_hours: optionalNumber(aircraftForm.hundred_hour_due_hours),
         annual_due_date: aircraftForm.annual_due_date || null,
         static_due_date: aircraftForm.static_due_date || null,
         transponder_due_date: aircraftForm.transponder_due_date || null,
         elt_due_date: aircraftForm.elt_due_date || null,
+        adsb_due_date: aircraftForm.adsb_due_date || null,
+        registration_due_date: aircraftForm.registration_due_date || null,
+        operational_status: aircraftForm.operational_status,
       };
       const input = {
         model_id: aircraftForm.model_id,
@@ -258,10 +456,36 @@ export default function OrganizationManager() {
       };
 
       if (!input.model_id) throw new Error("Select an aircraft model.");
+      let savedAircraft: AircraftRecord;
       if (editingAircraftId) {
-        await updateOrganizationAircraft(activeOrganization.id, editingAircraftId, input);
+        if (editingAssignedAircraft && editingAircraft) {
+          await updateOrganizationAircraftMaintenance(editingAircraftId, maintenance);
+          savedAircraft = editingAircraft;
+        } else {
+          savedAircraft = await updateOrganizationAircraft(activeOrganization.id, editingAircraftId, input);
+        }
       } else {
-        await createOrganizationAircraft({ organization_id: activeOrganization.id, ...input });
+        savedAircraft = await createOrganizationAircraft({ organization_id: activeOrganization.id, ...input });
+      }
+
+      const meterValue = optionalNumber(aircraftForm.current_meter_value);
+      const previousAircraft = aircraft.find((item) => item.id === editingAircraftId);
+      const meterChanged =
+        meterValue !== null &&
+        (previousAircraft?.current_meter_value !== meterValue ||
+          previousAircraft?.current_meter_type !== aircraftForm.current_meter_type);
+      if (meterValue !== null && (!editingAircraftId || meterChanged)) {
+        if (!aircraftForm.meter_observed_at) throw new Error("Meter observation time is required.");
+        if (aircraftForm.meter_change_reason.trim().length < 3) {
+          throw new Error("Enter a reason for the initial or corrected meter reading.");
+        }
+        await correctAircraftMeter({
+          aircraftId: savedAircraft.id,
+          meterType: aircraftForm.current_meter_type,
+          meterValue,
+          observedAt: new Date(aircraftForm.meter_observed_at).toISOString(),
+          reason: aircraftForm.meter_change_reason,
+        });
       }
 
       setAircraft(await fetchOrganizationAircraft(activeOrganization.id));
@@ -277,6 +501,10 @@ export default function OrganizationManager() {
   }
 
   async function handleDeleteAircraft(item: AircraftRecord) {
+    if (item.organization_access === "assigned") {
+      setStatus("Assigned aircraft can only be unassigned by a Platform Super Admin.");
+      return;
+    }
     if (!activeOrganization?.id || !window.confirm(`Delete ${item.tail_number} from this organization?`)) return;
     setSaving(true);
     setStatus("");
@@ -358,6 +586,34 @@ export default function OrganizationManager() {
     }
   }
 
+  function renderOrganizationPersonEditor(person: OrganizationPerson) {
+    if (editingPersonId !== person.id) return null;
+    return (
+      <div className="mt-3 grid gap-3 rounded-xl border border-sky-200 bg-white p-3 md:grid-cols-2">
+        <Field label="Organization name">
+          <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.displayName} onChange={(event) => setPersonDraft((current) => ({ ...current, displayName: event.target.value }))} />
+        </Field>
+        <Field label="Teaching role">
+          <select className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.teachingRole} onChange={(event) => setPersonDraft((current) => ({ ...current, teachingRole: event.target.value as OrganizationTeachingRole | "" }))}>
+            <option value="">No teaching role</option>
+            <option value="instructor">Instructor</option>
+            <option value="student">Student</option>
+          </select>
+        </Field>
+        <Field label="Internal ID">
+          <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.internalId} onChange={(event) => setPersonDraft((current) => ({ ...current, internalId: event.target.value }))} maxLength={120} />
+        </Field>
+        <Field label="Organization notes">
+          <textarea className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.notes} onChange={(event) => setPersonDraft((current) => ({ ...current, notes: event.target.value }))} rows={3} maxLength={2000} />
+        </Field>
+        <div className="flex gap-2 md:col-span-2">
+          <button className="primary-button" type="button" disabled={saving} onClick={() => void handleSaveOrganizationPerson()}>{saving ? "Saving..." : "Save organization details"}</button>
+          <button className="ghost-button" type="button" disabled={saving} onClick={() => setEditingPersonId("")}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
   if (organizationsLoading || loading) return <div className="saas-panel">Loading organization...</div>;
   if (!activeOrganization) {
     return <div className="saas-panel">This account does not belong to an organization.</div>;
@@ -368,19 +624,72 @@ export default function OrganizationManager() {
 
   return (
     <div className="grid gap-5">
-      <section className="saas-panel">
-        <p className="saas-kicker">Current organization</p>
-        <h1 className="tools-child-title">{activeOrganization.name}</h1>
-        <p className="saas-meta-text mt-2">Role: {formatRole(role ?? "member")}</p>
-        {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
-      </section>
-
-      <section className="saas-panel">
-        <div className="people-toolbar">
-          <div>
-            <h2 className="saas-subsection-title">Aircraft models</h2>
-            <p className="saas-meta-text">Create models owned and maintained by {activeOrganization.name}. Global models remain available.</p>
+      <AdminPageHeader
+        eyebrow={activeOrganization.name}
+        title={organizationViewTitle(view)}
+        description={organizationViewDescription(view)}
+        action={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {activeSectionKeys.length ? <AdminSectionControls expanded={hasOpenSection} onToggleAll={toggleAllSections} /> : null}
+            <StatusBadge tone="info">{formatRole(role ?? "member")}</StatusBadge>
           </div>
+        )}
+      />
+      {status ? <p role="status" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">{status}</p> : null}
+
+      {view === "overview" ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <OverviewLink href="/dashboard/organization/people" label="People" value={members.length + pendingPeople.length} detail={`${pendingPeople.length} pending`} />
+          <OverviewLink href="/dashboard/organization/fleet" label="Fleet & MX" value={aircraft.length} detail={`${models.length} available models`} />
+          <OverviewLink href="/dashboard/organization/briefs" label="Preflight Records" value="Open" detail="Finalized student briefs" />
+          <OverviewLink href="/dashboard/organization/endorsements" label="Endorsements" value="Review" detail="Organization change requests" />
+        </section>
+      ) : null}
+
+      {view === "messages" ? (<AdminCollapsibleSection
+        id="organization-message"
+        title="Compose organization message"
+        description="Send one notification to every current organization member."
+        summary={`${members.length} recipients`}
+        open={openSections.has("message")}
+        onToggle={() => toggleSection("message")}
+      >
+        <form className="mt-5 grid gap-4" onSubmit={handleSendOrganizationMessage}>
+          <label className="saas-field">
+            <span>Title</span>
+            <input value={messageTitle} onChange={(event) => setMessageTitle(event.target.value)} required />
+          </label>
+          <label className="saas-field">
+            <span>Message</span>
+            <textarea rows={4} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} required />
+          </label>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="saas-field sm:w-48">
+              <span>Priority</span>
+              <select value={messagePriority} onChange={(event) => setMessagePriority(event.target.value as NotificationPriority)}>
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </label>
+            <button className="primary-button" type="submit" disabled={saving || !messageTitle.trim() || !messageBody.trim()}>
+              {saving ? "Sending..." : "Send to organization"}
+            </button>
+          </div>
+        </form>
+      </AdminCollapsibleSection>) : null}
+
+      {view === "fleet" && canManageFleet ? (<AdminCollapsibleSection
+        id="aircraft-models"
+        title="Aircraft models"
+        description={`Organization-owned models plus the global models available to ${activeOrganization.name}.`}
+        summary={`${models.filter((model) => model.organization_id === activeOrganization.id).length} organization · ${models.filter((model) => !model.organization_id).length} global`}
+        open={openSections.has("models")}
+        onToggle={() => toggleSection("models")}
+      >
+        <div className="people-toolbar">
+          <p className="saas-meta-text">Only organization-owned models can be edited here. Global models remain read-only and available when adding aircraft.</p>
           <button className="secondary-button" type="button" onClick={startCreateModel}>Add model</button>
         </div>
 
@@ -406,30 +715,120 @@ export default function OrganizationManager() {
             </div>
           ))}
         </div>
-      </section>
+      </AdminCollapsibleSection>) : null}
 
-      <section className="saas-panel">
-        <div className="people-toolbar">
-          <div>
-            <h2 className="saas-subsection-title">Members</h2>
-            <p className="saas-meta-text">Add an existing PilotSeal account by exact email.</p>
+      {view === "people" ? (<>
+        <AdminCollapsibleSection
+          id="add-organization-person"
+          title="Add a person"
+          description="Add by email; registered accounts link immediately and all others remain pending."
+          summary="Email-based access"
+          open={openSections.has("add-person")}
+          onToggle={() => toggleSection("add-person")}
+        >
+        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-white/80 p-4 md:grid-cols-2" onSubmit={handleAddMember}>
+          <Field label="Email">
+            <input
+              type="email"
+              className="rounded-xl border border-slate-300 px-3 py-2"
+              value={memberEmail}
+              onChange={(event) => setMemberEmail(event.target.value)}
+              placeholder="Enter email"
+              required
+            />
+          </Field>
+          <Field label="Organization name">
+            <input
+              className="rounded-xl border border-slate-300 px-3 py-2"
+              value={memberDisplayName}
+              onChange={(event) => setMemberDisplayName(event.target.value)}
+              placeholder="Optional organization display name"
+            />
+          </Field>
+          <Field label="Teaching role">
+            <select
+              className="rounded-xl border border-slate-300 px-3 py-2"
+              value={memberTeachingRole}
+              onChange={(event) => setMemberTeachingRole(event.target.value as OrganizationTeachingRole | "")}
+            >
+              <option value="">No teaching role</option>
+              <option value="instructor">Instructor</option>
+              <option value="student">Student</option>
+            </select>
+          </Field>
+          <Field label="Internal ID">
+            <input
+              className="rounded-xl border border-slate-300 px-3 py-2"
+              value={memberInternalId}
+              onChange={(event) => setMemberInternalId(event.target.value)}
+              placeholder="Optional student or employee ID"
+              maxLength={120}
+            />
+          </Field>
+          <Field label="Organization notes">
+            <textarea
+              className="rounded-xl border border-slate-300 px-3 py-2"
+              value={memberNotes}
+              onChange={(event) => setMemberNotes(event.target.value)}
+              placeholder="Visible only to authorized organization managers"
+              rows={3}
+              maxLength={2000}
+            />
+          </Field>
+          <div className="flex items-end">
+            <button className="primary-button" type="submit" disabled={saving}>
+              {saving ? "Adding..." : "Add person"}
+            </button>
           </div>
-        </div>
-        <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={handleAddMember}>
-          <input
-            type="email"
-            className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2"
-            value={memberEmail}
-            onChange={(event) => setMemberEmail(event.target.value)}
-            placeholder="member@example.com"
-            required
-          />
-          <button className="primary-button" type="submit" disabled={saving}>Add member</button>
         </form>
-        <div className="mt-5 grid gap-3">
+        </AdminCollapsibleSection>
+
+        <AdminCollapsibleSection
+          id="pending-organization-people"
+          title="Pending accounts"
+          description="People whose email has not yet linked to a verified PilotSeal account."
+          summary={`${pendingPeople.length} pending`}
+          open={openSections.has("pending-people")}
+          onToggle={() => toggleSection("pending-people")}
+        >
+          {pendingPeople.length > 0 ? (
+            <div className="grid gap-3">
+              {pendingPeople.map((person) => (
+                <div key={person.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{person.organization_display_name || person.email}</p>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-800">Pending account</span>
+                      </div>
+                      <p className="saas-meta-text mt-1">{person.email}{person.teaching_role ? ` · ${formatTeachingRole(person.teaching_role)}` : ""}{person.internal_id ? ` · ID ${person.internal_id}` : ""}</p>
+                      {person.notes ? <p className="saas-meta-text mt-2">{person.notes}</p> : null}
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditOrganizationPerson(person)}>Edit</button>
+                      <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleArchivePendingPerson(person)}>Remove</button>
+                    </div>
+                  </div>
+                  {renderOrganizationPersonEditor(person)}
+                </div>
+              ))}
+            </div>
+          ) : <p className="saas-empty-state">No pending accounts.</p>}
+        </AdminCollapsibleSection>
+
+        <AdminCollapsibleSection
+          id="linked-organization-members"
+          title="Linked members"
+          description="Manage organization roles, teaching roles, and member access."
+          summary={`${members.length} linked`}
+          open={openSections.has("linked-members")}
+          onToggle={() => toggleSection("linked-members")}
+        >
+        <div className="grid gap-3">
           {members.map((member) => {
             const isOwner = member.member_role === "owner";
             const isSelf = member.user_id === session?.user?.id;
+            const organizationPerson = peopleByUserId.get(member.user_id);
             const adminCanRemove = role === "organization_admin" && member.member_role === "member";
             const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
             return (
@@ -437,9 +836,13 @@ export default function OrganizationManager() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{member.display_name || member.email}</p>
-                    <p className="saas-meta-text">{member.email} · {formatRole(member.member_role)}{member.teaching_role ? ` · ${formatTeachingRole(member.teaching_role)}` : ""}</p>
+                    <p className="saas-meta-text">{member.email} · {formatRole(member.member_role)}{member.teaching_role ? ` · ${formatTeachingRole(member.teaching_role)}` : ""}{organizationPerson?.internal_id ? ` · ID ${organizationPerson.internal_id}` : ""}</p>
+                    {organizationPerson?.notes ? <p className="saas-meta-text mt-1">{organizationPerson.notes}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {organizationPerson ? (
+                      <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditOrganizationPerson(organizationPerson)}>Edit details</button>
+                    ) : null}
                     <select
                       className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
                       value={member.teaching_role ?? ""}
@@ -468,38 +871,67 @@ export default function OrganizationManager() {
                     ) : null}
                   </div>
                 </div>
+                {organizationPerson ? renderOrganizationPersonEditor(organizationPerson) : null}
               </div>
             );
           })}
         </div>
-      </section>
+        </AdminCollapsibleSection>
+      </>) : null}
 
-      <section className="saas-panel">
+      {view === "fleet" && canManageFleet ? (<AdminCollapsibleSection
+        id="organization-aircraft"
+        title="Organization aircraft"
+        description={`Aircraft available to members of ${activeOrganization.name}.`}
+        summary={`${aircraft.length} aircraft · ${aircraft.filter((item) => item.organization_access === "assigned").length} assigned`}
+        open={openSections.has("aircraft")}
+        onToggle={() => toggleSection("aircraft")}
+      >
         <div className="people-toolbar">
-          <div>
-            <h2 className="saas-subsection-title">Organization aircraft</h2>
-            <p className="saas-meta-text">Visible only to members of {activeOrganization.name}.</p>
-          </div>
+          <p className="saas-meta-text">Open an aircraft only when you need to edit its identity, status, meter, or maintenance limits.</p>
           <button className="secondary-button" type="button" onClick={startCreateAircraft}>Add aircraft</button>
         </div>
 
         {showAircraftForm ? (
           <form className="mt-5 grid gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4 md:grid-cols-2" onSubmit={handleSaveAircraft}>
             <h3 className="text-sm font-semibold text-slate-900 md:col-span-2">
-              {editingAircraftId ? "Edit organization aircraft" : "New organization aircraft"}
+              {editingAssignedAircraft ? "Edit assigned aircraft MX" : editingAircraftId ? "Edit organization aircraft" : "New organization aircraft"}
             </h3>
+            {editingAssignedAircraft ? (
+              <p className="saas-meta-text md:col-span-2">
+                This aircraft is assigned by a Platform Super Admin. Its model, tail number, empty weight, and arms are read-only; organization managers share one MX record.
+              </p>
+            ) : null}
             <Field label="Model">
-              <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.model_id} onChange={(event) => updateAircraftField("model_id", event.target.value)} required>
+              <select disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.model_id} onChange={(event) => updateAircraftField("model_id", event.target.value)} required>
                 <option value="">Select a model</option>
                 {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
               </select>
             </Field>
-            <Field label="Tail number"><input className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.tail_number} onChange={(event) => updateAircraftField("tail_number", event.target.value.toUpperCase())} required /></Field>
-            <Field label="Empty weight"><input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.empty_weight} onChange={(event) => updateAircraftField("empty_weight", event.target.value)} required /></Field>
-            <Field label="Empty arm"><input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.empty_arm} onChange={(event) => updateAircraftField("empty_arm", event.target.value)} required /></Field>
-            <Field label="Lateral arm"><input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.empty_lat_arm} onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)} /></Field>
+            <Field label="Tail number"><input disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.tail_number} onChange={(event) => updateAircraftField("tail_number", event.target.value.toUpperCase())} required /></Field>
+            <Field label="Empty weight"><input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_weight} onChange={(event) => updateAircraftField("empty_weight", event.target.value)} required /></Field>
+            <Field label="Empty arm"><input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_arm} onChange={(event) => updateAircraftField("empty_arm", event.target.value)} required /></Field>
+            <Field label="Lateral arm"><input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_lat_arm} onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)} /></Field>
             <Field label="100-hour due"><input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.hundred_hour_due_hours} onChange={(event) => updateAircraftField("hundred_hour_due_hours", event.target.value)} /></Field>
-            {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date"] as const).map((key) => (
+            <Field label="Aircraft status">
+              <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.operational_status} onChange={(event) => updateAircraftField("operational_status", event.target.value as AircraftOperationalStatus)}>
+                <option value="available">Available</option>
+                <option value="away">Away</option>
+                <option value="in_maintenance">In maintenance</option>
+                <option value="grounded">Grounded</option>
+              </select>
+            </Field>
+            <Field label="Meter type">
+              <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_type} onChange={(event) => updateAircraftField("current_meter_type", event.target.value as AircraftMeterType)}>
+                <option value="hobbs">Hobbs</option>
+                <option value="tach">Tach</option>
+              </select>
+            </Field>
+            <Field label="Current meter"><input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_value} onChange={(event) => updateAircraftField("current_meter_value", event.target.value)} /></Field>
+            <Field label="Observed at"><input type="datetime-local" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_observed_at} onChange={(event) => updateAircraftField("meter_observed_at", event.target.value)} /></Field>
+            <Field label="Meter update reason"><input className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_change_reason} onChange={(event) => updateAircraftField("meter_change_reason", event.target.value)} placeholder="Initial reading, instrument replacement, correction..." /></Field>
+            <div />
+            {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date", "registration_due_date"] as const).map((key) => (
               <Field key={key} label={formatDueLabel(key)}><input type="date" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm[key]} onChange={(event) => updateAircraftField(key, event.target.value)} /></Field>
             ))}
             <div className="flex gap-2 md:col-span-2">
@@ -516,21 +948,73 @@ export default function OrganizationManager() {
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{item.tail_number}</p>
                   <p className="saas-meta-text">{modelNames.get(item.model_id ?? "") ?? "Unknown model"} · {item.empty_weight ?? "--"} lbs · Arm {item.empty_arm ?? "--"}</p>
+                  <p className="saas-meta-text mt-1">{item.organization_access === "assigned" ? "Assigned by Platform Super Admin" : "Owned by this organization"}</p>
                   <p className="saas-meta-text mt-1">{maintenanceSummary(item)}</p>
+                  <p className="saas-meta-text mt-1">Status: {formatOperationalStatus(item.operational_status)} · {item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${item.current_meter_value ?? "--"}` : "No meter saved"}</p>
                 </div>
                 <div className="flex gap-2">
-                  <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>Edit</button>
-                  <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleDeleteAircraft(item)}>Delete</button>
+                  <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>{item.organization_access === "assigned" ? "Manage MX" : "Edit"}</button>
+                  {item.organization_access !== "assigned" ? <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleDeleteAircraft(item)}>Delete</button> : null}
                 </div>
               </div>
             </div>
           ))}
         </div>
-      </section>
+      </AdminCollapsibleSection>) : null}
 
-      <OrganizationEndorsementRequests organizationId={activeOrganization.id} />
+      {view === "fleet" && canManageFleet ? (
+        <AdminCollapsibleSection
+          id="custom-inspections"
+          title="Custom inspections"
+          description="Organization-specific AD and interval definitions with aircraft assignments."
+          summary="Definitions and due limits"
+          open={openSections.has("inspections")}
+          onToggle={() => toggleSection("inspections")}
+        >
+          <OrganizationInspectionManager organizationId={activeOrganization.id} aircraft={aircraft} models={models} embedded />
+        </AdminCollapsibleSection>
+      ) : null}
+
+      {view === "endorsements" ? (
+        <AdminCollapsibleSection
+          id="endorsement-change-requests"
+          title="Template change requests"
+          description="Propose endorsement wording changes for Platform Super Admin review."
+          summary="Approval required"
+          open={openSections.has("endorsements")}
+          onToggle={() => toggleSection("endorsements")}
+        >
+          <OrganizationEndorsementRequests organizationId={activeOrganization.id} embedded />
+        </AdminCollapsibleSection>
+      ) : null}
     </div>
   );
+}
+
+function OverviewLink({ href, label, value, detail }: { href: string; label: string; value: string | number; detail: string }) {
+  return <Link href={href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition hover:border-blue-300 hover:shadow-md"><p className="text-sm font-semibold text-slate-600">{label}</p><p className="mt-4 text-2xl font-semibold text-slate-950">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p><p className="mt-4 text-sm font-semibold text-blue-700">View all →</p></Link>;
+}
+
+function organizationViewTitle(view: OrganizationManagerView) {
+  return ({ overview: "Overview", people: "People", fleet: "Fleet & MX", messages: "Messages", endorsements: "Endorsements" })[view];
+}
+
+function organizationViewDescription(view: OrganizationManagerView) {
+  return ({
+    overview: "Key organization activity and shortcuts, without the previous all-in-one page.",
+    people: "Manage the roster, account links, organization roles, and teaching roles.",
+    fleet: "Manage organization aircraft, shared models, meter readings, and maintenance limits.",
+    messages: "Send a notification to every current organization member.",
+    endorsements: "Review and submit organization endorsement template changes.",
+  })[view];
+}
+
+function organizationSectionKeys(view: OrganizationManagerView) {
+  if (view === "fleet") return ["models", "aircraft", "inspections"];
+  if (view === "people") return ["add-person", "pending-people", "linked-members"];
+  if (view === "messages") return ["message"];
+  if (view === "endorsements") return ["endorsements"];
+  return [];
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -548,6 +1032,18 @@ function optionalNumber(value: string) {
   const result = Number.parseFloat(value);
   if (!Number.isFinite(result)) throw new Error("Enter a valid number.");
   return result;
+}
+
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function formatOperationalStatus(value?: AircraftOperationalStatus) {
+  return (value ?? "available").replaceAll("_", " ");
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -568,7 +1064,14 @@ function formatTeachingRole(role: string) {
 }
 
 function formatDueLabel(key: string) {
-  return ({ annual_due_date: "Annual due", static_due_date: "Static due", transponder_due_date: "Transponder due", elt_due_date: "ELT due" } as Record<string, string>)[key] ?? key;
+  return ({
+    annual_due_date: "Annual due",
+    static_due_date: "91.411 Static due",
+    transponder_due_date: "91.413 Transponder due",
+    elt_due_date: "ELT due",
+    adsb_due_date: "ADS-B due",
+    registration_due_date: "Registration due",
+  } as Record<string, string>)[key] ?? key;
 }
 
 function maintenanceSummary(item: AircraftRecord) {
@@ -578,6 +1081,8 @@ function maintenanceSummary(item: AircraftRecord) {
     item.static_due_date ? `Static ${item.static_due_date}` : "",
     item.transponder_due_date ? `Transponder ${item.transponder_due_date}` : "",
     item.elt_due_date ? `ELT ${item.elt_due_date}` : "",
+    item.adsb_due_date ? `ADS-B ${item.adsb_due_date}` : "",
+    item.registration_due_date ? `Registration ${item.registration_due_date}` : "",
   ].filter(Boolean);
   return values.length ? values.join(" · ") : "No maintenance due dates recorded";
 }

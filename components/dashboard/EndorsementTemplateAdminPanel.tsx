@@ -522,7 +522,7 @@ export default function EndorsementTemplateAdminPanel() {
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex items-center justify-between gap-3">
-          <div><h2 className="text-sm font-semibold text-slate-950">Organization change requests</h2><p className="mt-1 text-xs text-slate-500">Approval applies the proposed wording atomically to the live templates.</p></div>
+          <div><h2 className="text-sm font-semibold text-slate-950">Endorsement template change requests</h2><p className="mt-1 text-xs text-slate-500">Approval applies the requested wording atomically to the live templates.</p></div>
           <span className="saas-pill">{changeRequests.filter((request) => request.status === "pending").length} pending</span>
         </div>
         <div className="mt-3 grid gap-3">

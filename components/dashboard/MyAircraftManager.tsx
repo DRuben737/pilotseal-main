@@ -7,20 +7,28 @@ import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   attachAircraftByTail,
+  fetchAircraftOrganizationAssignments,
   fetchAircraftModels,
   fetchMyAircraft,
   fetchOrganizationAircraft,
   fetchSharedAircraft,
   removeMyAircraft,
   saveCurrentAircraftForUser,
+  setPlatformAircraftOrganizations,
   submitAircraftUpdateRequest,
   updateMyAircraft,
   updateSavedAircraftDue,
   type AircraftModelRecord,
+  type AircraftOrganizationAssignment,
   type AircraftRecord,
   type AttachAircraftConflict,
   type SavedAircraftDueInput,
 } from "@/lib/aircraft";
+import {
+  fetchPlatformOrganizations,
+  type PlatformOrganization,
+} from "@/lib/platform-admin";
+import { fetchCurrentProfile } from "@/lib/profile";
 
 type AircraftFormState = {
   model_id: string;
@@ -139,6 +147,7 @@ function getDueSummary(aircraft: AircraftRecord) {
 export default function MyAircraftManager() {
   const { session } = useAuthSession();
   const { activeOrganization } = useOrganization();
+  const [profileRole, setProfileRole] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -146,6 +155,10 @@ export default function MyAircraftManager() {
   const [myAircraft, setMyAircraft] = useState<AircraftRecord[]>([]);
   const [sharedAircraft, setSharedAircraft] = useState<AircraftRecord[]>([]);
   const [organizationAircraft, setOrganizationAircraft] = useState<AircraftRecord[]>([]);
+  const [platformOrganizations, setPlatformOrganizations] = useState<PlatformOrganization[]>([]);
+  const [organizationAssignments, setOrganizationAssignments] = useState<AircraftOrganizationAssignment[]>([]);
+  const [assigningAircraftId, setAssigningAircraftId] = useState("");
+  const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
   const [form, setForm] = useState<AircraftFormState>(emptyForm);
   const [editingAircraftId, setEditingAircraftId] = useState("");
   const [conflict, setConflict] = useState<AttachAircraftConflict | null>(null);
@@ -153,6 +166,7 @@ export default function MyAircraftManager() {
   const [showForm, setShowForm] = useState(false);
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const isPlatformAdmin = profileRole === "admin";
 
   useEffect(() => {
     setPortalRoot(document.body);
@@ -192,6 +206,9 @@ export default function MyAircraftManager() {
     async function loadData() {
       if (!session?.user?.id) {
         if (!cancelled) {
+          setProfileRole("");
+          setPlatformOrganizations([]);
+          setOrganizationAssignments([]);
           setLoading(false);
         }
         return;
@@ -201,7 +218,8 @@ export default function MyAircraftManager() {
       setStatus("");
 
       try {
-        const [modelList, sharedList, attachedList, organizationList] = await Promise.all([
+        const [profile, modelList, sharedList, attachedList, organizationList] = await Promise.all([
+          fetchCurrentProfile(session.user.id),
           fetchAircraftModels(),
           fetchSharedAircraft(),
           fetchMyAircraft(session.user.id),
@@ -209,12 +227,27 @@ export default function MyAircraftManager() {
             ? fetchOrganizationAircraft(activeOrganization.id)
             : Promise.resolve([]),
         ]);
+        const nextProfileRole = String(profile?.role ?? "user").trim().toLowerCase();
+        const adminOwnedAircraftIds = attachedList
+          .filter((aircraft) =>
+            aircraft.visibility === "private" && aircraft.owner_user_id === session.user.id
+          )
+          .map((aircraft) => aircraft.id);
+        const [availableOrganizations, currentAssignments] = nextProfileRole === "admin"
+          ? await Promise.all([
+              fetchPlatformOrganizations(),
+              fetchAircraftOrganizationAssignments(adminOwnedAircraftIds),
+            ])
+          : [[], []] as [PlatformOrganization[], AircraftOrganizationAssignment[]];
 
         if (!cancelled) {
+          setProfileRole(nextProfileRole);
           setModels(modelList);
           setSharedAircraft(sharedList);
           setMyAircraft(attachedList);
           setOrganizationAircraft(organizationList);
+          setPlatformOrganizations(availableOrganizations);
+          setOrganizationAssignments(currentAssignments);
         }
       } catch (error) {
         if (!cancelled) {
@@ -246,10 +279,91 @@ export default function MyAircraftManager() {
     }
   }, [conflict, showForm, showManager]);
 
+  useEffect(() => {
+    if (showManager && assigningAircraftId) {
+      scrollEditorIntoView(
+        `my-aircraft-organizations-${assigningAircraftId}`,
+        scrollRef.current
+      );
+    }
+  }, [assigningAircraftId, showManager]);
+
   const modelNameById = useMemo(
     () => new Map(models.map((model) => [model.id, model.name])),
     [models]
   );
+  const organizationNameById = useMemo(
+    () => new Map(platformOrganizations.map((organization) => [organization.id, organization.name])),
+    [platformOrganizations]
+  );
+
+  function getAircraftOrganizationIds(aircraftId: string) {
+    return organizationAssignments
+      .filter((assignment) => assignment.aircraft_id === aircraftId)
+      .map((assignment) => assignment.organization_id);
+  }
+
+  function canAssignAircraft(aircraft: AircraftRecord) {
+    return Boolean(
+      isPlatformAdmin &&
+      session?.user?.id &&
+      aircraft.visibility === "private" &&
+      aircraft.owner_user_id === session.user.id
+    );
+  }
+
+  function openOrganizationAssignments(aircraft: AircraftRecord) {
+    if (!canAssignAircraft(aircraft)) return;
+    setSelectedOrganizationIds(getAircraftOrganizationIds(aircraft.id));
+    setAssigningAircraftId(aircraft.id);
+    setShowForm(false);
+    setShowManager(true);
+    setStatus("");
+  }
+
+  function closeOrganizationAssignments() {
+    setAssigningAircraftId("");
+    setSelectedOrganizationIds([]);
+  }
+
+  function closeManager() {
+    setShowManager(false);
+    closeForm();
+    closeOrganizationAssignments();
+  }
+
+  function toggleOrganizationAssignment(organizationId: string) {
+    setSelectedOrganizationIds((current) =>
+      current.includes(organizationId)
+        ? current.filter((id) => id !== organizationId)
+        : [...current, organizationId]
+    );
+  }
+
+  async function handleSaveOrganizationAssignments() {
+    if (!assigningAircraftId || !isPlatformAdmin) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await setPlatformAircraftOrganizations(assigningAircraftId, selectedOrganizationIds);
+      const nextAssignments = await fetchAircraftOrganizationAssignments(
+        myAircraft
+          .filter((aircraft) => canAssignAircraft(aircraft))
+          .map((aircraft) => aircraft.id)
+      );
+      setOrganizationAssignments(nextAssignments);
+      closeOrganizationAssignments();
+      setStatus(
+        selectedOrganizationIds.length === 0
+          ? "Organization access removed."
+          : `Aircraft authorized for ${selectedOrganizationIds.length} organization${selectedOrganizationIds.length === 1 ? "" : "s"}.`
+      );
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to update organization access."));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function reloadAircraftLists() {
     if (!session?.user?.id) {
@@ -267,6 +381,16 @@ export default function MyAircraftManager() {
     setSharedAircraft(sharedList);
     setMyAircraft(attachedList);
     setOrganizationAircraft(organizationList);
+    if (profileRole === "admin") {
+      const adminOwnedAircraftIds = attachedList
+        .filter((aircraft) =>
+          aircraft.visibility === "private" && aircraft.owner_user_id === session.user.id
+        )
+        .map((aircraft) => aircraft.id);
+      setOrganizationAssignments(
+        await fetchAircraftOrganizationAssignments(adminOwnedAircraftIds)
+      );
+    }
   }
 
   function updateField<K extends keyof AircraftFormState>(key: K, value: AircraftFormState[K]) {
@@ -510,6 +634,12 @@ export default function MyAircraftManager() {
     try {
       await removeMyAircraft(session.user.id, aircraftId);
       setMyAircraft((current) => current.filter((aircraft) => aircraft.id !== aircraftId));
+      setOrganizationAssignments((current) =>
+        current.filter((assignment) => assignment.aircraft_id !== aircraftId)
+      );
+      if (assigningAircraftId === aircraftId) {
+        closeOrganizationAssignments();
+      }
       setStatus("Aircraft removed from My Aircraft.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to remove this aircraft right now."));
@@ -577,8 +707,36 @@ export default function MyAircraftManager() {
                     Updated {formatDateLabel(aircraft.updated_at) || "--"}
                     {getDueSummary(aircraft) ? ` · ${getDueSummary(aircraft)}` : ""}
                   </p>
+                  {canAssignAircraft(aircraft) ? (
+                    <p className="my-aircraft-secondary my-aircraft-muted-line">
+                      Organizations: {getAircraftOrganizationIds(aircraft.id).length > 0
+                        ? getAircraftOrganizationIds(aircraft.id)
+                            .map((organizationId) => organizationNameById.get(organizationId) ?? "Unknown organization")
+                            .join(", ")
+                        : "None"}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="my-aircraft-cell my-aircraft-actions">
+                  {canAssignAircraft(aircraft) ? (
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      disabled={saving}
+                      onClick={() => openOrganizationAssignments(aircraft)}
+                    >
+                      Organizations ({getAircraftOrganizationIds(aircraft.id).length})
+                    </button>
+                  ) : (
+                    <span
+                      className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600"
+                      title={aircraft.visibility === "shared"
+                        ? "Global shared aircraft cannot be assigned directly to an organization."
+                        : "Organization assignment is available only to the Platform Super Admin who owns the aircraft."}
+                    >
+                      {aircraft.visibility === "shared" ? "Global shared" : "Personal aircraft"}
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="ghost-button"
@@ -654,7 +812,7 @@ export default function MyAircraftManager() {
 
       {showManager && portalRoot
         ? createPortal(
-            <div className="Overlay" onClick={() => setShowManager(false)}>
+            <div className="Overlay" onClick={closeManager}>
               <div className="Modal" onClick={(event) => event.stopPropagation()}>
                 <div className="tools-child-shell flex h-full min-h-0 flex-col">
                   <div className="tools-child-header">
@@ -669,10 +827,7 @@ export default function MyAircraftManager() {
                       <button
                         type="button"
                         className="ghost-button"
-                        onClick={() => {
-                          setShowManager(false);
-                          closeForm();
-                        }}
+                        onClick={closeManager}
                       >
                         Close
                       </button>
@@ -703,8 +858,27 @@ export default function MyAircraftManager() {
                                 Updated {formatDateLabel(aircraft.updated_at) || "--"}
                                 {getDueSummary(aircraft) ? ` · ${getDueSummary(aircraft)}` : ""}
                               </p>
+                              {canAssignAircraft(aircraft) ? (
+                                <p className="saas-meta-text mt-1">
+                                  Organization access: {getAircraftOrganizationIds(aircraft.id).length > 0
+                                    ? getAircraftOrganizationIds(aircraft.id)
+                                        .map((organizationId) => organizationNameById.get(organizationId) ?? "Unknown organization")
+                                        .join(", ")
+                                    : "None"}
+                                </p>
+                              ) : null}
                             </div>
                             <div className="flex flex-wrap justify-end gap-2">
+                              {canAssignAircraft(aircraft) ? (
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  disabled={saving}
+                                  onClick={() => openOrganizationAssignments(aircraft)}
+                                >
+                                  Organizations ({getAircraftOrganizationIds(aircraft.id).length})
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className="ghost-button"
@@ -723,6 +897,60 @@ export default function MyAircraftManager() {
                               </button>
                             </div>
                           </div>
+                          {assigningAircraftId === aircraft.id ? (
+                            <div
+                              id={`my-aircraft-organizations-${aircraft.id}`}
+                              className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-4"
+                            >
+                              <h3 className="text-sm font-semibold text-slate-900">Organization access</h3>
+                              <p className="saas-meta-text mt-1">
+                                Select one or more organizations that may use {aircraft.tail_number}. The aircraft stays private and remains owned by your account.
+                              </p>
+                              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                                {platformOrganizations.map((organization) => (
+                                  <label
+                                    key={organization.id}
+                                    className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="mt-0.5"
+                                      checked={selectedOrganizationIds.includes(organization.id)}
+                                      disabled={saving}
+                                      onChange={() => toggleOrganizationAssignment(organization.id)}
+                                    />
+                                    <span>
+                                      <span className="block font-medium text-slate-900">{organization.name}</span>
+                                      <span className="block text-xs text-slate-500">
+                                        Owner: {organization.owner_display_name || organization.owner_email || "Unavailable"}
+                                      </span>
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                              {platformOrganizations.length === 0 ? (
+                                <p className="saas-meta-text mt-3">No organizations are available.</p>
+                              ) : null}
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  className="primary-button"
+                                  disabled={saving}
+                                  onClick={() => void handleSaveOrganizationAssignments()}
+                                >
+                                  {saving ? "Saving..." : "Save organization access"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  disabled={saving}
+                                  onClick={closeOrganizationAssignments}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       ))}
 

@@ -8,6 +8,16 @@ import AuthShell from "@/components/auth/AuthShell";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { getSupabaseClient } from "@/lib/supabase";
 
+const USERNAME_EMAIL_DOMAIN = "pilotseal.com";
+
+function loginEmailFromIdentifier(identifier: string) {
+  const normalizedIdentifier = identifier.trim().toLowerCase();
+
+  return normalizedIdentifier.includes("@")
+    ? normalizedIdentifier
+    : `${normalizedIdentifier}@${USERNAME_EMAIL_DOMAIN}`;
+}
+
 export default function LoginForm({
   redirectTo = "/dashboard",
   initialStatus = "",
@@ -17,7 +27,7 @@ export default function LoginForm({
 }) {
   const router = useRouter();
   const { loading, session } = useAuthSession();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState(initialStatus);
@@ -38,7 +48,7 @@ export default function LoginForm({
     try {
       const supabase = getSupabaseClient();
       const { error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: loginEmailFromIdentifier(identifier),
         password,
       });
 
@@ -61,12 +71,14 @@ export default function LoginForm({
   }
 
   async function handleForgotPassword() {
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail) {
-      setError("Enter your email first, then request a password reset.");
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier) {
+      setError("Enter your username or email first, then request a password reset.");
       setStatus("");
       return;
     }
+
+    const normalizedEmail = loginEmailFromIdentifier(normalizedIdentifier);
 
     setSubmitting(true);
     setError("");
@@ -111,13 +123,16 @@ export default function LoginForm({
       <form className="grid gap-6" onSubmit={handleSubmit}>
         <label className="grid gap-2 border-b border-slate-200 pb-4">
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-            Email
+            Username or email
           </span>
           <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="cfi@pilotseal.com"
+            type="text"
+            autoCapitalize="none"
+            autoComplete="username"
+            spellCheck={false}
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
+            placeholder="Enter username or email"
             className="bg-transparent text-base text-slate-950 outline-none placeholder:text-slate-400"
             required
           />

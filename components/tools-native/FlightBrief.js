@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { fetchSavedPeople } from "@/lib/saved-people";
 import { fetchPersonCertificates } from "@/lib/person-certificates";
 import { fetchCurrentProfile } from "@/lib/profile";
@@ -13,6 +14,13 @@ import {
   fetchSharedAircraft,
   parseAircraftStations,
 } from "@/lib/aircraft";
+import {
+  createFlightBriefDraft,
+  fetchAircraftInspectionAssignments,
+  fetchFlightBriefById,
+  finalizeFlightBrief,
+  updateFlightBriefDraft,
+} from "@/lib/preflight";
 import WeightBalanceCalculator from "./WeightBalanceCalculator";
 
 /** ------------------ constants ------------------ */
@@ -140,13 +148,17 @@ function parseDueDateMs(value) {
   return Date.UTC(year, month - 1, day);
 }
 
-function getTodayUtcMs() {
+function getTodayUtcMs(referenceDate) {
+  if (referenceDate) {
+    const parsed = parseDueDateMs(referenceDate);
+    if (parsed !== null) return parsed;
+  }
   const today = new Date();
   return Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
-function getAircraftDueMeta(aircraft, mxNow) {
-  if (!aircraft?.is_saved) {
+function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
+  if (!aircraft || (!aircraft.is_saved && aircraft.source !== "organization")) {
     return {
       label: "--",
       detail: "Select a saved aircraft",
@@ -155,10 +167,15 @@ function getAircraftDueMeta(aircraft, mxNow) {
     };
   }
 
-  const todayMs = getTodayUtcMs();
+  const todayMs = getTodayUtcMs(referenceDate);
   const items = [];
   let hasExpired = false;
   let needsMxTime = false;
+
+  if (aircraft.operational_status && aircraft.operational_status !== "available") {
+    hasExpired = true;
+    items.push(`Aircraft status ${String(aircraft.operational_status).replaceAll("_", " ")}`);
+  }
 
   if (aircraft.hundred_hour_due_hours != null) {
     const currentMx = parseFloat(String(mxNow ?? ""));
@@ -177,6 +194,8 @@ function getAircraftDueMeta(aircraft, mxNow) {
     ["91.411", aircraft.static_due_date],
     ["91.413", aircraft.transponder_due_date],
     ["ELT", aircraft.elt_due_date],
+    ["ADS-B", aircraft.adsb_due_date],
+    ["Registration", aircraft.registration_due_date],
   ].forEach(([label, value]) => {
     if (!value) {
       return;
@@ -202,6 +221,43 @@ function getAircraftDueMeta(aircraft, mxNow) {
     detail: items.join(" · "),
     ok: hasExpired ? false : needsMxTime ? null : true,
     report: items.join("; "),
+  };
+}
+
+function formatCustomInspection(item, mxNow, plannedIncrease, referenceDate) {
+  const definition = item?.definition ?? {};
+  const name = definition.name || "Custom inspection";
+  const basis = definition.basis || "calendar";
+  const details = [];
+  let ok = true;
+
+  if (item?.due_date) {
+    const dueMs = parseDueDateMs(item.due_date);
+    const referenceMs = getTodayUtcMs(referenceDate);
+    const dateOk = dueMs === null || dueMs >= referenceMs;
+    ok = ok && dateOk;
+    details.push(`${dateOk ? "due" : "expired"} ${item.due_date}`);
+  }
+
+  if (item?.due_meter != null) {
+    const current = parseFloat(String(mxNow ?? ""));
+    const expected = parseFloat(String(plannedIncrease ?? ""));
+    if (Number.isFinite(current)) {
+      const projected = current + (Number.isFinite(expected) ? expected : 0);
+      const remaining = Number(item.due_meter) - projected;
+      const meterOk = remaining >= 0;
+      ok = ok && meterOk;
+      details.push(`${remaining.toFixed(1)} hr remaining${Number.isFinite(expected) ? " at projected return" : " now"}`);
+    } else {
+      details.push(`due at ${item.due_meter}`);
+    }
+  }
+
+  return {
+    id: item.id,
+    label: name,
+    detail: `${String(basis).replaceAll("_", " ")} · ${details.join(" / ") || "No due limit"}`,
+    ok,
   };
 }
 
@@ -682,6 +738,7 @@ async function postJson(url, body, signal) {
 /** ------------------ Component ------------------ */
 export default function FlightBrief() {
   const { session } = useAuthSession();
+  const { activeOrganization } = useOrganization();
   const { brief, setBrief, briefWb, briefSelectedAircraft } = useToolState();
   const stepperRef = useRef(null);
   const stepButtonRefs = useRef([]);
@@ -691,7 +748,16 @@ export default function FlightBrief() {
         const previousValue = current?.[key];
         const nextValue =
           typeof valueOrUpdater === "function" ? valueOrUpdater(previousValue) : valueOrUpdater;
-        return { ...current, [key]: nextValue };
+        return {
+          ...current,
+          [key]: nextValue,
+          ...(key !== "currentStep" &&
+          key !== "flightBriefDraftId" &&
+          key !== "finalizedFlightBriefId" &&
+          current?.finalizedFlightBriefId
+            ? { flightBriefDraftId: "", finalizedFlightBriefId: "" }
+            : {}),
+        };
       });
     },
     [setBrief]
@@ -816,41 +882,57 @@ export default function FlightBrief() {
   const setMxNow = useCallback((value) => setBriefField("mxNow", value), [setBriefField]);
   const mxDue = brief.mxDue ?? "";
   const setMxDue = useCallback((value) => setBriefField("mxDue", value), [setBriefField]);
+  const meterType = brief.meterType ?? "hobbs";
+  const setMeterType = useCallback((value) => setBriefField("meterType", value), [setBriefField]);
+  const meterObservedAt = brief.meterObservedAt ?? "";
+  const setMeterObservedAt = useCallback((value) => setBriefField("meterObservedAt", value), [setBriefField]);
+  const plannedMeterIncrease = brief.plannedMeterIncrease ?? "";
+  const setPlannedMeterIncrease = useCallback((value) => setBriefField("plannedMeterIncrease", value), [setBriefField]);
+  const [recordSaving, setRecordSaving] = useState(false);
+  const [recordStatus, setRecordStatus] = useState("");
+  const [customInspections, setCustomInspections] = useState([]);
+  const loadedDraftIdRef = useRef("");
 
-  const validateMxTimes = useCallback((nextMxNow, nextMxDue) => {
-    if (!String(nextMxNow).trim() || !String(nextMxDue).trim()) {
-      return true;
+  useEffect(() => {
+    if (!session?.user?.id || loadedDraftIdRef.current || typeof window === "undefined") return;
+    const draftId = new URLSearchParams(window.location.search).get("briefId") ?? "";
+    if (!draftId) return;
+    loadedDraftIdRef.current = draftId;
+    let cancelled = false;
+    async function loadDraft() {
+      try {
+        const record = await fetchFlightBriefById(draftId);
+        if (record.created_by !== session.user.id || record.status !== "draft") {
+          throw new Error("Only your own draft can be opened for editing.");
+        }
+        if (!cancelled) {
+          setBrief((current) => ({
+            ...current,
+            ...record.brief_data,
+            flightBriefDraftId: record.id,
+            finalizedFlightBriefId: "",
+          }));
+          setRecordStatus(`Editing revision ${record.revision_number}.`);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRecordStatus(error instanceof Error ? error.message : "Unable to open this draft.");
+        }
+      }
     }
-
-    const now = parseFloat(nextMxNow);
-    const due = parseFloat(nextMxDue);
-    if (Number.isNaN(now) || Number.isNaN(due)) {
-      return true;
-    }
-
-    if (now > due) {
-      window.alert("Mx Time Now cannot be greater than Next Mx Due.");
-      return false;
-    }
-
-    return true;
-  }, []);
+    void loadDraft();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, setBrief]);
 
   const handleMxNowChange = useCallback((value) => {
-    if (!validateMxTimes(value, mxDue)) {
-      return;
-    }
-
     setMxNow(value);
-  }, [mxDue, setMxNow, validateMxTimes]);
+  }, [setMxNow]);
 
   const handleMxDueChange = useCallback((value) => {
-    if (!validateMxTimes(mxNow, value)) {
-      return;
-    }
-
     setMxDue(value);
-  }, [mxNow, setMxDue, validateMxTimes]);
+  }, [setMxDue]);
 
   const mxRemaining = useMemo(() => {
     if (!String(mxNow).trim() || !String(mxDue).trim()) {
@@ -868,25 +950,25 @@ export default function FlightBrief() {
       return { label: "--", detail: "Enter MX times", ok: null };
     }
 
-    const eteHours = parseFloat(ete);
-    if (Number.isNaN(eteHours)) {
+    const expectedIncrease = parseFloat(String(plannedMeterIncrease));
+    if (Number.isNaN(expectedIncrease)) {
       return {
         label: `${mxRemaining.toFixed(1)} hr`,
-        detail: "Enter ETD and ETA",
+        detail: "Before-flight margin; expected meter increase is optional",
         ok: null,
       };
     }
 
-    const mxMargin = mxRemaining - eteHours;
-    const isSufficient = mxMargin > 1;
+    const mxMargin = mxRemaining - expectedIncrease;
+    const isSufficient = mxMargin >= 0;
     return {
       label: `${mxRemaining.toFixed(1)} hr`,
       detail: isSufficient
-        ? "Sufficient for ETE"
-        : "Remaining MX time may be insufficient for this flight",
+        ? `Projected return margin ${mxMargin.toFixed(1)} hr`
+        : `Projected return exceeds the limit by ${Math.abs(mxMargin).toFixed(1)} hr`,
       ok: isSufficient,
     };
-  }, [ete, mxRemaining]);
+  }, [mxRemaining, plannedMeterIncrease]);
 
   const avgFuelBurnRate = useMemo(() => {
     const value = briefSelectedAircraft?.model?.avg_fuel_burn_rate;
@@ -1052,9 +1134,10 @@ export default function FlightBrief() {
         } = await supabase.auth.getSession();
 
         if (!session?.user?.id) {
+          const sharedAircraft = await fetchSharedAircraft().catch(() => []);
           if (!cancelled) {
             setSavedPeopleOptions([]);
-            setAircraftOptions([]);
+            setAircraftOptions(mergeAircraftOptions(sharedAircraft, []));
           }
           return;
         }
@@ -1133,9 +1216,10 @@ export default function FlightBrief() {
           setAircraftOptions(mergeAircraftOptions([...sharedAircraft, ...organizationAircraft], myAircraft));
         }
       } catch {
+        const sharedAircraft = await fetchSharedAircraft().catch(() => []);
         if (!cancelled) {
           setSavedPeopleOptions([]);
-          setAircraftOptions([]);
+          setAircraftOptions(mergeAircraftOptions(sharedAircraft, []));
         }
       }
     }
@@ -1187,13 +1271,44 @@ export default function FlightBrief() {
     () => matchAircraftByTail(aircraftOptions, aircraftId),
     [aircraftId, aircraftOptions]
   );
+  const selectedSavedStudent = useMemo(
+    () => savedPeopleOptions.find((person) => person.id === selectedStudentId) ?? null,
+    [savedPeopleOptions, selectedStudentId]
+  );
+  const selectedSavedInstructor = useMemo(
+    () => savedPeopleOptions.find((person) => person.id === selectedInstructorId) ?? null,
+    [savedPeopleOptions, selectedInstructorId]
+  );
   const selectedAircraftDueMeta = useMemo(
-    () => getAircraftDueMeta(selectedSavedAircraft, mxNow),
-    [mxNow, selectedSavedAircraft]
+    () => getAircraftDueMeta(selectedSavedAircraft, mxNow, flightDate),
+    [flightDate, mxNow, selectedSavedAircraft]
   );
 
   useEffect(() => {
-    if (!selectedSavedAircraft?.is_saved || selectedSavedAircraft.hundred_hour_due_hours == null) {
+    let cancelled = false;
+    if (selectedSavedAircraft?.source !== "organization" || !selectedSavedAircraft.id) {
+      setCustomInspections([]);
+      return undefined;
+    }
+    fetchAircraftInspectionAssignments(selectedSavedAircraft.id)
+      .then((items) => {
+        if (!cancelled) setCustomInspections(items.filter((item) => item.is_active));
+      })
+      .catch(() => {
+        if (!cancelled) setCustomInspections([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSavedAircraft?.id, selectedSavedAircraft?.source]);
+
+  const customInspectionSummary = useMemo(
+    () => customInspections.map((item) => formatCustomInspection(item, mxNow, plannedMeterIncrease, flightDate)),
+    [customInspections, flightDate, mxNow, plannedMeterIncrease]
+  );
+
+  useEffect(() => {
+    if (!selectedSavedAircraft || selectedSavedAircraft.hundred_hour_due_hours == null) {
       return;
     }
 
@@ -1210,6 +1325,7 @@ export default function FlightBrief() {
       return {
         ...current,
         mxDue: nextMxDue,
+        meterType: selectedSavedAircraft.current_meter_type ?? current.meterType ?? "hobbs",
         aircraftDueSourceTail: selectedTail,
       };
     });
@@ -1636,7 +1752,11 @@ Gross Weight: ${grossWeight}
 CG: ${wbCg}
 Fuel Time: ${fuelTime}
 Mx Remaining: ${mxRemaining}
+Meter Type: ${meterType}
+Meter Observed At: ${meterObservedAt || "(not recorded)"}
+Expected Meter Increase: ${plannedMeterIncrease || "(not entered)"}
 Saved Aircraft Due: ${selectedAircraftDueMeta.label} - ${selectedAircraftDueMeta.report}
+Custom Inspections: ${customInspectionSummary.length ? customInspectionSummary.map((item) => `${item.label}: ${item.detail}`).join("; ") : "(none)"}
 
 🪨 Static Risk:
 ${staticLines.length ? staticLines.join("\n") : "- None"}
@@ -1694,7 +1814,11 @@ ${riskComments}
     wbCg,
     fuelTime,
     mxRemaining,
+    meterType,
+    meterObservedAt,
+    plannedMeterIncrease,
     selectedAircraftDueMeta,
+    customInspectionSummary,
     staticChecked,
     dynamicChecked,
     imsafe,
@@ -1770,7 +1894,13 @@ ${riskComments}
 
     if (stepIndex === 1) {
       if (!String(mxNow).trim()) missing.push("MX time now");
-      if (!String(mxDue).trim()) missing.push("Next MX due");
+      if (
+        !String(mxDue).trim() &&
+        !(selectedSavedAircraft?.source === "organization" && selectedSavedAircraft.hundred_hour_due_hours == null)
+      ) missing.push("Next MX due");
+      if (selectedSavedAircraft?.source === "organization" && !meterObservedAt) {
+        missing.push("Meter observation time");
+      }
       if (briefSelectedAircraft && !withinLimitsConfirmed) {
         missing.push("Weight and balance within limits");
       }
@@ -1806,10 +1936,12 @@ ${riskComments}
     lessonPractice,
     mxDue,
     mxNow,
+    meterObservedAt,
     riskComments,
     routeMode,
     stops,
     studentName,
+    selectedSavedAircraft,
     withinLimitsConfirmed,
   ]);
 
@@ -1834,12 +1966,158 @@ ${riskComments}
     goToNextStep();
   };
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     if (!confirmMissingStepFields(currentStep)) {
       return;
     }
 
-    generateReport();
+    if (!session?.user?.id) {
+      generateReport();
+      return;
+    }
+
+    const organizationAircraft = selectedSavedAircraft?.source === "organization";
+    const meterValue = parseFloat(String(mxNow));
+    const plannedIncreaseValue = String(plannedMeterIncrease).trim()
+      ? parseFloat(String(plannedMeterIncrease))
+      : null;
+
+    if (organizationAircraft) {
+      if (!selectedSavedAircraft?.organization_id || !activeOrganization?.id) {
+        setRecordStatus("Select the organization that owns this aircraft before finalizing.");
+        return;
+      }
+      if (!Number.isFinite(meterValue) || meterValue < 0) {
+        setRecordStatus("Enter the current Hobbs or Tach reading.");
+        return;
+      }
+      if (!meterObservedAt) {
+        setRecordStatus("Enter when the meter reading was observed.");
+        return;
+      }
+      if (
+        selectedSavedAircraft.current_meter_value != null &&
+        meterValue < Number(selectedSavedAircraft.current_meter_value)
+      ) {
+        setRecordStatus(
+          `The entered reading is lower than the current MX value (${selectedSavedAircraft.current_meter_value}). Correct it before finalizing.`
+        );
+        return;
+      }
+    }
+    if (plannedIncreaseValue !== null && (!Number.isFinite(plannedIncreaseValue) || plannedIncreaseValue < 0)) {
+      setRecordStatus("Expected meter increase must be zero or greater.");
+      return;
+    }
+
+    setRecordSaving(true);
+    setRecordStatus("");
+    try {
+      const routeText = [departure, ...stops, arrival]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+        .join(" → ");
+      const recordInput = {
+        organization_id: organizationAircraft ? selectedSavedAircraft.organization_id : null,
+        aircraft_id: selectedSavedAircraft?.id || null,
+        aircraft_tail_number: aircraftId,
+        student_name: studentName,
+        instructor_name: instructorName,
+        flight_date: flightDate || null,
+        etd: etd || null,
+        eta: eta || null,
+        ete: Number.isFinite(Number(ete)) ? Number(ete) : null,
+        flight_rules: flightRules,
+        route: routeText,
+        brief_data: {
+          studentName,
+          instructorName,
+          selectedStudentId,
+          selectedInstructorId,
+          flightRules,
+          flightDate,
+          etd,
+          eta,
+          ete,
+          aircraftId,
+          fuel,
+          fuelTime,
+          routeMode,
+          departure,
+          arrival,
+          stops,
+          lessonPractice,
+          fieldElevation,
+          outsideTemp,
+          daResult,
+          weatherNotes,
+          grossWeight,
+          wbCg,
+          withinLimitsConfirmed,
+          mxNow,
+          mxDue,
+          meterType,
+          meterObservedAt,
+          plannedMeterIncrease,
+          staticChecked,
+          dynamicChecked,
+          imsafe,
+          cfiStress,
+          otherRiskLabel,
+          otherRisks,
+          riskComments,
+          staticScore,
+          dynamicScore,
+          totalRisk,
+          riskLevel: riskMeta.level,
+          riskRecommendation: riskMeta.recommendation,
+        },
+        weather_snapshot: {
+          fetched_at: new Date().toISOString(),
+          metarByIcaoData,
+          tafByIcao,
+          airsigmetSummary,
+          airmets,
+          sigmets,
+          pireps,
+          weatherResults,
+        },
+        notam_snapshot: {
+          fetched_at: new Date().toISOString(),
+          notamByIcao,
+        },
+        wb_snapshot: {
+          inputs: briefWb?.inputs ?? {},
+          result: briefWb?.result ?? null,
+        },
+      };
+
+      const existingDraftId = String(brief.flightBriefDraftId ?? "");
+      const draft = existingDraftId
+        ? await updateFlightBriefDraft(existingDraftId, recordInput)
+        : await createFlightBriefDraft(recordInput);
+      setBrief((current) => ({ ...current, flightBriefDraftId: draft.id }));
+
+      const finalized = await finalizeFlightBrief(draft.id, {
+        meterType: organizationAircraft ? meterType : null,
+        meterValue: organizationAircraft ? meterValue : null,
+        observedAt: organizationAircraft ? new Date(meterObservedAt).toISOString() : null,
+        plannedMeterIncrease: organizationAircraft ? plannedIncreaseValue : null,
+      });
+      setBrief((current) => ({
+        ...current,
+        flightBriefDraftId: finalized.id,
+        finalizedFlightBriefId: finalized.id,
+      }));
+      setRecordStatus("Preflight record finalized and saved.");
+      generateReport();
+    } catch (error) {
+      setRecordStatus(
+        error instanceof Error ? error.message : "Unable to finalize this preflight record."
+      );
+    } finally {
+      setRecordSaving(false);
+    }
   };
 
   return (
@@ -1849,6 +2127,11 @@ ${riskComments}
           Step {currentStep + 1} of {steps.length}
         </div>
       </div>
+      {recordStatus ? (
+        <div className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+          {recordStatus}
+        </div>
+      ) : null}
 
       <div
         ref={stepperRef}
@@ -1888,16 +2171,16 @@ ${riskComments}
                   <option key={person.id} value={person.display_name} />
                 ))}
               </datalist>
-              <datalist id="flightBriefSavedAircraft">
-                {aircraftTailOptions.map((aircraft) => (
-                  <option
-                    key={aircraft.id}
-                    value={aircraft.tail_number || aircraft.name}
-                  />
-                ))}
-              </datalist>
             </>
           ) : null}
+          <datalist id="flightBriefSavedAircraft">
+            {aircraftTailOptions.map((aircraft) => (
+              <option
+                key={aircraft.id}
+                value={aircraft.tail_number || aircraft.name}
+              />
+            ))}
+          </datalist>
           {currentStep === 0 && (
             <section className="flightbrief-panel">
               <h2 className="text-xl font-bold mb-4">Flight Information</h2>
@@ -1953,7 +2236,7 @@ ${riskComments}
                       <input
                         autoFocus
                         type="text"
-                        list={session?.user?.id ? "flightBriefSavedAircraft" : undefined}
+                        list="flightBriefSavedAircraft"
                         value={aircraftId}
                         onChange={(e) => setAircraftId(e.target.value)}
                         onBlur={close}
@@ -2099,7 +2382,7 @@ ${riskComments}
                     type="text"
                     id="aircraftId"
                     className="input-field"
-                    list={session?.user?.id ? "flightBriefSavedAircraft" : undefined}
+                    list="flightBriefSavedAircraft"
                     value={aircraftId}
                     onChange={(e) => setAircraftId(e.target.value)}
                     placeholder="e.g. N6758H"
@@ -2144,12 +2427,27 @@ ${riskComments}
                   <small>{fuelTimeMeta.detail}</small>
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="mx-now">Mx Time Now:</label>
-                  <input type="number" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder="Check Aircraft" />
+                  <label className="label" htmlFor="mx-now">Observed Meter Reading:</label>
+                  <input type="number" min="0" step="any" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder={selectedSavedAircraft?.current_meter_value == null ? "Check aircraft" : `MX currently ${selectedSavedAircraft.current_meter_value}`} />
+                </div>
+                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
+                  <label className="label" htmlFor="meter-type">Meter Type:</label>
+                  <select id="meter-type" className="input-field" value={meterType} onChange={(e) => setMeterType(e.target.value)}>
+                    <option value="hobbs">Hobbs</option>
+                    <option value="tach">Tach</option>
+                  </select>
+                </div>
+                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
+                  <label className="label" htmlFor="meter-observed-at">Observed At:</label>
+                  <input type="datetime-local" id="meter-observed-at" className="input-field" value={meterObservedAt} onChange={(e) => setMeterObservedAt(e.target.value)} />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="mx-due">Next Mx Due:</label>
-                  <input type="number" id="mx-due" className="input-field" value={mxDue} onChange={(e) => handleMxDueChange(e.target.value)} placeholder="" />
+                  <input type="number" id="mx-due" className="input-field" readOnly={selectedSavedAircraft?.source === "organization"} value={mxDue} onChange={(e) => handleMxDueChange(e.target.value)} placeholder={selectedSavedAircraft?.source === "organization" ? "Managed by organization" : ""} />
+                </div>
+                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
+                  <label className="label" htmlFor="planned-meter-increase">Expected Meter Increase (optional):</label>
+                  <input type="number" min="0" step="any" id="planned-meter-increase" className="input-field" value={plannedMeterIncrease} onChange={(e) => setPlannedMeterIncrease(e.target.value)} placeholder="Not the same as ETE" />
                 </div>
                 <div className="flightbrief-kpi">
                   <span>MX Remaining</span>
@@ -2175,7 +2473,28 @@ ${riskComments}
                 </div>
               </div>
 
-              <WeightBalanceCalculator stateKey="briefWb" embedded />
+              {selectedSavedAircraft?.source === "organization" ? (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white/80 p-3">
+                  <strong className="text-sm text-slate-900">Organization custom inspections</strong>
+                  {customInspectionSummary.length ? (
+                    <div className="mt-2 grid gap-2">
+                      {customInspectionSummary.map((item) => (
+                        <div key={item.id} className={`rounded-lg px-3 py-2 text-sm ${item.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
+                          <strong>{item.label}</strong> · {item.detail}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="mt-2 text-sm text-slate-500">No custom inspections assigned.</p>}
+                </div>
+              ) : null}
+
+              <WeightBalanceCalculator
+                stateKey="briefWb"
+                embedded
+                sourceAircraft={selectedSavedAircraft}
+                sourceStudent={selectedSavedStudent}
+                sourceInstructor={selectedSavedInstructor}
+              />
             </section>
           )}
 
@@ -2953,8 +3272,8 @@ ${riskComments}
           <strong>{steps[currentStep].title}</strong>
         </div>
         {isLastStep ? (
-          <button type="button" className="flightbrief-navButton primary" onClick={handleGenerateReport}>
-            <span className="flightbrief-navButtonDesktop">Generate Flight Brief Report</span>
+          <button type="button" className="flightbrief-navButton primary" onClick={handleGenerateReport} disabled={recordSaving}>
+            <span className="flightbrief-navButtonDesktop">{recordSaving ? "Finalizing..." : "Finalize & Generate Report"}</span>
             <span className="flightbrief-navButtonMobile" aria-hidden="true">✓</span>
           </button>
         ) : (

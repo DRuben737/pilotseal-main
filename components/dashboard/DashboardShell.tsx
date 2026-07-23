@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -11,6 +11,11 @@ import { canManageOrganization } from "@/lib/organizations";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
+import {
+  fetchUnreadNotificationCount,
+  refreshMyProfileReminders,
+  subscribeToNotificationChanges,
+} from "@/lib/notifications";
 
 const dashboardLinks = [
   { href: "/dashboard", label: "Overview" },
@@ -20,13 +25,30 @@ const dashboardLinks = [
   { href: "/dashboard/notifications", label: "Notifications" },
   { href: "/dashboard/account-settings", label: "Account" },
 ];
-const DASHBOARD_NAV_ITEM_STEP = 56;
+const organizationLinks = [
+  { href: "/dashboard/organization/overview", label: "Overview" },
+  { href: "/dashboard/organization/people", label: "People" },
+  { href: "/dashboard/organization/fleet", label: "Fleet & MX" },
+  { href: "/dashboard/organization/briefs", label: "Preflight Records" },
+  { href: "/dashboard/organization/endorsements", label: "Endorsements" },
+  { href: "/dashboard/organization/messages", label: "Messages" },
+  { href: "/dashboard/organization/audit", label: "Audit Log" },
+];
+const platformLinks = [
+  { href: "/dashboard/admin/overview", label: "Platform Overview" },
+  { href: "/dashboard/admin/access", label: "Organizations & Access" },
+  { href: "/dashboard/admin/aircraft", label: "Platform Fleet" },
+  { href: "/dashboard/admin/aircraft-assignments", label: "Aircraft Assignments" },
+  { href: "/dashboard/admin/endorsements", label: "Endorsement Approvals" },
+  { href: "/dashboard/admin/audit", label: "Audit Log" },
+];
 
 function DashboardIcon({ kind }: { kind: string }) {
   const common = "h-[18px] w-[18px]";
 
   switch (kind) {
     case "Overview":
+    case "Platform Overview":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <rect x="4" y="4" width="7" height="7" rx="1.5" />
@@ -37,6 +59,7 @@ function DashboardIcon({ kind }: { kind: string }) {
       );
     case "People":
     case "Organization":
+    case "Organizations & Access":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <circle cx="9" cy="8" r="3" />
@@ -46,6 +69,8 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Records":
+    case "Preflight Records":
+    case "Audit Log":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M7 3.8h7.2L18 7.6V20a1.2 1.2 0 0 1-1.2 1.2H7A1.2 1.2 0 0 1 5.8 20V5A1.2 1.2 0 0 1 7 3.8Z" />
@@ -56,6 +81,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Notifications":
+    case "Messages":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M12 4a4 4 0 0 1 4 4v2.7c0 1 .4 2 .9 2.9l1 1.5H6.1l1-1.5c.5-.9.9-1.9.9-2.9V8a4 4 0 0 1 4-4Z" />
@@ -70,12 +96,16 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Aircraft":
+    case "Fleet & MX":
+    case "Platform Fleet":
+    case "Aircraft Assignments":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M2 13.5h7l5.2-7.2c.5-.7 1.5-.8 2.1-.3.5.4.7 1.1.4 1.7L15 13.5h5.2c.9 0 1.8.5 2.2 1.3l-.9.7H15l-1.4 4.1h-1.7l.2-4.1H8.7L7 18H5.4l.5-2.5H2v-2Z" />
         </svg>
       );
     case "Endorsements":
+    case "Endorsement Approvals":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M6.5 3.8h8.2L18 7.1V20a1.2 1.2 0 0 1-1.2 1.2H6.5A1.2 1.2 0 0 1 5.3 20V5a1.2 1.2 0 0 1 1.2-1.2Z" />
@@ -83,6 +113,13 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="M8.5 12h6.8" />
           <path d="M8.5 15.2h6.8" />
           <path d="M8.5 18.4h4.4" />
+        </svg>
+      );
+    case "Access":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <path d="M12 3.5 19 6v5.4c0 4.2-2.8 7.7-7 9.1-4.2-1.4-7-4.9-7-9.1V6l7-2.5Z" />
+          <path d="M9.2 12.1 11 14l4-4.2" />
         </svg>
       );
     case "My Aircraft":
@@ -127,6 +164,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [displayName, setDisplayName] = useState("");
   const [defaultCfiName, setDefaultCfiName] = useState("");
   const [profileRole, setProfileRole] = useState("");
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   useEffect(() => {
     if (!loading && !session?.user) {
@@ -173,82 +211,71 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     };
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    const userId = session?.user?.id ?? "";
+    if (!userId) {
+      setUnreadNotificationCount(0);
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function refreshUnreadCount(syncProfileReminders = false) {
+      try {
+        if (syncProfileReminders) await refreshMyProfileReminders();
+        const count = await fetchUnreadNotificationCount(userId);
+        if (!cancelled) setUnreadNotificationCount(count);
+      } catch (error) {
+        console.error("Unable to load unread notifications:", error);
+      }
+    }
+
+    void refreshUnreadCount(true);
+    const unsubscribe = subscribeToNotificationChanges(userId, () => void refreshUnreadCount());
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [session?.user?.id]);
+
   const identityLabel = resolveDisplayIdentity({
     displayName,
     defaultCfiName,
     email: session?.user?.email,
   });
 
-  const visibleDashboardLinks = [
-    ...dashboardLinks,
-    ...(activeOrganization && canManageOrganization(activeOrganization.member_role)
-      ? [{ href: "/dashboard/organization", label: "Organization" }]
-      : []),
-    ...(profileRole === "admin"
-      ? [
-          { href: "/dashboard/admin/aircraft", label: "Aircraft" },
-          { href: "/dashboard/admin/endorsements", label: "Endorsements" },
-        ]
-      : []),
-  ];
+  const workspace = pathname.startsWith("/dashboard/admin")
+    ? "platform"
+    : pathname.startsWith("/dashboard/organization")
+      ? "organization"
+      : "personal";
+  const visibleDashboardLinks = workspace === "platform"
+    ? platformLinks
+    : workspace === "organization"
+      ? organizationLinks
+      : dashboardLinks;
+  const workspaceLabel = workspace === "platform"
+    ? "Platform administration"
+    : workspace === "organization"
+      ? activeOrganization?.name ?? "Organization"
+      : "Personal workspace";
+  const workspaceSwitches = [
+    { href: "/dashboard", label: "Personal", icon: "Overview", visible: true },
+    {
+      href: "/dashboard/organization/overview",
+      label: "Organization",
+      icon: "Organization",
+      visible: Boolean(activeOrganization && canManageOrganization(activeOrganization.member_role)),
+    },
+    {
+      href: "/dashboard/admin/overview",
+      label: "Platform",
+      icon: "Access",
+      visible: profileRole === "admin",
+    },
+  ].filter((item) => item.visible);
   const isDashboardLinkActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname === href || pathname.startsWith(`${href}/`);
-  const activeDashboardIndex = visibleDashboardLinks.findIndex((item) => isDashboardLinkActive(item.href));
-  const [activeIndicatorMotion, setActiveIndicatorMotion] = useState({ y: 0, scaleX: 1, scaleY: 1 });
-  const activeIndicatorRef = useRef({ initialized: false, y: 0, scaleX: 1, scaleY: 1, frame: 0 });
-
-  useEffect(() => {
-    if (activeDashboardIndex < 0) {
-      return undefined;
-    }
-
-    const targetY = activeDashboardIndex * DASHBOARD_NAV_ITEM_STEP;
-    const motion = activeIndicatorRef.current;
-
-    if (!motion.initialized) {
-      motion.initialized = true;
-      motion.y = targetY;
-      motion.scaleX = 1;
-      motion.scaleY = 1;
-      setActiveIndicatorMotion({ y: targetY, scaleX: 1, scaleY: 1 });
-      return undefined;
-    }
-
-    cancelAnimationFrame(motion.frame);
-
-    const animate = () => {
-      const diff = targetY - motion.y;
-      const velocity = diff * 0.42;
-
-      motion.y += velocity;
-
-      const speed = Math.abs(velocity);
-      const stretch = 1 + Math.min(speed * 0.018, 0.36);
-      const squash = 1 / stretch;
-
-      motion.scaleY = motion.scaleY * 0.78 + stretch * 0.22;
-      motion.scaleX = motion.scaleX * 0.78 + squash * 0.22;
-
-      if (Math.abs(diff) < 0.08 && Math.abs(motion.scaleY - 1) < 0.008) {
-        motion.y = targetY;
-        motion.scaleX = 1;
-        motion.scaleY = 1;
-        setActiveIndicatorMotion({ y: targetY, scaleX: 1, scaleY: 1 });
-        return;
-      }
-
-      setActiveIndicatorMotion({
-        y: motion.y,
-        scaleX: motion.scaleX,
-        scaleY: motion.scaleY,
-      });
-      motion.frame = requestAnimationFrame(animate);
-    };
-
-    motion.frame = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(motion.frame);
-  }, [activeDashboardIndex]);
+  const mobileDashboardLinks = visibleDashboardLinks;
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -270,14 +297,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className="site-shell page-stack">
         {loading || !session?.user ? null : (
           <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
-            <aside className="dashboard-sidebar group sticky top-4 max-h-[calc(100vh-2rem)] w-[82px] shrink-0 overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-2.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)] transition-[width] duration-200 md:hover:w-[220px]">
+            <aside className="dashboard-sidebar sticky top-4 max-h-[calc(100vh-2rem)] w-[240px] shrink-0 overflow-x-hidden overflow-y-auto rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-3 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)]">
               <div>
                 <div className="block">
-                  <div className="flex items-center justify-center gap-0 overflow-hidden md:justify-center md:group-hover:justify-start md:group-hover:gap-3">
+                  <div className="flex items-center gap-3 overflow-hidden px-1">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/12 bg-white/8 text-sm font-semibold">
                       PS
                     </div>
-                    <div className="hidden min-w-0 md:block md:max-w-0 md:overflow-hidden md:translate-x-2 md:opacity-0 md:transition-[max-width,opacity,transform] md:duration-200 md:group-hover:max-w-[120px] md:group-hover:translate-x-0 md:group-hover:opacity-100">
+                    <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-white">PilotSeal</p>
                       <p className="truncate text-xs text-white/55">{identityLabel}</p>
                     </div>
@@ -285,17 +312,17 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <div className="mt-5 h-px w-full bg-white/10" />
                 </div>
 
-                <nav aria-label="Dashboard navigation" className="relative mt-4 grid gap-2">
-                  {activeDashboardIndex >= 0 ? (
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-x-0 top-0 h-12 rounded-[16px] bg-[linear-gradient(135deg,rgba(96,165,250,0.96),rgba(37,99,235,0.94))] shadow-[0_16px_34px_rgba(59,130,214,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] will-change-transform"
-                      style={{
-                        transform: `translate3d(0, ${activeIndicatorMotion.y}px, 0) scaleX(${activeIndicatorMotion.scaleX}) scaleY(${activeIndicatorMotion.scaleY})`,
-                        transformOrigin: "center center",
-                      }}
-                    />
-                  ) : null}
+                {workspaceSwitches.length > 1 ? (
+                  <div className="mt-4 grid grid-cols-3 gap-1 rounded-[14px] bg-white/8 p-1" aria-label="Switch workspace">
+                    {workspaceSwitches.map((item) => {
+                      const active = workspace === item.label.toLowerCase();
+                      return <Link key={item.href} href={item.href} title={`${item.label} workspace`} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-[11px] px-1 text-[0.65rem] font-semibold transition-colors ${active ? "bg-white text-slate-900" : "text-white/65 hover:bg-white/10 hover:text-white"}`}><DashboardIcon kind={item.icon} /><span>{item.label}</span></Link>;
+                    })}
+                  </div>
+                ) : null}
+
+                <nav aria-label={`${workspaceLabel} navigation`} className="mt-5 grid gap-1.5">
+                  <p className="px-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/45">{workspaceLabel}</p>
                   {visibleDashboardLinks.map((item) => {
                     const active = isDashboardLinkActive(item.href);
 
@@ -305,18 +332,21 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                         href={item.href}
                         aria-label={item.label}
                         title={item.label}
-                        className={`relative z-10 flex h-12 items-center justify-center overflow-hidden rounded-[16px] transition-colors duration-300 md:w-full md:justify-center md:group-hover:justify-start ${
+                        className={`relative flex min-h-11 items-center gap-3 rounded-[13px] px-3 text-sm font-medium transition-colors duration-200 ${
                           active
-                            ? "text-white"
-                            : "text-white/72 hover:bg-white/8 hover:text-white"
+                            ? "bg-blue-500 text-white shadow-[0_8px_20px_rgba(37,99,235,0.28)]"
+                            : "text-white/70 hover:bg-white/8 hover:text-white"
                         }`}
                       >
-                        <span className="flex h-12 w-full shrink-0 items-center justify-center md:group-hover:ml-4 md:group-hover:w-5">
+                        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
                           <DashboardIcon kind={item.label} />
+                          {item.label === "Notifications" && unreadNotificationCount > 0 ? (
+                            <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
+                              {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                            </span>
+                          ) : null}
                         </span>
-                        <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-0 text-sm font-medium opacity-0 transition-[max-width,opacity,transform,padding] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:pl-3 md:group-hover:opacity-100">
-                          {item.label}
-                        </span>
+                        <span className="min-w-0 flex-1 leading-5">{item.label}</span>
                       </Link>
                     );
                   })}
@@ -327,29 +357,25 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     href="/tools/endorsement-generator"
                     aria-label="New endorsement"
                     title="New endorsement"
-                    className="relative flex h-12 items-center justify-center overflow-hidden rounded-[16px] text-white/72 transition hover:bg-white/8 hover:text-white md:w-full md:justify-center md:group-hover:justify-start"
+                    className="relative flex min-h-11 items-center gap-3 rounded-[13px] px-3 text-sm font-medium text-white/70 transition hover:bg-white/8 hover:text-white"
                   >
-                    <span className="flex h-12 w-full shrink-0 items-center justify-center md:group-hover:ml-4 md:group-hover:w-5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                       <DashboardIcon kind="new" />
                     </span>
-                    <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-0 text-sm font-medium opacity-0 transition-[max-width,opacity,transform,padding] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:pl-3 md:group-hover:opacity-100">
-                      New endorsement
-                    </span>
+                    <span>New endorsement</span>
                   </Link>
                   <button
                     type="button"
                     aria-label="Sign out"
                     title={`Sign out ${identityLabel}`}
-                    className="relative flex h-12 items-center justify-center overflow-hidden rounded-[16px] text-white/72 transition hover:bg-white/8 hover:text-white disabled:opacity-60 md:w-full md:justify-center md:group-hover:justify-start"
+                    className="relative flex min-h-11 w-full items-center gap-3 rounded-[13px] px-3 text-sm font-medium text-white/70 transition hover:bg-white/8 hover:text-white disabled:opacity-60"
                     disabled={!session?.user || signingOut}
                     onClick={handleSignOut}
                   >
-                    <span className="flex h-12 w-full shrink-0 items-center justify-center md:group-hover:ml-4 md:group-hover:w-5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                       <DashboardIcon kind="signout" />
                     </span>
-                    <span className="max-w-0 translate-x-2 overflow-hidden whitespace-nowrap pl-0 text-sm font-medium opacity-0 transition-[max-width,opacity,transform,padding] duration-200 md:group-hover:max-w-[140px] md:group-hover:translate-x-0 md:group-hover:pl-3 md:group-hover:opacity-100">
-                      {signingOut ? "Signing out..." : "Sign out"}
-                    </span>
+                    <span>{signingOut ? "Signing out..." : "Sign out"}</span>
                   </button>
                 </div>
               </div>
@@ -358,7 +384,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <div className="min-w-0 flex-1">
               <section className="dashboard-mobile-top">
                 <div className="min-w-0">
-                  <p className="dashboard-mobile-kicker">Dashboard</p>
+                  <p className="dashboard-mobile-kicker">{workspaceLabel}</p>
                   <p className="dashboard-mobile-identity">{identityLabel}</p>
                 </div>
                 <Link
@@ -369,7 +395,15 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <span>New</span>
                 </Link>
               </section>
-              {!organizationsLoading && organizations.length > 0 ? (
+              {workspaceSwitches.length > 1 ? (
+                <nav className="dashboard-mobile-workspaces mb-3 gap-2 overflow-x-auto" aria-label="Switch workspace">
+                  {workspaceSwitches.map((item) => {
+                    const active = workspace === item.label.toLowerCase();
+                    return <Link key={item.href} href={item.href} className={`min-h-10 shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}>{item.label}</Link>;
+                  })}
+                </nav>
+              ) : null}
+              {!organizationsLoading && organizations.length > 0 && (profileRole !== "admin" || workspace === "organization") ? (
                 <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
                   <div>
                     <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
@@ -397,7 +431,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </div>
 
             <nav className="dashboard-bottom-nav" aria-label="Dashboard navigation">
-              {visibleDashboardLinks.map((item) => {
+              {mobileDashboardLinks.map((item) => {
                 const active =
                   item.href === "/dashboard"
                     ? pathname === "/dashboard"
@@ -407,11 +441,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`dashboard-bottom-nav-link ${
+                    className={`dashboard-bottom-nav-link relative ${
                       active ? "dashboard-bottom-nav-link-active" : ""
                     }`}
                   >
                     <DashboardIcon kind={item.label} />
+                    {item.label === "Notifications" && unreadNotificationCount > 0 ? (
+                      <span className="absolute right-2 top-1 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
+                        {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                      </span>
+                    ) : null}
                     <span>{item.label}</span>
                   </Link>
                 );

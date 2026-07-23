@@ -9,7 +9,6 @@ import {
   parseAircraftEnvelopeSet,
   parseAircraftStations,
 } from "@/lib/aircraft";
-import { fetchSavedPeople } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import CGEnvelopeChart from "./CGEnvelopeChart";
@@ -392,6 +391,9 @@ function formatAircraftOptionLabel(aircraft) {
 export default function WeightBalanceCalculator({
   stateKey = "wb",
   embedded = false,
+  sourceAircraft = null,
+  sourceStudent = null,
+  sourceInstructor = null,
 }) {
   const {
     wb,
@@ -443,18 +445,38 @@ export default function WeightBalanceCalculator({
       setError("");
 
       try {
+        if (embedded) {
+          const resolvedAircraft = sourceAircraft ?? null;
+
+          setAircraftOptions(resolvedAircraft ? [resolvedAircraft] : []);
+          setSavedStudents(sourceStudent ? [sourceStudent] : []);
+          setSavedCfis(sourceInstructor ? [sourceInstructor] : []);
+          setSavedPeople(
+            [sourceStudent, sourceInstructor].filter(
+              (person, index, people) =>
+                person &&
+                people.findIndex((candidate) => candidate?.id === person.id) === index
+            )
+          );
+          setAircraftMatchMissing(Boolean(normalizedBriefAircraftId && !resolvedAircraft));
+          setActiveSelectedAircraft(resolvedAircraft);
+          setActiveWb((current) => ({
+            ...current,
+            selectedTail: resolvedAircraft?.id ?? "",
+            ...(!resolvedAircraft ? { result: null, status: "" } : {}),
+          }));
+          return;
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
-        const [sharedAircraft, organizationAircraft, myAircraft, students, cfis] = await Promise.all([
+        const [sharedAircraft, organizationAircraft, myAircraft] = await Promise.all([
           fetchSharedAircraft(),
           session?.user?.id ? fetchActiveOrganizationAircraft() : Promise.resolve([]),
           session?.user?.id ? fetchMyAircraft(session.user.id) : Promise.resolve([]),
-          embedded && session?.user?.id ? fetchSavedPeople(session.user.id, "student") : Promise.resolve([]),
-          embedded && session?.user?.id ? fetchSavedPeople(session.user.id, "cfi") : Promise.resolve([]),
         ]);
-        const people = embedded && session?.user?.id ? await fetchSavedPeople(session.user.id) : [];
 
         const mergedAircraft = mergeAircraftOptions(
           [...sharedAircraft, ...organizationAircraft],
@@ -462,39 +484,14 @@ export default function WeightBalanceCalculator({
         );
 
         setAircraftOptions(mergedAircraft);
-        setSavedStudents(students);
-        setSavedCfis(cfis);
-        setSavedPeople(people);
+        setSavedStudents([]);
+        setSavedCfis([]);
+        setSavedPeople([]);
 
         if (mergedAircraft.length > 0) {
-          const matchedBriefAircraft = normalizedBriefAircraftId
-            ? mergedAircraft.find((aircraft) => {
-                const aircraftName = normalizeTailNumber(aircraft.name);
-                const tailNumber = normalizeTailNumber(aircraft.tail_number);
-                const aircraftId = normalizeTailNumber(aircraft.id);
-                return (
-                  aircraftName === normalizedBriefAircraftId ||
-                  tailNumber === normalizedBriefAircraftId ||
-                  aircraftId === normalizedBriefAircraftId
-                );
-              }) ?? null
-            : null;
-
-          const persistedAircraft = embedded
-            ? matchedBriefAircraft
-            : mergedAircraft.find((aircraft) => aircraft.id === selectedAircraftId) ?? mergedAircraft[0];
-
-          if (embedded && normalizedBriefAircraftId && !matchedBriefAircraft) {
-            setAircraftMatchMissing(true);
-            setActiveSelectedAircraft(null);
-            setActiveWb((current) => ({
-              ...current,
-              selectedTail: "",
-              result: null,
-              status: "",
-            }));
-            return;
-          }
+          const persistedAircraft =
+            mergedAircraft.find((aircraft) => aircraft.id === selectedAircraftId) ??
+            mergedAircraft[0];
 
           setAircraftMatchMissing(false);
 
@@ -515,7 +512,7 @@ export default function WeightBalanceCalculator({
             selectedTail: persistedAircraft.id,
           }));
         } else {
-          setAircraftMatchMissing(Boolean(embedded && normalizedBriefAircraftId));
+          setAircraftMatchMissing(false);
           setActiveSelectedAircraft(null);
           setActiveWb((current) => ({
             ...current,
@@ -532,7 +529,17 @@ export default function WeightBalanceCalculator({
     }
 
     void loadData();
-  }, [briefAircraftId, embedded, normalizedBriefAircraftId, selectedAircraftId, setActiveSelectedAircraft, setActiveWb]);
+  }, [
+    briefAircraftId,
+    embedded,
+    normalizedBriefAircraftId,
+    selectedAircraftId,
+    setActiveSelectedAircraft,
+    setActiveWb,
+    sourceAircraft,
+    sourceInstructor,
+    sourceStudent,
+  ]);
 
   const aircraftProfile = useMemo(
     () => resolveAircraftProfile(activeSelectedAircraft),
@@ -571,6 +578,27 @@ export default function WeightBalanceCalculator({
     selectedStudent ?? savedPeople.find((person) => person.id === selectedStudentId) ?? null;
   const selectedInstructorPerson =
     selectedInstructor ?? savedPeople.find((person) => person.id === selectedInstructorId) ?? null;
+  const briefManagedStationIds = useMemo(() => {
+    if (!embedded || !aircraftProfile) {
+      return new Set();
+    }
+
+    const { leftStation, rightStation } = resolveCrewStations(renderedStations);
+    const isHelicopter = /helicopter/i.test(aircraftProfile.category ?? "");
+    const leftPerson = isHelicopter ? selectedInstructorPerson : selectedStudentPerson;
+    const rightPerson = isHelicopter ? selectedStudentPerson : selectedInstructorPerson;
+
+    return new Set([
+      ...(leftStation && typeof leftPerson?.weight_lbs === "number" ? [leftStation.id] : []),
+      ...(rightStation && typeof rightPerson?.weight_lbs === "number" ? [rightStation.id] : []),
+    ]);
+  }, [
+    aircraftProfile,
+    embedded,
+    renderedStations,
+    selectedInstructorPerson,
+    selectedStudentPerson,
+  ]);
 
   const handleInputChange = (key, value) => {
     setActiveWb((current) => ({
@@ -666,22 +694,24 @@ export default function WeightBalanceCalculator({
       <div className="wb-grid">
         <section className={`wb-panel ${embedded ? "wb-panel-embedded" : ""}`}>
           <div className="wb-section-head">
-            <h3>Aircraft and loading</h3>
+            <h3>{embedded ? "Weight & balance loading" : "Aircraft and loading"}</h3>
           </div>
 
-          <div className="wb-top-fields">
-            <label className="wb-field">
-              <span>Aircraft</span>
-              <select value={selectedAircraftId} onChange={handleAircraftChange} disabled={loading}>
-                <option value="">{loading ? "Loading aircraft..." : "Select an aircraft"}</option>
-                {aircraftOptions.map((aircraft) => (
-                  <option key={aircraft.id} value={aircraft.id}>
-                    {formatAircraftOptionLabel(aircraft)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          {!embedded ? (
+            <div className="wb-top-fields">
+              <label className="wb-field">
+                <span>Aircraft</span>
+                <select value={selectedAircraftId} onChange={handleAircraftChange} disabled={loading}>
+                  <option value="">{loading ? "Loading aircraft..." : "Select an aircraft"}</option>
+                  {aircraftOptions.map((aircraft) => (
+                    <option key={aircraft.id} value={aircraft.id}>
+                      {formatAircraftOptionLabel(aircraft)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : null}
 
           {error ? <p className="copy-muted mt-2">{error}</p> : null}
 
@@ -705,7 +735,9 @@ export default function WeightBalanceCalculator({
               <label key={station.id} className="wb-field">
                 <span>{station.name}</span>
                 <small>
-                  {typeof station.fixedWeight === "number" && !isEditableDefaultWeightStation(station)
+                  {briefManagedStationIds.has(station.id)
+                    ? "From Flight Brief"
+                    : typeof station.fixedWeight === "number" && !isEditableDefaultWeightStation(station)
                     ? "Fixed weight"
                     : typeof station.fixedWeight === "number" && isEditableDefaultWeightStation(station)
                     ? "lbs"
@@ -727,8 +759,9 @@ export default function WeightBalanceCalculator({
                   }
                   onChange={(event) => handleInputChange(station.id, event.target.value)}
                   readOnly={
-                    typeof station.fixedWeight === "number" &&
-                    !isEditableDefaultWeightStation(station)
+                    briefManagedStationIds.has(station.id) ||
+                    (typeof station.fixedWeight === "number" &&
+                      !isEditableDefaultWeightStation(station))
                   }
                 />
               </label>

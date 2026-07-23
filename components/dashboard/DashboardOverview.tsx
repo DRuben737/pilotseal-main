@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
 import {
   formatTimeUntilDate,
   resolveDisplayIdentity,
 } from "@/lib/identity";
 import {
-  fetchNotificationHistory,
+  fetchInboxNotifications,
   type NotificationRecord,
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
@@ -104,8 +105,7 @@ export default function DashboardOverview() {
           }
         }
 
-        const notifications =
-          profile?.role === "admin" ? await fetchNotificationHistory() : [];
+        const notifications = await fetchInboxNotifications(session.user.id);
 
         if (!cancelled) {
           setOverview({
@@ -152,7 +152,9 @@ export default function DashboardOverview() {
     },
     {
       label: "Notifications",
-      value: loading ? "..." : String(overview.notifications.length),
+      value: loading
+        ? "..."
+        : String(overview.notifications.filter((notification) => !notification.read_at).length),
     },
   ];
 
@@ -222,6 +224,8 @@ export default function DashboardOverview() {
           <p>{statusNote}</p>
         </section>
       ) : null}
+
+      <OrganizationAccessManager />
 
       <section className="saas-panel">
         <div className="flex items-start justify-between gap-6">

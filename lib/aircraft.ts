@@ -18,6 +18,12 @@ export type AircraftEnvelopeSet = {
 };
 
 export type AircraftChartType = "1d1p" | "2d1p" | "2d2p";
+export type AircraftMeterType = "hobbs" | "tach";
+export type AircraftOperationalStatus =
+  | "available"
+  | "away"
+  | "in_maintenance"
+  | "grounded";
 
 export type AircraftStation = {
   id: string;
@@ -49,6 +55,7 @@ export type AircraftRecord = {
   owner_user_id?: string | null;
   organization_id?: string | null;
   organization_name?: string | null;
+  organization_access?: "owned" | "assigned" | null;
   visibility?: "shared" | "private" | string | null;
   category?: string | null;
   empty_weight: number | null;
@@ -63,6 +70,47 @@ export type AircraftRecord = {
   static_due_date?: string | null;
   transponder_due_date?: string | null;
   elt_due_date?: string | null;
+  adsb_due_date?: string | null;
+  registration_due_date?: string | null;
+  current_meter_type?: AircraftMeterType | null;
+  current_meter_value?: number | null;
+  meter_observed_at?: string | null;
+  meter_source?: string | null;
+  meter_source_brief_id?: string | null;
+  operational_status?: AircraftOperationalStatus;
+};
+
+export type AircraftOrganizationAssignment = {
+  aircraft_id: string;
+  organization_id: string;
+  assigned_by: string | null;
+  created_at: string;
+};
+
+export type AircraftAssignmentBulkMode = "add" | "remove";
+
+export type BulkAircraftAssignmentInput = {
+  aircraftIds: string[];
+  organizationIds: string[];
+  mode: AircraftAssignmentBulkMode;
+};
+
+export type BulkAircraftAssignmentResult = {
+  aircraft_id: string;
+  before_count: number;
+  changed_count: number;
+  after_count: number;
+};
+
+export type AircraftAssignmentAuditEntry = {
+  id: string;
+  aircraft_id: string | null;
+  aircraft_tail_number: string;
+  organization_id: string | null;
+  organization_name: string;
+  actor_user_id: string | null;
+  action: "assigned" | "unassigned";
+  created_at: string;
 };
 
 export type SavedAircraftDueInput = {
@@ -73,8 +121,19 @@ export type SavedAircraftDueInput = {
   elt_due_date?: string | null;
 };
 
-export type OrganizationAircraftMaintenance = SavedAircraftDueInput & {
+export type OrganizationAircraftMaintenanceInput = SavedAircraftDueInput & {
+  adsb_due_date?: string | null;
+  registration_due_date?: string | null;
+  operational_status?: AircraftOperationalStatus;
+};
+
+export type OrganizationAircraftMaintenance = OrganizationAircraftMaintenanceInput & {
   aircraft_id: string;
+  current_meter_type?: AircraftMeterType | null;
+  current_meter_value?: number | null;
+  meter_observed_at?: string | null;
+  meter_source?: string | null;
+  meter_source_brief_id?: string | null;
   updated_by?: string | null;
   updated_at?: string | null;
 };
@@ -86,7 +145,7 @@ export type OrganizationAircraftInput = {
   empty_weight: number;
   empty_arm: number;
   empty_lat_arm?: number | null;
-  maintenance?: SavedAircraftDueInput;
+  maintenance?: OrganizationAircraftMaintenanceInput;
 };
 
 export type AircraftUpdateRequestRecord = {
@@ -167,7 +226,7 @@ const SAVED_AIRCRAFT_SELECT_LEGACY = "aircraft_id, is_default";
 const ORGANIZATION_AIRCRAFT_SELECT =
   "id, model_id, name, tail_number, updated_at, owner_user_id, organization_id, visibility, empty_weight, empty_arm, empty_lat_arm";
 const ORGANIZATION_MAINTENANCE_SELECT =
-  "aircraft_id, hundred_hour_due_hours, annual_due_date, static_due_date, transponder_due_date, elt_due_date, updated_by, updated_at";
+  "aircraft_id, hundred_hour_due_hours, annual_due_date, static_due_date, transponder_due_date, elt_due_date, adsb_due_date, registration_due_date, current_meter_type, current_meter_value, meter_observed_at, meter_source, meter_source_brief_id, operational_status, updated_by, updated_at";
 
 export async function fetchAircraftModels(organizationId?: string | null) {
   const supabase = getSupabaseClient();
@@ -214,12 +273,9 @@ export async function fetchSharedAircraft() {
 export async function fetchOrganizationAircraft(organizationId: string) {
   const supabase = getSupabaseClient();
   const [{ data, error }, models, organizationResult] = await Promise.all([
-    supabase
-      .from("aircraft")
-      .select(ORGANIZATION_AIRCRAFT_SELECT)
-      .eq("organization_id", organizationId)
-      .eq("visibility", "organization")
-      .order("tail_number", { ascending: true }),
+    supabase.rpc("list_organization_aircraft", {
+      p_organization_id: organizationId,
+    }),
     fetchAircraftModels(organizationId).catch(() => [] as AircraftModelRecord[]),
     supabase.from("organizations").select("id, name").eq("id", organizationId).maybeSingle(),
   ]);
@@ -231,7 +287,10 @@ export async function fetchOrganizationAircraft(organizationId: string) {
     throw error;
   }
 
-  const aircraftIds = (data ?? []).map((row) => String((row as Record<string, unknown>).id ?? ""));
+  const organizationAircraftRows = (data ?? []) as unknown[];
+  const aircraftIds = organizationAircraftRows.map((row) =>
+    String((row as Record<string, unknown>).id ?? "")
+  );
   let maintenanceRows: unknown[] = [];
   if (aircraftIds.length > 0) {
     const maintenanceResult = await supabase
@@ -248,19 +307,77 @@ export async function fetchOrganizationAircraft(organizationId: string) {
   const maintenanceByAircraftId = new Map(
     maintenanceRows.map((row) => {
       const record = (row ?? {}) as Record<string, unknown>;
-      return [String(record.aircraft_id ?? ""), record as SavedAircraftDueInput];
+      return [String(record.aircraft_id ?? ""), record as OrganizationAircraftMaintenance];
     })
   );
   const organizationName =
     typeof organizationResult.data?.name === "string" ? organizationResult.data.name : null;
 
   return normalizeAircraftList(
-    (data ?? []).map((row) => ({ ...(row as Record<string, unknown>), organization_name: organizationName })),
+    organizationAircraftRows.map((row) => ({
+      ...(row as Record<string, unknown>),
+      organization_name: organizationName,
+    })),
     models,
     "organization",
     new Set(),
     maintenanceByAircraftId
   );
+}
+
+export async function fetchAircraftOrganizationAssignments(aircraftIds: string[]) {
+  if (aircraftIds.length === 0) return [] as AircraftOrganizationAssignment[];
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("aircraft_organization_assignments")
+    .select("aircraft_id, organization_id, assigned_by, created_at")
+    .in("aircraft_id", aircraftIds);
+
+  if (error) throw error;
+  return (data ?? []) as AircraftOrganizationAssignment[];
+}
+
+export async function setPlatformAircraftOrganizations(
+  aircraftId: string,
+  organizationIds: string[]
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("set_platform_aircraft_organizations", {
+    p_aircraft_id: aircraftId,
+    p_organization_ids: organizationIds,
+  });
+
+  if (error) throw error;
+  return (data ?? []) as string[];
+}
+
+export async function bulkUpdatePlatformAircraftOrganizations(
+  input: BulkAircraftAssignmentInput
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("bulk_update_platform_aircraft_organizations", {
+    p_aircraft_ids: input.aircraftIds,
+    p_organization_ids: input.organizationIds,
+    p_mode: input.mode,
+  });
+
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    aircraft_id: String(row.aircraft_id ?? ""),
+    before_count: Number(row.before_count ?? 0),
+    changed_count: Number(row.changed_count ?? 0),
+    after_count: Number(row.after_count ?? 0),
+  })) as BulkAircraftAssignmentResult[];
+}
+
+export async function fetchAircraftAssignmentAudit(organizationId?: string | null, limit = 100) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_aircraft_assignment_audit", {
+    p_organization_id: organizationId ?? null,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return (data ?? []) as AircraftAssignmentAuditEntry[];
 }
 
 export async function fetchActiveOrganizationAircraft() {
@@ -357,7 +474,7 @@ export async function deleteOrganizationAircraft(organizationId: string, aircraf
 
 export async function updateOrganizationAircraftMaintenance(
   aircraftId: string,
-  input: SavedAircraftDueInput
+  input: OrganizationAircraftMaintenanceInput
 ) {
   const supabase = getSupabaseClient();
   const {
@@ -365,7 +482,7 @@ export async function updateOrganizationAircraftMaintenance(
   } = await supabase.auth.getUser();
   const { error } = await supabase.from("organization_aircraft_maintenance").upsert({
     aircraft_id: aircraftId,
-    ...normalizeSavedAircraftDueInput(input),
+    ...normalizeOrganizationMaintenanceInput(input),
     updated_by: user?.id ?? null,
     updated_at: new Date().toISOString(),
   });
@@ -1355,6 +1472,10 @@ function normalizeAircraftRecord(
     organization_id: typeof record.organization_id === "string" ? record.organization_id : null,
     organization_name:
       typeof record.organization_name === "string" ? record.organization_name : null,
+    organization_access:
+      record.organization_access === "owned" || record.organization_access === "assigned"
+        ? record.organization_access
+        : null,
     visibility: typeof record.visibility === "string" ? record.visibility : "shared",
     category: model?.category ?? null,
     model,
@@ -1365,7 +1486,39 @@ function normalizeAircraftRecord(
     static_due_date: toDateString(record.static_due_date),
     transponder_due_date: toDateString(record.transponder_due_date),
     elt_due_date: toDateString(record.elt_due_date),
+    adsb_due_date: toDateString(record.adsb_due_date),
+    registration_due_date: toDateString(record.registration_due_date),
+    current_meter_type:
+      record.current_meter_type === "hobbs" || record.current_meter_type === "tach"
+        ? record.current_meter_type
+        : null,
+    current_meter_value: toNumber(record.current_meter_value),
+    meter_observed_at: toDateString(record.meter_observed_at),
+    meter_source: typeof record.meter_source === "string" ? record.meter_source : null,
+    meter_source_brief_id:
+      typeof record.meter_source_brief_id === "string" ? record.meter_source_brief_id : null,
+    operational_status: isAircraftOperationalStatus(record.operational_status)
+      ? record.operational_status
+      : "available",
   } as AircraftRecord;
+}
+
+function normalizeOrganizationMaintenanceInput(input: OrganizationAircraftMaintenanceInput) {
+  return {
+    ...normalizeSavedAircraftDueInput(input),
+    adsb_due_date: normalizeDateForStorage(input.adsb_due_date),
+    registration_due_date: normalizeDateForStorage(input.registration_due_date),
+    operational_status: input.operational_status ?? "available",
+  };
+}
+
+function isAircraftOperationalStatus(value: unknown): value is AircraftOperationalStatus {
+  return (
+    value === "available" ||
+    value === "away" ||
+    value === "in_maintenance" ||
+    value === "grounded"
+  );
 }
 
 function normalizeSavedAircraftDueInput(input: SavedAircraftDueInput) {

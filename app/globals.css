@@ -2188,6 +2188,7 @@ summary:focus-visible {
 }
 
 .dashboard-mobile-top,
+.dashboard-mobile-workspaces,
 .dashboard-bottom-nav {
   display: none;
 }
@@ -2488,7 +2489,7 @@ summary:focus-visible {
 .my-aircraft-table-head,
 .my-aircraft-row {
   display: grid;
-  grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 0.95fr) minmax(14rem, 1.25fr) auto;
+  grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 0.95fr) minmax(14rem, 1.25fr) 18rem;
   align-items: center;
   gap: 1rem;
 }
@@ -3504,6 +3505,10 @@ summary:focus-visible {
     border-radius: 20px;
     background: #fffdf7;
     box-shadow: 0 10px 24px rgba(18, 58, 117, 0.06);
+  }
+
+  .dashboard-mobile-workspaces {
+    display: flex;
   }
 
   .dashboard-bottom-nav {

@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.99.0";
-import { Resend } from "npm:resend";
 
 type CertificateRow = {
   id: string;
@@ -29,6 +28,25 @@ type ProfileRow = {
 type MedicalPrivilege = {
   label: string;
   dueDate: Date;
+};
+
+type AircraftMaintenanceRow = {
+  aircraft_id: string;
+  user_id?: string;
+  annual_due_date: string | null;
+  static_due_date: string | null;
+  transponder_due_date: string | null;
+  elt_due_date: string | null;
+  aircraft: {
+    tail_number: string;
+    organization_id?: string | null;
+    organization?: { name: string } | null;
+  } | null;
+};
+
+type OrganizationMemberRow = {
+  organization_id: string;
+  user_id: string;
 };
 
 const DAY_MS = 86_400_000;
@@ -99,6 +117,16 @@ function daysUntil(date: Date, now: Date) {
 
 function isInsideReminderWindow(date: Date, now: Date) {
   return daysUntil(date, now) <= REMINDER_WINDOW_DAYS;
+}
+
+function reminderStage(date: Date, now: Date) {
+  const days = daysUntil(date, now);
+  if (days < 0) return "expired";
+  if (days === 0) return "due";
+  if (days <= 7) return "7-day";
+  if (days <= 30) return "30-day";
+  if (days <= 90) return "90-day";
+  return null;
 }
 
 function getCertificateDueDate(certificate: CertificateRow) {
@@ -172,10 +200,6 @@ function formatDisplayDate(date: Date) {
   }).format(date);
 }
 
-function getFromEmail() {
-  return Deno.env.get("REMINDER_FROM_EMAIL") || "PilotSeal <noreply@pilotseal.com>";
-}
-
 function certificateTypeLabel(value: CertificateRow["certificate_type"]) {
   return value === "ground_instructor"
     ? "Ground instructor certificate"
@@ -191,71 +215,100 @@ function reminderLine(dueDate: Date, now: Date) {
   return `${days} day${days === 1 ? "" : "s"} left`;
 }
 
-async function sendCertificateReminder(
-  resend: Resend,
-  to: string,
+async function createCertificateReminder(
+  supabase: ReturnType<typeof createClient>,
   certificate: CertificateRow,
   dueDate: Date,
   now: Date,
 ) {
   const displayName = certificate.person?.display_name || "Saved instructor";
   const certificateNumber = certificate.certificate_number || "Not provided";
+  const stage = reminderStage(dueDate, now);
+  if (!stage) return;
 
-  await resend.emails.send({
-    from: getFromEmail(),
-    to,
-    subject: `${certificateTypeLabel(certificate.certificate_type)} reminder`,
-    html: `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f5f7fa;padding:40px 0;">
-  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:28px;box-shadow:0 8px 24px rgba(0,0,0,0.06);">
-    <h2 style="margin:0 0 12px;font-size:18px;">Certificate Reminder</h2>
-    <p style="font-size:14px;color:#333;">A saved instructor certificate is within the reminder window.</p>
-    <div style="margin:20px 0;padding:14px;border-radius:8px;background:#f1f3f5;">
-      <p style="margin:0;font-size:12px;color:#777;">Instructor</p>
-      <p style="margin:4px 0 10px;">${displayName}</p>
-      <p style="margin:0;font-size:12px;color:#777;">Certificate</p>
-      <p style="margin:4px 0 10px;">${certificateTypeLabel(certificate.certificate_type)} - ${certificateNumber}</p>
-      <p style="margin:0;font-size:12px;color:#777;">Due</p>
-      <p style="margin:4px 0;">${formatDisplayDate(dueDate)} (${reminderLine(dueDate, now)})</p>
-    </div>
-    <a href="https://pilotseal.com/dashboard/saved-people" style="padding:10px 16px;background:#111;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;">Review people</a>
-  </div>
-</div>`,
-  });
+  const message = `${displayName}'s ${certificateTypeLabel(certificate.certificate_type).toLowerCase()} (${certificateNumber}) is due ${formatDisplayDate(dueDate)} — ${reminderLine(dueDate, now)}.`;
+  const { error } = await supabase.from("notifications").upsert({
+    title: `${certificateTypeLabel(certificate.certificate_type)} reminder`,
+    message,
+    content: message,
+    priority: "high",
+    status: "sent",
+    is_active: true,
+    scheduled_at: now.toISOString(),
+    kind: "reminder",
+    recipient_user_id: certificate.user_id,
+    action_url: "/dashboard/saved-people",
+    dedupe_key: `certificate:${certificate.id}:${formatIsoDate(dueDate)}:${stage}`,
+  }, { onConflict: "recipient_user_id,dedupe_key" });
+  if (error) throw error;
 }
 
-async function sendMedicalReminder(
-  resend: Resend,
-  to: string,
+async function createMedicalReminder(
+  supabase: ReturnType<typeof createClient>,
   profile: ProfileRow,
   privileges: MedicalPrivilege[],
   now: Date,
 ) {
   const rows = privileges
-    .map((privilege) => `
-      <p style="margin:0;font-size:12px;color:#777;">${privilege.label}</p>
-      <p style="margin:4px 0 10px;">${formatDisplayDate(privilege.dueDate)} (${reminderLine(privilege.dueDate, now)})</p>
-    `)
-    .join("");
+    .map((privilege) => `${privilege.label}: ${formatDisplayDate(privilege.dueDate)} (${reminderLine(privilege.dueDate, now)})`)
+    .join(" · ");
+  const dueDate = privileges[0].dueDate;
+  const stage = reminderStage(dueDate, now);
+  if (!stage) return;
+  const message = `${profile.display_name || "Your medical certificate"}: ${rows}`;
+  const { error } = await supabase.from("notifications").upsert({
+    title: "Medical certificate reminder",
+    message,
+    content: message,
+    priority: "high",
+    status: "sent",
+    is_active: true,
+    scheduled_at: now.toISOString(),
+    kind: "reminder",
+    recipient_user_id: profile.id,
+    action_url: "/dashboard/account-settings",
+    dedupe_key: `medical:${formatIsoDate(dueDate)}:${stage}`,
+  }, { onConflict: "recipient_user_id,dedupe_key" });
+  if (error) throw error;
+}
 
-  await resend.emails.send({
-    from: getFromEmail(),
-    to,
-    subject: "Medical certificate reminder",
-    html: `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f5f7fa;padding:40px 0;">
-  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:28px;box-shadow:0 8px 24px rgba(0,0,0,0.06);">
-    <h2 style="margin:0 0 12px;font-size:18px;">Medical Certificate Reminder</h2>
-    <p style="font-size:14px;color:#333;">Your medical certificate privileges are within the reminder window.</p>
-    <div style="margin:20px 0;padding:14px;border-radius:8px;background:#f1f3f5;">
-      <p style="margin:0;font-size:12px;color:#777;">Account</p>
-      <p style="margin:4px 0 10px;">${profile.display_name || "PilotSeal user"}</p>
-      ${rows}
-    </div>
-    <a href="https://pilotseal.com/dashboard/account-settings" style="padding:10px 16px;background:#111;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;">Review medical</a>
-  </div>
-</div>`,
-  });
+const aircraftDateFields = [
+  ["annual_due_date", "Annual inspection"],
+  ["static_due_date", "Static inspection"],
+  ["transponder_due_date", "Transponder inspection"],
+  ["elt_due_date", "ELT inspection"],
+] as const;
+
+async function createAircraftReminder(
+  supabase: ReturnType<typeof createClient>,
+  row: AircraftMaintenanceRow,
+  recipientUserId: string,
+  field: typeof aircraftDateFields[number][0],
+  label: string,
+  dueDate: Date,
+  stage: string,
+  now: Date,
+  organizationId: string | null,
+  sourceLabel: string,
+) {
+  const tailNumber = row.aircraft?.tail_number || "Aircraft";
+  const message = `${tailNumber} ${label.toLowerCase()} is due ${formatDisplayDate(dueDate)} — ${reminderLine(dueDate, now)}.`;
+  const { error } = await supabase.from("notifications").upsert({
+    title: `${tailNumber} maintenance reminder`,
+    message,
+    content: message,
+    priority: stage === "expired" ? "critical" : stage === "due" || stage === "7-day" ? "high" : "normal",
+    status: "sent",
+    is_active: true,
+    scheduled_at: now.toISOString(),
+    kind: "reminder",
+    recipient_user_id: recipientUserId,
+    organization_id: organizationId,
+    source_label: sourceLabel,
+    action_url: "/dashboard/my-aircraft",
+    dedupe_key: `aircraft:${organizationId ?? "personal"}:${row.aircraft_id}:${field}:${formatIsoDate(dueDate)}:${stage}`,
+  }, { onConflict: "recipient_user_id,dedupe_key" });
+  if (error) throw error;
 }
 
 serve(async (req) => {
@@ -270,14 +323,11 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const resendApiKey = Deno.env.get("RESEND_API_KEY");
-
-  if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
+  if (!supabaseUrl || !serviceRoleKey) {
     return jsonResponse({ error: "Missing environment configuration" }, 500);
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-  const resend = new Resend(resendApiKey);
   const now = new Date();
 
   try {
@@ -317,9 +367,35 @@ serve(async (req) => {
       throw profileError;
     }
 
+    const [personalAircraftResult, organizationMaintenanceResult, organizationMembersResult] = await Promise.all([
+      supabase.from("saved_aircraft").select(`
+        aircraft_id,
+        user_id,
+        annual_due_date,
+        static_due_date,
+        transponder_due_date,
+        elt_due_date,
+        aircraft:aircraft_id(tail_number)
+      `),
+      supabase.from("organization_aircraft_maintenance").select(`
+        aircraft_id,
+        annual_due_date,
+        static_due_date,
+        transponder_due_date,
+        elt_due_date,
+        aircraft:aircraft_id(tail_number, organization_id, organization:organization_id(name))
+      `),
+      supabase.from("organization_members").select("organization_id, user_id"),
+    ]);
+
+    if (personalAircraftResult.error) throw personalAircraftResult.error;
+    if (organizationMaintenanceResult.error) throw organizationMaintenanceResult.error;
+    if (organizationMembersResult.error) throw organizationMembersResult.error;
+
     const profilesById = new Map((profiles || []).map((profile: ProfileRow) => [profile.id, profile]));
     let certificateRemindersSent = 0;
     let medicalRemindersSent = 0;
+    let aircraftRemindersSent = 0;
 
     for (const certificate of (certificates || []) as CertificateRow[]) {
       const dueDate = getCertificateDueDate(certificate);
@@ -327,43 +403,16 @@ serve(async (req) => {
         continue;
       }
 
-      const dueDateText = formatIsoDate(dueDate);
-      if (certificate.last_alerted_due_date === dueDateText) {
-        continue;
-      }
-
       const profile = profilesById.get(certificate.user_id);
-      if (!profile?.email) {
-        continue;
-      }
-
       if (!profile.self_person_id || certificate.person_id !== profile.self_person_id) {
         continue;
       }
 
-      await sendCertificateReminder(resend, profile.email, certificate, dueDate, now);
-
-      const { error: updateError } = await supabase
-        .from("saved_person_certificates")
-        .update({
-          last_alerted_due_date: dueDateText,
-          alert_sent_at: now.toISOString(),
-        })
-        .eq("id", certificate.id);
-
-      if (updateError) {
-        console.error("Failed to mark certificate reminder as sent", updateError);
-        continue;
-      }
-
+      await createCertificateReminder(supabase, certificate, dueDate, now);
       certificateRemindersSent += 1;
     }
 
     for (const profile of (profiles || []) as ProfileRow[]) {
-      if (!profile.email) {
-        continue;
-      }
-
       const duePrivileges = getMedicalPrivileges(profile)
         .filter((privilege) => isInsideReminderWindow(privilege.dueDate, now))
         .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime());
@@ -372,33 +421,50 @@ serve(async (req) => {
         continue;
       }
 
-      const alertDueDate = formatIsoDate(duePrivileges[0].dueDate);
-      if (profile.last_medical_alerted_due_date === alertDueDate) {
-        continue;
-      }
-
-      await sendMedicalReminder(resend, profile.email, profile, duePrivileges, now);
-
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          last_medical_alerted_due_date: alertDueDate,
-          medical_alert_sent_at: now.toISOString(),
-        })
-        .eq("id", profile.id);
-
-      if (updateError) {
-        console.error("Failed to mark medical reminder as sent", updateError);
-        continue;
-      }
-
+      await createMedicalReminder(supabase, profile, duePrivileges, now);
       medicalRemindersSent += 1;
+    }
+
+    for (const row of (personalAircraftResult.data || []) as unknown as AircraftMaintenanceRow[]) {
+      if (!row.user_id) continue;
+      for (const [field, label] of aircraftDateFields) {
+        const dueDate = parseIsoDate(row[field]);
+        if (!dueDate) continue;
+        const stage = reminderStage(dueDate, now);
+        if (!stage) continue;
+        await createAircraftReminder(supabase, row, row.user_id, field, label, dueDate, stage, now, null, "Personal aircraft");
+        aircraftRemindersSent += 1;
+      }
+    }
+
+    const membersByOrganization = new Map<string, string[]>();
+    for (const member of (organizationMembersResult.data || []) as OrganizationMemberRow[]) {
+      const members = membersByOrganization.get(member.organization_id) || [];
+      members.push(member.user_id);
+      membersByOrganization.set(member.organization_id, members);
+    }
+
+    for (const row of (organizationMaintenanceResult.data || []) as unknown as AircraftMaintenanceRow[]) {
+      const organizationId = row.aircraft?.organization_id;
+      if (!organizationId) continue;
+      const organizationName = row.aircraft?.organization?.name || "Organization aircraft";
+      for (const [field, label] of aircraftDateFields) {
+        const dueDate = parseIsoDate(row[field]);
+        if (!dueDate) continue;
+        const stage = reminderStage(dueDate, now);
+        if (!stage) continue;
+        for (const userId of membersByOrganization.get(organizationId) || []) {
+          await createAircraftReminder(supabase, row, userId, field, label, dueDate, stage, now, organizationId, organizationName);
+          aircraftRemindersSent += 1;
+        }
+      }
     }
 
     return jsonResponse({
       success: true,
       certificateRemindersSent,
       medicalRemindersSent,
+      aircraftRemindersSent,
     });
   } catch (error) {
     console.error("Reminder function failed", error);

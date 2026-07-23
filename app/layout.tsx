@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
-import AuthOnboardingGate from "@/components/auth/AuthOnboardingGate";
+import OrganizationProvider from "@/components/organizations/OrganizationProvider";
 import MobileAppNav from "@/components/ui/MobileAppNav";
 import SiteHeader from "@/components/ui/SiteHeader";
-import SiteNotificationBanner from "@/components/notifications/SiteNotificationBanner";
 import { getSiteUrl } from "@/lib/seo";
 import { ToolProvider } from "@/stores/toolState";
 import "./globals.css";
@@ -69,62 +67,59 @@ export default function RootLayout({
         </Script>
         <ToolProvider>
           <AuthSessionProvider>
-            <SiteHeader />
-            <Suspense fallback={null}>
-              <AuthOnboardingGate />
-            </Suspense>
+            <OrganizationProvider>
+              <SiteHeader />
 
-            <div className="app-main-content pb-16 pt-6 sm:pt-10">
-              <SiteNotificationBanner />
-              {children}
-            </div>
+              <div className="app-main-content pb-16 pt-6 sm:pt-10">
+                {children}
+              </div>
 
-            <MobileAppNav />
+              <MobileAppNav />
 
-            <footer className="app-footer-shell px-3 pb-10 pt-10">
-              <div className="site-shell">
-                <div className="grid gap-10 md:grid-cols-[1.35fr_0.8fr_0.8fr]">
-                  <div>
-                    <p className="muted-kicker">FAA-oriented workflow support</p>
-                    <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-                      PilotSeal tools reference FAA guidance such as Advisory
-                      Circular AC 61-65. They are intended to assist instructors
-                      and pilots but do not replace FAA regulations or instructor
-                      judgment.
-                    </p>
-                  </div>
-
-                  <div className="text-sm text-[var(--muted)]">
-                    <p className="font-semibold text-[var(--foreground)]">Site</p>
-                    <div className="mt-4 grid gap-3">
-                      <Link href="/">Home</Link>
-                      <Link href="/tools">Tools</Link>
-                      <Link href="/endorsements">Endorsements</Link>
-                      <Link href="/read">Read</Link>
-                      
+              <footer className="app-footer-shell px-3 pb-10 pt-10">
+                <div className="site-shell">
+                  <div className="grid gap-10 md:grid-cols-[1.35fr_0.8fr_0.8fr]">
+                    <div>
+                      <p className="muted-kicker">FAA-oriented workflow support</p>
+                      <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+                        PilotSeal tools reference FAA guidance such as Advisory
+                        Circular AC 61-65. They are intended to assist instructors
+                        and pilots but do not replace FAA regulations or instructor
+                        judgment.
+                      </p>
                     </div>
-                  </div>
 
-                  <div className="text-sm text-[var(--muted)]">
-                    <p className="font-semibold text-[var(--foreground)]">Info</p>
-                    <div className="mt-4 grid gap-3">
-                      <Link href="/privacy">Privacy</Link>
-                      <Link href="/disclaimer">Disclaimer</Link>
-                      <Link href="/sitelog">Site Log</Link>
-                      <a href="mailto:admin@pilotseal.com">Contact</a>
-                      <a
-                        href="https://ruben.pilotseal.com"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Blog
-                      </a>
+                    <div className="text-sm text-[var(--muted)]">
+                      <p className="font-semibold text-[var(--foreground)]">Site</p>
+                      <div className="mt-4 grid gap-3">
+                        <Link href="/">Home</Link>
+                        <Link href="/tools">Tools</Link>
+                        <Link href="/endorsements">Endorsements</Link>
+                        <Link href="/read">Read</Link>
+                      </div>
                     </div>
-                    <p className="mt-6">© {new Date().getFullYear()} PilotSeal</p>
+
+                    <div className="text-sm text-[var(--muted)]">
+                      <p className="font-semibold text-[var(--foreground)]">Info</p>
+                      <div className="mt-4 grid gap-3">
+                        <Link href="/privacy">Privacy</Link>
+                        <Link href="/disclaimer">Disclaimer</Link>
+                        <Link href="/sitelog">Site Log</Link>
+                        <a href="mailto:admin@pilotseal.com">Contact</a>
+                        <a
+                          href="https://ruben.pilotseal.com"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Blog
+                        </a>
+                      </div>
+                      <p className="mt-6">© {new Date().getFullYear()} PilotSeal</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </footer>
+              </footer>
+            </OrganizationProvider>
           </AuthSessionProvider>
         </ToolProvider>
       </body>

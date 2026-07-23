@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
 import { getDeterministicGreeting } from "@/lib/greetings";
 import {
   CERTIFICATE_TYPE_LABELS,
@@ -923,6 +924,8 @@ export default function AccountSettingsPanel() {
   return (
     <div className="dashboard-settings-list">
       {greeting ? <p className="saas-greeting">{greeting}</p> : null}
+
+      <OrganizationAccessManager showEmpty />
 
       <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">

@@ -26,6 +26,34 @@ export type OrganizationStudent = {
   certificate_number: string | null;
 };
 
+export type OrganizationPersonStatus = "pending" | "linked";
+
+export type OrganizationPerson = {
+  id: string;
+  organization_id: string;
+  email: string;
+  organization_display_name: string | null;
+  profile_display_name: string | null;
+  teaching_role: OrganizationTeachingRole | null;
+  internal_id: string | null;
+  notes: string | null;
+  user_id: string | null;
+  status: OrganizationPersonStatus;
+  member_role: Exclude<OrganizationRole, "platform_admin"> | null;
+  created_at: string;
+  linked_at: string | null;
+};
+
+export type AvailableOrganization = {
+  person_id: string;
+  organization_id: string;
+  organization_name: string;
+  organization_display_name: string | null;
+  teaching_role: OrganizationTeachingRole | null;
+  internal_id: string | null;
+  added_at: string;
+};
+
 export const ACTIVE_ORGANIZATION_STORAGE_KEY = "pilotseal.activeOrganizationId";
 
 export async function fetchUserOrganizations(): Promise<Organization[]> {
@@ -53,6 +81,78 @@ export async function fetchOrganizationMembers(organizationId: string): Promise<
   }
 
   return ((data ?? []) as unknown[]).map(normalizeOrganizationMember);
+}
+
+export async function fetchOrganizationPeople(organizationId: string): Promise<OrganizationPerson[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_organization_people", {
+    p_organization_id: organizationId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as unknown[]).map(normalizeOrganizationPerson);
+}
+
+export async function addOrganizationPerson(input: {
+  organizationId: string;
+  email: string;
+  displayName?: string;
+  teachingRole?: OrganizationTeachingRole | null;
+  internalId?: string;
+  notes?: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("add_organization_person", {
+    p_organization_id: input.organizationId,
+    p_email: input.email.trim(),
+    p_display_name: input.displayName?.trim() || null,
+    p_teaching_role: input.teachingRole ?? null,
+    p_internal_id: input.internalId?.trim() || null,
+    p_notes: input.notes?.trim() || null,
+  });
+  if (error) throw error;
+  return data as unknown as OrganizationPerson;
+}
+
+export async function updateOrganizationPerson(input: {
+  personId: string;
+  displayName?: string;
+  teachingRole?: OrganizationTeachingRole | null;
+  internalId?: string;
+  notes?: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("update_organization_person", {
+    p_person_id: input.personId,
+    p_display_name: input.displayName?.trim() || null,
+    p_teaching_role: input.teachingRole ?? null,
+    p_internal_id: input.internalId?.trim() || null,
+    p_notes: input.notes?.trim() || null,
+  });
+  if (error) throw error;
+  return data as unknown as OrganizationPerson;
+}
+
+export async function archivePendingOrganizationPerson(personId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("archive_pending_organization_person", {
+    p_person_id: personId,
+  });
+  if (error) throw error;
+}
+
+export async function fetchAvailableOrganizations(): Promise<AvailableOrganization[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_my_available_organizations");
+  if (error) throw error;
+  return ((data ?? []) as unknown[]).map(normalizeAvailableOrganization);
+}
+
+export async function claimOrganizationPerson(personId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("claim_organization_person", {
+    p_person_id: personId,
+  });
+  if (error) throw error;
 }
 
 export async function addOrganizationMemberByEmail(organizationId: string, email: string) {
@@ -170,6 +270,53 @@ function normalizeOrganizationMember(value: unknown): OrganizationMember {
         : null,
     created_at: String(record.created_at ?? ""),
   };
+}
+
+function normalizeOrganizationPerson(value: unknown): OrganizationPerson {
+  const record = (value ?? {}) as Record<string, unknown>;
+  return {
+    id: String(record.id ?? ""),
+    organization_id: String(record.organization_id ?? ""),
+    email: String(record.email ?? ""),
+    organization_display_name: optionalText(record.organization_display_name),
+    profile_display_name: optionalText(record.profile_display_name),
+    teaching_role:
+      record.teaching_role === "instructor" || record.teaching_role === "student"
+        ? record.teaching_role
+        : null,
+    internal_id: optionalText(record.internal_id),
+    notes: optionalText(record.notes),
+    user_id: optionalText(record.user_id),
+    status: record.status === "linked" ? "linked" : "pending",
+    member_role:
+      record.member_role === "owner" ||
+      record.member_role === "organization_admin" ||
+      record.member_role === "member"
+        ? record.member_role
+        : null,
+    created_at: String(record.created_at ?? ""),
+    linked_at: optionalText(record.linked_at),
+  };
+}
+
+function normalizeAvailableOrganization(value: unknown): AvailableOrganization {
+  const record = (value ?? {}) as Record<string, unknown>;
+  return {
+    person_id: String(record.person_id ?? ""),
+    organization_id: String(record.organization_id ?? ""),
+    organization_name: String(record.organization_name ?? ""),
+    organization_display_name: optionalText(record.organization_display_name),
+    teaching_role:
+      record.teaching_role === "instructor" || record.teaching_role === "student"
+        ? record.teaching_role
+        : null,
+    internal_id: optionalText(record.internal_id),
+    added_at: String(record.added_at ?? ""),
+  };
+}
+
+function optionalText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function isMissingOrganizationSchema(error: { code?: string; message?: string }) {
