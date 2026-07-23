@@ -571,7 +571,7 @@ export default function EndorsementTemplateAdminPanel() {
                             {template.reference_number ? <span className="saas-pill">{template.reference_number}</span> : null}
                             <p className="text-sm font-semibold text-slate-950">{template.title}</p>
                           </div>
-                          <p className="mt-1 text-xs text-slate-500">Short name: {template.key}</p>
+                          <p className="mt-1 text-xs text-slate-500">Template ID: {template.key}</p>
                         </div>
                         <span className="saas-pill">{getVisibilityLabel(template.status)}</span>
                       </div>
@@ -614,7 +614,7 @@ export default function EndorsementTemplateAdminPanel() {
                 </div>
 
                 <div className="mt-4 grid gap-2 text-sm text-slate-600">
-                  <span>Short name: {previewTemplate.key}</span>
+                  <span>Template ID: {previewTemplate.key}</span>
                   {previewTemplate.reference_number ? <span>AC number: {previewTemplate.reference_number}</span> : null}
                   <span>Where it appears: {getVisibilityLabel(previewTemplate.status)}</span>
                 </div>

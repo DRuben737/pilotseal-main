@@ -532,7 +532,7 @@ export default function MyAircraftManager() {
           aircraft: currentAircraft,
           proposed,
         });
-        setStatus("This shared aircraft needs an update request for W&B changes.");
+        setStatus("Changes to a shared aircraft must be submitted for review.");
         return;
       }
 
@@ -548,7 +548,7 @@ export default function MyAircraftManager() {
 
       if (result.kind === "conflict") {
         setConflict(result);
-        setStatus("This tail number already exists with different W&B numbers.");
+        setStatus("This tail number already exists with different weight-and-balance values.");
         return;
       }
 
@@ -681,7 +681,7 @@ export default function MyAircraftManager() {
           <div className="my-aircraft-table-head">
             <span>Tail number</span>
             <span>Model</span>
-            <span>W&B</span>
+            <span>Weight & balance</span>
             <span>Action</span>
           </div>
 
@@ -1117,7 +1117,7 @@ export default function MyAircraftManager() {
                             >
                               <h2 className="text-sm font-semibold text-slate-950">Existing aircraft found</h2>
                               <p className="saas-meta-text mt-2">
-                                The tail number already exists, but your W&B numbers do not match the current shared
+                                The tail number already exists, but your weight-and-balance values do not match the current shared
                                 record.
                               </p>
 
@@ -1166,7 +1166,7 @@ export default function MyAircraftManager() {
                                   disabled={saving}
                                   onClick={() => void handleSubmitUpdateRequest()}
                                 >
-                                  Submit updated W&B
+                                  Submit weight-and-balance update
                                 </button>
                                 <button
                                   type="button"

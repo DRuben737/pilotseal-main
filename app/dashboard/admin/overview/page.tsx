@@ -2,8 +2,8 @@ import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/AdminConsole";
 
 const tasks = [
-  ["Organizations & Access", "/dashboard/admin/access", "Create organizations and manage Platform Super Admin access."],
-  ["Platform Fleet", "/dashboard/admin/aircraft", "Maintain global aircraft models and platform aircraft."],
+  ["Organizations & Access", "/dashboard/admin/access", "Create organizations and manage platform administrator access."],
+  ["Aircraft Library", "/dashboard/admin/aircraft", "Manage the aircraft models and shared aircraft available across PilotSeal."],
   ["Aircraft Assignments", "/dashboard/admin/aircraft-assignments", "Batch-add or remove organization access for your private aircraft."],
   ["Endorsement Approvals", "/dashboard/admin/endorsements", "Approve or reject organization template changes."],
   ["Audit Log", "/dashboard/admin/audit", "Review aircraft access changes."],

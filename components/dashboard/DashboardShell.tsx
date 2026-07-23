@@ -38,7 +38,7 @@ const organizationLinks = [
 const platformLinks = [
   { href: "/dashboard/admin/overview", label: "Platform Overview" },
   { href: "/dashboard/admin/access", label: "Organizations & Access" },
-  { href: "/dashboard/admin/aircraft", label: "Platform Fleet" },
+  { href: "/dashboard/admin/aircraft", label: "Aircraft Library" },
   { href: "/dashboard/admin/aircraft-assignments", label: "Aircraft Assignments" },
   { href: "/dashboard/admin/endorsements", label: "Endorsement Approvals" },
   { href: "/dashboard/admin/audit", label: "Audit Log" },
@@ -99,7 +99,7 @@ function DashboardIcon({ kind }: { kind: string }) {
       );
     case "Aircraft":
     case "Aircraft & Maintenance":
-    case "Platform Fleet":
+    case "Aircraft Library":
     case "Aircraft Assignments":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>

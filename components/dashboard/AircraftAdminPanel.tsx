@@ -213,6 +213,31 @@ function isValidNumber(value: string) {
   return value.trim() !== "" && Number.isFinite(Number(value));
 }
 
+function getUniqueStationId(
+  station: ModelStationDraft,
+  stationIndex: number,
+  usedIds: Set<string>
+) {
+  const baseId =
+    station.id.trim() ||
+    station.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
+      .replace(/^-+|-+$/g, "") ||
+    `loading-location-${stationIndex + 1}`;
+  let candidate = baseId;
+  let suffix = 2;
+
+  while (usedIds.has(candidate.toLowerCase())) {
+    candidate = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  usedIds.add(candidate.toLowerCase());
+  return candidate;
+}
+
 function validateOptionalNumber(
   errors: ModelFormErrors,
   key: string,
@@ -276,11 +301,8 @@ function validateModelForm(modelForm: ModelFormState) {
       continue;
     }
 
-    if (!station.id.trim()) {
-      errors[`${prefix}.id`] = "Add a short name for this loading location.";
-    }
     if (!station.name.trim()) {
-      errors[`${prefix}.name`] = "Add the name users will see.";
+      errors[`${prefix}.name`] = "Enter a name for this loading location.";
     }
     if (!isValidNumber(station.arm)) {
       errors[`${prefix}.arm`] = "Enter the arm from the aircraft datum.";
@@ -326,7 +348,6 @@ function validateModelForm(modelForm: ModelFormState) {
     }
 
     if (
-      station.id.trim() &&
       station.name.trim() &&
       isValidNumber(station.arm) &&
       !Object.keys(errors).some((key) => key.startsWith(`${prefix}.`))
@@ -897,15 +918,16 @@ export default function AircraftAdminPanel() {
       return;
     }
 
+    const usedStationIds = new Set<string>();
     const stations = modelForm.stations
-      .filter((station) => station.id.trim() && station.name.trim() && station.arm.trim())
-      .map((station) => {
+      .filter((station) => station.name.trim() && station.arm.trim())
+      .map((station, stationIndex) => {
         const weightPerGallon =
           toOptionalNumber(station.weightPerGallon) ??
           (/fuel/i.test(station.id) || /fuel/i.test(station.name) ? 6 : null);
 
         return {
-          id: station.id.trim(),
+          id: getUniqueStationId(station, stationIndex, usedStationIds),
           name: station.name.trim(),
           arm: toNumber(station.arm),
           latArm: toOptionalNumber(station.latArm),
@@ -1189,7 +1211,7 @@ export default function AircraftAdminPanel() {
     try {
       await approveAircraftUpdateRequest(request);
       await reloadAll();
-      setStatus(`Approved W&B update for ${request.aircraft_tail_number}.`);
+      setStatus(`Approved the weight-and-balance update for ${request.aircraft_tail_number}.`);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to approve this aircraft update right now."));
     } finally {
@@ -1204,7 +1226,7 @@ export default function AircraftAdminPanel() {
     try {
       await rejectAircraftUpdateRequest(request.id);
       await reloadAll();
-      setStatus(`Rejected W&B update for ${request.aircraft_tail_number}.`);
+      setStatus(`Rejected the weight-and-balance update for ${request.aircraft_tail_number}.`);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to reject this aircraft update right now."));
     } finally {
@@ -1217,7 +1239,7 @@ export default function AircraftAdminPanel() {
   }
 
   if (!isAdmin) {
-    return <div className="saas-panel">Admin access required.</div>;
+    return <div className="saas-panel">Platform administrator access is required.</div>;
   }
 
   const renderModelForm = () => (
@@ -1372,38 +1394,14 @@ export default function AircraftAdminPanel() {
               }`}
             >
               <label className="grid gap-2 text-sm">
-                <span>Short name <span className="text-rose-700">(required)</span></span>
-                <input
-                  className={fieldClass(
-                    Boolean(modelErrors[`station.${station.clientKey}.id`])
-                  )}
-                  value={station.id}
-                  onChange={(event) => updateStation(index, "id", event.target.value)}
-                  placeholder="e.g. pilot, baggage, mainFuel"
-                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.id`])}
-                  aria-describedby={
-                    modelErrors[`station.${station.clientKey}.id`]
-                      ? `station-${station.clientKey}-id-error`
-                      : undefined
-                  }
-                />
-                <span className="text-xs text-slate-500">
-                  A unique name used behind the scenes.
-                </span>
-                <FieldError
-                  id={`station-${station.clientKey}-id-error`}
-                  message={modelErrors[`station.${station.clientKey}.id`]}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Name users see <span className="text-rose-700">(required)</span></span>
+                <span>Location name <span className="text-rose-700">(required)</span></span>
                 <input
                   className={fieldClass(
                     Boolean(modelErrors[`station.${station.clientKey}.name`])
                   )}
                   value={station.name}
                   onChange={(event) => updateStation(index, "name", event.target.value)}
-                  placeholder="e.g. Pilot seat"
+                  placeholder="e.g. Pilot seat or Main fuel tank"
                   aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.name`])}
                   aria-describedby={
                     modelErrors[`station.${station.clientKey}.name`]
@@ -1558,7 +1556,7 @@ export default function AircraftAdminPanel() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h4 className="text-sm font-semibold text-slate-900">
-                  CG limits — top view
+                  Center-of-gravity limits — top view
                 </h4>
                 <p className="saas-meta-text mt-1">
                   Enter at least three complete forward/aft and left/right CG boundary
@@ -1644,7 +1642,7 @@ export default function AircraftAdminPanel() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h4 className="text-sm font-semibold text-slate-900">
-                  CG and weight limits
+                  Center-of-gravity and weight limits
                 </h4>
                 <p className="saas-meta-text mt-1">
                   Optional. If used, enter at least three complete points.
@@ -1730,7 +1728,7 @@ export default function AircraftAdminPanel() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h4 className="text-sm font-semibold text-slate-900">
-                Weight-and-balance limits
+                Center-of-gravity and weight limits
               </h4>
               <p className="saas-meta-text mt-1">
                 Enter at least three complete points from the approved CG envelope.
@@ -1928,7 +1926,7 @@ export default function AircraftAdminPanel() {
             step="0.1"
             value={aircraftForm.empty_weight}
             onChange={(event) => updateAircraftField("empty_weight", event.target.value)}
-            placeholder="From the current W&B record"
+            placeholder="From the current weight-and-balance record"
             aria-invalid={Boolean(aircraftErrors.empty_weight)}
             aria-describedby={
               aircraftErrors.empty_weight ? "aircraft-empty-weight-error" : undefined
@@ -1950,7 +1948,7 @@ export default function AircraftAdminPanel() {
             step="0.01"
             value={aircraftForm.empty_arm}
             onChange={(event) => updateAircraftField("empty_arm", event.target.value)}
-            placeholder="From the current W&B record"
+            placeholder="From the current weight-and-balance record"
             aria-invalid={Boolean(aircraftErrors.empty_arm)}
             aria-describedby={
               aircraftErrors.empty_arm ? "aircraft-empty-arm-error" : undefined
@@ -2085,7 +2083,7 @@ export default function AircraftAdminPanel() {
                                 <p className="text-sm font-semibold text-slate-900">{model.name}</p>
                                 <p className="saas-meta-text">
                                   {model.category === "helicopter" ? "Helicopter" : "Airplane"}
-                                  {" · Typical fuel burn: "}
+                                  {" · Typical fuel use: "}
                                   {typeof model.avg_fuel_burn_rate === "number"
                                     ? `${model.avg_fuel_burn_rate} gal/hr`
                                     : "not entered"}
@@ -2290,7 +2288,7 @@ export default function AircraftAdminPanel() {
                         <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
                           <p className="text-sm font-medium text-slate-900">No pending requests.</p>
                           <p className="saas-meta-text mt-1">
-                            Submitted W&B conflicts will appear here for admin review.
+                            Submitted weight-and-balance changes will appear here for review.
                           </p>
                         </div>
                       ) : null}
