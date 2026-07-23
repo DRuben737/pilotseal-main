@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
@@ -68,6 +68,14 @@ const OPTION_CATEGORIES: Array<{ value: AsrOptionCategory; label: string }> = [
   { value: "external_agency", label: "External Agency" },
 ];
 
+type DraftSaveContext = {
+  organizationId: string;
+  clientRequestId: string;
+  reportId: string;
+  lastSavedSnapshot: string;
+  latestSaveVersion: number;
+};
+
 export default function AsrReportsManager() {
   const searchParams = useSearchParams();
   const requestedReportId = searchParams.get("reportId") ?? "";
@@ -88,6 +96,7 @@ export default function AsrReportsManager() {
   const [draftRequestId, setDraftRequestId] = useState("");
   const [draftData, setDraftData] = useState<AsrReportData>(createEmptyAsrReportData);
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [closingDraft, setClosingDraft] = useState(false);
   const [createDiscrepancy, setCreateDiscrepancy] = useState(false);
   const [discrepancyType, setDiscrepancyType] =
     useState<AircraftDiscrepancyType>("Wings");
@@ -98,6 +107,15 @@ export default function AsrReportsManager() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const draftDataRef = useRef(draftData);
+  const draftContextRef = useRef<DraftSaveContext>({
+    organizationId: "",
+    clientRequestId: "",
+    reportId: "",
+    lastSavedSnapshot: "",
+    latestSaveVersion: 0,
+  });
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const activeReport = reports.find((report) => report.id === activeReportId) ?? null;
   const currentCapabilities = assignments
@@ -106,6 +124,98 @@ export default function AsrReportsManager() {
   const isSafetyReviewer = currentCapabilities.includes("safety_reviewer");
   const isTrainingReviewer = currentCapabilities.includes("training_reviewer");
   const isMaintenanceReviewer = currentCapabilities.includes("maintenance_reviewer");
+  const draftSnapshot = useMemo(() => JSON.stringify(draftData), [draftData]);
+  const hasUnsavedDraft =
+    showForm &&
+    (draftSnapshot !== draftContextRef.current.lastSavedSnapshot ||
+      draftState === "saving");
+
+  const queueDraftSave = useCallback(
+    (snapshot: AsrReportData): Promise<string> => {
+      const context = draftContextRef.current;
+      const organizationId = context.organizationId;
+      const clientRequestId = context.clientRequestId;
+      if (!organizationId || !clientRequestId) {
+        return Promise.reject(new Error("Unable to identify this ASR draft."));
+      }
+
+      const serializedSnapshot = JSON.stringify(snapshot);
+      const saveVersion = context.latestSaveVersion + 1;
+      context.latestSaveVersion = saveVersion;
+      setDraftState("saving");
+
+      const saveTask = saveQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const reportId = await saveAsrDraft({
+            organizationId,
+            reportId: context.reportId || null,
+            clientRequestId,
+            reportData: snapshot,
+          });
+          context.reportId = reportId;
+          context.lastSavedSnapshot = serializedSnapshot;
+          if (draftContextRef.current === context) {
+            setEditingReportId(reportId);
+          }
+          return reportId;
+        });
+
+      saveQueueRef.current = saveTask.then(
+        () => undefined,
+        () => undefined
+      );
+
+      return saveTask.then(
+        (reportId) => {
+          if (
+            draftContextRef.current === context &&
+            context.latestSaveVersion === saveVersion
+          ) {
+            setDraftState("saved");
+          }
+          return reportId;
+        },
+        (value) => {
+          if (
+            draftContextRef.current === context &&
+            context.latestSaveVersion === saveVersion
+          ) {
+            setDraftState("error");
+          }
+          throw value;
+        }
+      );
+    },
+    []
+  );
+
+  const flushDraftOnExit = useCallback(() => {
+    const context = draftContextRef.current;
+    const snapshot = draftDataRef.current;
+    const serializedSnapshot = JSON.stringify(snapshot);
+    if (
+      !context.organizationId ||
+      !context.clientRequestId ||
+      serializedSnapshot === context.lastSavedSnapshot
+    ) {
+      return;
+    }
+
+    const saveTask = saveQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const reportId = await saveAsrDraft({
+          organizationId: context.organizationId,
+          reportId: context.reportId || null,
+          clientRequestId: context.clientRequestId,
+          reportData: snapshot,
+        });
+        context.reportId = reportId;
+        context.lastSavedSnapshot = serializedSnapshot;
+      });
+    saveQueueRef.current = saveTask.catch(() => undefined);
+  }, []);
 
   async function loadData(preferredReportId = "") {
     if (!activeOrganization?.id) {
@@ -152,33 +262,67 @@ export default function AsrReportsManager() {
   }
 
   useEffect(() => {
+    flushDraftOnExit();
     setShowForm(false);
     setEditingReportId("");
+    draftContextRef.current = {
+      organizationId: "",
+      clientRequestId: "",
+      reportId: "",
+      lastSavedSnapshot: "",
+      latestSaveVersion: 0,
+    };
     setActiveReportId("");
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrganization?.id, canManage, requestedReportId]);
 
+  useEffect(
+    () => () => {
+      flushDraftOnExit();
+    },
+    [flushDraftOnExit]
+  );
+
   useEffect(() => {
-    if (!showForm || !activeOrganization?.id || !draftRequestId) return;
-    setDraftState("saving");
+    draftDataRef.current = draftData;
+  }, [draftData]);
+
+  useEffect(() => {
+    if (
+      !showForm ||
+      !activeOrganization?.id ||
+      !draftRequestId ||
+      draftSnapshot === draftContextRef.current.lastSavedSnapshot
+    ) {
+      return;
+    }
     const timeoutId = window.setTimeout(async () => {
       try {
-        const reportId = await saveAsrDraft({
-          organizationId: activeOrganization.id,
-          reportId: editingReportId || null,
-          clientRequestId: draftRequestId,
-          reportData: draftData,
-        });
-        setEditingReportId(reportId);
-        setDraftState("saved");
+        await queueDraftSave(draftData);
       } catch (value) {
-        setDraftState("error");
         setError(getErrorMessage(value, "Unable to save ASR draft."));
       }
     }, 800);
     return () => window.clearTimeout(timeoutId);
-  }, [activeOrganization?.id, draftData, draftRequestId, editingReportId, showForm]);
+  }, [
+    activeOrganization?.id,
+    draftData,
+    draftRequestId,
+    draftSnapshot,
+    queueDraftSave,
+    showForm,
+  ]);
+
+  useEffect(() => {
+    if (!hasUnsavedDraft) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [hasUnsavedDraft]);
 
   const filteredReports = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -205,6 +349,7 @@ export default function AsrReportsManager() {
   }
 
   function startNewReport() {
+    if (!activeOrganization?.id) return;
     const currentPerson = people.find((person) => person.user_id === session?.user?.id);
     const initial = createEmptyAsrReportData();
     if (currentPerson) {
@@ -219,8 +364,17 @@ export default function AsrReportsManager() {
       initial.reporter_title =
         currentPerson.teaching_role === "instructor" ? "Flight Instructor" : "Student Pilot";
     }
+    const requestId = crypto.randomUUID();
+    draftDataRef.current = initial;
+    draftContextRef.current = {
+      organizationId: activeOrganization.id,
+      clientRequestId: requestId,
+      reportId: "",
+      lastSavedSnapshot: "",
+      latestSaveVersion: 0,
+    };
     setDraftData(initial);
-    setDraftRequestId(crypto.randomUUID());
+    setDraftRequestId(requestId);
     setEditingReportId("");
     setCreateDiscrepancy(false);
     setGroundAircraft(false);
@@ -232,8 +386,19 @@ export default function AsrReportsManager() {
   }
 
   function editDraft(report: AsrReport) {
+    if (!activeOrganization?.id) return;
+    const requestId = crypto.randomUUID();
+    const snapshot = JSON.stringify(report.report_data);
+    draftDataRef.current = report.report_data;
+    draftContextRef.current = {
+      organizationId: activeOrganization.id,
+      clientRequestId: requestId,
+      reportId: report.id,
+      lastSavedSnapshot: snapshot,
+      latestSaveVersion: 0,
+    };
     setDraftData(report.report_data);
-    setDraftRequestId(crypto.randomUUID());
+    setDraftRequestId(requestId);
     setEditingReportId(report.id);
     setCreateDiscrepancy(false);
     setGroundAircraft(false);
@@ -293,17 +458,45 @@ export default function AsrReportsManager() {
     }));
   }
 
+  async function handleSaveDraft() {
+    setError("");
+    try {
+      await queueDraftSave(draftDataRef.current);
+    } catch (value) {
+      setError(getErrorMessage(value, "Unable to save ASR draft."));
+    }
+  }
+
+  async function handleCloseDraft() {
+    setClosingDraft(true);
+    setError("");
+    try {
+      if (
+        JSON.stringify(draftDataRef.current) !==
+          draftContextRef.current.lastSavedSnapshot ||
+        draftState === "saving"
+      ) {
+        await queueDraftSave(draftDataRef.current);
+      }
+      setShowForm(false);
+    } catch (value) {
+      setError(
+        getErrorMessage(
+          value,
+          "The draft could not be saved. It remains open so you can try again."
+        )
+      );
+    } finally {
+      setClosingDraft(false);
+    }
+  }
+
   async function handleSubmit() {
     if (!activeOrganization?.id) return;
     setBusy(true);
     setError("");
     try {
-      const reportId = await saveAsrDraft({
-        organizationId: activeOrganization.id,
-        reportId: editingReportId || null,
-        clientRequestId: draftRequestId || crypto.randomUUID(),
-        reportData: draftData,
-      });
+      const reportId = await queueDraftSave(draftDataRef.current);
       if (
         groundAircraft &&
         !window.confirm(
@@ -360,7 +553,15 @@ export default function AsrReportsManager() {
                 Reviewer & option settings
               </button>
             ) : null}
-            <button className="primary-button" type="button" onClick={startNewReport}>New ASR</button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={startNewReport}
+              disabled={showForm || busy}
+              title={showForm ? "Save and close the open draft first." : undefined}
+            >
+              New ASR
+            </button>
           </div>
         </div>
         {message ? <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
@@ -384,11 +585,59 @@ export default function AsrReportsManager() {
             <div>
               <p className="saas-kicker">{editingReportId ? "ASR draft" : "New ASR"}</p>
               <h2 className="saas-subsection-title">Air Safety Event Report</h2>
-              <p className="saas-meta-text mt-2">
-                {draftState === "saving" ? "Saving draft…" : draftState === "saved" ? "Draft saved" : draftState === "error" ? "Draft save failed" : "Draft will save automatically"}
+              <p
+                className={`mt-2 flex items-center gap-2 text-sm ${
+                  draftState === "error"
+                    ? "text-rose-700"
+                    : draftState === "saved" && !hasUnsavedDraft
+                      ? "text-emerald-700"
+                      : "text-slate-600"
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-2 w-2 rounded-full ${
+                    draftState === "error"
+                      ? "bg-rose-500"
+                      : draftState === "saved" && !hasUnsavedDraft
+                        ? "bg-emerald-500"
+                        : "bg-amber-500"
+                  }`}
+                />
+                {draftState === "saving"
+                  ? "Saving your latest changes…"
+                  : draftState === "saved" && !hasUnsavedDraft
+                    ? "All changes saved"
+                    : draftState === "error"
+                      ? "Draft not saved — try again"
+                      : "Changes save automatically"}
               </p>
             </div>
-            <button className="ghost-button" type="button" onClick={() => setShowForm(false)} disabled={busy}>Close draft</button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void handleSaveDraft()}
+                disabled={
+                  busy ||
+                  closingDraft ||
+                  draftState === "saving" ||
+                  !hasUnsavedDraft
+                }
+              >
+                {draftState === "saving" ? "Saving…" : "Save now"}
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => void handleCloseDraft()}
+                disabled={busy || closingDraft}
+              >
+                {closingDraft ? "Saving & closing…" : "Save & close"}
+              </button>
+            </div>
           </div>
 
           <FormSection title="Section 1 - Occurrence">
@@ -488,7 +737,7 @@ export default function AsrReportsManager() {
                 </button>
                 <div className="flex gap-2">
                   {report.risk_score ? <RiskBadge score={report.risk_score} /> : null}
-                  {report.status === "draft" && report.submitted_by === session?.user?.id ? <button className="ghost-button" type="button" onClick={() => editDraft(report)}>Edit draft</button> : null}
+                  {report.status === "draft" && report.submitted_by === session?.user?.id ? <button className="ghost-button" type="button" disabled={showForm || busy} onClick={() => editDraft(report)}>Edit draft</button> : null}
                 </div>
               </div>
             </article>
@@ -504,7 +753,7 @@ export default function AsrReportsManager() {
           isTrainingReviewer={isTrainingReviewer}
           isMaintenanceReviewer={isMaintenanceReviewer}
           agencyOptions={optionValues("external_agency")}
-          busy={busy}
+          busy={busy || showForm}
           onBusy={setBusy}
           onError={(value) => setError(getErrorMessage(value, "Unable to update ASR."))}
           onChanged={async (text, preferredReportId) => {
