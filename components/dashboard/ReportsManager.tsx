@@ -13,26 +13,46 @@ export default function ReportsManager() {
   return (
     <div className="space-y-4">
       <nav
-        className="inline-flex rounded-xl border border-slate-200 bg-white p-1"
+        className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 sm:grid-cols-2"
         aria-label="Report type"
       >
         <button
           type="button"
           onClick={() => router.replace("/dashboard/reports?type=aircraft")}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-            activeType === "aircraft" ? "bg-blue-600 text-white" : "text-slate-600"
+          aria-pressed={activeType === "aircraft"}
+          className={`rounded-xl px-4 py-3 text-left transition-colors ${
+            activeType === "aircraft"
+              ? "bg-blue-600 text-white"
+              : "text-slate-700 hover:bg-slate-50"
           }`}
         >
-          Aircraft Reports
+          <span className="block text-sm font-semibold">Aircraft issues</span>
+          <span
+            className={`mt-1 block text-xs ${
+              activeType === "aircraft" ? "text-blue-100" : "text-slate-500"
+            }`}
+          >
+            Report a defect, damage, or maintenance concern.
+          </span>
         </button>
         <button
           type="button"
           onClick={() => router.replace("/dashboard/reports?type=asr")}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-            activeType === "asr" ? "bg-blue-600 text-white" : "text-slate-600"
+          aria-pressed={activeType === "asr"}
+          className={`rounded-xl px-4 py-3 text-left transition-colors ${
+            activeType === "asr"
+              ? "bg-blue-600 text-white"
+              : "text-slate-700 hover:bg-slate-50"
           }`}
         >
-          ASR
+          <span className="block text-sm font-semibold">Safety reports (ASR)</span>
+          <span
+            className={`mt-1 block text-xs ${
+              activeType === "asr" ? "text-blue-100" : "text-slate-500"
+            }`}
+          >
+            Record an internal safety event and its reviews.
+          </span>
         </button>
       </nav>
       {activeType === "aircraft" ? <AircraftReportsManager /> : <AsrReportsManager />}

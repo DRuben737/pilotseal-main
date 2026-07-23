@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
@@ -44,6 +53,11 @@ import {
   type OrganizationMember,
 } from "@/lib/organizations";
 import { downloadAsrPdf } from "@/lib/asr-pdf";
+import {
+  validateAsrDraft,
+  type AsrFormErrors,
+  type AsrRequiredField,
+} from "@/lib/asr-report-validation";
 
 const REVIEWER_CAPABILITIES: Array<{
   value: AsrReviewerCapability;
@@ -95,6 +109,7 @@ export default function AsrReportsManager() {
   const [editingReportId, setEditingReportId] = useState("");
   const [draftRequestId, setDraftRequestId] = useState("");
   const [draftData, setDraftData] = useState<AsrReportData>(createEmptyAsrReportData);
+  const [formErrors, setFormErrors] = useState<AsrFormErrors>({});
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [closingDraft, setClosingDraft] = useState(false);
   const [createDiscrepancy, setCreateDiscrepancy] = useState(false);
@@ -374,6 +389,7 @@ export default function AsrReportsManager() {
       latestSaveVersion: 0,
     };
     setDraftData(initial);
+    setFormErrors({});
     setDraftRequestId(requestId);
     setEditingReportId("");
     setCreateDiscrepancy(false);
@@ -398,6 +414,7 @@ export default function AsrReportsManager() {
       latestSaveVersion: 0,
     };
     setDraftData(report.report_data);
+    setFormErrors({});
     setDraftRequestId(requestId);
     setEditingReportId(report.id);
     setCreateDiscrepancy(false);
@@ -408,8 +425,27 @@ export default function AsrReportsManager() {
     setError("");
   }
 
+  function clearFormErrors(keys: AsrRequiredField[]) {
+    setFormErrors((current) => {
+      if (!keys.some((key) => current[key])) {
+        return current;
+      }
+      const next = { ...current };
+      keys.forEach((key) => delete next[key]);
+      return next;
+    });
+  }
+
   function updateDraft<K extends keyof AsrReportData>(key: K, value: AsrReportData[K]) {
     setDraftData((current) => ({ ...current, [key]: value }));
+    clearFormErrors(
+      key === "aircraft_id" ||
+        key === "aircraft_registration" ||
+        key === "aircraft_type" ||
+        key === "no_aircraft"
+        ? ["aircraft"]
+        : [key as AsrRequiredField]
+    );
   }
 
   function selectAircraft(aircraftId: string) {
@@ -421,6 +457,7 @@ export default function AsrReportsManager() {
       aircraft_type: item?.model?.name ?? "",
       no_aircraft: false,
     }));
+    clearFormErrors(["aircraft"]);
   }
 
   function selectPerson(
@@ -438,8 +475,11 @@ export default function AsrReportsManager() {
         : {
             put_sic_person_id: personId,
             put_sic_name: person?.display_name ?? "",
-          }),
+        }),
     }));
+    if (role === "commander") {
+      clearFormErrors(["aircraft_commander_name"]);
+    }
   }
 
   function linkSourceDiscrepancy(reportId: string) {
@@ -456,6 +496,11 @@ export default function AsrReportsManager() {
       student_person_id: report?.student_person_id ?? current.student_person_id,
       instructor_person_id: report?.instructor_person_id ?? current.instructor_person_id,
     }));
+    clearFormErrors([
+      "occurrence_date",
+      "aircraft",
+      "description",
+    ]);
   }
 
   async function handleSaveDraft() {
@@ -493,6 +538,22 @@ export default function AsrReportsManager() {
 
   async function handleSubmit() {
     if (!activeOrganization?.id) return;
+    const nextFormErrors = validateAsrDraft(draftDataRef.current);
+    if (Object.keys(nextFormErrors).length > 0) {
+      setFormErrors(nextFormErrors);
+      setError(
+        `Complete the ${Object.keys(nextFormErrors).length} highlighted required ${
+          Object.keys(nextFormErrors).length === 1 ? "field" : "fields"
+        } before signing.`
+      );
+      requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>("#asr-report-form [aria-invalid='true']")
+          ?.focus();
+      });
+      return;
+    }
+    setFormErrors({});
     setBusy(true);
     setError("");
     try {
@@ -580,11 +641,14 @@ export default function AsrReportsManager() {
       ) : null}
 
       {showForm ? (
-        <section className="saas-panel">
+        <section id="asr-report-form" className="saas-panel">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="saas-kicker">{editingReportId ? "ASR draft" : "New ASR"}</p>
               <h2 className="saas-subsection-title">Air Safety Event Report</h2>
+              <p className="saas-meta-text mt-2">
+                Fields marked with * are required before you can sign and submit.
+              </p>
               <p
                 className={`mt-2 flex items-center gap-2 text-sm ${
                   draftState === "error"
@@ -648,33 +712,33 @@ export default function AsrReportsManager() {
                   {discrepancies.map((report) => <option key={report.id} value={report.id}>{report.aircraft_tail_number} · {report.report_date} · {report.discrepancy_type}</option>)}
                 </select>
               </Field>
-              <Field label="Date of Occurrence" required><input type="date" value={draftData.occurrence_date} onChange={(event) => updateDraft("occurrence_date", event.target.value)} /></Field>
-              <Field label="LCL Time" required><input type="time" value={draftData.occurrence_local_time} onChange={(event) => updateDraft("occurrence_local_time", event.target.value)} /></Field>
-              <Field label="Aircraft">
+              <Field label="Date of occurrence" required error={formErrors.occurrence_date}><input type="date" value={draftData.occurrence_date} onChange={(event) => updateDraft("occurrence_date", event.target.value)} /></Field>
+              <Field label="Local time" required error={formErrors.occurrence_local_time}><input type="time" value={draftData.occurrence_local_time} onChange={(event) => updateDraft("occurrence_local_time", event.target.value)} /></Field>
+              <Field label="Organization aircraft" error={formErrors.aircraft}>
                 <select value={draftData.aircraft_id} onChange={(event) => selectAircraft(event.target.value)} disabled={draftData.no_aircraft}>
                   <option value="">External / not selected</option>
                   {aircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number} · {item.model?.name ?? "Unknown type"}</option>)}
                 </select>
               </Field>
-              <Field label="External Aircraft Type"><input value={draftData.aircraft_type} disabled={Boolean(draftData.aircraft_id) || draftData.no_aircraft} onChange={(event) => updateDraft("aircraft_type", event.target.value)} /></Field>
-              <Field label="External Registration"><input value={draftData.aircraft_registration} disabled={Boolean(draftData.aircraft_id) || draftData.no_aircraft} onChange={(event) => updateDraft("aircraft_registration", event.target.value)} /></Field>
+              <Field label="Aircraft type (if not in fleet)"><input value={draftData.aircraft_type} disabled={Boolean(draftData.aircraft_id) || draftData.no_aircraft} onChange={(event) => updateDraft("aircraft_type", event.target.value)} /></Field>
+              <Field label="Registration / tail number (if not in fleet)"><input value={draftData.aircraft_registration} disabled={Boolean(draftData.aircraft_id) || draftData.no_aircraft} onChange={(event) => updateDraft("aircraft_registration", event.target.value)} /></Field>
               <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draftData.no_aircraft} onChange={(event) => updateDraft("no_aircraft", event.target.checked)} />Aircraft not applicable</label>
-              <OptionField label="Type of Occurrence" required value={draftData.type_of_occurrence} options={optionValues("occurrence_type")} onChange={(value) => updateDraft("type_of_occurrence", value)} />
-              <OptionField label="Nature of Flight" required value={draftData.nature_of_flight} options={optionValues("nature_of_flight")} onChange={(value) => updateDraft("nature_of_flight", value)} />
+              <OptionField label="Type of occurrence" required error={formErrors.type_of_occurrence} value={draftData.type_of_occurrence} options={optionValues("occurrence_type")} onChange={(value) => updateDraft("type_of_occurrence", value)} />
+              <OptionField label="Nature of flight" required error={formErrors.nature_of_flight} value={draftData.nature_of_flight} options={optionValues("nature_of_flight")} onChange={(value) => updateDraft("nature_of_flight", value)} />
               <Field label="Route From"><input value={draftData.route_from} onChange={(event) => updateDraft("route_from", event.target.value.toUpperCase())} /></Field>
               <Field label="Route To"><input value={draftData.route_to} onChange={(event) => updateDraft("route_to", event.target.value.toUpperCase())} /></Field>
               <OptionField label="Training Area" value={draftData.training_area} options={optionValues("training_area")} onChange={(value) => updateDraft("training_area", value)} />
-              <OptionField label="Phase of Flight" required value={draftData.phase_of_flight} options={optionValues("phase_of_flight")} onChange={(value) => updateDraft("phase_of_flight", value)} />
+              <OptionField label="Phase of flight" required error={formErrors.phase_of_flight} value={draftData.phase_of_flight} options={optionValues("phase_of_flight")} onChange={(value) => updateDraft("phase_of_flight", value)} />
               <OptionField label="Training Maneuver" value={draftData.training_maneuver} options={optionValues("maneuver")} onChange={(value) => updateDraft("training_maneuver", value)} />
             </div>
           </FormSection>
 
           <FormSection title="Section 2 - Crew Information">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Field label="Aircraft Commander" required><select value={draftData.aircraft_commander_person_id} onChange={(event) => selectPerson("commander", event.target.value)}><option value="">Select person</option>{people.map((person) => <option key={person.person_id} value={person.person_id}>{person.display_name}</option>)}</select></Field>
-              <Field label="Commander Name"><input value={draftData.aircraft_commander_name} onChange={(event) => updateDraft("aircraft_commander_name", event.target.value)} /></Field>
-              <Field label="PUT/SIC"><select value={draftData.put_sic_person_id} onChange={(event) => selectPerson("put_sic", event.target.value)}><option value="">Not specified</option>{people.map((person) => <option key={person.person_id} value={person.person_id}>{person.display_name}</option>)}</select></Field>
-              <Field label="PUT/SIC Name"><input value={draftData.put_sic_name} onChange={(event) => updateDraft("put_sic_name", event.target.value)} /></Field>
+              <Field label="Person in command (saved person)"><select value={draftData.aircraft_commander_person_id} onChange={(event) => selectPerson("commander", event.target.value)}><option value="">Enter a name instead</option>{people.map((person) => <option key={person.person_id} value={person.person_id}>{person.display_name}</option>)}</select></Field>
+              <Field label="Person in command name" required error={formErrors.aircraft_commander_name}><input value={draftData.aircraft_commander_name} onChange={(event) => updateDraft("aircraft_commander_name", event.target.value)} /></Field>
+              <Field label="Pilot under training / second in command"><select value={draftData.put_sic_person_id} onChange={(event) => selectPerson("put_sic", event.target.value)}><option value="">Not specified</option>{people.map((person) => <option key={person.person_id} value={person.person_id}>{person.display_name}</option>)}</select></Field>
+              <Field label="Pilot under training / second in command name"><input value={draftData.put_sic_name} onChange={(event) => updateDraft("put_sic_name", event.target.value)} /></Field>
               <Field label="Other Crew"><input value={draftData.other_crew} onChange={(event) => updateDraft("other_crew", event.target.value)} /></Field>
               <Field label="Passengers"><input value={draftData.passengers} onChange={(event) => updateDraft("passengers", event.target.value)} /></Field>
               <OptionField label="Program" value={draftData.program} options={optionValues("program")} onChange={(value) => updateDraft("program", value)} />
@@ -686,12 +750,12 @@ export default function AsrReportsManager() {
               <Field label="Wind"><input value={draftData.wind} onChange={(event) => updateDraft("wind", event.target.value)} /></Field>
               <OptionField label="Turbulence" value={draftData.turbulence} options={optionValues("intensity")} onChange={(value) => updateDraft("turbulence", value)} />
               <OptionField label="Day or Night" value={draftData.day_night} options={optionValues("day_night")} onChange={(value) => updateDraft("day_night", value)} />
-              <Field label="Visibility (SM)"><input type="number" min="0" step="0.1" value={draftData.visibility_sm} onChange={(event) => updateDraft("visibility_sm", event.target.value)} /></Field>
-              <OptionField label="IMC or VMC" value={draftData.flight_conditions} options={optionValues("flight_conditions")} onChange={(value) => updateDraft("flight_conditions", value)} />
+              <Field label="Visibility (statute miles)"><input type="number" min="0" step="0.1" value={draftData.visibility_sm} onChange={(event) => updateDraft("visibility_sm", event.target.value)} /></Field>
+              <OptionField label="Flight conditions (IMC / VMC)" value={draftData.flight_conditions} options={optionValues("flight_conditions")} onChange={(value) => updateDraft("flight_conditions", value)} />
               <OptionField label="Precipitation" value={draftData.precipitation} options={optionValues("precipitation")} onChange={(value) => updateDraft("precipitation", value)} />
-              <Field label="OAT (°C)"><input type="number" step="1" value={draftData.oat_c} onChange={(event) => updateDraft("oat_c", event.target.value)} /></Field>
+              <Field label="Outside air temperature (°C)"><input type="number" step="1" value={draftData.oat_c} onChange={(event) => updateDraft("oat_c", event.target.value)} /></Field>
               <OptionField label="Icing" value={draftData.icing} options={optionValues("intensity")} onChange={(value) => updateDraft("icing", value)} />
-              <OptionField label="Precip. Intensity" value={draftData.precipitation_intensity} options={optionValues("intensity")} onChange={(value) => updateDraft("precipitation_intensity", value)} />
+              <OptionField label="Precipitation intensity" value={draftData.precipitation_intensity} options={optionValues("intensity")} onChange={(value) => updateDraft("precipitation_intensity", value)} />
             </div>
           </FormSection>
 
@@ -705,8 +769,8 @@ export default function AsrReportsManager() {
           </FormSection>
 
           <FormSection title="Section 5 - Description of Occurrence">
-            <Field label="Description" required><textarea rows={8} maxLength={10000} value={draftData.description} onChange={(event) => updateDraft("description", event.target.value)} /></Field>
-            <div className="mt-4 max-w-md"><Field label="Your Title" required><input value={draftData.reporter_title} onChange={(event) => updateDraft("reporter_title", event.target.value)} placeholder="Flight Instructor, Student Pilot, etc." /></Field></div>
+            <Field label="What happened" required error={formErrors.description}><textarea rows={8} maxLength={10000} value={draftData.description} onChange={(event) => updateDraft("description", event.target.value)} /></Field>
+            <div className="mt-4 max-w-md"><Field label="Your role or title" required error={formErrors.reporter_title}><input value={draftData.reporter_title} onChange={(event) => updateDraft("reporter_title", event.target.value)} placeholder="Flight instructor, student pilot, etc." /></Field></div>
           </FormSection>
 
           {!draftData.source_discrepancy_report_id ? (
@@ -900,8 +964,75 @@ function AsrSettings({ organizationId, members, assignments, options, onChanged,
 
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <fieldset className="mt-5 rounded-2xl border border-slate-200 p-4"><legend className="px-2 text-sm font-semibold text-slate-900">{title}</legend>{children}</fieldset>; }
 function ReviewPanel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="mt-5 rounded-2xl border border-slate-200 p-4"><h3 className="font-semibold text-slate-950">{title}</h3><div className="mt-4">{children}</div></div>; }
-function Field({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) { return <label className="grid gap-1.5 text-sm font-medium text-slate-700"><span>{label}{required ? " *" : ""}</span>{children}</label>; }
-function OptionField({ label, required = false, value, options, onChange }: { label: string; required?: boolean; value: string; options: string[]; onChange: (value: string) => void }) { return <Field label={label} required={required}><select value={value} onChange={(event) => onChange(event.target.value)}><option value="">Not specified</option>{options.map((option) => <option key={option}>{option}</option>)}</select></Field>; }
+function Field({
+  label,
+  required = false,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  const generatedId = useId();
+  const controlId = `asr-${generatedId.replaceAll(":", "")}`;
+  const isNativeControl =
+    isValidElement(children) &&
+    typeof children.type === "string" &&
+    ["input", "select", "textarea"].includes(children.type);
+  const control = isNativeControl
+    ? cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+        id: controlId,
+        required,
+        "aria-invalid": error ? true : undefined,
+        "aria-describedby": error ? `${controlId}-error` : undefined,
+      })
+    : children;
+
+  return (
+    <label
+      className="grid gap-1.5 text-sm font-medium text-slate-700"
+      htmlFor={isNativeControl ? controlId : undefined}
+    >
+      <span>
+        {label}
+        {required ? <span className="text-rose-700"> *</span> : null}
+      </span>
+      {control}
+      {error ? (
+        <span id={`${controlId}-error`} className="text-sm font-normal text-rose-700">
+          {error}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function OptionField({
+  label,
+  required = false,
+  error,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label} required={required} error={error}>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{required ? "Select an option" : "Not specified"}</option>
+        {options.map((option) => <option key={option}>{option}</option>)}
+      </select>
+    </Field>
+  );
+}
 function ValueWithUnit({ label, value, unit, units, onValue, onUnit }: { label: string; value: string; unit: string; units: string[]; onValue: (value: string) => void; onUnit: (value: string) => void }) { return <Field label={label}><div className="grid grid-cols-[1fr_90px] gap-2"><input type="number" min="0" step="0.1" value={value} onChange={(event) => onValue(event.target.value)} /><select value={unit} onChange={(event) => onUnit(event.target.value)}>{units.map((item) => <option key={item}>{item}</option>)}</select></div></Field>; }
 function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-slate-200 bg-white p-3"><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</dt><dd className="mt-1 text-sm text-slate-800">{value}</dd></div>; }
 function RiskBadge({ score }: { score: number }) { const band = riskBand(score); const className = band === "High" ? "bg-rose-100 text-rose-800" : band === "Medium" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"; return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{score} · {band}</span>; }
