@@ -566,6 +566,14 @@ declare
   v_person public.organization_people;
   v_member public.organization_members;
 begin
+  if auth.uid() is null or not (
+    private.can_manage_organization(p_organization_id, auth.uid())
+    or private.is_platform_admin(auth.uid())
+  ) then
+    raise exception 'Only organization Owners and Admins can add members.'
+      using errcode = '42501';
+  end if;
+
   v_person := public.add_organization_person(
     p_organization_id,
     p_email,
