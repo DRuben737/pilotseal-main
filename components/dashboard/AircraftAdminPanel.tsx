@@ -2135,7 +2135,7 @@ export default function AircraftAdminPanel() {
                   <div className="tools-child-header">
                     <div>
                       <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Aircraft Registry</h2>
+                      <h2 className="tools-child-title">Fleet Aircraft</h2>
                     </div>
                     <div className="tools-child-actions">
                       <button type="button" className="ghost-button" onClick={() => openAircraftEditor()}>
