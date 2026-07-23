@@ -33,6 +33,8 @@ type ReportForm = {
   description: string;
 };
 
+type ReportFormErrors = Partial<Record<keyof ReportForm, string>>;
+
 type ProcessingForm = {
   status: OrganizationReportStatus;
   instructorPersonId: string;
@@ -69,6 +71,7 @@ export default function AircraftReportsManager() {
   const [activeReportId, setActiveReportId] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<ReportForm>(emptyReportForm);
+  const [formErrors, setFormErrors] = useState<ReportFormErrors>({});
   const [clientRequestId, setClientRequestId] = useState("");
   const [processingForm, setProcessingForm] = useState<ProcessingForm | null>(null);
   const [query, setQuery] = useState("");
@@ -84,6 +87,9 @@ export default function AircraftReportsManager() {
     [aircraft]
   );
   const activeAircraft = activeReport ? aircraftById.get(activeReport.aircraft_id) ?? null : null;
+  const selectedReportAircraft = form.aircraftId
+    ? aircraftById.get(form.aircraftId) ?? null
+    : null;
   const students = people.filter((person) => person.teaching_role === "student");
   const instructors = people.filter((person) => person.teaching_role === "instructor");
   const reportStats = useMemo(
@@ -141,6 +147,7 @@ export default function AircraftReportsManager() {
     setShowForm(false);
     setActiveReportId("");
     setForm(emptyReportForm());
+    setFormErrors({});
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrganization?.id, requestedReportId]);
@@ -201,15 +208,38 @@ export default function AircraftReportsManager() {
         currentPerson?.teaching_role === "instructor" ? currentPerson.person_id : "",
     });
     setClientRequestId(crypto.randomUUID());
+    setFormErrors({});
     setMessage("");
     setError("");
     setShowForm(true);
   }
 
+  function updateReportField<Key extends keyof ReportForm>(
+    key: Key,
+    value: ReportForm[Key]
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFormErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
   async function handleSubmit(groundAircraft: boolean) {
     if (!activeOrganization?.id) return;
-    if (!form.aircraftId || !form.reportDate || !form.description.trim()) {
-      setError("Aircraft, report date, discrepancy type, and description are required.");
+    const nextFormErrors = validateReportForm(form);
+    if (Object.keys(nextFormErrors).length > 0) {
+      setFormErrors(nextFormErrors);
+      setError("Review the highlighted report fields.");
+      requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>(
+            "#aircraft-report-new-form [aria-invalid='true']"
+          )
+          ?.focus();
+      });
       return;
     }
     if (
@@ -247,6 +277,7 @@ export default function AircraftReportsManager() {
       await loadData(reportId);
       setShowForm(false);
       setForm(emptyReportForm());
+      setFormErrors({});
       setClientRequestId("");
       setMessage(
         groundAircraft
@@ -368,20 +399,48 @@ export default function AircraftReportsManager() {
       </div>
 
       {showForm ? (
-        <section className="saas-panel">
+        <section id="aircraft-report-new-form" className="saas-panel">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="saas-kicker">New report</p>
               <h2 className="saas-subsection-title">Aircraft Discrepancy Report</h2>
             </div>
-            <button className="ghost-button" type="button" onClick={() => setShowForm(false)} disabled={busy}>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => {
+                setShowForm(false);
+                setFormErrors({});
+                setError("");
+              }}
+              disabled={busy}
+            >
               Cancel
             </button>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <Field label="Aircraft" required>
-              <select value={form.aircraftId} onChange={(event) => setForm({ ...form, aircraftId: event.target.value })}>
+            <Field
+              label="Aircraft"
+              required
+              error={formErrors.aircraftId}
+              errorId="report-aircraft-error"
+              hint={
+                selectedReportAircraft
+                  ? `Current fleet status: ${formatAircraftStatus(selectedReportAircraft.operational_status)}`
+                  : "Choose the aircraft with the discrepancy."
+              }
+            >
+              <select
+                value={form.aircraftId}
+                onChange={(event) =>
+                  updateReportField("aircraftId", event.target.value)
+                }
+                aria-invalid={Boolean(formErrors.aircraftId)}
+                aria-describedby={
+                  formErrors.aircraftId ? "report-aircraft-error" : undefined
+                }
+              >
                 <option value="">Select aircraft</option>
                 {aircraft.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -390,17 +449,43 @@ export default function AircraftReportsManager() {
                 ))}
               </select>
             </Field>
-            <Field label="Date" required>
-              <input type="date" value={form.reportDate} onChange={(event) => setForm({ ...form, reportDate: event.target.value })} />
+            <Field
+              label="Report date"
+              required
+              error={formErrors.reportDate}
+              errorId="report-date-error"
+            >
+              <input
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                value={form.reportDate}
+                onChange={(event) =>
+                  updateReportField("reportDate", event.target.value)
+                }
+                aria-invalid={Boolean(formErrors.reportDate)}
+                aria-describedby={
+                  formErrors.reportDate ? "report-date-error" : undefined
+                }
+              />
             </Field>
-            <Field label="Student Name">
-              <select value={form.studentPersonId} onChange={(event) => setForm({ ...form, studentPersonId: event.target.value })}>
+            <Field label="Student">
+              <select
+                value={form.studentPersonId}
+                onChange={(event) =>
+                  updateReportField("studentPersonId", event.target.value)
+                }
+              >
                 <option value="">Not specified</option>
                 {students.map((person) => <option key={person.person_id} value={person.person_id}>{person.display_name}</option>)}
               </select>
             </Field>
-            <Field label="Instructor Name">
-              <select value={form.instructorPersonId} onChange={(event) => setForm({ ...form, instructorPersonId: event.target.value })}>
+            <Field label="Instructor">
+              <select
+                value={form.instructorPersonId}
+                onChange={(event) =>
+                  updateReportField("instructorPersonId", event.target.value)
+                }
+              >
                 <option value="">Not specified</option>
                 {instructors.map((person) => (
                   <option key={person.person_id} value={person.person_id}>
@@ -409,33 +494,130 @@ export default function AircraftReportsManager() {
                 ))}
               </select>
             </Field>
-            <Field label="Flight Hobbs End">
-              <NumberInput value={form.flightHobbsEnd} onChange={(value) => setForm({ ...form, flightHobbsEnd: value })} />
+            <Field
+              label="Flight Hobbs ending value"
+              error={formErrors.flightHobbsEnd}
+              errorId="report-flight-hobbs-error"
+            >
+              <NumberInput
+                value={form.flightHobbsEnd}
+                onChange={(value) => updateReportField("flightHobbsEnd", value)}
+                invalid={Boolean(formErrors.flightHobbsEnd)}
+                describedBy={
+                  formErrors.flightHobbsEnd
+                    ? "report-flight-hobbs-error"
+                    : undefined
+                }
+              />
             </Field>
-            <Field label="Maintenance Hobbs End">
-              <NumberInput value={form.maintenanceHobbsEnd} onChange={(value) => setForm({ ...form, maintenanceHobbsEnd: value })} />
+            <Field
+              label="Maintenance Hobbs ending value"
+              error={formErrors.maintenanceHobbsEnd}
+              errorId="report-maintenance-hobbs-error"
+            >
+              <NumberInput
+                value={form.maintenanceHobbsEnd}
+                onChange={(value) =>
+                  updateReportField("maintenanceHobbsEnd", value)
+                }
+                invalid={Boolean(formErrors.maintenanceHobbsEnd)}
+                describedBy={
+                  formErrors.maintenanceHobbsEnd
+                    ? "report-maintenance-hobbs-error"
+                    : undefined
+                }
+              />
             </Field>
-            <Field label="Flight Duration">
-              <NumberInput value={form.flightDuration} onChange={(value) => setForm({ ...form, flightDuration: value })} />
+            <Field
+              label="Flight time (hours)"
+              error={formErrors.flightDuration}
+              errorId="report-flight-duration-error"
+            >
+              <NumberInput
+                value={form.flightDuration}
+                onChange={(value) => updateReportField("flightDuration", value)}
+                invalid={Boolean(formErrors.flightDuration)}
+                describedBy={
+                  formErrors.flightDuration
+                    ? "report-flight-duration-error"
+                    : undefined
+                }
+              />
             </Field>
-            <Field label="Discrepancy Type" required>
-              <select value={form.discrepancyType} onChange={(event) => setForm({ ...form, discrepancyType: event.target.value as AircraftDiscrepancyType })}>
+            <Field label="Affected system" required>
+              <select
+                value={form.discrepancyType}
+                onChange={(event) =>
+                  updateReportField(
+                    "discrepancyType",
+                    event.target.value as AircraftDiscrepancyType
+                  )
+                }
+              >
                 {AIRCRAFT_DISCREPANCY_TYPES.map((type) => <option key={type}>{type}</option>)}
               </select>
             </Field>
             <div className="md:col-span-2">
-              <Field label="Description of Discrepancy" required>
-                <textarea rows={6} maxLength={5000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Describe the discrepancy, when it occurred, and any troubleshooting already attempted." />
+              <Field
+                label="What happened?"
+                required
+                error={formErrors.description}
+                errorId="report-description-error"
+                hint={`${form.description.length}/5000 characters`}
+              >
+                <textarea
+                  rows={6}
+                  maxLength={5000}
+                  value={form.description}
+                  onChange={(event) =>
+                    updateReportField("description", event.target.value)
+                  }
+                  placeholder="Describe the problem, when it happened, and anything you already tried."
+                  aria-invalid={Boolean(formErrors.description)}
+                  aria-describedby={
+                    formErrors.description
+                      ? "report-description-error"
+                      : undefined
+                  }
+                />
               </Field>
+            </div>
+          </div>
+
+          {selectedReportAircraft?.operational_status === "grounded" ? (
+            <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              This aircraft is already grounded. You can still submit another
+              report, but its fleet status will not change.
+            </p>
+          ) : null}
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-950">
+                Submit report
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Records the discrepancy without changing the aircraft&apos;s
+                Fleet &amp; MX status.
+              </p>
+            </div>
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+              <p className="text-sm font-semibold text-rose-900">
+                Submit and ground immediately
+              </p>
+              <p className="mt-1 text-sm text-rose-800">
+                Sets the aircraft to Grounded and blocks dispatch until an owner
+                or administrator returns it to service.
+              </p>
             </div>
           </div>
 
           <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button className="secondary-button" type="button" disabled={busy} onClick={() => void handleSubmit(false)}>
-              {busy ? "Submitting…" : "Submit Report"}
+              {busy ? "Submitting…" : "Submit report"}
             </button>
             <button className="min-h-11 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60" type="button" disabled={busy} onClick={() => void handleSubmit(true)}>
-              {busy ? "Submitting…" : "Submit & Ground Aircraft"}
+              {busy ? "Submitting…" : "Submit and ground immediately"}
             </button>
           </div>
         </section>
@@ -659,12 +841,64 @@ export default function AircraftReportsManager() {
   );
 }
 
-function Field({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="grid gap-1.5 text-sm font-medium text-slate-700"><span>{label}{required ? " *" : ""}</span>{children}</label>;
+function Field({
+  label,
+  required = false,
+  error,
+  errorId,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  errorId?: string;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+      <span>
+        {label}
+        {required ? (
+          <span className="font-normal text-slate-500"> (required)</span>
+        ) : null}
+      </span>
+      {children}
+      {error ? (
+        <span id={errorId} className="text-sm font-normal text-rose-700">
+          {error}
+        </span>
+      ) : hint ? (
+        <span className="text-xs font-normal text-slate-500">{hint}</span>
+      ) : null}
+    </label>
+  );
 }
 
-function NumberInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <input type="number" min="0" step="0.1" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} />;
+function NumberInput({
+  value,
+  onChange,
+  invalid = false,
+  describedBy,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  invalid?: boolean;
+  describedBy?: string;
+}) {
+  return (
+    <input
+      type="number"
+      min="0"
+      step="0.1"
+      inputMode="decimal"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-invalid={invalid}
+      aria-describedby={describedBy}
+    />
+  );
 }
 
 function TriStateField({ label, value, onChange }: { label: string; value: TriState; onChange: (value: TriState) => void }) {
@@ -791,6 +1025,57 @@ function getReportNextSteps(
   }
 
   return steps;
+}
+
+function validateReportForm(form: ReportForm): ReportFormErrors {
+  const errors: ReportFormErrors = {};
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (!form.aircraftId) {
+    errors.aircraftId = "Select the aircraft this report is about.";
+  }
+  if (!form.reportDate) {
+    errors.reportDate = "Enter the report date.";
+  } else if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(form.reportDate) ||
+    Number.isNaN(new Date(`${form.reportDate}T00:00:00Z`).getTime())
+  ) {
+    errors.reportDate = "Enter a valid report date.";
+  } else if (form.reportDate > today) {
+    errors.reportDate = "The report date cannot be in the future.";
+  }
+  if (!form.description.trim()) {
+    errors.description = "Describe what happened.";
+  }
+
+  const flightHobbsError = validateOptionalNonNegativeNumber(
+    form.flightHobbsEnd
+  );
+  if (flightHobbsError) {
+    errors.flightHobbsEnd = flightHobbsError;
+  }
+  const maintenanceHobbsError = validateOptionalNonNegativeNumber(
+    form.maintenanceHobbsEnd
+  );
+  if (maintenanceHobbsError) {
+    errors.maintenanceHobbsEnd = maintenanceHobbsError;
+  }
+  const flightDurationError = validateOptionalNonNegativeNumber(
+    form.flightDuration
+  );
+  if (flightDurationError) {
+    errors.flightDuration = flightDurationError;
+  }
+
+  return errors;
+}
+
+function validateOptionalNonNegativeNumber(value: string) {
+  if (!value.trim()) return "";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? ""
+    : "Enter zero or a positive number.";
 }
 
 function optionalNonNegativeNumber(value: string, label: string) {
