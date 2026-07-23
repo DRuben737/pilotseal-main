@@ -730,7 +730,8 @@ export default function WeightBalanceCalculator({
       <div className="wb-shell wb-shell-embedded">
         <section className="wb-panel wb-panel-embedded">
           <p className="copy-muted">
-            The W&amp;B of your aircraft is not saved in the system, please calculate manually and add this model in your dashboard.
+            This aircraft does not have saved weight-and-balance data. Calculate it manually,
+            then add the aircraft model from your dashboard.
           </p>
         </section>
       </div>

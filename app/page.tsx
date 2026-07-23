@@ -38,7 +38,7 @@ export default function Home() {
                   For instructors and students, find the right tools here to smooth your training path.
                 </p>
                 <p className="max-w-md text-sm leading-7 text-slate-200/86">
-                  We offer FAA endorsement generator, W&amp;B, quick preflight brief, and more.
+                  Build FAA endorsements, check weight and balance, prepare a quick preflight brief, and more.
                 </p>
                 <div className="home-mobile-actions">
                   <Link href="/tools/endorsement-generator" className="home-mobile-primary">
@@ -73,7 +73,9 @@ export default function Home() {
             </div>
             <div className="home-mobile-card-copy p-4">
               <h2 className="text-sm font-semibold text-slate-950">Pilot tools</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Endorsements, briefing, W&amp;B, decoding, and flight math.</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Endorsements, flight briefings, weight and balance, decoding, and flight math.
+              </p>
             </div>
           </Link>
 

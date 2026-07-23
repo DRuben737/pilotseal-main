@@ -2028,7 +2028,7 @@ export default function AircraftAdminPanel() {
         <section className="saas-panel md:col-span-2">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="saas-subsection-title">Pending W&amp;B Changes</h3>
+              <h3 className="saas-subsection-title">Pending Weight-and-Balance Changes</h3>
               <p className="saas-meta-text mt-2">
                 {updateRequests.filter((request) => request.status === "pending").length} pending
               </p>
@@ -2269,7 +2269,7 @@ export default function AircraftAdminPanel() {
                   <div className="tools-child-header">
                     <div>
                       <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Pending W&amp;B Changes</h2>
+                      <h2 className="tools-child-title">Pending Weight-and-Balance Changes</h2>
                     </div>
                     <div className="tools-child-actions">
                       <button

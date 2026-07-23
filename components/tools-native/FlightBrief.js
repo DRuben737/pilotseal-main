@@ -652,7 +652,11 @@ const DYNAMIC_RISKS = [
     label: "Wind / Gust spread w/in 2 kts of personal min or USATS mins, whichever is lower.",
     value: 2,
   },
-  { id: "dynamic-high-da-gw", label: "High DA / high gross weight per W&B", value: 1 },
+  {
+    id: "dynamic-high-da-gw",
+    label: "High density altitude / high gross weight",
+    value: 1,
+  },
   { id: "dynamic-frontal-passage", label: "Frontal Passage to occur within 6 hrs.", value: 1 },
   { id: "dynamic-deteriorating-wx", label: "Deteriorating WX trend", detail: "(FG/BR/VCTS/VCSH)", value: 2 },
   { id: "dynamic-class-bc-solo", label: "Entering Class B or C airspace (SOLO)", value: 1 },

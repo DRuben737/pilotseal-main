@@ -774,7 +774,7 @@ export default function MyAircraftManager() {
             <div className="my-aircraft-table-head">
               <span>Tail number</span>
               <span>Model</span>
-              <span>W&amp;B / maintenance</span>
+              <span>Weight &amp; balance / maintenance</span>
               <span>Access</span>
             </div>
             {organizationAircraft.length === 0 ? (
