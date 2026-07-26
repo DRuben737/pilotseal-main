@@ -19,6 +19,12 @@ export type AircraftEnvelopeSet = {
 
 export type AircraftChartType = "1d1p" | "2d1p" | "2d2p";
 export type AircraftMeterType = "hobbs" | "tach";
+export type AircraftStationKind =
+  | "seat"
+  | "fuel"
+  | "baggage"
+  | "equipment"
+  | "other";
 export type AircraftOperationalStatus =
   | "available"
   | "away"
@@ -28,6 +34,7 @@ export type AircraftOperationalStatus =
 export type AircraftStation = {
   id: string;
   name: string;
+  kind: AircraftStationKind;
   arm: number;
   latArm?: number | null;
   weightPerGallon?: number | null;
@@ -36,6 +43,47 @@ export type AircraftStation = {
   inputType?: "number" | "checkbox" | null;
   crewRole?: "pilot" | "copilot" | null;
 };
+
+export function inferAircraftStationKind(
+  station: Record<string, unknown>
+): AircraftStationKind {
+  if (
+    station.kind === "seat" ||
+    station.kind === "fuel" ||
+    station.kind === "baggage" ||
+    station.kind === "equipment" ||
+    station.kind === "other"
+  ) {
+    return station.kind;
+  }
+
+  const weightPerGallon = toNumber(station.weightPerGallon);
+  if (weightPerGallon !== null && weightPerGallon > 0) {
+    return "fuel";
+  }
+
+  const searchableName = `${String(station.id ?? "")} ${String(station.name ?? "")}`;
+  if (
+    station.crewRole === "pilot" ||
+    station.crewRole === "copilot" ||
+    /pilot|copilot|co-pilot|passenger|seat|crew/i.test(searchableName)
+  ) {
+    return "seat";
+  }
+
+  if (/bag|baggage|cargo|luggage/i.test(searchableName)) {
+    return "baggage";
+  }
+
+  if (
+    toNumber(station.fixedWeight) !== null ||
+    station.inputType === "checkbox"
+  ) {
+    return "equipment";
+  }
+
+  return "other";
+}
 
 export type AircraftModelRecord = {
   id: string;
@@ -1723,6 +1771,7 @@ function normalizeStation(value: unknown) {
   return {
     id,
     name,
+    kind: inferAircraftStationKind(station),
     arm,
     latArm: toNumber(station.latArm) ?? toNumber(station.lat_arm) ?? toNumber(station.lat),
     weightPerGallon: toNumber(station.weightPerGallon) ?? toNumber(station.weight_per_gallon),

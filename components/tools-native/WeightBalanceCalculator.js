@@ -356,10 +356,12 @@ function isCoPilotStation(station, category) {
 function resolveCrewStations(stations, category) {
   const seatStations = stations.filter(
     (station) =>
-      station.inputType !== "checkbox" &&
-      !(typeof station.weightPerGallon === "number" && station.weightPerGallon > 0) &&
-      !/bag|baggage|cargo/i.test(station.id) &&
-      !/bag|baggage|cargo/i.test(station.name)
+      station.kind === "seat" ||
+      (!station.kind &&
+        station.inputType !== "checkbox" &&
+        !(typeof station.weightPerGallon === "number" && station.weightPerGallon > 0) &&
+        !/bag|baggage|cargo/i.test(station.id) &&
+        !/bag|baggage|cargo/i.test(station.name))
   );
 
   const pilotStation =

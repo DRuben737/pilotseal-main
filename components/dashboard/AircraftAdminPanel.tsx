@@ -15,6 +15,7 @@ import {
   fetchAircraftUpdateRequests,
   fetchMyAircraft,
   fetchSharedAircraft,
+  inferAircraftStationKind,
   makeAircraftPrivateForUser,
   rejectAircraftUpdateRequest,
   parseAircraftEnvelopeSet,
@@ -27,6 +28,7 @@ import {
   type AircraftRecord,
   type AircraftUpdateRequestRecord,
   type AircraftOrganizationAssignment,
+  type AircraftStationKind,
 } from "@/lib/aircraft";
 import {
   fetchPlatformOrganizations,
@@ -38,6 +40,7 @@ type ModelStationDraft = {
   clientKey: string;
   id: string;
   name: string;
+  kind: AircraftStationKind;
   arm: string;
   latArm: string;
   weightPerGallon: string;
@@ -93,6 +96,7 @@ const emptyModelForm: ModelFormState = {
     clientKey: "new-station-1",
     id: "",
     name: "",
+    kind: "seat",
     arm: "",
     latArm: "",
     weightPerGallon: "",
@@ -145,6 +149,7 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
             clientKey: `station-${model.id}-${index}`,
             id: station.id,
             name: station.name,
+            kind: station.kind,
             arm: String(station.arm),
             latArm: station.latArm != null ? String(station.latArm) : "",
             weightPerGallon: station.weightPerGallon != null ? String(station.weightPerGallon) : "",
@@ -929,6 +934,11 @@ export default function AircraftAdminPanel() {
         return {
           id: getUniqueStationId(station, stationIndex, usedStationIds),
           name: station.name.trim(),
+          kind: inferAircraftStationKind({
+            ...station,
+            kind: undefined,
+            weightPerGallon,
+          }),
           arm: toNumber(station.arm),
           latArm: toOptionalNumber(station.latArm),
           weightPerGallon,
@@ -1367,6 +1377,7 @@ export default function AircraftAdminPanel() {
                   clientKey: crypto.randomUUID(),
                   id: "",
                   name: "",
+                  kind: "seat",
                   arm: "",
                   latArm: "",
                   weightPerGallon: "",

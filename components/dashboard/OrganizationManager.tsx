@@ -19,6 +19,7 @@ import {
   type AircraftModelRecord,
   type AircraftOperationalStatus,
   type AircraftRecord,
+  type AircraftStationKind,
   type OrganizationAircraftMaintenanceInput,
 } from "@/lib/aircraft";
 import {
@@ -57,6 +58,7 @@ type LoadingLocationDraft = {
   clientKey: string;
   id: string;
   name: string;
+  kind: AircraftStationKind;
   arm: string;
   latArm: string;
   weightPerGallon: string;
@@ -89,14 +91,18 @@ type ModelForm = {
   sideView: HelicopterLimitDraft[];
 };
 
-function emptyLoadingLocation(clientKey = "new-loading-location-1"): LoadingLocationDraft {
+function emptyLoadingLocation(
+  clientKey = "new-loading-location-1",
+  kind: AircraftStationKind = "seat"
+): LoadingLocationDraft {
   return {
     clientKey,
     id: "",
     name: "",
+    kind,
     arm: "",
     latArm: "",
-    weightPerGallon: "",
+    weightPerGallon: kind === "fuel" ? "6" : "",
     fixedWeight: "",
     maxWeight: "",
     inputType: "number",
@@ -670,19 +676,29 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                 clientKey: `loading-location-${model.id}-${index}`,
                 id: station.id,
                 name: station.name,
+                kind: station.kind,
                 arm: String(station.arm),
                 latArm: station.latArm == null ? "" : String(station.latArm),
                 weightPerGallon:
                   station.weightPerGallon == null ? "" : String(station.weightPerGallon),
                 fixedWeight: station.fixedWeight == null ? "" : String(station.fixedWeight),
-                maxWeight: station.maxWeight == null ? "" : String(station.maxWeight),
+                maxWeight:
+                  station.maxWeight == null
+                    ? ""
+                    : station.kind === "fuel" &&
+                        typeof station.weightPerGallon === "number" &&
+                        station.weightPerGallon > 0
+                      ? String(station.maxWeight / station.weightPerGallon)
+                      : String(station.maxWeight),
                 inputType: station.inputType === "checkbox" ? "checkbox" : "number",
                 crewRole:
                   station.crewRole === "pilot" || station.crewRole === "copilot"
                     ? station.crewRole
                     : "",
               })),
-              emptyLoadingLocation(crypto.randomUUID()),
+              ...Array.from(new Set(stations.map((station) => station.kind))).map(
+                (kind) => emptyLoadingLocation(crypto.randomUUID(), kind)
+              ),
             ]
           : [emptyLoadingLocation(crypto.randomUUID())],
       envelope:
@@ -734,11 +750,20 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         station.clientKey === clientKey ? { ...station, [field]: value } : station
       );
       const changedIndex = stations.findIndex((station) => station.clientKey === clientKey);
+      const changedStation = stations[changedIndex];
       if (
-        changedIndex === stations.length - 1 &&
-        hasLoadingLocationValue(stations[changedIndex])
+        changedStation &&
+        hasLoadingLocationValue(changedStation) &&
+        !stations.some(
+          (station, index) =>
+            index !== changedIndex &&
+            station.kind === changedStation.kind &&
+            !hasLoadingLocationValue(station)
+        )
       ) {
-        stations.push(emptyLoadingLocation(crypto.randomUUID()));
+        stations.push(
+          emptyLoadingLocation(crypto.randomUUID(), changedStation.kind)
+        );
       }
       return { ...current, stations };
     });
@@ -795,7 +820,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         if (section === "stations") {
           return {
             ...current,
-            stations: keepOneTrailingBlank(current.stations, hasLoadingLocationValue),
+            stations: keepOneBlankLoadingLocationPerKind(current.stations),
           };
         }
         if (section === "envelope") {
@@ -838,41 +863,62 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             throw new Error("Give each loading location a different name.");
           }
           usedLocationIds.add(id.toLowerCase());
-          if (station.crewRole && usedCrewRoles.has(station.crewRole)) {
+          if (
+            station.kind === "seat" &&
+            station.crewRole &&
+            usedCrewRoles.has(station.crewRole)
+          ) {
             throw new Error(`Only one location can be assigned as the ${station.crewRole === "pilot" ? "pilot" : "co-pilot"} seat.`);
           }
-          if (station.crewRole) {
+          if (station.kind === "seat" && station.crewRole) {
             usedCrewRoles.add(station.crewRole);
           }
           const latArm = optionalNumber(station.latArm);
           if (modelForm.category === "helicopter" && latArm == null) {
             throw new Error(`Enter the left/right distance for ${station.name.trim()}. Use 0 if it is on the centerline.`);
           }
-          const fixedWeight = optionalNonNegativeNumber(
-            station.fixedWeight,
-            `${station.name.trim()} default or fixed weight`
+          const fuelDensity =
+            station.kind === "fuel"
+              ? requiredPositiveNumber(
+                  station.weightPerGallon,
+                  `${station.name.trim()} fuel density`
+                )
+              : null;
+          const fixedWeight =
+            station.kind === "equipment"
+              ? requiredPositiveNumber(
+                  station.fixedWeight,
+                  `${station.name.trim()} equipment weight`
+                )
+              : null;
+          const enteredLimit = optionalNonNegativeNumber(
+            station.maxWeight,
+            station.kind === "fuel"
+              ? `${station.name.trim()} capacity`
+              : `${station.name.trim()} maximum load`
           );
-          if (station.inputType === "checkbox" && fixedWeight == null) {
-            throw new Error(`Enter the included weight for ${station.name.trim()}.`);
-          }
           return {
             id,
             name: station.name.trim(),
+            kind: station.kind,
             arm: requiredNumber(station.arm, `${station.name || `Loading location ${index + 1}`} arm`),
             latArm,
-            weightPerGallon:
-              optionalPositiveNumber(
-                station.weightPerGallon,
-                `${station.name.trim()} fuel weight`
-              ) ??
-              (/fuel/i.test(station.name) ? 6 : null),
+            weightPerGallon: fuelDensity,
             fixedWeight,
-            maxWeight: optionalNonNegativeNumber(
-              station.maxWeight,
-              `${station.name.trim()} maximum load`
-            ),
-            inputType: station.inputType,
-            crewRole: station.crewRole || null,
+            maxWeight:
+              station.kind === "equipment"
+                ? null
+                : station.kind === "fuel" &&
+                    enteredLimit != null &&
+                    fuelDensity != null
+                  ? enteredLimit * fuelDensity
+                  : enteredLimit,
+            inputType:
+              station.kind === "equipment"
+                ? station.inputType
+                : "number",
+            crewRole:
+              station.kind === "seat" ? station.crewRole || null : null,
           };
         });
       const airplaneEnvelope = modelForm.envelope
@@ -1197,11 +1243,20 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               rows={modelForm.stations}
               onChange={updateLoadingLocation}
               onBlur={() => trimTrailingModelRows("stations")}
+              onAdd={(kind) =>
+                setModelForm((current) => ({
+                  ...current,
+                  stations: [
+                    ...current.stations,
+                    emptyLoadingLocation(crypto.randomUUID(), kind),
+                  ],
+                }))
+              }
               onRemove={(clientKey) =>
                 setModelForm((current) => ({
                   ...current,
-                  stations: ensureLoadingLocationRow(
-                    current.stations.filter((item) => item.clientKey !== clientKey)
+                  stations: current.stations.filter(
+                    (item) => item.clientKey !== clientKey
                   ),
                 }))
               }
@@ -1756,6 +1811,7 @@ function LoadingLocationsGrid({
   rows,
   onChange,
   onBlur,
+  onAdd,
   onRemove,
 }: {
   category: ModelForm["category"];
@@ -1766,31 +1822,137 @@ function LoadingLocationsGrid({
     value: string
   ) => void;
   onBlur: () => void;
+  onAdd: (kind: AircraftStationKind) => void;
   onRemove: (clientKey: string) => void;
 }) {
+  const stationGroups: Array<{
+    kind: AircraftStationKind;
+    label: string;
+    emptyLabel: string;
+  }> = [
+    { kind: "seat", label: "Seats", emptyLabel: "Add seat" },
+    { kind: "fuel", label: "Fuel tanks", emptyLabel: "Add fuel tank" },
+    { kind: "baggage", label: "Baggage / cargo", emptyLabel: "Add baggage area" },
+    { kind: "equipment", label: "Installed equipment", emptyLabel: "Add equipment" },
+    { kind: "other", label: "Other loads", emptyLabel: "Add other load" },
+  ];
+
   return (
     <fieldset className="min-w-0 border-t border-slate-300 bg-white" onBlur={onBlur}>
-      <div className="flex items-center justify-between gap-3 border-b border-slate-300 bg-slate-200 px-2 py-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-slate-200 px-2 py-1">
         <legend className="text-[11px] font-bold uppercase tracking-wide text-slate-800">
           Loading stations
         </legend>
-        <span className="text-[10px] text-slate-600">Seats, fuel, baggage and fixed items</span>
+        <div className="flex flex-wrap gap-1">
+          {stationGroups.map((group) => {
+            const hasBlankRow = rows.some(
+              (row) => row.kind === group.kind && !hasLoadingLocationValue(row)
+            );
+            return (
+              <button
+                key={group.kind}
+                className="cursor-pointer rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 transition-colors hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600 disabled:cursor-default disabled:bg-slate-100 disabled:text-slate-400"
+                type="button"
+                disabled={hasBlankRow}
+                onClick={() => onAdd(group.kind)}
+              >
+                + {group.emptyLabel}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {stationGroups.map((group) => {
+        const groupRows = rows.filter((row) => row.kind === group.kind);
+        return groupRows.length > 0 ? (
+          <LoadingStationTable
+            key={group.kind}
+            category={category}
+            kind={group.kind}
+            label={group.label}
+            rows={groupRows}
+            onChange={onChange}
+            onRemove={onRemove}
+          />
+        ) : null;
+      })}
+    </fieldset>
+  );
+}
+
+function LoadingStationTable({
+  category,
+  kind,
+  label,
+  rows,
+  onChange,
+  onRemove,
+}: {
+  category: ModelForm["category"];
+  kind: AircraftStationKind;
+  label: string;
+  rows: LoadingLocationDraft[];
+  onChange: (
+    clientKey: string,
+    field: keyof LoadingLocationDraft,
+    value: string
+  ) => void;
+  onRemove: (clientKey: string) => void;
+}) {
+  const stationLabel =
+    kind === "seat"
+      ? "Seat"
+      : kind === "fuel"
+        ? "Tank"
+        : kind === "baggage"
+          ? "Area"
+          : kind === "equipment"
+            ? "Item"
+            : "Load";
+  const placeholder =
+    kind === "seat"
+      ? "Pilot seat"
+      : kind === "fuel"
+        ? "Main tank"
+        : kind === "baggage"
+          ? "Baggage area"
+          : kind === "equipment"
+            ? "Installed item"
+            : "External load";
+
+  return (
+    <div className="border-b border-slate-300 last:border-b-0">
+      <div className="border-b border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+        {label}
       </div>
       <div className="max-w-full overflow-x-auto" data-edit-grid>
-        <table className="w-full min-w-[950px] border-collapse text-left text-xs">
-          <thead className="bg-slate-100 text-[11px] font-semibold text-slate-700">
+        <table className="w-full min-w-[620px] border-collapse text-left text-xs">
+          <thead className="bg-white text-[11px] font-semibold text-slate-700">
             <tr>
               <GridHeader className="w-9 text-center">#</GridHeader>
-              <GridHeader className="min-w-36">Station</GridHeader>
+              <GridHeader className="min-w-40">{stationLabel}</GridHeader>
               <GridHeader className="w-24">Arm (in)</GridHeader>
               <GridHeader className="w-24" title="Left/right arm">
                 Lat arm{category === "helicopter" ? " *" : ""}
               </GridHeader>
-              <GridHeader className="w-24">Max lb</GridHeader>
-              <GridHeader className="w-24">Fuel lb/gal</GridHeader>
-              <GridHeader className="w-24">Fixed lb</GridHeader>
-              <GridHeader className="w-36">Input</GridHeader>
-              <GridHeader className="w-32">Crew</GridHeader>
+              {kind === "fuel" ? (
+                <>
+                  <GridHeader className="w-28">Capacity (gal)</GridHeader>
+                  <GridHeader className="w-24">lb/gal</GridHeader>
+                </>
+              ) : null}
+              {kind === "seat" || kind === "baggage" || kind === "other" ? (
+                <GridHeader className="w-24">Max lb</GridHeader>
+              ) : null}
+              {kind === "seat" ? (
+                <GridHeader className="w-28">Crew role</GridHeader>
+              ) : null}
+              {kind === "equipment" ? (
+                <>
+                  <GridHeader className="w-24">Weight (lb)</GridHeader>
+                  <GridHeader className="w-32">Use</GridHeader>
+                </>
+              ) : null}
               <GridHeader className="w-9 text-center" last>
                 <span className="sr-only">Remove</span>
               </GridHeader>
@@ -1804,8 +1966,8 @@ function LoadingLocationsGrid({
                   <GridIndexCell>{isBlank ? "•" : index + 1}</GridIndexCell>
                   <GridCell>
                     <GridTextInput
-                      ariaLabel={`Loading location ${index + 1} name`}
-                      placeholder="Pilot seat"
+                      ariaLabel={`${label} ${index + 1} name`}
+                      placeholder={placeholder}
                       value={station.name}
                       onChange={(value) =>
                         onChange(station.clientKey, "name", value)
@@ -1814,7 +1976,7 @@ function LoadingLocationsGrid({
                   </GridCell>
                   <GridCell>
                     <GridNumberInput
-                      ariaLabel={`Loading location ${index + 1} arm from datum`}
+                      ariaLabel={`${label} ${index + 1} arm from datum`}
                       value={station.arm}
                       onChange={(value) =>
                         onChange(station.clientKey, "arm", value)
@@ -1823,7 +1985,7 @@ function LoadingLocationsGrid({
                   </GridCell>
                   <GridCell>
                     <GridNumberInput
-                      ariaLabel={`Loading location ${index + 1} left or right arm`}
+                      ariaLabel={`${label} ${index + 1} left or right arm`}
                       placeholder={category === "helicopter" ? "0" : ""}
                       value={station.latArm}
                       onChange={(value) =>
@@ -1831,67 +1993,88 @@ function LoadingLocationsGrid({
                       }
                     />
                   </GridCell>
-                  <GridCell>
-                    <GridNumberInput
-                      ariaLabel={`Loading location ${index + 1} maximum load`}
-                      min={0}
-                      value={station.maxWeight}
-                      onChange={(value) =>
-                        onChange(station.clientKey, "maxWeight", value)
-                      }
-                    />
-                  </GridCell>
-                  <GridCell>
-                    <GridNumberInput
-                      ariaLabel={`Loading location ${index + 1} fuel weight per gallon`}
-                      min={0}
-                      placeholder={/fuel/i.test(station.name) ? "6" : ""}
-                      value={station.weightPerGallon}
-                      onChange={(value) =>
-                        onChange(station.clientKey, "weightPerGallon", value)
-                      }
-                    />
-                  </GridCell>
-                  <GridCell>
-                    <GridNumberInput
-                      ariaLabel={`Loading location ${index + 1} fixed weight`}
-                      min={0}
-                      value={station.fixedWeight}
-                      onChange={(value) =>
-                        onChange(station.clientKey, "fixedWeight", value)
-                      }
-                    />
-                  </GridCell>
-                  <GridCell>
-                    <GridSelect
-                      ariaLabel={`How users enter loading location ${index + 1}`}
-                      value={station.inputType}
-                      onChange={(value) =>
-                        onChange(station.clientKey, "inputType", value)
-                      }
-                    >
-                      <option value="number">Weight / qty</option>
-                      <option value="checkbox">Yes / no</option>
-                    </GridSelect>
-                  </GridCell>
-                  <GridCell>
-                    <GridSelect
-                      ariaLabel={`Crew seat for loading location ${index + 1}`}
-                      value={station.crewRole}
-                      onChange={(value) =>
-                        onChange(station.clientKey, "crewRole", value)
-                      }
-                    >
-                      <option value="">—</option>
-                      <option value="pilot">Pilot</option>
-                      <option value="copilot">Co-pilot</option>
-                    </GridSelect>
-                  </GridCell>
+                  {kind === "fuel" ? (
+                    <>
+                      <GridCell>
+                        <GridNumberInput
+                          ariaLabel={`${label} ${index + 1} capacity in gallons`}
+                          min={0}
+                          value={station.maxWeight}
+                          onChange={(value) =>
+                            onChange(station.clientKey, "maxWeight", value)
+                          }
+                        />
+                      </GridCell>
+                      <GridCell>
+                        <GridNumberInput
+                          ariaLabel={`${label} ${index + 1} fuel density in pounds per gallon`}
+                          min={0}
+                          value={station.weightPerGallon}
+                          onChange={(value) =>
+                            onChange(station.clientKey, "weightPerGallon", value)
+                          }
+                        />
+                      </GridCell>
+                    </>
+                  ) : null}
+                  {kind === "seat" || kind === "baggage" || kind === "other" ? (
+                    <GridCell>
+                      <GridNumberInput
+                        ariaLabel={`${label} ${index + 1} maximum load`}
+                        min={0}
+                        value={station.maxWeight}
+                        onChange={(value) =>
+                          onChange(station.clientKey, "maxWeight", value)
+                        }
+                      />
+                    </GridCell>
+                  ) : null}
+                  {kind === "seat" ? (
+                    <GridCell>
+                      <GridSelect
+                        ariaLabel={`${label} ${index + 1} crew role`}
+                        value={station.crewRole}
+                        onChange={(value) =>
+                          onChange(station.clientKey, "crewRole", value)
+                        }
+                      >
+                        <option value="">Passenger / none</option>
+                        <option value="pilot">Pilot</option>
+                        <option value="copilot">Co-pilot</option>
+                      </GridSelect>
+                    </GridCell>
+                  ) : null}
+                  {kind === "equipment" ? (
+                    <>
+                      <GridCell>
+                        <GridNumberInput
+                          ariaLabel={`${label} ${index + 1} installed weight`}
+                          min={0}
+                          value={station.fixedWeight}
+                          onChange={(value) =>
+                            onChange(station.clientKey, "fixedWeight", value)
+                          }
+                        />
+                      </GridCell>
+                      <GridCell>
+                        <GridSelect
+                          ariaLabel={`${label} ${index + 1} inclusion rule`}
+                          value={station.inputType}
+                          onChange={(value) =>
+                            onChange(station.clientKey, "inputType", value)
+                          }
+                        >
+                          <option value="number">Always included</option>
+                          <option value="checkbox">Optional</option>
+                        </GridSelect>
+                      </GridCell>
+                    </>
+                  ) : null}
                   <td className="border-t border-slate-200 p-0 text-center">
-                    {!isBlank || rows.length > 1 ? (
+                    {!isBlank || kind !== "seat" || rows.length > 1 ? (
                       <RemoveGridRowButton
                         onClick={() => onRemove(station.clientKey)}
-                        ariaLabel={`Remove loading location ${index + 1}`}
+                        ariaLabel={`Remove ${label.toLowerCase()} ${index + 1}`}
                       />
                     ) : null}
                   </td>
@@ -1901,7 +2084,7 @@ function LoadingLocationsGrid({
           </tbody>
         </table>
       </div>
-    </fieldset>
+    </div>
   );
 }
 
@@ -2147,7 +2330,6 @@ function hasLoadingLocationValue(row: LoadingLocationDraft | undefined) {
       row.name.trim() ||
       row.arm.trim() ||
       row.latArm.trim() ||
-      row.weightPerGallon.trim() ||
       row.fixedWeight.trim() ||
       row.maxWeight.trim() ||
       row.inputType !== "number" ||
@@ -2178,11 +2360,14 @@ function keepOneTrailingBlank<T>(
   return next;
 }
 
-function ensureLoadingLocationRow(rows: LoadingLocationDraft[]) {
-  if (rows.length === 0 || hasLoadingLocationValue(rows[rows.length - 1])) {
-    return [...rows, emptyLoadingLocation(crypto.randomUUID())];
-  }
-  return rows;
+function keepOneBlankLoadingLocationPerKind(rows: LoadingLocationDraft[]) {
+  const keptBlankKinds = new Set<AircraftStationKind>();
+  return [...rows].reverse().filter((row) => {
+    if (hasLoadingLocationValue(row)) return true;
+    if (keptBlankKinds.has(row.kind)) return false;
+    keptBlankKinds.add(row.kind);
+    return true;
+  }).reverse();
 }
 
 function ensureWeightBalanceLimitRow(rows: WeightBalanceLimitDraft[]) {
