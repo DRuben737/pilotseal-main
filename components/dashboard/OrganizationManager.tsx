@@ -43,6 +43,7 @@ import {
   type NotificationPriority,
 } from "@/lib/notifications";
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
+import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
 import {
   AdminCollapsibleSection,
   AdminPageHeader,
@@ -88,40 +89,38 @@ type ModelForm = {
   sideView: HelicopterLimitDraft[];
 };
 
+function emptyLoadingLocation(clientKey = "new-loading-location-1"): LoadingLocationDraft {
+  return {
+    clientKey,
+    id: "",
+    name: "",
+    arm: "",
+    latArm: "",
+    weightPerGallon: "",
+    fixedWeight: "",
+    maxWeight: "",
+    inputType: "number",
+    crewRole: "",
+  };
+}
+
+function emptyWeightBalanceLimit(clientKey = "new-limit-1"): WeightBalanceLimitDraft {
+  return { clientKey, cg: "", weight: "" };
+}
+
+function emptyHelicopterLimit(clientKey: string): HelicopterLimitDraft {
+  return { clientKey, x: "", y: "" };
+}
+
 const emptyModelForm: ModelForm = {
   name: "",
   category: "airplane",
   avg_fuel_burn_rate: "",
   max_weight: "",
-  stations: [
-    {
-      clientKey: "new-loading-location-1",
-      id: "",
-      name: "",
-      arm: "",
-      latArm: "",
-      weightPerGallon: "",
-      fixedWeight: "",
-      maxWeight: "",
-      inputType: "number",
-      crewRole: "",
-    },
-  ],
-  envelope: [
-    { clientKey: "new-limit-1", cg: "", weight: "" },
-    { clientKey: "new-limit-2", cg: "", weight: "" },
-    { clientKey: "new-limit-3", cg: "", weight: "" },
-  ],
-  topView: [
-    { clientKey: "new-top-limit-1", x: "", y: "" },
-    { clientKey: "new-top-limit-2", x: "", y: "" },
-    { clientKey: "new-top-limit-3", x: "", y: "" },
-  ],
-  sideView: [
-    { clientKey: "new-side-limit-1", x: "", y: "" },
-    { clientKey: "new-side-limit-2", x: "", y: "" },
-    { clientKey: "new-side-limit-3", x: "", y: "" },
-  ],
+  stations: [emptyLoadingLocation()],
+  envelope: [emptyWeightBalanceLimit()],
+  topView: [emptyHelicopterLimit("new-top-limit-1")],
+  sideView: [emptyHelicopterLimit("new-side-limit-1")],
 };
 
 type AircraftForm = {
@@ -220,7 +219,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const pendingPeople = organizationPeople.filter((person) => person.status === "pending");
   const editingAircraft = aircraft.find((item) => item.id === editingAircraftId) ?? null;
   const editingAssignedAircraft = editingAircraft?.organization_access === "assigned";
-  const activeSectionKeys = organizationSectionKeys(view);
+  const activeSectionKeys = organizationSectionKeys(view, canManageFleet);
   const hasOpenSection = activeSectionKeys.some((key) => openSections.has(key));
 
   function toggleSection(key: string) {
@@ -644,7 +643,13 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
   function startCreateModel() {
     setEditingModelId("");
-    setModelForm(emptyModelForm);
+    setModelForm({
+      ...emptyModelForm,
+      stations: [emptyLoadingLocation(crypto.randomUUID())],
+      envelope: [emptyWeightBalanceLimit(crypto.randomUUID())],
+      topView: [emptyHelicopterLimit(crypto.randomUUID())],
+      sideView: [emptyHelicopterLimit(crypto.randomUUID())],
+    });
     setModelError("");
     setShowModelForm(true);
   }
@@ -660,47 +665,59 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       max_weight: model.max_weight == null ? "" : String(model.max_weight),
       stations:
         stations.length > 0
-          ? stations.map((station, index) => ({
-              clientKey: `loading-location-${model.id}-${index}`,
-              id: station.id,
-              name: station.name,
-              arm: String(station.arm),
-              latArm: station.latArm == null ? "" : String(station.latArm),
-              weightPerGallon:
-                station.weightPerGallon == null ? "" : String(station.weightPerGallon),
-              fixedWeight: station.fixedWeight == null ? "" : String(station.fixedWeight),
-              maxWeight: station.maxWeight == null ? "" : String(station.maxWeight),
-              inputType: station.inputType === "checkbox" ? "checkbox" : "number",
-              crewRole:
-                station.crewRole === "pilot" || station.crewRole === "copilot"
-                  ? station.crewRole
-                  : "",
-            }))
-          : emptyModelForm.stations,
+          ? [
+              ...stations.map<LoadingLocationDraft>((station, index) => ({
+                clientKey: `loading-location-${model.id}-${index}`,
+                id: station.id,
+                name: station.name,
+                arm: String(station.arm),
+                latArm: station.latArm == null ? "" : String(station.latArm),
+                weightPerGallon:
+                  station.weightPerGallon == null ? "" : String(station.weightPerGallon),
+                fixedWeight: station.fixedWeight == null ? "" : String(station.fixedWeight),
+                maxWeight: station.maxWeight == null ? "" : String(station.maxWeight),
+                inputType: station.inputType === "checkbox" ? "checkbox" : "number",
+                crewRole:
+                  station.crewRole === "pilot" || station.crewRole === "copilot"
+                    ? station.crewRole
+                    : "",
+              })),
+              emptyLoadingLocation(crypto.randomUUID()),
+            ]
+          : [emptyLoadingLocation(crypto.randomUUID())],
       envelope:
         envelopeSet.normal.length > 0
-          ? envelopeSet.normal.map((point, index) => ({
-              clientKey: `limit-${model.id}-${index}`,
-              cg: String(point.cg),
-              weight: String(point.weight),
-            }))
-          : emptyModelForm.envelope,
+          ? [
+              ...envelopeSet.normal.map((point, index) => ({
+                clientKey: `limit-${model.id}-${index}`,
+                cg: String(point.cg),
+                weight: String(point.weight),
+              })),
+              emptyWeightBalanceLimit(crypto.randomUUID()),
+            ]
+          : [emptyWeightBalanceLimit(crypto.randomUUID())],
       topView:
         envelopeSet.topView.length > 0
-          ? envelopeSet.topView.map((point, index) => ({
-              clientKey: `top-limit-${model.id}-${index}`,
-              x: String(point.x),
-              y: String(point.y),
-            }))
-          : emptyModelForm.topView,
+          ? [
+              ...envelopeSet.topView.map((point, index) => ({
+                clientKey: `top-limit-${model.id}-${index}`,
+                x: String(point.x),
+                y: String(point.y),
+              })),
+              emptyHelicopterLimit(crypto.randomUUID()),
+            ]
+          : [emptyHelicopterLimit(crypto.randomUUID())],
       sideView:
         envelopeSet.sideView.length > 0
-          ? envelopeSet.sideView.map((point, index) => ({
-              clientKey: `side-limit-${model.id}-${index}`,
-              x: String(point.x),
-              y: String(point.y),
-            }))
-          : emptyModelForm.sideView,
+          ? [
+              ...envelopeSet.sideView.map((point, index) => ({
+                clientKey: `side-limit-${model.id}-${index}`,
+                x: String(point.x),
+                y: String(point.y),
+              })),
+              emptyHelicopterLimit(crypto.randomUUID()),
+            ]
+          : [emptyHelicopterLimit(crypto.randomUUID())],
     });
     setModelError("");
     setShowModelForm(true);
@@ -712,12 +729,19 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     value: string
   ) {
     setModelError("");
-    setModelForm((current) => ({
-      ...current,
-      stations: current.stations.map((station) =>
+    setModelForm((current) => {
+      const stations = current.stations.map((station) =>
         station.clientKey === clientKey ? { ...station, [field]: value } : station
-      ),
-    }));
+      );
+      const changedIndex = stations.findIndex((station) => station.clientKey === clientKey);
+      if (
+        changedIndex === stations.length - 1 &&
+        hasLoadingLocationValue(stations[changedIndex])
+      ) {
+        stations.push(emptyLoadingLocation(crypto.randomUUID()));
+      }
+      return { ...current, stations };
+    });
   }
 
   function updateWeightBalanceLimit(
@@ -726,12 +750,19 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     value: string
   ) {
     setModelError("");
-    setModelForm((current) => ({
-      ...current,
-      envelope: current.envelope.map((point) =>
+    setModelForm((current) => {
+      const envelope = current.envelope.map((point) =>
         point.clientKey === clientKey ? { ...point, [field]: value } : point
-      ),
-    }));
+      );
+      const changedIndex = envelope.findIndex((point) => point.clientKey === clientKey);
+      if (
+        changedIndex === envelope.length - 1 &&
+        hasWeightBalanceLimitValue(envelope[changedIndex])
+      ) {
+        envelope.push(emptyWeightBalanceLimit(crypto.randomUUID()));
+      }
+      return { ...current, envelope };
+    });
   }
 
   function updateHelicopterLimit(
@@ -741,12 +772,50 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     value: string
   ) {
     setModelError("");
-    setModelForm((current) => ({
-      ...current,
-      [section]: current[section].map((point) =>
+    setModelForm((current) => {
+      const points = current[section].map((point) =>
         point.clientKey === clientKey ? { ...point, [field]: value } : point
-      ),
-    }));
+      );
+      const changedIndex = points.findIndex((point) => point.clientKey === clientKey);
+      if (
+        changedIndex === points.length - 1 &&
+        hasHelicopterLimitValue(points[changedIndex])
+      ) {
+        points.push(emptyHelicopterLimit(crypto.randomUUID()));
+      }
+      return { ...current, [section]: points };
+    });
+  }
+
+  function trimTrailingModelRows(
+    section: "stations" | "envelope" | "topView" | "sideView"
+  ) {
+    window.requestAnimationFrame(() => {
+      setModelForm((current) => {
+        if (section === "stations") {
+          return {
+            ...current,
+            stations: keepOneTrailingBlank(current.stations, hasLoadingLocationValue),
+          };
+        }
+        if (section === "envelope") {
+          return {
+            ...current,
+            envelope: keepOneTrailingBlank(
+              current.envelope,
+              hasWeightBalanceLimitValue
+            ),
+          };
+        }
+        return {
+          ...current,
+          [section]: keepOneTrailingBlank(
+            current[section],
+            hasHelicopterLimitValue
+          ),
+        };
+      });
+    });
   }
 
   async function handleSaveModel(event: React.FormEvent) {
@@ -759,7 +828,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       const usedLocationIds = new Set<string>();
       const usedCrewRoles = new Set<string>();
       const stations = modelForm.stations
-        .filter((station) => station.name.trim() || station.arm.trim())
+        .filter(hasLoadingLocationValue)
         .map((station, index) => {
           if (!station.name.trim() || !station.arm.trim()) {
             throw new Error(`Complete the name and arm for loading location ${index + 1}.`);
@@ -927,8 +996,12 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   if (!activeOrganization) {
     return <div className="saas-panel">This account does not belong to an organization.</div>;
   }
-  if (!canManage) {
-    return <div className="saas-panel">Organization members can view the fleet from My Aircraft.</div>;
+  if (!canManage && view !== "fleet") {
+    return (
+      <div className="saas-panel">
+        This organization page is available to organization managers.
+      </div>
+    );
   }
 
   return (
@@ -989,6 +1062,24 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         </form>
       </AdminCollapsibleSection>) : null}
 
+      {view === "fleet" ? (
+        <AdminCollapsibleSection
+          id="fleet-reports"
+          title="Printable fleet reports"
+          description="Download clean, landscape records for maintenance planning or weight-and-balance files."
+          summary="2 PDF reports"
+          open={openSections.has("reports")}
+          onToggle={() => toggleSection("reports")}
+        >
+          <FleetReportsPanel
+            aircraft={aircraft}
+            models={models}
+            organizationId={activeOrganization.id}
+            organizationName={activeOrganization.name}
+          />
+        </AdminCollapsibleSection>
+      ) : null}
+
       {view === "fleet" && canManageFleet ? (<AdminCollapsibleSection
         id="aircraft-models"
         title="Aircraft models"
@@ -1034,113 +1125,39 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               </Field>
             </div>
 
-            <fieldset className="grid gap-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <legend className="text-sm font-semibold text-slate-900">Seats, fuel, baggage, and fixed equipment</legend>
-                  <p className="saas-meta-text mt-1">Add every place where weight can be carried. “Arm” is the distance from the aircraft datum.</p>
-                </div>
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={() =>
-                    setModelForm((current) => ({
-                      ...current,
-                      stations: [
-                        ...current.stations,
-                        {
-                          clientKey: crypto.randomUUID(),
-                          id: "",
-                          name: "",
-                          arm: "",
-                          latArm: "",
-                          weightPerGallon: "",
-                          fixedWeight: "",
-                          maxWeight: "",
-                          inputType: "number",
-                          crewRole: "",
-                        },
-                      ],
-                    }))
-                  }
-                >
-                  Add another location
-                </button>
-              </div>
-              {modelForm.stations.map((station, index) => (
-                <div key={station.clientKey} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 md:grid-cols-2 xl:grid-cols-4">
-                  <Field label={`Location ${index + 1} name`}>
-                    <input className="rounded-xl border border-slate-300 px-3 py-2" value={station.name} onChange={(event) => updateLoadingLocation(station.clientKey, "name", event.target.value)} placeholder="e.g. Front seats or Main fuel" />
-                  </Field>
-                  <Field label="Distance from datum (in)">
-                    <input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.arm} onChange={(event) => updateLoadingLocation(station.clientKey, "arm", event.target.value)} placeholder="e.g. 37" />
-                  </Field>
-                  <Field label="Maximum load (lb, optional)">
-                    <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.maxWeight} onChange={(event) => updateLoadingLocation(station.clientKey, "maxWeight", event.target.value)} />
-                  </Field>
-                  <Field label="Fuel weight (lb/gal, fuel only)">
-                    <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.weightPerGallon} onChange={(event) => updateLoadingLocation(station.clientKey, "weightPerGallon", event.target.value)} placeholder={/fuel/i.test(station.name) ? "6" : ""} />
-                  </Field>
-                  <details className="rounded-xl border border-slate-200 bg-white px-3 py-2 md:col-span-2 xl:col-span-4">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-                      More options for this location
-                    </summary>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <Field label="Left/right distance from centerline (in)">
-                        <input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.latArm} onChange={(event) => updateLoadingLocation(station.clientKey, "latArm", event.target.value)} placeholder={modelForm.category === "helicopter" ? "Required for lateral CG" : "Optional"} />
-                      </Field>
-                      <Field label="Default or fixed weight (lb)">
-                        <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={station.fixedWeight} onChange={(event) => updateLoadingLocation(station.clientKey, "fixedWeight", event.target.value)} placeholder="Optional" />
-                      </Field>
-                      <Field label="How this load is selected">
-                        <select className="rounded-xl border border-slate-300 px-3 py-2" value={station.inputType} onChange={(event) => updateLoadingLocation(station.clientKey, "inputType", event.target.value)}>
-                          <option value="number">Enter a weight or quantity</option>
-                          <option value="checkbox">Included / not included</option>
-                        </select>
-                      </Field>
-                      <Field label="Crew seat assignment">
-                        <select className="rounded-xl border border-slate-300 px-3 py-2" value={station.crewRole} onChange={(event) => updateLoadingLocation(station.clientKey, "crewRole", event.target.value)}>
-                          <option value="">Not a crew seat</option>
-                          <option value="pilot">Pilot seat</option>
-                          <option value="copilot">Co-pilot seat</option>
-                        </select>
-                      </Field>
-                    </div>
-                  </details>
-                  <button
-                    className="danger-button-compact justify-self-start xl:col-span-4"
-                    type="button"
-                    disabled={modelForm.stations.length === 1}
-                    onClick={() => setModelForm((current) => ({ ...current, stations: current.stations.filter((item) => item.clientKey !== station.clientKey) }))}
-                  >
-                    Remove this location
-                  </button>
-                </div>
-              ))}
-            </fieldset>
+            <LoadingLocationsGrid
+              category={modelForm.category}
+              rows={modelForm.stations}
+              onChange={updateLoadingLocation}
+              onBlur={() => trimTrailingModelRows("stations")}
+              onRemove={(clientKey) =>
+                setModelForm((current) => ({
+                  ...current,
+                  stations: ensureLoadingLocationRow(
+                    current.stations.filter((item) => item.clientKey !== clientKey)
+                  ),
+                }))
+              }
+            />
 
             {modelForm.category === "helicopter" ? (
               <div className="grid gap-6 xl:grid-cols-2">
                 <HelicopterLimitsEditor
                   title="CG limits viewed from above"
-                  description="Enter forward/aft and left/right CG boundary points from the approved chart."
+                  description="Enter at least three forward/aft and left/right points from the approved chart."
                   xLabel="Forward/aft CG (in)"
                   yLabel="Left/right CG (in)"
                   points={modelForm.topView}
-                  minimumPoints={3}
-                  onAdd={() =>
-                    setModelForm((current) => ({
-                      ...current,
-                      topView: [...current.topView, { clientKey: crypto.randomUUID(), x: "", y: "" }],
-                    }))
-                  }
                   onChange={(clientKey, field, value) =>
                     updateHelicopterLimit("topView", clientKey, field, value)
                   }
+                  onBlur={() => trimTrailingModelRows("topView")}
                   onRemove={(clientKey) =>
                     setModelForm((current) => ({
                       ...current,
-                      topView: current.topView.filter((point) => point.clientKey !== clientKey),
+                      topView: ensureHelicopterLimitRow(
+                        current.topView.filter((point) => point.clientKey !== clientKey)
+                      ),
                     }))
                   }
                 />
@@ -1150,66 +1167,34 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                   xLabel="Forward/aft CG (in)"
                   yLabel="Aircraft weight (lb)"
                   points={modelForm.sideView}
-                  minimumPoints={0}
-                  onAdd={() =>
-                    setModelForm((current) => ({
-                      ...current,
-                      sideView: [...current.sideView, { clientKey: crypto.randomUUID(), x: "", y: "" }],
-                    }))
-                  }
                   onChange={(clientKey, field, value) =>
                     updateHelicopterLimit("sideView", clientKey, field, value)
                   }
+                  onBlur={() => trimTrailingModelRows("sideView")}
                   onRemove={(clientKey) =>
                     setModelForm((current) => ({
                       ...current,
-                      sideView: current.sideView.filter((point) => point.clientKey !== clientKey),
+                      sideView: ensureHelicopterLimitRow(
+                        current.sideView.filter((point) => point.clientKey !== clientKey)
+                      ),
                     }))
                   }
                 />
               </div>
             ) : (
-              <fieldset className="grid gap-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <legend className="text-sm font-semibold text-slate-900">Approved weight-and-balance limits</legend>
-                    <p className="saas-meta-text mt-1">Enter at least three points from the aircraft’s approved CG envelope.</p>
-                  </div>
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() =>
-                      setModelForm((current) => ({
-                        ...current,
-                        envelope: [...current.envelope, { clientKey: crypto.randomUUID(), cg: "", weight: "" }],
-                      }))
-                    }
-                  >
-                    Add another limit point
-                  </button>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {modelForm.envelope.map((point, index) => (
-                    <div key={point.clientKey} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Limit point {index + 1}</p>
-                      <Field label="CG position (in)">
-                        <input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={point.cg} onChange={(event) => updateWeightBalanceLimit(point.clientKey, "cg", event.target.value)} />
-                      </Field>
-                      <Field label="Aircraft weight (lb)">
-                        <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={point.weight} onChange={(event) => updateWeightBalanceLimit(point.clientKey, "weight", event.target.value)} />
-                      </Field>
-                      <button
-                        className="danger-button-compact justify-self-start"
-                        type="button"
-                        disabled={modelForm.envelope.length <= 3}
-                        onClick={() => setModelForm((current) => ({ ...current, envelope: current.envelope.filter((item) => item.clientKey !== point.clientKey) }))}
-                      >
-                        Remove point
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </fieldset>
+              <WeightBalanceLimitsGrid
+                rows={modelForm.envelope}
+                onChange={updateWeightBalanceLimit}
+                onBlur={() => trimTrailingModelRows("envelope")}
+                onRemove={(clientKey) =>
+                  setModelForm((current) => ({
+                    ...current,
+                    envelope: ensureWeightBalanceLimitRow(
+                      current.envelope.filter((item) => item.clientKey !== clientKey)
+                    ),
+                  }))
+                }
+              />
             )}
 
             <div className="flex gap-2"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : editingModelId ? "Save changes" : "Add aircraft model"}</button><button className="ghost-button" type="button" onClick={() => setShowModelForm(false)}>Cancel</button></div>
@@ -1576,14 +1561,21 @@ function organizationViewDescription(view: OrganizationManagerView) {
   return ({
     overview: "Key organization activity and shortcuts, without the previous all-in-one page.",
     people: "Manage the roster, account links, organization roles, and teaching roles.",
-    fleet: "Manage organization aircraft, shared models, meter readings, and maintenance limits.",
+    fleet: "Review printable fleet records and, when authorized, manage aircraft and maintenance limits.",
     messages: "Send a notification to every current organization member.",
     endorsements: "Review and submit organization endorsement template changes.",
   })[view];
 }
 
-function organizationSectionKeys(view: OrganizationManagerView) {
-  if (view === "fleet") return ["models", "aircraft", "inspections"];
+function organizationSectionKeys(
+  view: OrganizationManagerView,
+  canManageFleet: boolean
+) {
+  if (view === "fleet") {
+    return canManageFleet
+      ? ["reports", "models", "aircraft", "inspections"]
+      : ["reports"];
+  }
   if (view === "people") return ["add-person", "pending-people", "linked-members"];
   if (view === "messages") return ["message"];
   if (view === "endorsements") return ["endorsements"];
@@ -1600,9 +1592,8 @@ function HelicopterLimitsEditor({
   xLabel,
   yLabel,
   points,
-  minimumPoints,
-  onAdd,
   onChange,
+  onBlur,
   onRemove,
 }: {
   title: string;
@@ -1610,43 +1601,524 @@ function HelicopterLimitsEditor({
   xLabel: string;
   yLabel: string;
   points: HelicopterLimitDraft[];
-  minimumPoints: number;
-  onAdd: () => void;
   onChange: (clientKey: string, field: "x" | "y", value: string) => void;
+  onBlur: () => void;
   onRemove: (clientKey: string) => void;
 }) {
   return (
-    <fieldset className="grid content-start gap-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="max-w-xl">
-          <legend className="text-sm font-semibold text-slate-900">{title}</legend>
-          <p className="saas-meta-text mt-1">{description}</p>
-        </div>
-        <button className="ghost-button" type="button" onClick={onAdd}>
-          Add limit point
-        </button>
+    <fieldset className="grid min-w-0 content-start gap-3" onBlur={onBlur}>
+      <div className="max-w-xl">
+        <legend className="text-sm font-semibold text-slate-900">{title}</legend>
+        <p className="saas-meta-text mt-1">{description}</p>
       </div>
-      {points.map((point, index) => (
-        <div key={point.clientKey} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 md:grid-cols-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 md:col-span-2">Limit point {index + 1}</p>
-          <Field label={xLabel}>
-            <input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={point.x} onChange={(event) => onChange(point.clientKey, "x", event.target.value)} />
-          </Field>
-          <Field label={yLabel}>
-            <input type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={point.y} onChange={(event) => onChange(point.clientKey, "y", event.target.value)} />
-          </Field>
-          <button
-            className="danger-button-compact justify-self-start md:col-span-2"
-            type="button"
-            disabled={points.length <= minimumPoints}
-            onClick={() => onRemove(point.clientKey)}
-          >
-            Remove point
-          </button>
-        </div>
-      ))}
+      <div
+        className="max-w-full overflow-x-auto rounded-xl border border-slate-300 bg-white"
+        data-edit-grid
+      >
+        <table className="w-full min-w-[560px] border-collapse text-left">
+          <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+            <tr>
+              <th className="w-12 border-b border-r border-slate-300 px-2 py-2 text-center">#</th>
+              <th className="border-b border-r border-slate-300 px-2 py-2">{xLabel}</th>
+              <th className="border-b border-r border-slate-300 px-2 py-2">{yLabel}</th>
+              <th className="w-20 border-b border-slate-300 px-2 py-2 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point, index) => {
+              const isBlank = !hasHelicopterLimitValue(point);
+              return (
+                <tr key={point.clientKey} className="group even:bg-slate-50/60">
+                  <td className="border-r border-t border-slate-200 px-2 py-2 text-center text-xs font-medium text-slate-500">
+                    {isBlank ? "New" : index + 1}
+                  </td>
+                  <td className="border-r border-t border-slate-200 p-0">
+                    <GridNumberInput
+                      ariaLabel={`${title} ${index + 1}, ${xLabel}`}
+                      value={point.x}
+                      onChange={(value) => onChange(point.clientKey, "x", value)}
+                    />
+                  </td>
+                  <td className="border-r border-t border-slate-200 p-0">
+                    <GridNumberInput
+                      ariaLabel={`${title} ${index + 1}, ${yLabel}`}
+                      min={yLabel.includes("weight") ? 0 : undefined}
+                      value={point.y}
+                      onChange={(value) => onChange(point.clientKey, "y", value)}
+                    />
+                  </td>
+                  <td className="border-t border-slate-200 px-2 py-1 text-center">
+                    {!isBlank || points.length > 1 ? (
+                      <button
+                        className="cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+                        type="button"
+                        onClick={() => onRemove(point.clientKey)}
+                        aria-label={`Remove ${title} row ${index + 1}`}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-slate-600">
+        Start typing in the last row to add another. Use Tab or Enter to move between cells.
+      </p>
     </fieldset>
   );
+}
+
+function LoadingLocationsGrid({
+  category,
+  rows,
+  onChange,
+  onBlur,
+  onRemove,
+}: {
+  category: ModelForm["category"];
+  rows: LoadingLocationDraft[];
+  onChange: (
+    clientKey: string,
+    field: keyof LoadingLocationDraft,
+    value: string
+  ) => void;
+  onBlur: () => void;
+  onRemove: (clientKey: string) => void;
+}) {
+  return (
+    <fieldset className="grid min-w-0 gap-3" onBlur={onBlur}>
+      <div>
+        <legend className="text-sm font-semibold text-slate-900">
+          Loading locations
+        </legend>
+        <p className="saas-meta-text mt-1">
+          Enter each seat, fuel tank, baggage area, or fixed item. Arm means the
+          distance from the aircraft datum.
+        </p>
+      </div>
+      <div
+        className="max-w-full overflow-x-auto rounded-xl border border-slate-300 bg-white"
+        data-edit-grid
+      >
+        <table className="w-full min-w-[1120px] border-collapse text-left">
+          <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+            <tr>
+              <GridHeader className="w-12 text-center">#</GridHeader>
+              <GridHeader className="min-w-40">Location</GridHeader>
+              <GridHeader>Arm (in)</GridHeader>
+              <GridHeader>
+                Left/right arm
+                {category === "helicopter" ? " (required)" : ""}
+              </GridHeader>
+              <GridHeader>Max load (lb)</GridHeader>
+              <GridHeader>Fuel (lb/gal)</GridHeader>
+              <GridHeader>Fixed weight (lb)</GridHeader>
+              <GridHeader className="min-w-40">How users enter it</GridHeader>
+              <GridHeader className="min-w-32">Crew seat</GridHeader>
+              <GridHeader className="w-20 text-center" last>
+                Action
+              </GridHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((station, index) => {
+              const isBlank = !hasLoadingLocationValue(station);
+              return (
+                <tr key={station.clientKey} className="even:bg-slate-50/60">
+                  <GridIndexCell>{isBlank ? "New" : index + 1}</GridIndexCell>
+                  <GridCell>
+                    <GridTextInput
+                      ariaLabel={`Loading location ${index + 1} name`}
+                      placeholder="Pilot seat"
+                      value={station.name}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "name", value)
+                      }
+                    />
+                  </GridCell>
+                  <GridCell>
+                    <GridNumberInput
+                      ariaLabel={`Loading location ${index + 1} arm from datum`}
+                      value={station.arm}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "arm", value)
+                      }
+                    />
+                  </GridCell>
+                  <GridCell>
+                    <GridNumberInput
+                      ariaLabel={`Loading location ${index + 1} left or right arm`}
+                      placeholder={category === "helicopter" ? "0" : ""}
+                      value={station.latArm}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "latArm", value)
+                      }
+                    />
+                  </GridCell>
+                  <GridCell>
+                    <GridNumberInput
+                      ariaLabel={`Loading location ${index + 1} maximum load`}
+                      min={0}
+                      value={station.maxWeight}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "maxWeight", value)
+                      }
+                    />
+                  </GridCell>
+                  <GridCell>
+                    <GridNumberInput
+                      ariaLabel={`Loading location ${index + 1} fuel weight per gallon`}
+                      min={0}
+                      placeholder={/fuel/i.test(station.name) ? "6" : ""}
+                      value={station.weightPerGallon}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "weightPerGallon", value)
+                      }
+                    />
+                  </GridCell>
+                  <GridCell>
+                    <GridNumberInput
+                      ariaLabel={`Loading location ${index + 1} fixed weight`}
+                      min={0}
+                      value={station.fixedWeight}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "fixedWeight", value)
+                      }
+                    />
+                  </GridCell>
+                  <GridCell>
+                    <GridSelect
+                      ariaLabel={`How users enter loading location ${index + 1}`}
+                      value={station.inputType}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "inputType", value)
+                      }
+                    >
+                      <option value="number">Enter weight/quantity</option>
+                      <option value="checkbox">Included / not included</option>
+                    </GridSelect>
+                  </GridCell>
+                  <GridCell>
+                    <GridSelect
+                      ariaLabel={`Crew seat for loading location ${index + 1}`}
+                      value={station.crewRole}
+                      onChange={(value) =>
+                        onChange(station.clientKey, "crewRole", value)
+                      }
+                    >
+                      <option value="">Not a crew seat</option>
+                      <option value="pilot">Pilot seat</option>
+                      <option value="copilot">Co-pilot seat</option>
+                    </GridSelect>
+                  </GridCell>
+                  <td className="border-t border-slate-200 px-2 py-1 text-center">
+                    {!isBlank || rows.length > 1 ? (
+                      <button
+                        className="cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+                        type="button"
+                        onClick={() => onRemove(station.clientKey)}
+                        aria-label={`Remove loading location ${index + 1}`}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-slate-600">
+        Start typing in the last row to add another. Use Tab or Enter to move between cells.
+      </p>
+    </fieldset>
+  );
+}
+
+function WeightBalanceLimitsGrid({
+  rows,
+  onChange,
+  onBlur,
+  onRemove,
+}: {
+  rows: WeightBalanceLimitDraft[];
+  onChange: (
+    clientKey: string,
+    field: keyof WeightBalanceLimitDraft,
+    value: string
+  ) => void;
+  onBlur: () => void;
+  onRemove: (clientKey: string) => void;
+}) {
+  return (
+    <fieldset className="grid min-w-0 gap-3" onBlur={onBlur}>
+      <div>
+        <legend className="text-sm font-semibold text-slate-900">
+          Approved CG and weight limits
+        </legend>
+        <p className="saas-meta-text mt-1">
+          Enter at least three boundary points from the approved aircraft chart.
+        </p>
+      </div>
+      <div
+        className="max-w-full overflow-x-auto rounded-xl border border-slate-300 bg-white"
+        data-edit-grid
+      >
+        <table className="w-full min-w-[560px] border-collapse text-left">
+          <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+            <tr>
+              <GridHeader className="w-12 text-center">#</GridHeader>
+              <GridHeader>CG position (in)</GridHeader>
+              <GridHeader>Aircraft weight (lb)</GridHeader>
+              <GridHeader className="w-20 text-center" last>
+                Action
+              </GridHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((point, index) => {
+              const isBlank = !hasWeightBalanceLimitValue(point);
+              return (
+                <tr key={point.clientKey} className="even:bg-slate-50/60">
+                  <GridIndexCell>{isBlank ? "New" : index + 1}</GridIndexCell>
+                  <GridCell>
+                    <GridNumberInput
+                      ariaLabel={`CG limit point ${index + 1} position`}
+                      value={point.cg}
+                      onChange={(value) =>
+                        onChange(point.clientKey, "cg", value)
+                      }
+                    />
+                  </GridCell>
+                  <GridCell>
+                    <GridNumberInput
+                      ariaLabel={`CG limit point ${index + 1} aircraft weight`}
+                      min={0}
+                      value={point.weight}
+                      onChange={(value) =>
+                        onChange(point.clientKey, "weight", value)
+                      }
+                    />
+                  </GridCell>
+                  <td className="border-t border-slate-200 px-2 py-1 text-center">
+                    {!isBlank || rows.length > 1 ? (
+                      <button
+                        className="cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+                        type="button"
+                        onClick={() => onRemove(point.clientKey)}
+                        aria-label={`Remove CG limit point ${index + 1}`}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-slate-600">
+        Start typing in the last row to add another. Use Tab or Enter to move between cells.
+      </p>
+    </fieldset>
+  );
+}
+
+const gridControlClass =
+  "block w-full min-w-24 border-0 bg-transparent px-2 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:bg-blue-50/60 focus:bg-blue-50 focus:ring-2 focus:ring-inset focus:ring-blue-600";
+
+function GridHeader({
+  children,
+  className = "",
+  last = false,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  last?: boolean;
+}) {
+  return (
+    <th
+      className={`border-b border-slate-300 px-2 py-2 ${
+        last ? "" : "border-r"
+      } ${className}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function GridCell({ children }: { children: React.ReactNode }) {
+  return <td className="border-r border-t border-slate-200 p-0">{children}</td>;
+}
+
+function GridIndexCell({ children }: { children: React.ReactNode }) {
+  return (
+    <td className="border-r border-t border-slate-200 px-2 py-2 text-center text-xs font-medium text-slate-500">
+      {children}
+    </td>
+  );
+}
+
+function GridTextInput({
+  ariaLabel,
+  placeholder,
+  value,
+  onChange,
+}: {
+  ariaLabel: string;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      aria-label={ariaLabel}
+      className={gridControlClass}
+      data-grid-cell
+      placeholder={placeholder}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={handleGridKeyDown}
+    />
+  );
+}
+
+function GridNumberInput({
+  ariaLabel,
+  min,
+  placeholder,
+  value,
+  onChange,
+}: {
+  ariaLabel: string;
+  min?: number;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      aria-label={ariaLabel}
+      className={gridControlClass}
+      data-grid-cell
+      min={min}
+      placeholder={placeholder}
+      step="any"
+      type="number"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={handleGridKeyDown}
+    />
+  );
+}
+
+function GridSelect({
+  ariaLabel,
+  children,
+  value,
+  onChange,
+}: {
+  ariaLabel: string;
+  children: React.ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      aria-label={ariaLabel}
+      className={`${gridControlClass} cursor-pointer`}
+      data-grid-cell
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={handleGridKeyDown}
+    >
+      {children}
+    </select>
+  );
+}
+
+function handleGridKeyDown(
+  event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>
+) {
+  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+  event.preventDefault();
+  const grid = event.currentTarget.closest<HTMLElement>("[data-edit-grid]");
+  if (!grid) return;
+  const currentCells = Array.from(
+    grid.querySelectorAll<HTMLElement>("[data-grid-cell]:not(:disabled)")
+  );
+  const currentIndex = currentCells.indexOf(event.currentTarget);
+  window.requestAnimationFrame(() => {
+    const nextCells = Array.from(
+      grid.querySelectorAll<HTMLElement>("[data-grid-cell]:not(:disabled)")
+    );
+    nextCells[currentIndex + 1]?.focus();
+  });
+}
+
+function hasLoadingLocationValue(row: LoadingLocationDraft | undefined) {
+  if (!row) return false;
+  return Boolean(
+    row.id.trim() ||
+      row.name.trim() ||
+      row.arm.trim() ||
+      row.latArm.trim() ||
+      row.weightPerGallon.trim() ||
+      row.fixedWeight.trim() ||
+      row.maxWeight.trim() ||
+      row.inputType !== "number" ||
+      row.crewRole
+  );
+}
+
+function hasWeightBalanceLimitValue(row: WeightBalanceLimitDraft | undefined) {
+  return Boolean(row && (row.cg.trim() || row.weight.trim()));
+}
+
+function hasHelicopterLimitValue(row: HelicopterLimitDraft | undefined) {
+  return Boolean(row && (row.x.trim() || row.y.trim()));
+}
+
+function keepOneTrailingBlank<T>(
+  rows: T[],
+  hasValue: (row: T | undefined) => boolean
+) {
+  const next = [...rows];
+  while (
+    next.length > 1 &&
+    !hasValue(next[next.length - 1]) &&
+    !hasValue(next[next.length - 2])
+  ) {
+    next.pop();
+  }
+  return next;
+}
+
+function ensureLoadingLocationRow(rows: LoadingLocationDraft[]) {
+  if (rows.length === 0 || hasLoadingLocationValue(rows[rows.length - 1])) {
+    return [...rows, emptyLoadingLocation(crypto.randomUUID())];
+  }
+  return rows;
+}
+
+function ensureWeightBalanceLimitRow(rows: WeightBalanceLimitDraft[]) {
+  if (rows.length === 0 || hasWeightBalanceLimitValue(rows[rows.length - 1])) {
+    return [...rows, emptyWeightBalanceLimit(crypto.randomUUID())];
+  }
+  return rows;
+}
+
+function ensureHelicopterLimitRow(rows: HelicopterLimitDraft[]) {
+  if (rows.length === 0 || hasHelicopterLimitValue(rows[rows.length - 1])) {
+    return [...rows, emptyHelicopterLimit(crypto.randomUUID())];
+  }
+  return rows;
 }
 
 function requiredNumber(value: string, label: string) {
