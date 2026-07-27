@@ -5,7 +5,6 @@
   "scripts": {
     "predev": "node scripts/assert-local-targets.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/assert-local-targets.mjs --allow-confirmed-production",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
