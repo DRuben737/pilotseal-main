@@ -1,7 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 
+import {
+  AdminDataTable,
+  CompactButton,
+  CompactToolbar,
+  DetailDrawer,
+  EmptyState,
+  StatusBadge,
+  WorksheetCell,
+  WorksheetGrid,
+  WorksheetHeader,
+  worksheetInputClass,
+} from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import {
   fetchAdminEndorsementTemplates,
@@ -86,25 +98,21 @@ export default function OrganizationEndorsementRequests({ organizationId, embedd
     setMessage("");
     try {
       const fields = JSON.parse(form.fieldsJson);
-      await submitEndorsementTemplateChangeRequest(
-        organizationId,
-        form.template_id || null,
-        {
-          key: form.key,
-          reference_number: form.reference_number,
-          title: form.title,
-          body: form.body,
-          fields,
-          category: form.category,
-          status: form.status,
-          sort_order: Number.parseInt(form.sort_order, 10),
-          userId: session?.user?.id,
-        }
-      );
+      await submitEndorsementTemplateChangeRequest(organizationId, form.template_id || null, {
+        key: form.key,
+        reference_number: form.reference_number,
+        title: form.title,
+        body: form.body,
+        fields,
+        category: form.category,
+        status: form.status,
+        sort_order: Number.parseInt(form.sort_order, 10),
+        userId: session?.user?.id,
+      });
       await reload();
       setForm(emptyForm);
       setOpen(false);
-      setMessage("Template change request submitted. It will not affect the live endorsement until a platform administrator approves it.");
+      setMessage("Template change request submitted for platform review.");
     } catch (error) {
       setMessage(getErrorMessage(error, "Unable to submit this endorsement proposal."));
     } finally {
@@ -113,45 +121,81 @@ export default function OrganizationEndorsementRequests({ organizationId, embedd
   }
 
   return (
-    <section className={embedded ? "" : "saas-panel"}>
-      <div className="people-toolbar">
-        <div>
-          {!embedded ? <h2 className="saas-subsection-title">Endorsement template change requests</h2> : null}
-          <p className="saas-meta-text">Organization administrators may propose wording changes. Platform approval is required before publication.</p>
-        </div>
-        <button className="secondary-button" type="button" onClick={() => setOpen((value) => !value)}>{open ? "Close" : "Request template change"}</button>
-      </div>
-      {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
+    <section className={embedded ? "" : "grid gap-3"}>
+      {message ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{message}</p> : null}
+      <AdminDataTable label="Endorsement template change requests">
+        <thead>
+          <tr>
+            <th colSpan={5} className="p-0 font-normal">
+              <CompactToolbar
+                resultLabel={`${requests.length} requests`}
+                actions={<CompactButton type="button" tone="primary" onClick={() => { setForm(emptyForm); setOpen(true); }}>Request change</CompactButton>}
+              />
+            </th>
+          </tr>
+          <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+            <th className="px-3 py-2">Endorsement</th>
+            <th className="px-3 py-2">Change</th>
+            <th className="px-3 py-2">Submitted</th>
+            <th className="px-3 py-2">Status</th>
+            <th className="px-3 py-2">Review note</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {!requests.length ? <tr><td colSpan={5}><EmptyState title="No endorsement requests" description="Proposed wording changes will appear here." /></td></tr> : null}
+          {requests.map((request) => (
+            <tr key={request.id} className="hover:bg-blue-50/40">
+              <td className="px-3 py-2 font-semibold text-slate-950">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</td>
+              <td className="px-3 py-2 text-xs text-slate-600">{request.action === "create" ? "New endorsement" : "Update"}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{new Date(request.submitted_at).toLocaleString()}</td>
+              <td className="px-3 py-2"><StatusBadge tone={request.status === "approved" ? "success" : request.status === "rejected" ? "danger" : "warning"}>{formatStatus(request.status)}</StatusBadge></td>
+              <td className="max-w-sm px-3 py-2 text-xs text-slate-600">{request.review_note || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </AdminDataTable>
 
-      {open ? (
-        <form className="mt-5 grid gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4 md:grid-cols-2" onSubmit={submit}>
-          <label className="grid gap-2 text-sm md:col-span-2"><span>Change an existing endorsement, or leave blank to propose a new one</span><select className="rounded-xl border border-slate-300 px-3 py-2" value={form.template_id} onChange={(event) => chooseTemplate(event.target.value)}><option value="">New endorsement</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.reference_number ? `${template.reference_number} · ` : ""}{template.title}</option>)}</select></label>
-          <Input label="Unique key" value={form.key} onChange={(value) => setForm((current) => ({ ...current, key: value }))} />
-          <Input label="AC number" value={form.reference_number} onChange={(value) => setForm((current) => ({ ...current, reference_number: value }))} />
-          <Input label="Title" value={form.title} onChange={(value) => setForm((current) => ({ ...current, title: value }))} />
-          <Input label="Category" value={form.category} onChange={(value) => setForm((current) => ({ ...current, category: value }))} />
-          <label className="grid gap-2 text-sm"><span>Status</span><select className="rounded-xl border border-slate-300 px-3 py-2" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as EndorsementTemplateStatus }))}><option value="active">Active</option><option value="inactive">Inactive</option><option value="archived">Archived</option></select></label>
-          <Input label="Sort order" type="number" value={form.sort_order} onChange={(value) => setForm((current) => ({ ...current, sort_order: value }))} />
-          <label className="grid gap-2 text-sm md:col-span-2"><span>Wording</span><textarea rows={7} className="rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs" value={form.body} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} required /></label>
-          <label className="grid gap-2 text-sm md:col-span-2"><span>Fill-in fields (JSON)</span><textarea rows={7} className="rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs" value={form.fieldsJson} onChange={(event) => setForm((current) => ({ ...current, fieldsJson: event.target.value }))} required /></label>
-          <div className="md:col-span-2"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Submitting..." : "Submit template change request"}</button></div>
-        </form>
-      ) : null}
-
-      <div className="mt-5 grid gap-3">
-        {requests.length === 0 ? <p className="saas-empty-state">No endorsement template change requests from this organization.</p> : requests.map((request) => (
-          <div key={request.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</p><p className="saas-meta-text">{request.action === "create" ? "New endorsement" : "Update"} · {new Date(request.submitted_at).toLocaleString()}</p></div><span className="saas-pill">{request.status}</span></div>
-            {request.review_note ? <p className="mt-2 text-sm text-slate-600">Review note: {request.review_note}</p> : null}
+      <DetailDrawer open={open} width="wide" onClose={() => setOpen(false)} title="Request endorsement change" description="Choose an existing endorsement to copy, or leave it blank to propose a new one.">
+        <form onSubmit={submit}>
+          <label className="grid gap-1 text-xs font-semibold text-slate-700">
+            Existing endorsement
+            <select autoFocus className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-normal" value={form.template_id} onChange={(event) => chooseTemplate(event.target.value)}>
+              <option value="">New endorsement</option>
+              {templates.map((template) => <option key={template.id} value={template.id}>{template.reference_number ? `${template.reference_number} · ` : ""}{template.title}</option>)}
+            </select>
+          </label>
+          <div className="mt-3">
+            <WorksheetGrid label="Endorsement request details" minWidth={760}>
+              <thead><tr><WorksheetHeader>Unique key</WorksheetHeader><WorksheetHeader>AC number</WorksheetHeader><WorksheetHeader>Title</WorksheetHeader><WorksheetHeader>Category</WorksheetHeader><WorksheetHeader>Status</WorksheetHeader><WorksheetHeader>Order</WorksheetHeader></tr></thead>
+              <tbody><tr>
+                <WorksheetCell><GridInput label="Unique key" value={form.key} onChange={(value) => updateForm(setForm, "key", value)} required /></WorksheetCell>
+                <WorksheetCell><GridInput label="AC number" value={form.reference_number} onChange={(value) => updateForm(setForm, "reference_number", value)} /></WorksheetCell>
+                <WorksheetCell><GridInput label="Title" value={form.title} onChange={(value) => updateForm(setForm, "title", value)} required /></WorksheetCell>
+                <WorksheetCell><GridInput label="Category" value={form.category} onChange={(value) => updateForm(setForm, "category", value)} /></WorksheetCell>
+                <WorksheetCell><select aria-label="Status" className={worksheetInputClass} value={form.status} onChange={(event) => updateForm(setForm, "status", event.target.value as EndorsementTemplateStatus)}><option value="active">Active</option><option value="inactive">Inactive</option><option value="archived">Archived</option></select></WorksheetCell>
+                <WorksheetCell><GridInput label="Sort order" type="number" value={form.sort_order} onChange={(value) => updateForm(setForm, "sort_order", value)} required /></WorksheetCell>
+              </tr></tbody>
+            </WorksheetGrid>
           </div>
-        ))}
-      </div>
+          <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Wording<textarea rows={8} className="rounded-md border border-slate-300 px-2 py-1.5 font-mono text-xs font-normal" value={form.body} onChange={(event) => updateForm(setForm, "body", event.target.value)} required /></label>
+          <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Fill-in fields (JSON)<textarea rows={7} className="rounded-md border border-slate-300 px-2 py-1.5 font-mono text-xs font-normal" value={form.fieldsJson} onChange={(event) => updateForm(setForm, "fieldsJson", event.target.value)} required /></label>
+          <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setOpen(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Submitting…" : "Submit request"}</CompactButton></div>
+        </form>
+      </DetailDrawer>
     </section>
   );
 }
 
-function Input({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <label className="grid gap-2 text-sm"><span>{label}</span><input type={type} className="rounded-xl border border-slate-300 px-3 py-2" value={value} onChange={(event) => onChange(event.target.value)} required={label !== "AC number" && label !== "Category"} /></label>;
+function GridInput({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) {
+  return <input aria-label={label} type={type} required={required} className={worksheetInputClass} value={value} onChange={(event) => onChange(event.target.value)} />;
+}
+
+function updateForm<K extends keyof FormState>(setForm: Dispatch<SetStateAction<FormState>>, key: K, value: FormState[K]) {
+  setForm((current) => ({ ...current, [key]: value }));
+}
+
+function formatStatus(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function getErrorMessage(error: unknown, fallback: string) {

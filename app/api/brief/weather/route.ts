@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const AVWX_FUNCTION_URL =
-  "https://dyewqcrqbhnbsseigcoa.supabase.co/functions/v1/AVWX";
-
 type WeatherResult = {
   icao: string;
   metarRaw: string;
@@ -19,6 +16,15 @@ function getAnonKey() {
   }
 
   return anonKey;
+}
+
+function getAvwxFunctionUrl() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL.");
+  }
+
+  return new URL("/functions/v1/AVWX", supabaseUrl).toString();
 }
 
 function normalizeIcao(value: unknown) {
@@ -181,7 +187,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No airports provided." }, { status: 400 });
     }
 
-    const response = await fetch(AVWX_FUNCTION_URL, {
+    const response = await fetch(getAvwxFunctionUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${getAnonKey()}`,

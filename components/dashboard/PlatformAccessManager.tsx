@@ -1,7 +1,21 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  AdminDataTable,
+  AdminPageHeader,
+  CompactButton,
+  CompactToolbar,
+  ConfirmDialog,
+  DetailDrawer,
+  EmptyState,
+  StatusBadge,
+  WorksheetCell,
+  WorksheetGrid,
+  WorksheetHeader,
+  worksheetInputClass,
+} from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import Panel from "@/components/ui/Panel";
 import {
@@ -9,27 +23,14 @@ import {
   fetchPlatformAdminAuditLog,
   fetchPlatformAdmins,
   fetchPlatformOrganizations,
-  PlatformAdminAccount,
-  PlatformAdminAuditEntry,
-  PlatformOrganization,
+  type PlatformAdminAccount,
+  type PlatformAdminAuditEntry,
+  type PlatformOrganization,
   setPlatformAdminByEmail,
 } from "@/lib/platform-admin";
 import { fetchCurrentProfile } from "@/lib/profile";
 
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function errorMessage(error: unknown) {
-  if (error && typeof error === "object" && "message" in error) {
-    return String(error.message);
-  }
-  return "Unable to complete the platform access request.";
-}
+type DrawerMode = "organization" | "admin" | "revoke" | null;
 
 export default function PlatformAccessManager() {
   const { loading: authLoading, session } = useAuthSession();
@@ -44,6 +45,8 @@ export default function PlatformAccessManager() {
   const [grantReason, setGrantReason] = useState("");
   const [revokeTarget, setRevokeTarget] = useState<PlatformAdminAccount | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
+  const [revokeConfirmOpen, setRevokeConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -52,7 +55,6 @@ export default function PlatformAccessManager() {
   const loadData = useCallback(async () => {
     const userId = session?.user?.id;
     if (!userId) return;
-
     setLoading(true);
     setError("");
     try {
@@ -60,7 +62,6 @@ export default function PlatformAccessManager() {
       const isAdmin = profile?.role === "admin";
       setAuthorized(isAdmin);
       if (!isAdmin) return;
-
       const [nextAdmins, nextAuditLog, nextOrganizations] = await Promise.all([
         fetchPlatformAdmins(),
         fetchPlatformAdminAuditLog(),
@@ -92,13 +93,10 @@ export default function PlatformAccessManager() {
     setError("");
     setStatus("");
     try {
-      const account = await setPlatformAdminByEmail({
-        email,
-        makeAdmin: true,
-        reason: grantReason,
-      });
+      const account = await setPlatformAdminByEmail({ email, makeAdmin: true, reason: grantReason });
       setEmail("");
       setGrantReason("");
+      setDrawerMode(null);
       setStatus(`Platform access granted to ${account?.email ?? "the account"}.`);
       await loadData();
     } catch (nextError) {
@@ -122,9 +120,8 @@ export default function PlatformAccessManager() {
       setOrganizationName("");
       setOwnerEmail("");
       setOrganizationReason("");
-      setStatus(
-        `${organization?.name ?? "Organization"} was created and assigned to ${organization?.owner_email ?? "the owner"}.`,
-      );
+      setDrawerMode(null);
+      setStatus(`${organization?.name ?? "Organization"} was created and assigned to ${organization?.owner_email ?? "the owner"}.`);
       await loadData();
     } catch (nextError) {
       setError(errorMessage(nextError));
@@ -147,298 +144,168 @@ export default function PlatformAccessManager() {
       setStatus(`Platform access revoked from ${revokeTarget.email ?? "the account"}.`);
       setRevokeTarget(null);
       setRevokeReason("");
+      setDrawerMode(null);
+      setRevokeConfirmOpen(false);
       await loadData();
     } catch (nextError) {
       setError(errorMessage(nextError));
+      setRevokeConfirmOpen(false);
     } finally {
       setBusy(false);
     }
   }
 
   if (authLoading || loading) {
-    return <Panel className="p-6 text-sm text-slate-500">Loading platform access…</Panel>;
+    return <Panel className="p-4 text-sm text-slate-500">Loading platform access…</Panel>;
   }
-
   if (!authorized) {
-    return (
-      <Panel className="p-6">
-        <p className="text-sm font-semibold text-slate-900">Platform administrator access required</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Organization Owner and Admin roles do not grant access to this page.
-        </p>
-      </Panel>
-    );
+    return <Panel className="p-4 text-sm text-slate-600">Platform administrator access is required.</Panel>;
   }
 
   return (
-    <div className="grid gap-4">
-      <section className="rounded-[24px] bg-[linear-gradient(135deg,#173b56,#0f2740)] px-6 py-7 text-white shadow-[0_18px_44px_rgba(15,23,42,0.12)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Platform security</p>
-        <h1 className="mt-2 text-2xl font-semibold">Platform Access</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
-          Manage the small group of accounts that can approve platform-level changes. Organization roles remain separate.
-        </p>
-      </section>
-
-      {error ? (
-        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}
-        </div>
-      ) : null}
-      {status ? (
-        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {status}
-        </div>
-      ) : null}
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <Panel className="p-5 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Create organization</p>
-          <h2 className="mt-2 text-lg font-semibold text-slate-900">Assign an organization to an existing user</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Enter the organization name and the exact email of a registered account. The organization and Owner assignment are created together.
-          </p>
-          <form className="mt-5 grid gap-4" onSubmit={handleCreateOrganization}>
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
-              Organization name
-              <input
-                type="text"
-                required
-                minLength={2}
-                maxLength={120}
-                value={organizationName}
-                onChange={(event) => setOrganizationName(event.target.value)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900"
-                placeholder="Enter organization name"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
-              Owner&apos;s registered email
-              <input
-                type="email"
-                autoComplete="off"
-                required
-                value={ownerEmail}
-                onChange={(event) => setOwnerEmail(event.target.value)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900"
-                placeholder="Enter registered email"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
-              Reason
-              <textarea
-                required
-                minLength={3}
-                maxLength={500}
-                rows={3}
-                value={organizationReason}
-                onChange={(event) => setOrganizationReason(event.target.value)}
-                className="resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900"
-                placeholder="Why this organization is being created"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy ? "Creating…" : "Create organization and assign Owner"}
-            </button>
-          </form>
-        </Panel>
-
-        <Panel className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Organization directory</p>
-              <h2 className="mt-2 text-lg font-semibold text-slate-900">Existing organizations</h2>
-            </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-              {organizations.length} organization{organizations.length === 1 ? "" : "s"}
-            </span>
+    <div className="grid gap-3">
+      <AdminPageHeader
+        eyebrow="Platform administration"
+        title="Platform Access"
+        description="Organizations and the small group of accounts with platform-level approval access."
+        action={(
+          <div className="flex gap-2">
+            <CompactButton type="button" onClick={() => setDrawerMode("admin")}>Grant access</CompactButton>
+            <CompactButton type="button" tone="primary" onClick={() => setDrawerMode("organization")}>Add organization</CompactButton>
           </div>
-          <div className="mt-5 grid max-h-[32rem] gap-3 overflow-y-auto pr-1">
-            {organizations.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
-                No organizations have been created yet.
-              </p>
-            ) : organizations.map((organization) => (
-              <article key={organization.id} className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900">{organization.name}</p>
-                    <p className="mt-1 truncate text-xs text-slate-500">
-                      Owner: {organization.owner_display_name || organization.owner_email || "Unavailable"}
-                    </p>
-                    {organization.owner_display_name && organization.owner_email ? (
-                      <p className="mt-1 truncate text-xs text-slate-400">{organization.owner_email}</p>
-                    ) : null}
-                  </div>
-                  <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[0.7rem] font-semibold text-sky-700">
-                    {organization.member_count} member{organization.member_count === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-slate-400">Created {formatDate(organization.created_at)}</p>
-              </article>
-            ))}
-          </div>
-        </Panel>
-      </div>
+        )}
+      />
+      {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
+      {status ? <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{status}</p> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <Panel className="p-5 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Grant access</p>
-          <h2 className="mt-2 text-lg font-semibold text-slate-900">Add a platform administrator</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Enter the exact email of an existing registered account. This does not change any organization role.
-          </p>
-          <form className="mt-5 grid gap-4" onSubmit={handleGrant}>
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
-              Registered email
-              <input
-                type="email"
-                autoComplete="off"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900"
-                placeholder="admin@example.com"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
-              Reason
-              <textarea
-                required
-                minLength={3}
-                maxLength={500}
-                rows={3}
-                value={grantReason}
-                onChange={(event) => setGrantReason(event.target.value)}
-                className="resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900"
-                placeholder="Why this account needs platform-level access"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy ? "Saving…" : "Grant platform access"}
-            </button>
-          </form>
-        </Panel>
+      <AdminDataTable label="Organizations">
+        <thead>
+          <tr><th colSpan={5} className="p-0 font-normal"><CompactToolbar resultLabel={`${organizations.length} organizations`} /></th></tr>
+          <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+            <th className="px-3 py-2">Organization</th>
+            <th className="px-3 py-2">Owner</th>
+            <th className="px-3 py-2">Email</th>
+            <th className="px-3 py-2 text-center">Members</th>
+            <th className="px-3 py-2">Created</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {!organizations.length ? <tr><td colSpan={5}><EmptyState title="No organizations" description="Create the first organization with the button above." /></td></tr> : null}
+          {organizations.map((organization) => (
+            <tr key={organization.id} className="hover:bg-blue-50/40">
+              <td className="px-3 py-2 font-semibold text-slate-950">{organization.name}</td>
+              <td className="px-3 py-2 text-slate-700">{organization.owner_display_name || "—"}</td>
+              <td className="px-3 py-2 text-xs text-slate-600">{organization.owner_email || "—"}</td>
+              <td className="px-3 py-2 text-center tabular-nums text-slate-700">{organization.member_count}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{formatDate(organization.created_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </AdminDataTable>
 
-        <Panel className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Current access</p>
-              <h2 className="mt-2 text-lg font-semibold text-slate-900">Platform administrators</h2>
-            </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-              {admins.length} account{admins.length === 1 ? "" : "s"}
-            </span>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {admins.map((admin) => {
-              const isCurrentUser = admin.id === session?.user?.id;
-              return (
-                <article key={admin.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-slate-900">{admin.display_name || admin.email || "Unnamed account"}</p>
-                      {isCurrentUser ? <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-700">You</span> : null}
-                    </div>
-                    <p className="mt-1 truncate text-xs text-slate-500">{admin.email || "No email"}</p>
-                  </div>
-                  <button
+      <AdminDataTable label="Platform administrators">
+        <thead>
+          <tr><th colSpan={4} className="p-0 font-normal"><CompactToolbar resultLabel={`${admins.length} accounts`} /></th></tr>
+          <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+            <th className="px-3 py-2">Name</th>
+            <th className="px-3 py-2">Email</th>
+            <th className="px-3 py-2">Access</th>
+            <th className="px-3 py-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {admins.map((admin) => {
+            const isCurrentUser = admin.id === session?.user?.id;
+            return (
+              <tr key={admin.id} className="hover:bg-blue-50/40">
+                <td className="px-3 py-2 font-semibold text-slate-950">{admin.display_name || "Unnamed account"} {isCurrentUser ? <span className="text-xs font-normal text-blue-700">(You)</span> : null}</td>
+                <td className="px-3 py-2 text-xs text-slate-600">{admin.email || "—"}</td>
+                <td className="px-3 py-2"><StatusBadge tone="info">Platform Admin</StatusBadge></td>
+                <td className="px-3 py-2 text-right">
+                  <CompactButton
                     type="button"
+                    tone="danger"
                     disabled={busy || isCurrentUser}
+                    title={isCurrentUser ? "You cannot revoke your own platform access." : undefined}
                     onClick={() => {
                       setRevokeTarget(admin);
                       setRevokeReason("");
-                      setError("");
-                      setStatus("");
+                      setDrawerMode("revoke");
                     }}
-                    className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    title={isCurrentUser ? "You cannot revoke your own platform access." : undefined}
                   >
                     Revoke
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-        </Panel>
-      </div>
+                  </CompactButton>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </AdminDataTable>
 
-      {revokeTarget ? (
-        <Panel className="border-rose-200 p-5 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-500">Confirm revocation</p>
-          <h2 className="mt-2 text-lg font-semibold text-slate-900">Remove platform access from {revokeTarget.email}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Their account and organization memberships remain unchanged. They will lose platform-level approval and management access.
-          </p>
-          <label className="mt-4 grid gap-1.5 text-sm font-medium text-slate-700">
-            Reason
-            <textarea
-              required
-              minLength={3}
-              maxLength={500}
-              rows={3}
-              value={revokeReason}
-              onChange={(event) => setRevokeReason(event.target.value)}
-              className="resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900"
-            />
-          </label>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy || revokeReason.trim().length < 3}
-              onClick={() => void handleRevoke()}
-              className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy ? "Revoking…" : "Confirm revocation"}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setRevokeTarget(null);
-                setRevokeReason("");
-              }}
-              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </Panel>
-      ) : null}
+      <AdminDataTable label="Platform role audit trail">
+        <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+          <tr><th className="px-3 py-2">Changed by</th><th className="px-3 py-2">Action</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Reason</th><th className="px-3 py-2">When</th></tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {!auditLog.length ? <tr><td colSpan={5}><EmptyState title="No role changes" description="Platform access changes will appear here." /></td></tr> : null}
+          {auditLog.map((entry) => (
+            <tr key={entry.id} className="hover:bg-slate-50">
+              <td className="px-3 py-2 text-xs text-slate-700">{entry.actor_email || "Deleted account"}</td>
+              <td className="px-3 py-2"><StatusBadge tone={entry.action === "granted" ? "success" : "danger"}>{entry.action === "granted" ? "Granted" : "Revoked"}</StatusBadge></td>
+              <td className="px-3 py-2 text-xs font-semibold text-slate-800">{entry.target_email}</td>
+              <td className="max-w-md px-3 py-2 text-xs text-slate-600">{entry.reason}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{formatDate(entry.created_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </AdminDataTable>
 
-      <Panel className="overflow-hidden">
-        <div className="border-b border-slate-200/80 px-5 py-4 sm:px-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Audit trail</p>
-          <h2 className="mt-2 text-lg font-semibold text-slate-900">Platform role changes</h2>
-        </div>
-        {auditLog.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500 sm:px-6">No platform role changes have been recorded yet.</p>
-        ) : (
-          <div className="divide-y divide-slate-200/80">
-            {auditLog.map((entry) => (
-              <article key={entry.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:px-6">
-                <div>
-                  <p className="text-sm text-slate-700">
-                    <span className="font-semibold text-slate-900">{entry.actor_email || "Deleted account"}</span>{" "}
-                    {entry.action === "granted" ? "granted access to" : "revoked access from"}{" "}
-                    <span className="font-semibold text-slate-900">{entry.target_email}</span>
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">{entry.reason}</p>
-                </div>
-                <time className="text-xs text-slate-400" dateTime={entry.created_at}>{formatDate(entry.created_at)}</time>
-              </article>
-            ))}
-          </div>
-        )}
-      </Panel>
+      <DetailDrawer open={drawerMode === "organization"} onClose={() => setDrawerMode(null)} title="Add organization" description="Create the organization and assign its first Owner in one step.">
+        <form onSubmit={handleCreateOrganization}>
+          <WorksheetGrid label="New organization details">
+            <thead><tr><WorksheetHeader>Organization name</WorksheetHeader><WorksheetHeader>Owner email</WorksheetHeader></tr></thead>
+            <tbody><tr>
+              <WorksheetCell><input autoFocus required minLength={2} maxLength={120} aria-label="Organization name" value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} className={worksheetInputClass} placeholder="Flight school name" /></WorksheetCell>
+              <WorksheetCell><input required type="email" autoComplete="off" aria-label="Owner registered email" value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)} className={worksheetInputClass} placeholder="owner@example.com" /></WorksheetCell>
+            </tr></tbody>
+          </WorksheetGrid>
+          <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Reason<textarea required minLength={3} maxLength={500} rows={3} value={organizationReason} onChange={(event) => setOrganizationReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
+          <DrawerActions busy={busy} onCancel={() => setDrawerMode(null)} submitLabel="Create organization" />
+        </form>
+      </DetailDrawer>
+
+      <DetailDrawer open={drawerMode === "admin"} onClose={() => setDrawerMode(null)} title="Grant platform access" description="This does not change the account's organization role.">
+        <form onSubmit={handleGrant}>
+          <WorksheetGrid label="Platform administrator details">
+            <thead><tr><WorksheetHeader>Registered email</WorksheetHeader><WorksheetHeader>Reason</WorksheetHeader></tr></thead>
+            <tbody><tr>
+              <WorksheetCell><input autoFocus required type="email" autoComplete="off" aria-label="Registered email" value={email} onChange={(event) => setEmail(event.target.value)} className={worksheetInputClass} placeholder="admin@example.com" /></WorksheetCell>
+              <WorksheetCell><input required minLength={3} maxLength={500} aria-label="Reason" value={grantReason} onChange={(event) => setGrantReason(event.target.value)} className={worksheetInputClass} placeholder="Why access is needed" /></WorksheetCell>
+            </tr></tbody>
+          </WorksheetGrid>
+          <DrawerActions busy={busy} onCancel={() => setDrawerMode(null)} submitLabel="Grant access" />
+        </form>
+      </DetailDrawer>
+
+      <DetailDrawer open={drawerMode === "revoke" && Boolean(revokeTarget)} onClose={() => setDrawerMode(null)} title={`Revoke ${revokeTarget?.email ?? "platform access"}`} description="The account and organization memberships will remain unchanged.">
+        <label className="grid gap-1 text-xs font-semibold text-slate-700">Reason<textarea autoFocus required minLength={3} maxLength={500} rows={4} value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
+        <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setDrawerMode(null)}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={revokeReason.trim().length < 3} onClick={() => setRevokeConfirmOpen(true)}>Continue</CompactButton></div>
+      </DetailDrawer>
+      <ConfirmDialog open={revokeConfirmOpen} title="Revoke platform access?" description={`This removes platform-level approval access from ${revokeTarget?.email ?? "this account"}. Organization memberships are not changed.`} confirmLabel="Revoke access" destructive busy={busy} onCancel={() => setRevokeConfirmOpen(false)} onConfirm={() => void handleRevoke()} />
     </div>
   );
+}
+
+function DrawerActions({ busy, onCancel, submitLabel }: { busy: boolean; onCancel: () => void; submitLabel: string }) {
+  return <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={onCancel}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={busy}>{busy ? "Saving…" : submitLabel}</CompactButton></div>;
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function errorMessage(error: unknown) {
+  if (error && typeof error === "object" && "message" in error) return String(error.message);
+  return "Unable to complete the platform access request.";
 }

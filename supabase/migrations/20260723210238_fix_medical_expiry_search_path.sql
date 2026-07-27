@@ -1,4 +1,3 @@
--- This pure legacy helper only uses pg_catalog functions. Pin its resolution
--- path so callers cannot influence object lookup through a mutable search_path.
-alter function public.calculate_medical_expiry(date, date, integer)
-set search_path = '';
+-- Local baseline marker for production migration 20260723210238_fix_medical_expiry_search_path.sql.
+-- The schema-only baseline in 20260707193726_aircraft_visibility.sql already includes this migration.
+-- Original SQL is preserved under supabase/archive/remote-migrations-fetched/.

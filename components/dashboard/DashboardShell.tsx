@@ -20,7 +20,7 @@ import {
 const dashboardLinks = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/my-aircraft", label: "My Aircraft" },
-  { href: "/dashboard/reports", label: "Reports" },
+  { href: "/dashboard/reports", label: "Safety Reports" },
   { href: "/dashboard/saved-people", label: "People" },
   { href: "/dashboard/records", label: "Records" },
   { href: "/dashboard/notifications", label: "Notifications" },
@@ -30,6 +30,7 @@ const organizationLinks = [
   { href: "/dashboard/organization/overview", label: "Overview" },
   { href: "/dashboard/organization/people", label: "People" },
   { href: "/dashboard/organization/fleet", label: "Aircraft & Maintenance" },
+  { href: "/dashboard/organization/reports", label: "Safety Reports" },
   { href: "/dashboard/organization/briefs", label: "Preflight Records" },
   { href: "/dashboard/organization/endorsements", label: "Endorsements" },
   { href: "/dashboard/organization/messages", label: "Messages" },
@@ -70,7 +71,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Records":
-    case "Reports":
+    case "Safety Reports":
     case "Preflight Records":
     case "Audit Log":
       return (
@@ -167,6 +168,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [defaultCfiName, setDefaultCfiName] = useState("");
   const [profileRole, setProfileRole] = useState("");
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [sidebarPinned, setSidebarPinned] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const sidebarExpanded = sidebarPinned || sidebarHovered;
 
   useEffect(() => {
     if (!loading && !session?.user) {
@@ -299,32 +303,73 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className="site-shell page-stack">
         {loading || !session?.user ? null : (
           <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
-            <aside className="dashboard-sidebar sticky top-4 max-h-[calc(100vh-2rem)] w-[240px] shrink-0 overflow-x-hidden overflow-y-auto rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-3 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)]">
+            <aside
+              className={`dashboard-sidebar sticky top-4 max-h-[calc(100vh-2rem)] shrink-0 overflow-x-hidden overflow-y-auto rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-3 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)] transition-[width] duration-200 ${
+                sidebarExpanded ? "w-[240px]" : "w-[72px]"
+              }`}
+              onPointerEnter={() => setSidebarHovered(true)}
+              onPointerLeave={() => setSidebarHovered(false)}
+              onFocusCapture={() => setSidebarHovered(true)}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setSidebarHovered(false);
+                }
+              }}
+            >
               <div>
                 <div className="block">
                   <div className="flex items-center gap-3 overflow-hidden px-1">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/12 bg-white/8 text-sm font-semibold">
+                    <button
+                      type="button"
+                      className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/12 bg-white/8 text-sm font-semibold transition hover:bg-white/14"
+                      aria-pressed={sidebarPinned}
+                      aria-label={sidebarPinned ? "Unpin sidebar" : "Keep sidebar open"}
+                      title={sidebarPinned ? "Unpin sidebar" : "Keep sidebar open"}
+                      onClick={() => setSidebarPinned((current) => !current)}
+                    >
                       PS
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">PilotSeal</p>
-                      <p className="truncate text-xs text-white/55">{identityLabel}</p>
-                    </div>
+                      <span
+                        aria-hidden="true"
+                        className="absolute bottom-0.5 right-1 text-[11px] font-normal text-white/55"
+                      >
+                        {sidebarExpanded ? "‹" : "›"}
+                      </span>
+                    </button>
+                    {sidebarExpanded ? (
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">PilotSeal</p>
+                        <p className="truncate text-xs text-white/55">{identityLabel}</p>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-5 h-px w-full bg-white/10" />
                 </div>
 
                 {workspaceSwitches.length > 1 ? (
-                  <div className="mt-4 grid grid-cols-3 gap-1 rounded-[14px] bg-white/8 p-1" aria-label="Switch workspace">
+                  <div
+                    className={`mt-4 grid gap-1 rounded-[14px] bg-white/8 p-1 ${
+                      sidebarExpanded ? "" : "grid-cols-1"
+                    }`}
+                    style={
+                      sidebarExpanded
+                        ? {
+                            gridTemplateColumns: `repeat(${workspaceSwitches.length}, minmax(0, 1fr))`,
+                          }
+                        : undefined
+                    }
+                    aria-label="Switch workspace"
+                  >
                     {workspaceSwitches.map((item) => {
                       const active = workspace === item.label.toLowerCase();
-                      return <Link key={item.href} href={item.href} title={`${item.label} workspace`} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-[11px] px-1 text-[0.65rem] font-semibold transition-colors ${active ? "bg-white text-slate-900" : "text-white/65 hover:bg-white/10 hover:text-white"}`}><DashboardIcon kind={item.icon} /><span>{item.label}</span></Link>;
+                      return <Link key={item.href} href={item.href} aria-label={`${item.label} workspace`} title={`${item.label} workspace`} className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-[11px] px-1 text-[0.65rem] font-semibold transition-colors ${active ? "bg-white text-slate-900" : "text-white/65 hover:bg-white/10 hover:text-white"}`}><DashboardIcon kind={item.icon} />{sidebarExpanded ? <span>{item.label}</span> : null}</Link>;
                     })}
                   </div>
                 ) : null}
 
                 <nav aria-label={`${workspaceLabel} navigation`} className="mt-5 grid gap-1.5">
-                  <p className="px-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/45">{workspaceLabel}</p>
+                  {sidebarExpanded ? (
+                    <p className="px-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/45">{workspaceLabel}</p>
+                  ) : null}
                   {visibleDashboardLinks.map((item) => {
                     const active = isDashboardLinkActive(item.href);
 
@@ -348,7 +393,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                             </span>
                           ) : null}
                         </span>
-                        <span className="min-w-0 flex-1 leading-5">{item.label}</span>
+                        {sidebarExpanded ? <span className="min-w-0 flex-1 leading-5">{item.label}</span> : null}
                       </Link>
                     );
                   })}
@@ -364,7 +409,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                       <DashboardIcon kind="new" />
                     </span>
-                    <span>New endorsement</span>
+                    {sidebarExpanded ? <span>New endorsement</span> : null}
                   </Link>
                   <button
                     type="button"
@@ -377,7 +422,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                       <DashboardIcon kind="signout" />
                     </span>
-                    <span>{signingOut ? "Signing out..." : "Sign out"}</span>
+                    {sidebarExpanded ? <span>{signingOut ? "Signing out..." : "Sign out"}</span> : null}
                   </button>
                 </div>
               </div>

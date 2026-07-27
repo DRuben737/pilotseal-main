@@ -14,7 +14,9 @@ import {
   parseAircraftEnvelopeSet,
   parseAircraftStations,
   saveOrganizationAircraftAtomic,
+  updateOrganizationAircraftStatus,
   updateAircraftModel,
+  type AircraftChartType,
   type AircraftMeterType,
   type AircraftModelRecord,
   type AircraftOperationalStatus,
@@ -46,13 +48,26 @@ import {
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
 import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
 import {
-  AdminCollapsibleSection,
+  AdminDataTable,
   AdminPageHeader,
-  AdminSectionControls,
+  CompactButton,
+  CompactToolbar,
+  ConfirmDialog,
+  DetailDrawer,
+  EmptyState,
+  QuickEditPopover,
   StatusBadge,
+  WorksheetCell,
+  WorksheetGrid,
+  WorksheetHeader,
+  worksheetInputClass,
 } from "@/components/admin/AdminConsole";
 
 export type OrganizationManagerView = "overview" | "people" | "fleet" | "messages" | "endorsements";
+type FleetWorkspace = "aircraft" | "records" | "models" | "inspections";
+type MemberConfirmation =
+  | { action: "role" | "remove" | "transfer"; member: OrganizationMember }
+  | { action: "pending"; person: OrganizationPerson };
 
 type LoadingLocationDraft = {
   clientKey: string;
@@ -83,10 +98,13 @@ type HelicopterLimitDraft = {
 type ModelForm = {
   name: string;
   category: "airplane" | "helicopter";
+  chart_type: AircraftChartType;
+  singleEnvelopeView: "topView" | "sideView";
   avg_fuel_burn_rate: string;
   max_weight: string;
   stations: LoadingLocationDraft[];
   envelope: WeightBalanceLimitDraft[];
+  utilityEnvelope: WeightBalanceLimitDraft[];
   topView: HelicopterLimitDraft[];
   sideView: HelicopterLimitDraft[];
 };
@@ -121,13 +139,35 @@ function emptyHelicopterLimit(clientKey: string): HelicopterLimitDraft {
 const emptyModelForm: ModelForm = {
   name: "",
   category: "airplane",
+  chart_type: "1d1p",
+  singleEnvelopeView: "topView",
   avg_fuel_burn_rate: "",
   max_weight: "",
   stations: [emptyLoadingLocation()],
   envelope: [emptyWeightBalanceLimit()],
+  utilityEnvelope: [emptyWeightBalanceLimit("new-utility-limit-1")],
   topView: [emptyHelicopterLimit("new-top-limit-1")],
   sideView: [emptyHelicopterLimit("new-side-limit-1")],
 };
+
+function resolveModelChartType(
+  chartType: AircraftModelRecord["chart_type"],
+  envelopeSet: ReturnType<typeof parseAircraftEnvelopeSet>
+): AircraftChartType {
+  if (chartType === "1d1p" || chartType === "2d1p" || chartType === "2d2p") {
+    return chartType;
+  }
+  if (envelopeSet.normal.length > 0) {
+    return "1d1p";
+  }
+  if (envelopeSet.topView.length > 0 && envelopeSet.sideView.length > 0) {
+    return "2d2p";
+  }
+  if (envelopeSet.topView.length > 0 || envelopeSet.sideView.length > 0) {
+    return "2d1p";
+  }
+  return "1d1p";
+}
 
 type AircraftForm = {
   model_id: string;
@@ -189,6 +229,8 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [messageTitle, setMessageTitle] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [messagePriority, setMessagePriority] = useState<NotificationPriority>("normal");
+  const [showMessageDrawer, setShowMessageDrawer] = useState(false);
+  const [showAddPersonDrawer, setShowAddPersonDrawer] = useState(false);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [organizationPeople, setOrganizationPeople] = useState<OrganizationPerson[]>([]);
   const [editingPersonId, setEditingPersonId] = useState("");
@@ -208,7 +250,12 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [showModelForm, setShowModelForm] = useState(false);
   const [modelForm, setModelForm] = useState<ModelForm>(emptyModelForm);
   const [modelError, setModelError] = useState("");
-  const [openSections, setOpenSections] = useState<Set<string>>(() => new Set());
+  const [fleetWorkspace, setFleetWorkspace] = useState<FleetWorkspace>("aircraft");
+  const [statusEditorAircraftId, setStatusEditorAircraftId] = useState("");
+  const [statusEditorValue, setStatusEditorValue] = useState<AircraftOperationalStatus>("available");
+  const [statusEditorNote, setStatusEditorNote] = useState("");
+  const [statusEditorError, setStatusEditorError] = useState("");
+  const [memberConfirmation, setMemberConfirmation] = useState<MemberConfirmation | null>(null);
 
   const modelNames = useMemo(
     () => new Map(models.map((model) => [model.id, model.name])),
@@ -223,31 +270,11 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     [organizationPeople],
   );
   const pendingPeople = organizationPeople.filter((person) => person.status === "pending");
+  const activeFleetWorkspace: FleetWorkspace = canManageFleet
+    ? fleetWorkspace
+    : "records";
   const editingAircraft = aircraft.find((item) => item.id === editingAircraftId) ?? null;
   const editingAssignedAircraft = editingAircraft?.organization_access === "assigned";
-  const activeSectionKeys = organizationSectionKeys(view, canManageFleet);
-  const hasOpenSection = activeSectionKeys.some((key) => openSections.has(key));
-
-  function toggleSection(key: string) {
-    setOpenSections((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  function toggleAllSections() {
-    setOpenSections((current) => {
-      const next = new Set(current);
-      if (activeSectionKeys.some((key) => current.has(key))) {
-        activeSectionKeys.forEach((key) => next.delete(key));
-      } else {
-        activeSectionKeys.forEach((key) => next.add(key));
-      }
-      return next;
-    });
-  }
 
   async function loadOrganizationData() {
     if (!activeOrganization?.id) {
@@ -302,6 +329,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setMemberTeachingRole("");
       setMemberInternalId("");
       setMemberNotes("");
+      setShowAddPersonDrawer(false);
       const [nextMembers, nextPeople] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
@@ -317,7 +345,6 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   async function handleArchivePendingPerson(person: OrganizationPerson) {
-    if (!window.confirm(`Remove pending person ${person.email}?`)) return;
     setSaving(true);
     setStatus("");
     try {
@@ -383,6 +410,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setMessageTitle("");
       setMessageBody("");
       setMessagePriority("normal");
+      setShowMessageDrawer(false);
       setStatus(`Organization message sent to ${recipientCount} member${recipientCount === 1 ? "" : "s"}.`);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to send this organization message."));
@@ -428,7 +456,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   async function handleRemoveMember(member: OrganizationMember) {
-    if (!activeOrganization?.id || !window.confirm(`Remove ${member.email} from this organization?`)) return;
+    if (!activeOrganization?.id) return;
     setSaving(true);
     setStatus("");
     try {
@@ -444,7 +472,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   async function handleTransferOwnership(member: OrganizationMember) {
-    if (!activeOrganization?.id || !window.confirm(`Transfer ownership to ${member.email}?`)) return;
+    if (!activeOrganization?.id) return;
     setSaving(true);
     setStatus("");
     try {
@@ -457,6 +485,21 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     } finally {
       setSaving(false);
     }
+  }
+
+  async function runMemberConfirmation() {
+    const confirmation = memberConfirmation;
+    if (!confirmation) return;
+    if (confirmation.action === "pending") {
+      await handleArchivePendingPerson(confirmation.person);
+    } else if (confirmation.action === "role") {
+      await handleRoleChange(confirmation.member);
+    } else if (confirmation.action === "transfer") {
+      await handleTransferOwnership(confirmation.member);
+    } else {
+      await handleRemoveMember(confirmation.member);
+    }
+    setMemberConfirmation(null);
   }
 
   function updateAircraftField<K extends keyof AircraftForm>(key: K, value: AircraftForm[K]) {
@@ -647,12 +690,61 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     }
   }
 
+  function setStatusEditorOpen(item: AircraftRecord, open: boolean) {
+    if (!open) {
+      setStatusEditorAircraftId("");
+      setStatusEditorError("");
+      return;
+    }
+    setStatusEditorAircraftId(item.id);
+    setStatusEditorValue(item.operational_status ?? "available");
+    setStatusEditorNote(item.operational_status_note ?? "");
+    setStatusEditorError("");
+  }
+
+  async function handleQuickStatusSave(item: AircraftRecord) {
+    if (!activeOrganization?.id) return;
+    const note = statusEditorNote.trim();
+    if (statusEditorValue === "grounded" && note.length < 3) {
+      setStatusEditorError("Enter at least 3 characters explaining why this aircraft is grounded.");
+      return;
+    }
+    setSaving(true);
+    setStatusEditorError("");
+    try {
+      const result = await updateOrganizationAircraftStatus({
+        organizationId: activeOrganization.id,
+        aircraftId: item.id,
+        operationalStatus: statusEditorValue,
+        operationalStatusNote: note || null,
+      });
+      setAircraft((current) =>
+        current.map((aircraftItem) =>
+          aircraftItem.id === item.id
+            ? {
+                ...aircraftItem,
+                operational_status: result.operational_status,
+                operational_status_note: result.operational_status_note,
+              }
+            : aircraftItem
+        )
+      );
+      setStatusEditorAircraftId("");
+      setStatus(`Status updated for ${item.tail_number}.`);
+    } catch (error) {
+      setStatusEditorError(getErrorMessage(error, "Unable to update aircraft status."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function startCreateModel() {
     setEditingModelId("");
     setModelForm({
       ...emptyModelForm,
       stations: [emptyLoadingLocation(crypto.randomUUID())],
       envelope: [emptyWeightBalanceLimit(crypto.randomUUID())],
+      utilityEnvelope: [emptyWeightBalanceLimit(crypto.randomUUID())],
       topView: [emptyHelicopterLimit(crypto.randomUUID())],
       sideView: [emptyHelicopterLimit(crypto.randomUUID())],
     });
@@ -663,10 +755,16 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   function startEditModel(model: AircraftModelRecord) {
     const stations = parseAircraftStations(model.stations);
     const envelopeSet = parseAircraftEnvelopeSet(model.envelope);
+    const chartType = resolveModelChartType(model.chart_type, envelopeSet);
     setEditingModelId(model.id);
     setModelForm({
       name: model.name,
       category: model.category?.toLowerCase() === "helicopter" ? "helicopter" : "airplane",
+      chart_type: chartType,
+      singleEnvelopeView:
+        envelopeSet.topView.length > 0 || envelopeSet.sideView.length === 0
+          ? "topView"
+          : "sideView",
       avg_fuel_burn_rate: model.avg_fuel_burn_rate == null ? "" : String(model.avg_fuel_burn_rate),
       max_weight: model.max_weight == null ? "" : String(model.max_weight),
       stations:
@@ -706,6 +804,17 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
           ? [
               ...envelopeSet.normal.map((point, index) => ({
                 clientKey: `limit-${model.id}-${index}`,
+                cg: String(point.cg),
+                weight: String(point.weight),
+              })),
+              emptyWeightBalanceLimit(crypto.randomUUID()),
+            ]
+          : [emptyWeightBalanceLimit(crypto.randomUUID())],
+      utilityEnvelope:
+        envelopeSet.utility.length > 0
+          ? [
+              ...envelopeSet.utility.map((point, index) => ({
+                clientKey: `utility-limit-${model.id}-${index}`,
                 cg: String(point.cg),
                 weight: String(point.weight),
               })),
@@ -770,13 +879,14 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   function updateWeightBalanceLimit(
+    section: "envelope" | "utilityEnvelope",
     clientKey: string,
     field: keyof WeightBalanceLimitDraft,
     value: string
   ) {
     setModelError("");
     setModelForm((current) => {
-      const envelope = current.envelope.map((point) =>
+      const envelope = current[section].map((point) =>
         point.clientKey === clientKey ? { ...point, [field]: value } : point
       );
       const changedIndex = envelope.findIndex((point) => point.clientKey === clientKey);
@@ -786,7 +896,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       ) {
         envelope.push(emptyWeightBalanceLimit(crypto.randomUUID()));
       }
-      return { ...current, envelope };
+      return { ...current, [section]: envelope };
     });
   }
 
@@ -813,7 +923,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   function trimTrailingModelRows(
-    section: "stations" | "envelope" | "topView" | "sideView"
+    section: "stations" | "envelope" | "utilityEnvelope" | "topView" | "sideView"
   ) {
     window.requestAnimationFrame(() => {
       setModelForm((current) => {
@@ -823,11 +933,11 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             stations: keepOneBlankLoadingLocationPerKind(current.stations),
           };
         }
-        if (section === "envelope") {
+        if (section === "envelope" || section === "utilityEnvelope") {
           return {
             ...current,
-            envelope: keepOneTrailingBlank(
-              current.envelope,
+            [section]: keepOneTrailingBlank(
+              current[section],
               hasWeightBalanceLimitValue
             ),
           };
@@ -930,6 +1040,15 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             `Limit point ${index + 1} aircraft weight`
           ),
         }));
+      const utilityEnvelope = modelForm.utilityEnvelope
+        .filter((point) => point.cg.trim() || point.weight.trim())
+        .map((point, index) => ({
+          cg: requiredNumber(point.cg, `Utility point ${index + 1} CG position`),
+          weight: requiredPositiveNumber(
+            point.weight,
+            `Utility point ${index + 1} aircraft weight`
+          ),
+        }));
       if (stations.length < 1) {
         throw new Error("Add at least one seat, fuel tank, baggage area, or fixed item.");
       }
@@ -948,24 +1067,51 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             `Weight-limit point ${index + 1} aircraft weight`
           ),
         }));
-      if (modelForm.category === "helicopter" && topView.length < 3) {
-        throw new Error("Add at least three complete top-view CG limit points.");
+      if (modelForm.chart_type === "1d1p" && airplaneEnvelope.length < 3) {
+        throw new Error("Add at least three complete Normal envelope points.");
       }
-      if (modelForm.category === "helicopter" && sideView.length > 0 && sideView.length < 3) {
-        throw new Error("Add at least three complete weight limit points, or leave that section empty.");
+      if (
+        modelForm.chart_type === "1d1p" &&
+        modelForm.category === "airplane" &&
+        utilityEnvelope.length > 0 &&
+        utilityEnvelope.length < 3
+      ) {
+        throw new Error("Add at least three complete Utility points, or leave Utility empty.");
       }
-      if (modelForm.category === "airplane" && airplaneEnvelope.length < 3) {
-        throw new Error("Add at least three complete weight-and-balance limit points.");
+      if (modelForm.chart_type === "2d1p") {
+        const singleEnvelope =
+          modelForm.singleEnvelopeView === "topView" ? topView : sideView;
+        if (singleEnvelope.length < 3) {
+          throw new Error("Add at least three complete points to the selected envelope.");
+        }
       }
-      const envelope =
-        modelForm.category === "helicopter"
-          ? sideView.length > 0
-            ? { top_view: topView, side_view: sideView }
-            : { polygon: topView }
-          : airplaneEnvelope;
+      if (modelForm.chart_type === "2d2p" && topView.length < 3) {
+        throw new Error("Add at least three complete top-view CG points.");
+      }
+      if (modelForm.chart_type === "2d2p" && sideView.length < 3) {
+        throw new Error("Add at least three complete side-view weight points.");
+      }
+      const envelope = {
+        normal: modelForm.chart_type === "1d1p" ? airplaneEnvelope : [],
+        utility:
+          modelForm.chart_type === "1d1p" && modelForm.category === "airplane"
+            ? utilityEnvelope
+            : [],
+        top_view:
+          modelForm.chart_type === "2d2p" ||
+          (modelForm.chart_type === "2d1p" && modelForm.singleEnvelopeView === "topView")
+            ? topView
+            : [],
+        side_view:
+          modelForm.chart_type === "2d2p" ||
+          (modelForm.chart_type === "2d1p" && modelForm.singleEnvelopeView === "sideView")
+            ? sideView
+            : [],
+      };
       const input = {
         name: modelForm.name.trim(),
         category: modelForm.category,
+        chart_type: modelForm.chart_type,
         avg_fuel_burn_rate: optionalPositiveNumber(
           modelForm.avg_fuel_burn_rate,
           "Typical fuel use"
@@ -1051,71 +1197,101 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-3">
       <AdminPageHeader
         eyebrow={activeOrganization.name}
         title={organizationViewTitle(view)}
         description={organizationViewDescription(view)}
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {activeSectionKeys.length ? <AdminSectionControls expanded={hasOpenSection} onToggleAll={toggleAllSections} /> : null}
             <StatusBadge tone="info">{formatRole(role ?? "member")}</StatusBadge>
           </div>
         )}
       />
-      {status ? <p role="status" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">{status}</p> : null}
+      {status ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{status}</p> : null}
+
+      {view === "fleet" ? (
+        <nav
+          aria-label="Fleet workspace"
+          className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
+        >
+          {(canManageFleet
+            ? [
+                ["aircraft", "Aircraft"],
+                ["records", "Aircraft Records"],
+                ["models", "Models"],
+                ["inspections", "Maintenance items"],
+              ]
+            : [["records", "Aircraft Records"]]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`min-h-8 shrink-0 cursor-pointer rounded-lg px-3 text-xs font-semibold transition-colors ${
+                activeFleetWorkspace === key
+                  ? "bg-blue-700 text-white"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+              }`}
+              aria-current={activeFleetWorkspace === key ? "page" : undefined}
+              onClick={() => setFleetWorkspace(key as FleetWorkspace)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
       {view === "overview" ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <OverviewLink href="/dashboard/organization/people" label="People" value={members.length + pendingPeople.length} detail={`${pendingPeople.length} pending`} />
           <OverviewLink href="/dashboard/organization/fleet" label="Aircraft & Maintenance" value={aircraft.length} detail={`${models.length} aircraft models`} />
+          <OverviewLink href="/dashboard/organization/reports" label="Safety Reports" value="Submit" detail="Aircraft discrepancy or ASR" />
           <OverviewLink href="/dashboard/organization/briefs" label="Preflight Records" value="Open" detail="Finalized student briefs" />
           <OverviewLink href="/dashboard/organization/endorsements" label="Endorsements" value="Review" detail="Organization change requests" />
         </section>
       ) : null}
 
-      {view === "messages" ? (<AdminCollapsibleSection
-        id="organization-message"
-        title="Compose organization message"
-        description="Send one notification to every current organization member."
-        summary={`${members.length} recipients`}
-        open={openSections.has("message")}
-        onToggle={() => toggleSection("message")}
-      >
-        <form className="mt-5 grid gap-4" onSubmit={handleSendOrganizationMessage}>
-          <label className="saas-field">
-            <span>Title</span>
-            <input value={messageTitle} onChange={(event) => setMessageTitle(event.target.value)} required />
-          </label>
-          <label className="saas-field">
-            <span>Message</span>
-            <textarea rows={4} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} required />
-          </label>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="saas-field sm:w-48">
-              <span>Priority</span>
-              <select value={messagePriority} onChange={(event) => setMessagePriority(event.target.value as NotificationPriority)}>
-                <option value="low">Low</option>
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-            </label>
-            <button className="primary-button" type="submit" disabled={saving || !messageTitle.trim() || !messageBody.trim()}>
-              {saving ? "Sending..." : "Send to organization"}
-            </button>
-          </div>
-        </form>
-      </AdminCollapsibleSection>) : null}
+      {view === "messages" ? (
+        <>
+          <AdminDataTable label="Organization messages">
+            <thead>
+              <tr>
+                <th colSpan={3} className="p-0 font-normal">
+                  <CompactToolbar
+                    resultLabel={`${members.length} recipients`}
+                    actions={<CompactButton type="button" tone="primary" onClick={() => setShowMessageDrawer(true)}>New message</CompactButton>}
+                  />
+                </th>
+              </tr>
+              <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+                <th className="px-3 py-2">Audience</th>
+                <th className="px-3 py-2">Delivery</th>
+                <th className="px-3 py-2">Purpose</th>
+              </tr>
+            </thead>
+            <tbody><tr><td className="px-3 py-2 font-semibold text-slate-950">All current members</td><td className="px-3 py-2 text-xs text-slate-600">PilotSeal notifications</td><td className="px-3 py-2 text-xs text-slate-600">Operational announcements and urgent notices</td></tr></tbody>
+          </AdminDataTable>
+          <DetailDrawer open={showMessageDrawer} onClose={() => setShowMessageDrawer(false)} title="New organization message" description={`Send one notification to ${members.length} current member${members.length === 1 ? "" : "s"}.`}>
+            <form onSubmit={handleSendOrganizationMessage}>
+              <WorksheetGrid label="Organization message details">
+                <thead><tr><WorksheetHeader>Title</WorksheetHeader><WorksheetHeader>Priority</WorksheetHeader></tr></thead>
+                <tbody><tr>
+                  <WorksheetCell><input autoFocus required aria-label="Message title" value={messageTitle} onChange={(event) => setMessageTitle(event.target.value)} className={worksheetInputClass} /></WorksheetCell>
+                  <WorksheetCell><select aria-label="Message priority" value={messagePriority} onChange={(event) => setMessagePriority(event.target.value as NotificationPriority)} className={worksheetInputClass}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="critical">Critical</option></select></WorksheetCell>
+                </tr></tbody>
+              </WorksheetGrid>
+              <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Message<textarea required rows={5} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
+              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowMessageDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving || !messageTitle.trim() || !messageBody.trim()}>{saving ? "Sending…" : "Send message"}</CompactButton></div>
+            </form>
+          </DetailDrawer>
+        </>
+      ) : null}
 
-      {view === "fleet" ? (
-        <AdminCollapsibleSection
-          id="fleet-reports"
-          title="Printable fleet reports"
-          description="Download clean, landscape records for maintenance planning or weight-and-balance files."
-          summary="2 PDF reports"
-          open={openSections.has("reports")}
-          onToggle={() => toggleSection("reports")}
+      {view === "fleet" && activeFleetWorkspace === "records" ? (
+        <FleetWorkspacePanel
+          title="Aircraft records"
+          description="Preview or print maintenance planning and weight-and-balance records."
+          summary="2 printable record layouts"
         >
           <FleetReportsPanel
             aircraft={aircraft}
@@ -1123,36 +1299,29 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             organizationId={activeOrganization.id}
             organizationName={activeOrganization.name}
           />
-        </AdminCollapsibleSection>
+        </FleetWorkspacePanel>
       ) : null}
 
-      {view === "fleet" && canManageFleet ? (<AdminCollapsibleSection
-        id="aircraft-models"
+      {view === "fleet" && canManageFleet && activeFleetWorkspace === "models" ? (<FleetWorkspacePanel
         title="Aircraft models"
         description={`Organization-owned models plus the global models available to ${activeOrganization.name}.`}
         summary={`${models.filter((model) => model.organization_id === activeOrganization.id).length} organization · ${models.filter((model) => !model.organization_id).length} global`}
-        open={openSections.has("models")}
-        onToggle={() => toggleSection("models")}
       >
-        <div className="people-toolbar">
-          <p className="saas-meta-text">Only organization-owned models can be edited here. Global models remain read-only and available when adding aircraft.</p>
-          <button className="secondary-button" type="button" onClick={startCreateModel}>Add model</button>
+        <div className="mb-2 flex justify-end">
+          <button className="cursor-pointer rounded-md border border-blue-600 bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" type="button" onClick={startCreateModel}>Add model</button>
         </div>
 
-        {showModelForm ? (
+        <DetailDrawer
+          open={showModelForm}
+          width="wide"
+          title={editingModelId ? `Edit ${modelForm.name}` : "Add aircraft model"}
+          description="Model details, loading locations, and approved CG limits."
+          onClose={() => setShowModelForm(false)}
+        >
           <form
-            className="mt-4 overflow-hidden border border-slate-300 bg-white shadow-sm"
+            className="overflow-hidden border border-slate-300 bg-white shadow-sm"
             onSubmit={handleSaveModel}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-slate-300 bg-slate-800 px-3 py-1.5 text-white">
-              <h3 className="text-xs font-semibold uppercase tracking-wide">
-                {editingModelId ? "Edit model worksheet" : "New model worksheet"}
-              </h3>
-              <span className="text-[11px] text-slate-300">
-                Tab / Enter moves to the next cell
-              </span>
-            </div>
-
             {modelError ? (
               <div className="border-b border-rose-300 bg-rose-50 px-3 py-1.5 text-xs text-rose-800" role="alert">
                 <span className="font-semibold">Check this row: </span>
@@ -1161,11 +1330,14 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             ) : null}
 
             <div className="max-w-full overflow-x-auto" data-edit-grid>
-              <table className="w-full min-w-[620px] border-collapse text-left text-xs">
+              <table className="w-full min-w-[820px] border-collapse text-left text-xs">
                 <thead className="bg-blue-100 font-semibold text-slate-800">
                   <tr>
                     <GridHeader className="min-w-52">Model</GridHeader>
                     <GridHeader className="w-32">Type</GridHeader>
+                    <GridHeader className="w-56" title="How the approved CG limits are plotted">
+                      Envelope layout
+                    </GridHeader>
                     <GridHeader className="w-36" title="Typical fuel use in gallons per hour">
                       Fuel burn (gph)
                     </GridHeader>
@@ -1201,6 +1373,23 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                       >
                         <option value="airplane">Airplane</option>
                         <option value="helicopter">Helicopter</option>
+                      </GridSelect>
+                    </GridCell>
+                    <GridCell>
+                      <GridSelect
+                        ariaLabel="Envelope layout"
+                        value={modelForm.chart_type}
+                        onChange={(value) => {
+                          setModelError("");
+                          setModelForm((current) => ({
+                            ...current,
+                            chart_type: value as AircraftChartType,
+                          }));
+                        }}
+                      >
+                        <option value="1d1p">CG and weight</option>
+                        <option value="2d1p">One 2-axis envelope</option>
+                        <option value="2d2p">Top and side envelopes</option>
                       </GridSelect>
                     </GridCell>
                     <GridCell>
@@ -1262,7 +1451,52 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               }
             />
 
-            {modelForm.category === "helicopter" ? (
+            {modelForm.chart_type === "1d1p" ? (
+              <div className={`grid border-t border-slate-300 ${
+                modelForm.category === "airplane"
+                  ? "xl:grid-cols-2 xl:divide-x xl:divide-slate-300"
+                  : ""
+              }`}>
+                <WeightBalanceLimitsGrid
+                  title="Normal boundary"
+                  description="Solid line · minimum 3 points"
+                  rows={modelForm.envelope}
+                  onChange={(clientKey, field, value) =>
+                    updateWeightBalanceLimit("envelope", clientKey, field, value)
+                  }
+                  onBlur={() => trimTrailingModelRows("envelope")}
+                  onRemove={(clientKey) =>
+                    setModelForm((current) => ({
+                      ...current,
+                      envelope: ensureWeightBalanceLimitRow(
+                        current.envelope.filter((item) => item.clientKey !== clientKey)
+                      ),
+                    }))
+                  }
+                />
+                {modelForm.category === "airplane" ? (
+                  <WeightBalanceLimitsGrid
+                    title="Utility boundary"
+                    description="Dashed overlay · optional"
+                    rows={modelForm.utilityEnvelope}
+                    onChange={(clientKey, field, value) =>
+                      updateWeightBalanceLimit("utilityEnvelope", clientKey, field, value)
+                    }
+                    onBlur={() => trimTrailingModelRows("utilityEnvelope")}
+                    onRemove={(clientKey) =>
+                      setModelForm((current) => ({
+                        ...current,
+                        utilityEnvelope: ensureWeightBalanceLimitRow(
+                          current.utilityEnvelope.filter(
+                            (item) => item.clientKey !== clientKey
+                          )
+                        ),
+                      }))
+                    }
+                  />
+                ) : null}
+              </div>
+            ) : modelForm.chart_type === "2d2p" ? (
               <div className="grid border-t border-slate-300 xl:grid-cols-2 xl:divide-x xl:divide-slate-300">
                 <HelicopterLimitsEditor
                   title="CG envelope — top view"
@@ -1285,7 +1519,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                 />
                 <HelicopterLimitsEditor
                   title="CG envelope — side view"
-                  description="Optional"
+                  description="Minimum 3 points"
                   xLabel="Fwd/aft CG (in)"
                   yLabel="Weight (lb)"
                   points={modelForm.sideView}
@@ -1304,19 +1538,63 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                 />
               </div>
             ) : (
-              <WeightBalanceLimitsGrid
-                rows={modelForm.envelope}
-                onChange={updateWeightBalanceLimit}
-                onBlur={() => trimTrailingModelRows("envelope")}
-                onRemove={(clientKey) =>
-                  setModelForm((current) => ({
-                    ...current,
-                    envelope: ensureWeightBalanceLimitRow(
-                      current.envelope.filter((item) => item.clientKey !== clientKey)
-                    ),
-                  }))
-                }
-              />
+              <div className="border-t border-slate-300 bg-slate-50">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 px-2 py-1">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-800">
+                    Single 2-axis envelope
+                  </p>
+                  <label className="flex items-center gap-2 text-[10px] font-medium text-slate-600">
+                    Plot
+                    <select
+                      className="h-7 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800"
+                      value={modelForm.singleEnvelopeView}
+                      onChange={(event) =>
+                        setModelForm((current) => ({
+                          ...current,
+                          singleEnvelopeView: event.target.value as ModelForm["singleEnvelopeView"],
+                        }))
+                      }
+                    >
+                      <option value="topView">Forward/aft + left/right CG</option>
+                      <option value="sideView">Forward/aft CG + weight</option>
+                    </select>
+                  </label>
+                </div>
+                <HelicopterLimitsEditor
+                  title={
+                    modelForm.singleEnvelopeView === "topView"
+                      ? "CG envelope — top view"
+                      : "CG envelope — side view"
+                  }
+                  description="Minimum 3 points"
+                  xLabel="Fwd/aft CG (in)"
+                  yLabel={
+                    modelForm.singleEnvelopeView === "topView"
+                      ? "Left/right CG (in)"
+                      : "Weight (lb)"
+                  }
+                  points={modelForm[modelForm.singleEnvelopeView]}
+                  onChange={(clientKey, field, value) =>
+                    updateHelicopterLimit(
+                      modelForm.singleEnvelopeView,
+                      clientKey,
+                      field,
+                      value
+                    )
+                  }
+                  onBlur={() => trimTrailingModelRows(modelForm.singleEnvelopeView)}
+                  onRemove={(clientKey) =>
+                    setModelForm((current) => ({
+                      ...current,
+                      [current.singleEnvelopeView]: ensureHelicopterLimitRow(
+                        current[current.singleEnvelopeView].filter(
+                          (point) => point.clientKey !== clientKey
+                        )
+                      ),
+                    }))
+                  }
+                />
+              </div>
             )}
 
             <div className="flex items-center justify-between gap-3 border-t border-slate-300 bg-slate-50 px-3 py-2">
@@ -1341,351 +1619,372 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               </div>
             </div>
           </form>
-        ) : null}
+        </DetailDrawer>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
-          {models.filter((model) => model.organization_id === activeOrganization.id).map((model) => (
-            <div key={model.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
-              <p className="text-sm font-semibold text-slate-900">{model.name}</p>
-              <p className="saas-meta-text">{model.category || "Uncategorized"}</p>
-              <div className="mt-3 flex gap-2"><button className="ghost-button" type="button" onClick={() => startEditModel(model)}>Edit</button><button className="danger-button-compact" type="button" onClick={() => void handleDeleteModel(model)}>Delete</button></div>
-            </div>
-          ))}
+        <div>
+          <AdminDataTable label="Aircraft models">
+            <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+              <tr>
+                <th className="border-b border-slate-200 px-3 py-2">Model</th>
+                <th className="border-b border-slate-200 px-3 py-2">Type</th>
+                <th className="border-b border-slate-200 px-3 py-2">Envelope</th>
+                <th className="border-b border-slate-200 px-3 py-2">Fuel burn</th>
+                <th className="border-b border-slate-200 px-3 py-2">Max weight</th>
+                <th className="border-b border-slate-200 px-3 py-2">Source</th>
+                <th className="border-b border-slate-200 px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {models.map((model) => {
+                const organizationOwned = model.organization_id === activeOrganization.id;
+                return (
+                  <tr key={model.id} className="hover:bg-blue-50/40">
+                    <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-900">{model.name}</td>
+                    <td className="border-b border-slate-100 px-3 py-2 text-xs capitalize text-slate-700">{model.category || "—"}</td>
+                    <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-700">{formatChartType(model.chart_type)}</td>
+                    <td className="border-b border-slate-100 px-3 py-2 text-xs tabular-nums text-slate-700">{model.avg_fuel_burn_rate == null ? "—" : `${model.avg_fuel_burn_rate} gph`}</td>
+                    <td className="border-b border-slate-100 px-3 py-2 text-xs tabular-nums text-slate-700">{model.max_weight == null ? "—" : `${model.max_weight.toLocaleString()} lb`}</td>
+                    <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-600">{organizationOwned ? "Organization" : "Global"}</td>
+                    <td className="border-b border-slate-100 px-3 py-1.5">
+                      {organizationOwned ? (
+                        <div className="flex justify-end gap-1">
+                          <button className="cursor-pointer rounded px-2 py-1 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50" type="button" onClick={() => startEditModel(model)}>Edit</button>
+                          <button className="cursor-pointer rounded px-2 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50" type="button" onClick={() => void handleDeleteModel(model)}>Delete</button>
+                        </div>
+                      ) : <span className="block text-right text-xs text-slate-400">Read only</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </AdminDataTable>
         </div>
-      </AdminCollapsibleSection>) : null}
+      </FleetWorkspacePanel>) : null}
 
-      {view === "people" ? (<>
-        <AdminCollapsibleSection
-          id="add-organization-person"
-          title="Add a person"
-          description="Add by email; registered accounts link immediately and all others remain pending."
-          summary="Email-based access"
-          open={openSections.has("add-person")}
-          onToggle={() => toggleSection("add-person")}
-        >
-        <form className="grid gap-3 rounded-2xl border border-slate-200 bg-white/80 p-4 md:grid-cols-2" onSubmit={handleAddMember}>
-          <Field label="Email">
-            <input
-              type="email"
-              className="rounded-xl border border-slate-300 px-3 py-2"
-              value={memberEmail}
-              onChange={(event) => setMemberEmail(event.target.value)}
-              placeholder="Enter email"
-              required
-            />
-          </Field>
-          <Field label="Organization name">
-            <input
-              className="rounded-xl border border-slate-300 px-3 py-2"
-              value={memberDisplayName}
-              onChange={(event) => setMemberDisplayName(event.target.value)}
-              placeholder="Optional organization display name"
-            />
-          </Field>
-          <Field label="Teaching role">
-            <select
-              className="rounded-xl border border-slate-300 px-3 py-2"
-              value={memberTeachingRole}
-              onChange={(event) => setMemberTeachingRole(event.target.value as OrganizationTeachingRole | "")}
-            >
-              <option value="">No teaching role</option>
-              <option value="instructor">Instructor</option>
-              <option value="student">Student</option>
-            </select>
-          </Field>
-          <Field label="Internal ID">
-            <input
-              className="rounded-xl border border-slate-300 px-3 py-2"
-              value={memberInternalId}
-              onChange={(event) => setMemberInternalId(event.target.value)}
-              placeholder="Optional student or employee ID"
-              maxLength={120}
-            />
-          </Field>
-          <Field label="Organization notes">
-            <textarea
-              className="rounded-xl border border-slate-300 px-3 py-2"
-              value={memberNotes}
-              onChange={(event) => setMemberNotes(event.target.value)}
-              placeholder="Visible only to authorized organization managers"
-              rows={3}
-              maxLength={2000}
-            />
-          </Field>
-          <div className="flex items-end">
-            <button className="primary-button" type="submit" disabled={saving}>
-              {saving ? "Adding..." : "Add person"}
-            </button>
-          </div>
-        </form>
-        </AdminCollapsibleSection>
+      {view === "people" ? (
+        <>
+          <AdminDataTable label="Linked organization members">
+            <thead>
+              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={<CompactButton type="button" tone="primary" onClick={() => setShowAddPersonDrawer(true)}>Add person</CompactButton>} /></th></tr>
+              <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+                <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {members.map((member) => {
+                const isOwner = member.member_role === "owner";
+                const isSelf = member.user_id === session?.user?.id;
+                const organizationPerson = peopleByUserId.get(member.user_id);
+                const adminCanRemove = role === "organization_admin" && member.member_role === "member";
+                const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
+                return (
+                  <tr key={member.user_id} className="hover:bg-blue-50/40">
+                    <td className="px-3 py-2 font-semibold text-slate-950">{member.display_name || member.email}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600">{member.email}</td>
+                    <td className="px-3 py-2"><StatusBadge tone={isOwner ? "info" : member.member_role === "organization_admin" ? "warning" : "neutral"}>{formatRole(member.member_role)}</StatusBadge></td>
+                    <td className="px-3 py-2"><select className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs" value={member.teaching_role ?? ""} disabled={saving} aria-label={`Teaching role for ${member.email}`} onChange={(event) => void handleTeachingRoleChange(member, (event.target.value || null) as "instructor" | "student" | null)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></td>
+                    <td className="px-3 py-2 text-xs text-slate-600">{organizationPerson?.internal_id || "—"}</td>
+                    <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={organizationPerson?.notes ?? ""}>{organizationPerson?.notes || "—"}</td>
+                    <td className="px-3 py-2"><div className="flex justify-end gap-1">
+                      {organizationPerson ? <CompactButton type="button" disabled={saving} onClick={() => startEditOrganizationPerson(organizationPerson)}>Edit</CompactButton> : null}
+                      {canManageAdmins && !isOwner && !isSelf ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "role", member })}>{member.member_role === "organization_admin" ? "Make member" : "Make admin"}</CompactButton> : null}
+                      {canManageAdmins && !isSelf && !isOwner ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member })}>Transfer owner</CompactButton> : null}
+                      {canRemove ? <CompactButton type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member })}>Remove</CompactButton> : null}
+                    </div></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </AdminDataTable>
 
-        <AdminCollapsibleSection
-          id="pending-organization-people"
-          title="Pending accounts"
-          description="People whose email has not yet linked to a verified PilotSeal account."
-          summary={`${pendingPeople.length} pending`}
-          open={openSections.has("pending-people")}
-          onToggle={() => toggleSection("pending-people")}
-        >
-          {pendingPeople.length > 0 ? (
-            <div className="grid gap-3">
+          <AdminDataTable label="Pending organization people">
+            <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Pending person</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {!pendingPeople.length ? <tr><td colSpan={6}><EmptyState title="No pending accounts" description="Unregistered email invitations will appear here." /></td></tr> : null}
               {pendingPeople.map((person) => (
-                <div key={person.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900">{person.organization_display_name || person.email}</p>
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-800">Pending account</span>
-                      </div>
-                      <p className="saas-meta-text mt-1">{person.email}{person.teaching_role ? ` · ${formatTeachingRole(person.teaching_role)}` : ""}{person.internal_id ? ` · ID ${person.internal_id}` : ""}</p>
-                      {person.notes ? <p className="saas-meta-text mt-2">{person.notes}</p> : null}
-                    </div>
-                    <div className="flex gap-2">
-                      <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditOrganizationPerson(person)}>Edit</button>
-                      <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleArchivePendingPerson(person)}>Remove</button>
-                    </div>
-                  </div>
-                  {renderOrganizationPersonEditor(person)}
-                </div>
+                <tr key={person.id} className="hover:bg-amber-50/50">
+                  <td className="px-3 py-2 font-semibold text-slate-950">{person.organization_display_name || person.email}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{person.email}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{person.teaching_role ? formatTeachingRole(person.teaching_role) : "—"}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{person.internal_id || "—"}</td>
+                  <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={person.notes ?? ""}>{person.notes || "—"}</td>
+                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" onClick={() => startEditOrganizationPerson(person)}>Edit</CompactButton><CompactButton type="button" tone="danger" onClick={() => setMemberConfirmation({ action: "pending", person })}>Remove</CompactButton></div></td>
+                </tr>
               ))}
-            </div>
-          ) : <p className="saas-empty-state">No pending accounts.</p>}
-        </AdminCollapsibleSection>
+            </tbody>
+          </AdminDataTable>
 
-        <AdminCollapsibleSection
-          id="linked-organization-members"
-          title="Linked members"
-          description="Manage organization roles, teaching roles, and member access."
-          summary={`${members.length} linked`}
-          open={openSections.has("linked-members")}
-          onToggle={() => toggleSection("linked-members")}
-        >
-        <div className="grid gap-3">
-          {members.map((member) => {
-            const isOwner = member.member_role === "owner";
-            const isSelf = member.user_id === session?.user?.id;
-            const organizationPerson = peopleByUserId.get(member.user_id);
-            const adminCanRemove = role === "organization_admin" && member.member_role === "member";
-            const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
-            return (
-              <div key={member.user_id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{member.display_name || member.email}</p>
-                    <p className="saas-meta-text">{member.email} · {formatRole(member.member_role)}{member.teaching_role ? ` · ${formatTeachingRole(member.teaching_role)}` : ""}{organizationPerson?.internal_id ? ` · ID ${organizationPerson.internal_id}` : ""}</p>
-                    {organizationPerson?.notes ? <p className="saas-meta-text mt-1">{organizationPerson.notes}</p> : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {organizationPerson ? (
-                      <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditOrganizationPerson(organizationPerson)}>Edit details</button>
-                    ) : null}
-                    <select
-                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      value={member.teaching_role ?? ""}
-                      disabled={saving}
-                      aria-label={`Teaching role for ${member.email}`}
-                      onChange={(event) => void handleTeachingRoleChange(member, (event.target.value || null) as "instructor" | "student" | null)}
-                    >
-                      <option value="">No teaching role</option>
-                      <option value="instructor">Instructor</option>
-                      <option value="student">Student</option>
-                    </select>
-                    {canManageAdmins && !isOwner && !isSelf ? (
-                      <button className="ghost-button" type="button" disabled={saving} onClick={() => void handleRoleChange(member)}>
-                        {member.member_role === "organization_admin" ? "Make member" : "Make admin"}
-                      </button>
-                    ) : null}
-                    {canManageAdmins && !isSelf && !isOwner ? (
-                      <button className="ghost-button" type="button" disabled={saving} onClick={() => void handleTransferOwnership(member)}>
-                        Transfer ownership
-                      </button>
-                    ) : null}
-                    {canRemove ? (
-                      <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleRemoveMember(member)}>
-                        Remove
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                {organizationPerson ? renderOrganizationPersonEditor(organizationPerson) : null}
-              </div>
-            );
-          })}
-        </div>
-        </AdminCollapsibleSection>
-      </>) : null}
+          <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Add person" description="Registered accounts link immediately; other email addresses remain pending.">
+            <form onSubmit={handleAddMember}>
+              <WorksheetGrid label="New organization person" minWidth={720}>
+                <thead><tr><WorksheetHeader>Email</WorksheetHeader><WorksheetHeader>Organization name</WorksheetHeader><WorksheetHeader>Teaching role</WorksheetHeader><WorksheetHeader>Internal ID</WorksheetHeader></tr></thead>
+                <tbody><tr>
+                  <WorksheetCell><input autoFocus required type="email" aria-label="Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} className={worksheetInputClass} placeholder="person@example.com" /></WorksheetCell>
+                  <WorksheetCell><input aria-label="Organization name" value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} className={worksheetInputClass} /></WorksheetCell>
+                  <WorksheetCell><select aria-label="Teaching role" value={memberTeachingRole} onChange={(event) => setMemberTeachingRole(event.target.value as OrganizationTeachingRole | "")} className={worksheetInputClass}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></WorksheetCell>
+                  <WorksheetCell><input aria-label="Internal ID" maxLength={120} value={memberInternalId} onChange={(event) => setMemberInternalId(event.target.value)} className={worksheetInputClass} /></WorksheetCell>
+                </tr></tbody>
+              </WorksheetGrid>
+              <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Organization notes<textarea rows={3} maxLength={2000} value={memberNotes} onChange={(event) => setMemberNotes(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
+              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Adding…" : "Add person"}</CompactButton></div>
+            </form>
+          </DetailDrawer>
+          <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit organization person" description="These details are organization-only and do not change the personal account.">
+            {editingPersonId ? renderOrganizationPersonEditor(organizationPeople.find((person) => person.id === editingPersonId) ?? ({ id: editingPersonId } as OrganizationPerson)) : null}
+          </DetailDrawer>
+          <ConfirmDialog
+            open={Boolean(memberConfirmation)}
+            title={memberConfirmationTitle(memberConfirmation)}
+            description={memberConfirmationDescription(memberConfirmation)}
+            confirmLabel={memberConfirmationLabel(memberConfirmation)}
+            destructive={memberConfirmation?.action === "remove" || memberConfirmation?.action === "pending"}
+            busy={saving}
+            onCancel={() => setMemberConfirmation(null)}
+            onConfirm={() => void runMemberConfirmation()}
+          />
+        </>
+      ) : null}
 
-      {view === "fleet" && canManageFleet ? (<AdminCollapsibleSection
-        id="organization-aircraft"
+      {view === "fleet" && canManageFleet && activeFleetWorkspace === "aircraft" ? (<FleetWorkspacePanel
         title="Organization aircraft"
         description={`Aircraft available to members of ${activeOrganization.name}.`}
         summary={`${aircraft.length} aircraft · ${aircraft.filter((item) => item.organization_access === "assigned").length} assigned`}
-        open={openSections.has("aircraft")}
-        onToggle={() => toggleSection("aircraft")}
       >
-        <div className="people-toolbar">
-          <p className="saas-meta-text">Open an aircraft only when you need to edit its identity, status, meter, or maintenance limits.</p>
-          <button className="secondary-button" type="button" onClick={startCreateAircraft}>Add aircraft</button>
+        <div className="mb-2 flex justify-end">
+          <button className="cursor-pointer rounded-md border border-blue-600 bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" type="button" onClick={startCreateAircraft}>Add aircraft</button>
         </div>
 
-        {showAircraftForm ? (
-          <form className="mt-5 grid gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4 md:grid-cols-2" onSubmit={handleSaveAircraft}>
-            <h3 className="text-sm font-semibold text-slate-900 md:col-span-2">
-              {editingAssignedAircraft ? "Edit assigned aircraft maintenance" : editingAircraftId ? "Edit organization aircraft" : "New organization aircraft"}
-            </h3>
+        <DetailDrawer
+          open={showAircraftForm}
+          width="wide"
+          title={editingAssignedAircraft ? "Aircraft maintenance" : editingAircraftId ? `Edit ${aircraftForm.tail_number}` : "Add aircraft"}
+          description="Edit the aircraft record as a compact worksheet. Blank due dates are not tracked."
+          onClose={() => setShowAircraftForm(false)}
+        >
+          <form className="grid gap-4" onSubmit={handleSaveAircraft}>
             {editingAssignedAircraft ? (
-              <p className="saas-meta-text md:col-span-2">
-                This aircraft is assigned by a platform administrator. Its model, tail number, empty weight, and balance distances are read-only; organization managers share one maintenance record.
+              <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                Identity and empty-weight values are controlled by the platform assignment. Maintenance fields remain editable.
               </p>
             ) : null}
             {aircraftError ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 md:col-span-2" role="alert">
-                <p className="font-semibold">The aircraft was not saved.</p>
-                <p className="mt-1">{aircraftError}</p>
+              <div className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert">
+                <span className="font-semibold">Aircraft not saved: </span>{aircraftError}
               </div>
             ) : null}
 
-            <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
-              <h4 className="text-sm font-semibold text-slate-900 md:col-span-2">Aircraft identity and empty weight</h4>
-              <Field label="Aircraft model (required)">
-                <select disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.model_id} onChange={(event) => updateAircraftField("model_id", event.target.value)} required>
-                  <option value="">Choose a model</option>
-                  {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Registration or tail number (required)">
-                <input disabled={editingAssignedAircraft} className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.tail_number} onChange={(event) => updateAircraftField("tail_number", event.target.value.toUpperCase())} placeholder="e.g. N5520X" required />
-              </Field>
-              <Field label="Basic empty weight (lb, required)">
-                <input disabled={editingAssignedAircraft} type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_weight} onChange={(event) => updateAircraftField("empty_weight", event.target.value)} required />
-              </Field>
-              <Field label="Empty-weight distance from datum (in, required)">
-                <input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_arm} onChange={(event) => updateAircraftField("empty_arm", event.target.value)} required />
-              </Field>
-              <Field label="Empty-weight left/right distance (in)">
-                <input disabled={editingAssignedAircraft} type="number" step="any" className="rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={aircraftForm.empty_lat_arm} onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)} placeholder="Use 0 for the centerline" />
-              </Field>
-            </div>
+            <AircraftWorksheet title="Aircraft identity">
+              <table className="w-full min-w-[780px] border-collapse text-left text-xs">
+                <thead className="bg-blue-100 font-semibold text-slate-800">
+                  <tr>
+                    <GridHeader className="min-w-52">Model</GridHeader>
+                    <GridHeader className="w-36">Tail number</GridHeader>
+                    <GridHeader className="w-36">Empty weight (lb)</GridHeader>
+                    <GridHeader className="w-36">Long. arm (in)</GridHeader>
+                    <GridHeader className="w-36" last>Lat. arm (in)</GridHeader>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <GridCell>
+                      <select disabled={editingAssignedAircraft} aria-label="Aircraft model" className={`${gridControlClass} cursor-pointer disabled:bg-slate-100`} value={aircraftForm.model_id} onChange={(event) => updateAircraftField("model_id", event.target.value)} required>
+                        <option value="">Choose a model</option>
+                        {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                      </select>
+                    </GridCell>
+                    <GridCell><AircraftWorksheetInput ariaLabel="Tail number" disabled={editingAssignedAircraft} value={aircraftForm.tail_number} onChange={(value) => updateAircraftField("tail_number", value.toUpperCase())} placeholder="N5520X" required /></GridCell>
+                    <GridCell><AircraftWorksheetInput ariaLabel="Basic empty weight in pounds" disabled={editingAssignedAircraft} type="number" min={0} value={aircraftForm.empty_weight} onChange={(value) => updateAircraftField("empty_weight", value)} required /></GridCell>
+                    <GridCell><AircraftWorksheetInput ariaLabel="Empty weight longitudinal arm" disabled={editingAssignedAircraft} type="number" value={aircraftForm.empty_arm} onChange={(value) => updateAircraftField("empty_arm", value)} required /></GridCell>
+                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel="Empty weight lateral arm" disabled={editingAssignedAircraft} type="number" value={aircraftForm.empty_lat_arm} onChange={(value) => updateAircraftField("empty_lat_arm", value)} placeholder="0 = centerline" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </AircraftWorksheet>
 
-            <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:col-span-2 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <h4 className="text-sm font-semibold text-slate-900">Flight availability</h4>
-                <p className="saas-meta-text mt-1">Grounded aircraft are marked “Do not dispatch” throughout the organization workflow.</p>
-              </div>
-              <Field label="Current aircraft status">
-                <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.operational_status} onChange={(event) => updateAircraftField("operational_status", event.target.value as AircraftOperationalStatus)}>
-                  <option value="available">Available for flight</option>
-                  <option value="away">Away or temporarily unavailable</option>
-                  <option value="in_maintenance">In maintenance</option>
-                  <option value="grounded">Grounded — do not dispatch</option>
-                </select>
-              </Field>
-              {aircraftForm.operational_status !== "available" ? (
-                <Field label={aircraftForm.operational_status === "grounded" ? "Why is it grounded? (required)" : "Status note (optional)"}>
-                  <input className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.operational_status_note} onChange={(event) => updateAircraftField("operational_status_note", event.target.value)} placeholder={aircraftForm.operational_status === "grounded" ? "Describe the discrepancy or maintenance restriction" : "Add context for members"} required={aircraftForm.operational_status === "grounded"} />
-                </Field>
-              ) : null}
-            </div>
+            <AircraftWorksheet title="Status and meter">
+              <table className="w-full min-w-[860px] border-collapse text-left text-xs">
+                <thead className="bg-slate-100 font-semibold text-slate-700">
+                  <tr>
+                    <GridHeader className="w-36">Flight status</GridHeader>
+                    <GridHeader className="min-w-52">Status note</GridHeader>
+                    <GridHeader className="w-24">Meter</GridHeader>
+                    <GridHeader className="w-24">Reading</GridHeader>
+                    <GridHeader className="w-40">Observed at</GridHeader>
+                    <GridHeader className="min-w-44" last>Change reason</GridHeader>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <GridCell>
+                      <select aria-label="Current aircraft status" className={`${gridControlClass} cursor-pointer`} value={aircraftForm.operational_status} onChange={(event) => updateAircraftField("operational_status", event.target.value as AircraftOperationalStatus)}>
+                        <option value="available">Available</option>
+                        <option value="away">Away</option>
+                        <option value="in_maintenance">In maintenance</option>
+                        <option value="grounded">Grounded — no dispatch</option>
+                      </select>
+                    </GridCell>
+                    <GridCell><AircraftWorksheetInput ariaLabel="Aircraft status note" value={aircraftForm.operational_status_note} onChange={(value) => updateAircraftField("operational_status_note", value)} placeholder={aircraftForm.operational_status === "grounded" ? "Grounding reason required" : "Optional"} required={aircraftForm.operational_status === "grounded"} /></GridCell>
+                    <GridCell>
+                      <select aria-label="Meter type" className={`${gridControlClass} cursor-pointer`} value={aircraftForm.current_meter_type} onChange={(event) => updateAircraftField("current_meter_type", event.target.value as AircraftMeterType)}>
+                        <option value="hobbs">Hobbs</option>
+                        <option value="tach">Tach</option>
+                      </select>
+                    </GridCell>
+                    <GridCell><AircraftWorksheetInput ariaLabel="Current meter reading" type="number" min={0} value={aircraftForm.current_meter_value} onChange={(value) => updateAircraftField("current_meter_value", value)} /></GridCell>
+                    <GridCell><AircraftWorksheetInput ariaLabel="Meter reading observed at" type="datetime-local" max={toDateTimeLocal(new Date().toISOString())} value={aircraftForm.meter_observed_at} onChange={(value) => updateAircraftField("meter_observed_at", value)} /></GridCell>
+                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel="Meter change reason" value={aircraftForm.meter_change_reason} onChange={(value) => updateAircraftField("meter_change_reason", value)} placeholder="Required when reading changes" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </AircraftWorksheet>
 
-            <details className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <summary className="cursor-pointer text-sm font-semibold text-slate-900">Meter reading used for maintenance tracking</summary>
-              <p className="saas-meta-text mt-1">A changed reading requires an observation time and audit reason.</p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Field label="Meter type">
-                  <select className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_type} onChange={(event) => updateAircraftField("current_meter_type", event.target.value as AircraftMeterType)}>
-                    <option value="hobbs">Hobbs meter</option>
-                    <option value="tach">Tachometer time</option>
-                  </select>
-                </Field>
-                <Field label="Current meter reading">
-                  <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.current_meter_value} onChange={(event) => updateAircraftField("current_meter_value", event.target.value)} />
-                </Field>
-                <Field label="Reading observed at">
-                  <input type="datetime-local" max={toDateTimeLocal(new Date().toISOString())} className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_observed_at} onChange={(event) => updateAircraftField("meter_observed_at", event.target.value)} />
-                </Field>
-                <Field label="Why is this reading being entered?">
-                  <input className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.meter_change_reason} onChange={(event) => updateAircraftField("meter_change_reason", event.target.value)} placeholder="Initial reading, instrument replacement, correction…" />
-                </Field>
-              </div>
-            </details>
+            <AircraftWorksheet title="Inspection and registration due">
+              <table className="w-full min-w-[840px] border-collapse text-left text-xs">
+                <thead className="bg-amber-100 font-semibold text-slate-800">
+                  <tr>
+                    <GridHeader className="w-28">100-hour</GridHeader>
+                    <GridHeader className="w-28">Annual</GridHeader>
+                    <GridHeader className="w-28">Pitot/static</GridHeader>
+                    <GridHeader className="w-28">Transponder</GridHeader>
+                    <GridHeader className="w-28">ELT</GridHeader>
+                    <GridHeader className="w-28">ADS-B</GridHeader>
+                    <GridHeader className="w-28" last>Registration</GridHeader>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <GridCell><AircraftWorksheetInput ariaLabel="Next 100-hour inspection meter reading" type="number" min={0} value={aircraftForm.hundred_hour_due_hours} onChange={(value) => updateAircraftField("hundred_hour_due_hours", value)} /></GridCell>
+                    {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date"] as const).map((key) => (
+                      <GridCell key={key}><AircraftWorksheetInput ariaLabel={formatDueLabel(key)} type="date" value={aircraftForm[key]} onChange={(value) => updateAircraftField(key, value)} /></GridCell>
+                    ))}
+                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel={formatDueLabel("registration_due_date")} type="date" value={aircraftForm.registration_due_date} onChange={(value) => updateAircraftField("registration_due_date", value)} /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </AircraftWorksheet>
 
-            <details className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <summary className="cursor-pointer text-sm font-semibold text-slate-900">Inspection and registration due limits</summary>
-              <p className="saas-meta-text mt-1">Leave a field blank when the organization does not track that limit here.</p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Field label="Next 100-hour inspection at meter reading">
-                  <input type="number" min="0" step="any" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm.hundred_hour_due_hours} onChange={(event) => updateAircraftField("hundred_hour_due_hours", event.target.value)} />
-                </Field>
-                {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date", "registration_due_date"] as const).map((key) => (
-                  <Field key={key} label={formatDueLabel(key)}><input type="date" className="rounded-xl border border-slate-300 px-3 py-2" value={aircraftForm[key]} onChange={(event) => updateAircraftField(key, event.target.value)} /></Field>
-                ))}
-              </div>
-            </details>
-            <div className="flex gap-2 md:col-span-2">
-              <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save aircraft"}</button>
+            <div className="sticky -bottom-5 flex justify-end gap-2 border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur">
               <button className="ghost-button" type="button" onClick={() => setShowAircraftForm(false)}>Cancel</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save aircraft"}</button>
             </div>
           </form>
-        ) : null}
+        </DetailDrawer>
 
-        <div className="mt-5 grid gap-3">
-          {aircraft.length === 0 ? <p className="saas-empty-state">No organization aircraft yet.</p> : aircraft.map((item) => (
-            <div key={item.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">{item.tail_number}</p>
-                  <p className="saas-meta-text">{modelNames.get(item.model_id ?? "") ?? "Unknown model"} · {item.empty_weight ?? "--"} lbs · Arm {item.empty_arm ?? "--"}</p>
-                  <p className="saas-meta-text mt-1">{item.organization_access === "assigned" ? "Assigned by Platform Super Admin" : "Owned by this organization"}</p>
-                  <p className="saas-meta-text mt-1">{maintenanceSummary(item)}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <StatusBadge tone={aircraftStatusTone(item.operational_status)}>
-                      {formatOperationalStatus(item.operational_status)}
-                    </StatusBadge>
-                    <span className="saas-meta-text">
-                      {item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${item.current_meter_value ?? "--"}` : "No meter saved"}
-                    </span>
-                  </div>
-                  {item.operational_status_note ? (
-                    <p className="mt-2 text-sm font-medium text-slate-700">
-                      {item.operational_status_note}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex gap-2">
-                  <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>{item.organization_access === "assigned" ? "Manage maintenance" : "Edit"}</button>
-                  {item.organization_access !== "assigned" ? <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleDeleteAircraft(item)}>Delete</button> : null}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </AdminCollapsibleSection>) : null}
+        {aircraft.length === 0 ? (
+          <p className="saas-empty-state mt-5">No organization aircraft yet.</p>
+        ) : (
+          <div className="mt-5">
+            <AdminDataTable label="Organization aircraft">
+              <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+                <tr>
+                  <th className="border-b border-slate-200 px-3 py-2">Tail</th>
+                  <th className="border-b border-slate-200 px-3 py-2">Model</th>
+                  <th className="border-b border-slate-200 px-3 py-2">Status</th>
+                  <th className="border-b border-slate-200 px-3 py-2">Meter</th>
+                  <th className="border-b border-slate-200 px-3 py-2">100-hour</th>
+                  <th className="border-b border-slate-200 px-3 py-2">Annual</th>
+                  <th className="border-b border-slate-200 px-3 py-2">Registration</th>
+                  <th className="border-b border-slate-200 px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {aircraft.map((item) => (
+                  <tr key={item.id} className="bg-white transition-colors hover:bg-blue-50/40">
+                    <td className="px-3 py-2 font-semibold text-slate-950">{item.tail_number}</td>
+                    <td className="px-3 py-2 text-slate-700">{modelNames.get(item.model_id ?? "") ?? "Unknown"}</td>
+                    <td className="px-3 py-2">
+                      <QuickEditPopover
+                        open={statusEditorAircraftId === item.id}
+                        onOpenChange={(open) => setStatusEditorOpen(item, open)}
+                        label={`Change ${item.tail_number} status`}
+                        trigger={(
+                          <button
+                            type="button"
+                            className="cursor-pointer rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                            aria-haspopup="dialog"
+                            aria-expanded={statusEditorAircraftId === item.id}
+                            title="Change aircraft status"
+                          >
+                            <StatusBadge tone={aircraftStatusTone(item.operational_status)}>
+                              {formatOperationalStatus(item.operational_status)}
+                              <span aria-hidden="true">⌄</span>
+                            </StatusBadge>
+                          </button>
+                        )}
+                      >
+                        <label className="grid gap-1 text-xs font-semibold text-slate-700">
+                          Status
+                          <select
+                            value={statusEditorValue}
+                            onChange={(event) => {
+                              setStatusEditorValue(event.target.value as AircraftOperationalStatus);
+                              setStatusEditorError("");
+                            }}
+                            className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-normal text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          >
+                            <option value="available">Available</option>
+                            <option value="away">Away</option>
+                            <option value="in_maintenance">In maintenance</option>
+                            <option value="grounded">Grounded</option>
+                          </select>
+                        </label>
+                        <label className="mt-2 grid gap-1 text-xs font-semibold text-slate-700">
+                          Note {statusEditorValue === "grounded" ? "(required)" : "(optional)"}
+                          <textarea
+                            rows={3}
+                            value={statusEditorNote}
+                            onChange={(event) => {
+                              setStatusEditorNote(event.target.value);
+                              setStatusEditorError("");
+                            }}
+                            placeholder={statusEditorValue === "grounded" ? "Why is this aircraft grounded?" : "Keep or update the current note"}
+                            className="resize-y rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                        </label>
+                        {statusEditorError ? <p role="alert" className="mt-2 text-xs text-rose-700">{statusEditorError}</p> : null}
+                        <div className="mt-3 flex justify-end gap-2">
+                          <CompactButton type="button" onClick={() => setStatusEditorOpen(item, false)}>Cancel</CompactButton>
+                          <CompactButton
+                            type="button"
+                            tone="primary"
+                            disabled={saving || (statusEditorValue === "grounded" && statusEditorNote.trim().length < 3)}
+                            onClick={() => void handleQuickStatusSave(item)}
+                          >
+                            {saving ? "Saving…" : "Apply"}
+                          </CompactButton>
+                        </div>
+                      </QuickEditPopover>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs tabular-nums text-slate-700">{item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${item.current_meter_value ?? "—"}` : "—"}</td>
+                    <td className="px-3 py-2 font-mono text-xs tabular-nums text-slate-700">{item.hundred_hour_due_hours ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs text-slate-700">{formatFleetDate(item.annual_due_date)}</td>
+                    <td className="px-3 py-2 text-xs text-slate-700">{formatFleetDate(item.registration_due_date)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-2">
+                        <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>{item.organization_access === "assigned" ? "Maintenance" : "Edit"}</button>
+                        {item.organization_access !== "assigned" ? <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleDeleteAircraft(item)}>Delete</button> : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </AdminDataTable>
+          </div>
+        )}
+      </FleetWorkspacePanel>) : null}
 
-      {view === "fleet" && canManageFleet ? (
-        <AdminCollapsibleSection
-          id="custom-inspections"
+      {view === "fleet" && canManageFleet && activeFleetWorkspace === "inspections" ? (
+        <FleetWorkspacePanel
           title="Additional maintenance requirements"
           description="Track Airworthiness Directives (ADs), recurring inspections, and their next due limits by aircraft."
           summary="Maintenance items and aircraft due limits"
-          open={openSections.has("inspections")}
-          onToggle={() => toggleSection("inspections")}
         >
           <OrganizationInspectionManager organizationId={activeOrganization.id} aircraft={aircraft} models={models} embedded />
-        </AdminCollapsibleSection>
+        </FleetWorkspacePanel>
       ) : null}
 
       {view === "endorsements" ? (
-        <AdminCollapsibleSection
-          id="endorsement-change-requests"
-          title="Template change requests"
-          description="Propose endorsement wording changes for Platform Super Admin review."
-          summary="Approval required"
-          open={openSections.has("endorsements")}
-          onToggle={() => toggleSection("endorsements")}
-        >
-          <OrganizationEndorsementRequests organizationId={activeOrganization.id} embedded />
-        </AdminCollapsibleSection>
+        <OrganizationEndorsementRequests organizationId={activeOrganization.id} embedded />
       ) : null}
     </div>
   );
@@ -1709,23 +2008,33 @@ function organizationViewDescription(view: OrganizationManagerView) {
   })[view];
 }
 
-function organizationSectionKeys(
-  view: OrganizationManagerView,
-  canManageFleet: boolean
-) {
-  if (view === "fleet") {
-    return canManageFleet
-      ? ["reports", "models", "aircraft", "inspections"]
-      : ["reports"];
-  }
-  if (view === "people") return ["add-person", "pending-people", "linked-members"];
-  if (view === "messages") return ["message"];
-  if (view === "endorsements") return ["endorsements"];
-  return [];
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-2 text-sm"><span>{label}</span>{children}</label>;
+}
+
+function FleetWorkspacePanel({
+  title,
+  description,
+  summary,
+  children,
+}: {
+  title: string;
+  description: string;
+  summary: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 sm:px-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
+          <p className="mt-0.5 text-xs leading-4 text-slate-500">{description}</p>
+        </div>
+        <p className="text-xs font-semibold text-slate-500">{summary}</p>
+      </header>
+      <div className="bg-slate-50/35 p-2.5 sm:p-3">{children}</div>
+    </section>
+  );
 }
 
 function HelicopterLimitsEditor({
@@ -2089,11 +2398,15 @@ function LoadingStationTable({
 }
 
 function WeightBalanceLimitsGrid({
+  title,
+  description,
   rows,
   onChange,
   onBlur,
   onRemove,
 }: {
+  title: string;
+  description: string;
   rows: WeightBalanceLimitDraft[];
   onChange: (
     clientKey: string,
@@ -2104,12 +2417,12 @@ function WeightBalanceLimitsGrid({
   onRemove: (clientKey: string) => void;
 }) {
   return (
-    <fieldset className="min-w-0 border-t border-slate-300 bg-white" onBlur={onBlur}>
+    <fieldset className="min-w-0 bg-white" onBlur={onBlur}>
       <div className="flex items-center justify-between gap-3 border-b border-slate-300 bg-slate-200 px-2 py-1">
         <legend className="text-[11px] font-bold uppercase tracking-wide text-slate-800">
-          CG envelope
+          {title}
         </legend>
-        <span className="text-[10px] text-slate-600">Minimum 3 boundary points</span>
+        <span className="text-[10px] text-slate-600">{description}</span>
       </div>
       <div className="max-w-full overflow-x-auto" data-edit-grid>
         <table className="w-full min-w-[420px] border-collapse text-left text-xs">
@@ -2131,7 +2444,7 @@ function WeightBalanceLimitsGrid({
                   <GridIndexCell>{isBlank ? "•" : index + 1}</GridIndexCell>
                   <GridCell>
                     <GridNumberInput
-                      ariaLabel={`CG limit point ${index + 1} position`}
+                      ariaLabel={`${title} point ${index + 1} position`}
                       value={point.cg}
                       onChange={(value) =>
                         onChange(point.clientKey, "cg", value)
@@ -2140,7 +2453,7 @@ function WeightBalanceLimitsGrid({
                   </GridCell>
                   <GridCell>
                     <GridNumberInput
-                      ariaLabel={`CG limit point ${index + 1} aircraft weight`}
+                      ariaLabel={`${title} point ${index + 1} aircraft weight`}
                       min={0}
                       value={point.weight}
                       onChange={(value) =>
@@ -2152,7 +2465,7 @@ function WeightBalanceLimitsGrid({
                     {!isBlank || rows.length > 1 ? (
                       <RemoveGridRowButton
                         onClick={() => onRemove(point.clientKey)}
-                        ariaLabel={`Remove CG limit point ${index + 1}`}
+                        ariaLabel={`Remove ${title} point ${index + 1}`}
                       />
                     ) : null}
                   </td>
@@ -2163,6 +2476,50 @@ function WeightBalanceLimitsGrid({
         </table>
       </div>
     </fieldset>
+  );
+}
+
+function AircraftWorksheet({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="min-w-0 overflow-hidden border border-slate-300 bg-white">
+      <legend className="sr-only">{title}</legend>
+      <div className="border-b border-slate-300 bg-slate-800 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+        {title}
+      </div>
+      <div className="max-w-full overflow-x-auto" data-edit-grid>{children}</div>
+    </fieldset>
+  );
+}
+
+function AircraftWorksheetInput({
+  ariaLabel,
+  className = "",
+  onChange,
+  type = "text",
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "type"> & {
+  ariaLabel: string;
+  className?: string;
+  onChange: (value: string) => void;
+  type?: React.HTMLInputTypeAttribute;
+}) {
+  return (
+    <input
+      {...props}
+      aria-label={ariaLabel}
+      className={`${gridControlClass} ${type === "number" ? "font-mono tabular-nums" : ""} disabled:bg-slate-100 ${className}`}
+      data-grid-cell
+      step={type === "number" ? "any" : props.step}
+      type={type}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={handleGridKeyDown}
+    />
   );
 }
 
@@ -2469,6 +2826,29 @@ function formatRole(role: string) {
   return "Member";
 }
 
+function memberConfirmationTitle(confirmation: MemberConfirmation | null) {
+  if (!confirmation) return "Confirm change";
+  if (confirmation.action === "pending") return "Remove pending person?";
+  if (confirmation.action === "role") return confirmation.member.member_role === "organization_admin" ? "Remove administrator access?" : "Grant administrator access?";
+  if (confirmation.action === "transfer") return "Transfer organization ownership?";
+  return "Remove organization member?";
+}
+
+function memberConfirmationDescription(confirmation: MemberConfirmation | null) {
+  if (!confirmation) return "";
+  if (confirmation.action === "pending") return `${confirmation.person.email} will be removed from the pending organization roster.`;
+  if (confirmation.action === "role") return `${confirmation.member.email} will ${confirmation.member.member_role === "organization_admin" ? "lose" : "receive"} organization administrator permissions.`;
+  if (confirmation.action === "transfer") return `${confirmation.member.email} will become the organization Owner. Your role will change according to the existing ownership workflow.`;
+  return `${confirmation.member.email} will lose access to this organization. Their PilotSeal account will not be deleted.`;
+}
+
+function memberConfirmationLabel(confirmation: MemberConfirmation | null) {
+  if (!confirmation) return "Confirm";
+  if (confirmation.action === "role") return confirmation.member.member_role === "organization_admin" ? "Remove admin access" : "Grant admin access";
+  if (confirmation.action === "transfer") return "Transfer ownership";
+  return "Remove";
+}
+
 function formatTeachingRole(role: string) {
   return role === "instructor" ? "Instructor" : "Student";
 }
@@ -2484,15 +2864,19 @@ function formatDueLabel(key: string) {
   } as Record<string, string>)[key] ?? key;
 }
 
-function maintenanceSummary(item: AircraftRecord) {
-  const values = [
-    item.hundred_hour_due_hours == null ? "" : `100-hour ${item.hundred_hour_due_hours}`,
-    item.annual_due_date ? `Annual ${item.annual_due_date}` : "",
-    item.static_due_date ? `Static ${item.static_due_date}` : "",
-    item.transponder_due_date ? `Transponder ${item.transponder_due_date}` : "",
-    item.elt_due_date ? `ELT ${item.elt_due_date}` : "",
-    item.adsb_due_date ? `ADS-B ${item.adsb_due_date}` : "",
-    item.registration_due_date ? `Registration ${item.registration_due_date}` : "",
-  ].filter(Boolean);
-  return values.length ? values.join(" · ") : "No maintenance due dates recorded";
+function formatChartType(value?: string | null) {
+  if (value === "1d1p") return "CG + weight";
+  if (value === "2d1p") return "Single 2-axis";
+  if (value === "2d2p") return "Top + side";
+  return "—";
+}
+
+function formatFleetDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "2-digit",
+  }).format(date);
 }

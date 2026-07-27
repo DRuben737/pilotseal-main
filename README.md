@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PilotSeal
 
-## Getting Started
+## Local development
 
-First, run the development server:
+PilotSeal development and testing use the Docker-backed local Supabase stack.
+Production or user data must never be copied into this environment.
+
+With Docker Desktop running:
 
 ```bash
+npm install
+npm run db:local:start
+npm run env:local:sync
+npm run db:local:reset
+npm run seed:local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app is at [http://localhost:3000](http://localhost:3000), Supabase
+Studio is at [http://127.0.0.1:54323](http://127.0.0.1:54323), and captured
+development email is at [http://127.0.0.1:54324](http://127.0.0.1:54324).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Run the complete local test sequence with:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run test:local
+```
 
-## Learn More
+This rebuilds the local database from versioned migrations, loads deterministic
+synthetic fixtures, runs pgTAP and application smoke tests, then runs lint and
+the production build. Target guards stop development, seed, and test commands
+before connection when a remote Supabase or Postgres host is configured.
 
-To learn more about Next.js, take a look at the following resources:
+The start script creates a dedicated `pilotseal-local` Docker network whose
+published ports bind to `127.0.0.1`. Every database lifecycle and test command
+uses that same network explicitly. Stop the stack when it is not in use:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run db:local:stop
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment policy
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Do not deploy unless the user explicitly requests it. Production deployment,
+release, or production-branch merge additionally requires an impact statement,
+backup/rollback plan, and explicit confirmation. Use
+`npm run check:production-deploy` as the final deployment authorization guard.

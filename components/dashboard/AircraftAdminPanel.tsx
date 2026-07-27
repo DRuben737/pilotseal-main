@@ -5,6 +5,15 @@ import { createPortal } from "react-dom";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import {
+  AdminDataTable,
+  AdminPageHeader,
+  CompactButton,
+  CompactToolbar,
+  DetailDrawer,
+  EmptyState,
+  StatusBadge,
+} from "@/components/admin/AdminConsole";
+import {
   approveAircraftUpdateRequest,
   createAircraft,
   createAircraftModel,
@@ -765,14 +774,14 @@ export default function AircraftAdminPanel() {
     setModelForm(nextForm);
     setModelErrors({});
     setShowModelForm(true);
-    setShowModelsModal(true);
+    setShowModelsModal(false);
   }
 
   function openAircraftEditor(nextForm = emptyAircraftForm) {
     setAircraftForm(nextForm);
     setAircraftErrors({});
     setShowAircraftForm(true);
-    setShowAircraftModal(true);
+    setShowAircraftModal(false);
   }
 
   useEffect(() => {
@@ -2003,59 +2012,57 @@ export default function AircraftAdminPanel() {
 
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-2">
-        <section className="saas-panel">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="saas-subsection-title">Aircraft Models</h3>
-              <p className="saas-meta-text mt-2">{models.length} saved</p>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setShowModelsModal(true)}
-            >
-              Manage models
-            </button>
-          </div>
-        </section>
+      <div className="grid gap-3">
+        <AdminPageHeader eyebrow="Platform administration" title="Aircraft Library" description="Platform aircraft models, fleet records, organization access, and submitted weight-and-balance changes." />
+        <AdminDataTable label="Platform aircraft models">
+          <thead>
+            <tr><th colSpan={5} className="p-0 font-normal"><CompactToolbar resultLabel={`${models.length} models`} actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} /></th></tr>
+            <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Model</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Envelope</th><th className="px-3 py-2">Fuel burn</th><th className="px-3 py-2 text-right">Actions</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {!models.length ? <tr><td colSpan={5}><EmptyState title="No aircraft models" description="Add the first platform aircraft model." /></td></tr> : null}
+            {models.map((model) => <tr key={model.id} className="hover:bg-blue-50/40"><td className="px-3 py-2 font-semibold text-slate-950">{model.name}</td><td className="px-3 py-2 text-xs text-slate-600">{model.category === "helicopter" ? "Helicopter" : "Airplane"}</td><td className="px-3 py-2 text-xs text-slate-600">{model.chart_type ?? "1d1p"}</td><td className="px-3 py-2 text-xs text-slate-600">{typeof model.avg_fuel_burn_rate === "number" ? `${model.avg_fuel_burn_rate} gph` : "—"}</td><td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" onClick={() => openModelEditor(normalizeModelForm(model))}>Edit</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleDeleteModel(model.id)}>Delete</CompactButton></div></td></tr>)}
+          </tbody>
+        </AdminDataTable>
 
-        <section className="saas-panel">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="saas-subsection-title">Fleet Aircraft</h3>
-              <p className="saas-meta-text mt-2">{aircraft.length} aircraft</p>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setShowAircraftModal(true)}
-            >
-              Manage aircraft
-            </button>
-          </div>
-        </section>
+        <AdminDataTable label="Platform fleet aircraft">
+          <thead>
+            <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${aircraft.length} aircraft`} actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} /></th></tr>
+            <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Tail</th><th className="px-3 py-2">Model</th><th className="px-3 py-2">Visibility</th><th className="px-3 py-2">Empty weight</th><th className="px-3 py-2">Empty arm</th><th className="px-3 py-2">Organizations</th><th className="px-3 py-2 text-right">Actions</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {!aircraft.length ? <tr><td colSpan={7}><EmptyState title="No fleet aircraft" description="Add the first platform aircraft record." /></td></tr> : null}
+            {aircraft.map((item) => {
+              const assignmentCount = organizationAssignments.filter((assignment) => assignment.aircraft_id === item.id).length;
+              return <tr key={item.id} className="hover:bg-blue-50/40"><td className="px-3 py-2 font-semibold text-slate-950">{item.tail_number ?? item.name}</td><td className="px-3 py-2 text-xs text-slate-600">{modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "—"}</td><td className="px-3 py-2"><StatusBadge tone={item.visibility === "private" ? "warning" : "info"}>{item.visibility === "private" ? "Private" : "Shared"}</StatusBadge></td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{item.empty_weight ?? "—"}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{item.empty_arm ?? "—"}</td><td className="px-3 py-2 text-center text-xs tabular-nums text-slate-600">{assignmentCount}</td><td className="px-3 py-2"><div className="flex justify-end gap-1">{item.visibility === "private" && item.owner_user_id === session?.user?.id ? <CompactButton type="button" onClick={() => openOrganizationAssignments(item)}>Organizations</CompactButton> : null}<CompactButton type="button" onClick={() => openAircraftEditor(normalizeAircraftForm(item))}>Edit</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleDeleteAircraft(item.id)}>Delete</CompactButton></div></td></tr>;
+            })}
+          </tbody>
+        </AdminDataTable>
 
-        <section className="saas-panel md:col-span-2">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="saas-subsection-title">Pending Weight-and-Balance Changes</h3>
-              <p className="saas-meta-text mt-2">
-                {updateRequests.filter((request) => request.status === "pending").length} pending
-              </p>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setShowRequestsModal(true)}
-            >
-              Review
-            </button>
-          </div>
-        </section>
+        <AdminDataTable label="Pending weight and balance changes">
+          <thead>
+            <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${updateRequests.filter((request) => request.status === "pending").length} pending`} /></th></tr>
+            <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Aircraft</th><th className="px-3 py-2">Submitted by</th><th className="px-3 py-2">Empty weight</th><th className="px-3 py-2">Arm</th><th className="px-3 py-2">Lat arm</th><th className="px-3 py-2">Note</th><th className="px-3 py-2 text-right">Review</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {!updateRequests.some((request) => request.status === "pending") ? <tr><td colSpan={7}><EmptyState title="No pending changes" description="Submitted weight-and-balance changes will appear here." /></td></tr> : null}
+            {updateRequests.filter((request) => request.status === "pending").map((request) => <tr key={request.id} className="hover:bg-blue-50/40"><td className="px-3 py-2 font-semibold text-slate-950">{request.aircraft_tail_number}</td><td className="px-3 py-2 text-xs text-slate-600">{request.submitted_by_label}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_weight ?? "—"} → {request.proposed_empty_weight ?? "—"}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_arm ?? "—"} → {request.proposed_empty_arm ?? "—"}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_lat_arm ?? "—"} → {request.proposed_empty_lat_arm ?? "—"}</td><td className="max-w-48 truncate px-3 py-2 text-xs text-slate-600">{request.note || "—"}</td><td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" tone="primary" disabled={saving} onClick={() => void handleApproveRequest(request)}>Approve</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRejectRequest(request)}>Reject</CompactButton></div></td></tr>)}
+          </tbody>
+        </AdminDataTable>
       </div>
 
       {status ? <p className="saas-meta-text">{status}</p> : null}
+
+      <DetailDrawer open={showModelForm} width="wide" onClose={() => setShowModelForm(false)} title={modelForm.id ? "Edit aircraft model" : "Add aircraft model"} description="Model identity, loading locations, and approved envelopes.">
+        {renderModelForm()}
+      </DetailDrawer>
+      <DetailDrawer open={showAircraftForm} width="wide" onClose={() => setShowAircraftForm(false)} title={aircraftForm.id ? "Edit aircraft" : "Add aircraft"} description="Aircraft identity and weight-and-balance record.">
+        {renderAircraftForm()}
+      </DetailDrawer>
+      <DetailDrawer open={Boolean(assigningAircraftId)} onClose={() => { setAssigningAircraftId(""); setSelectedOrganizationIds([]); }} title="Organization access" description="Choose every organization that may use this private aircraft.">
+        <div className="divide-y divide-slate-100 border border-slate-200">{organizations.map((organization) => <label key={organization.id} className="flex min-h-10 cursor-pointer items-center gap-3 px-3 text-sm hover:bg-slate-50"><input type="checkbox" checked={selectedOrganizationIds.includes(organization.id)} onChange={() => toggleOrganizationAssignment(organization.id)} /><span className="flex-1 font-medium text-slate-900">{organization.name}</span><span className="text-xs text-slate-500">{organization.owner_display_name || organization.owner_email || "No owner"}</span></label>)}</div>
+        <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => { setAssigningAircraftId(""); setSelectedOrganizationIds([]); }}>Cancel</CompactButton><CompactButton type="button" tone="primary" disabled={saving} onClick={() => void handleSaveOrganizationAssignments()}>{saving ? "Saving…" : "Save access"}</CompactButton></div>
+      </DetailDrawer>
 
       {showModelsModal && portalRoot
         ? createPortal(

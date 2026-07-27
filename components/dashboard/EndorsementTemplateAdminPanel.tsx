@@ -639,8 +639,8 @@ export default function EndorsementTemplateAdminPanel() {
 
       {editorOpen
         ? renderOverlay(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/50">
+          <div role="dialog" aria-modal="true" className="h-full w-full max-w-4xl overflow-auto bg-white p-5 shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="eyebrow">{form.id ? "Edit endorsement" : "New endorsement"}</p>
@@ -777,8 +777,8 @@ export default function EndorsementTemplateAdminPanel() {
 
       {sourceEditorOpen
         ? renderOverlay(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
-              <div className="max-h-[86vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/50">
+              <div role="dialog" aria-modal="true" className="h-full w-full max-w-2xl overflow-auto bg-white p-5 shadow-2xl">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="eyebrow">Source details</p>

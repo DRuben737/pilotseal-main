@@ -91,12 +91,36 @@ This document is the decision source for the next PilotSeal style pass. Follow t
   - Use a top-level portal when a modal is inside a layout that may create a stacking context.
   - Do not rely on increasing `z-index` alone when the parent container can still trap the modal.
 
+#### Compact Admin Grid
+
+Use **Compact Admin Grid** for every Platform Admin and Organization Admin data-entry surface.
+
+| User task | Interface |
+| --- | --- |
+| Scan or compare records | Compact data table with 32–36px rows |
+| Search, filter, paginate | One compact toolbar directly above the table |
+| Add or edit a record | Right-side detail drawer containing worksheet-style input grids |
+| Change one low-risk field | Small anchored quick-edit popover with an explicit Apply button |
+| Delete, revoke, transfer, or change permissions | Confirmation dialog after the user has supplied any required reason |
+| Read a report or supporting detail | Preview drawer or browser preview; no edit controls unless explicitly opened |
+
+- Keep the main page limited to the page title, compact toolbar, data table, and short status/error messages.
+- Use small table actions (`32px` minimum height on desktop) and concise labels.
+- Worksheet inputs use compact cells, visible column headings, and one trailing input row only when repeated rows are supported.
+- Never place a large data-entry form directly on the page.
+- Never place a data-entry form inside a downward-opening accordion.
+- Display-only sections may collapse when this materially improves scanning.
+- Drawers must close with Escape, trap keyboard focus while open, and restore focus to the opening control.
+- Quick-edit popovers must close with Escape or outside click, preserve the current value until Apply, and keep errors visible without closing.
+- On narrow screens, tables scroll inside their own surface; the page itself must not gain horizontal overflow. Drawers use the full viewport width.
+- Preserve business rules, permissions, audit behavior, and data sources while changing presentation.
+
 ### Endorsement Management
 
 - `/dashboard/admin/endorsements` is the place to maintain generator endorsement wording.
 - The management page should only show the endorsement list, search, and top-level actions.
   - Do not show an always-open edit form under the list.
-  - Add and edit flows open in modals.
+  - Add and edit flows open in right-side drawers.
 - Categories are shown as collapsible groups.
   - Groups are collapsed by default.
   - Opening one group closes the previously open group.

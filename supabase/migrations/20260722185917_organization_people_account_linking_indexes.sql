@@ -1,0 +1,3 @@
+-- Local baseline marker for production migration 20260722185917_organization_people_account_linking_indexes.sql.
+-- The schema-only baseline in 20260707193726_aircraft_visibility.sql already includes this migration.
+-- Original SQL is preserved under supabase/archive/remote-migrations-fetched/.

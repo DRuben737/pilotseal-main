@@ -1,0 +1,3 @@
+-- Local baseline marker for production migration 20260723132807_separate_public_and_authenticated_aircraft_read_policies.sql.
+-- The schema-only baseline in 20260707193726_aircraft_visibility.sql already includes this migration.
+-- Original SQL is preserved under supabase/archive/remote-migrations-fetched/.

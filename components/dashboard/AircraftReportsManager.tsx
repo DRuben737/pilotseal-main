@@ -371,7 +371,7 @@ export default function AircraftReportsManager() {
             </p>
           </div>
           <button className="primary-button" type="button" onClick={startReport}>
-            New aircraft report
+            New discrepancy report
           </button>
         </div>
 

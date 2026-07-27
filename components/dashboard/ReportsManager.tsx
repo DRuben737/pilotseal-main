@@ -1,58 +1,54 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import AircraftReportsManager from "@/components/dashboard/AircraftReportsManager";
 import AsrReportsManager from "@/components/dashboard/AsrReportsManager";
 
 export default function ReportsManager() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeType = searchParams.get("type") === "asr" ? "asr" : "aircraft";
 
   return (
     <div className="space-y-4">
+      <header className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_6px_20px_rgba(15,23,42,0.04)]">
+        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-blue-700">
+          Safety reporting
+        </p>
+        <h1 className="mt-1 text-lg font-semibold text-slate-950">Safety Reports</h1>
+        <p className="mt-1 text-xs text-slate-600">
+          Submit an aircraft discrepancy or an internal ASR report.
+        </p>
+      </header>
       <nav
-        className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 sm:grid-cols-2"
+        className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
         aria-label="Report type"
       >
         <button
           type="button"
-          onClick={() => router.replace("/dashboard/reports?type=aircraft")}
+          onClick={() => router.replace(`${pathname}?type=aircraft`)}
           aria-pressed={activeType === "aircraft"}
-          className={`rounded-xl px-4 py-3 text-left transition-colors ${
+          className={`min-h-8 shrink-0 rounded-lg px-3 text-xs font-semibold transition-colors ${
             activeType === "aircraft"
-              ? "bg-blue-600 text-white"
-              : "text-slate-700 hover:bg-slate-50"
+              ? "bg-blue-700 text-white"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
           }`}
         >
-          <span className="block text-sm font-semibold">Aircraft issues</span>
-          <span
-            className={`mt-1 block text-xs ${
-              activeType === "aircraft" ? "text-blue-100" : "text-slate-500"
-            }`}
-          >
-            Report a defect, damage, or maintenance concern.
-          </span>
+          Aircraft Discrepancy Reports
         </button>
         <button
           type="button"
-          onClick={() => router.replace("/dashboard/reports?type=asr")}
+          onClick={() => router.replace(`${pathname}?type=asr`)}
           aria-pressed={activeType === "asr"}
-          className={`rounded-xl px-4 py-3 text-left transition-colors ${
+          className={`min-h-8 shrink-0 rounded-lg px-3 text-xs font-semibold transition-colors ${
             activeType === "asr"
-              ? "bg-blue-600 text-white"
-              : "text-slate-700 hover:bg-slate-50"
+              ? "bg-blue-700 text-white"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
           }`}
         >
-          <span className="block text-sm font-semibold">Safety reports (ASR)</span>
-          <span
-            className={`mt-1 block text-xs ${
-              activeType === "asr" ? "text-blue-100" : "text-slate-500"
-            }`}
-          >
-            Record an internal safety event and its reviews.
-          </span>
+          ASR Reports
         </button>
       </nav>
       {activeType === "aircraft" ? <AircraftReportsManager /> : <AsrReportsManager />}

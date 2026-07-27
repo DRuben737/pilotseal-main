@@ -522,6 +522,35 @@ export async function saveOrganizationAircraftAtomic(
   return String(data ?? "");
 }
 
+export async function updateOrganizationAircraftStatus(input: {
+  organizationId: string;
+  aircraftId: string;
+  operationalStatus: AircraftOperationalStatus;
+  operationalStatusNote?: string | null;
+}) {
+  const supabase = getSupabaseClient();
+  const note = input.operationalStatusNote?.trim() || null;
+  if (input.operationalStatus === "grounded" && (note?.length ?? 0) < 3) {
+    throw new Error("Enter at least 3 characters explaining why this aircraft is grounded.");
+  }
+  const { data, error } = await supabase.rpc("update_organization_aircraft_status", {
+    p_organization_id: input.organizationId,
+    p_aircraft_id: input.aircraftId,
+    p_operational_status: input.operationalStatus,
+    p_operational_status_note: note,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    operational_status: normalizeOperationalStatus(row?.operational_status),
+    operational_status_note:
+      typeof row?.operational_status_note === "string"
+        ? row.operational_status_note
+        : null,
+    updated_at: toDateString(row?.updated_at),
+  };
+}
+
 export async function updateOrganizationAircraft(
   organizationId: string,
   aircraftId: string,
@@ -664,6 +693,7 @@ export async function createAircraftModel(input: {
   organization_id?: string | null;
   name: string;
   category: string;
+  chart_type?: AircraftChartType | null;
   avg_fuel_burn_rate?: number | null;
   max_weight?: number | null;
   stations: AircraftStation[];
@@ -674,6 +704,7 @@ export async function createAircraftModel(input: {
     organization_id: input.organization_id ?? null,
     name: input.name,
     category: input.category,
+    chart_type: input.chart_type ?? null,
     avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
     max_weight: input.max_weight ?? null,
     stations: input.stations,
@@ -715,6 +746,7 @@ export async function updateAircraftModel(
   input: {
     name: string;
     category: string;
+    chart_type?: AircraftChartType | null;
     avg_fuel_burn_rate?: number | null;
     max_weight?: number | null;
     stations: AircraftStation[];
@@ -725,6 +757,7 @@ export async function updateAircraftModel(
   const payload = {
     name: input.name,
     category: input.category,
+    chart_type: input.chart_type ?? null,
     avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
     max_weight: input.max_weight ?? null,
     stations: input.stations,
@@ -1793,4 +1826,10 @@ function toNumber(value: unknown) {
     : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))
       ? Number(value)
       : null;
+}
+
+function normalizeOperationalStatus(value: unknown): AircraftOperationalStatus {
+  return value === "away" || value === "in_maintenance" || value === "grounded"
+    ? value
+    : "available";
 }

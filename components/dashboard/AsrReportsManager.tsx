@@ -621,7 +621,7 @@ export default function AsrReportsManager() {
               disabled={showForm || busy}
               title={showForm ? "Save and close the open draft first." : undefined}
             >
-              New ASR
+              New ASR report
             </button>
           </div>
         </div>

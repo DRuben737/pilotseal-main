@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { AdminCollapsibleSection } from "@/components/admin/AdminConsole";
+import { AdminDataTable, DetailDrawer } from "@/components/admin/AdminConsole";
 import type { AircraftModelRecord, AircraftRecord } from "@/lib/aircraft";
 import {
   deleteAircraftInspectionAssignment,
@@ -52,7 +52,7 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
   const [assignmentForm, setAssignmentForm] = useState(emptyAssignment);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const [openPanels, setOpenPanels] = useState<Set<string>>(() => new Set());
+  const [activeDrawer, setActiveDrawer] = useState<"definition" | "assignment" | null>(null);
 
   const aircraftById = useMemo(
     () => new Map(aircraft.map((item) => [item.id, item])),
@@ -79,15 +79,6 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
     },
     [aircraft, selectedDefinition]
   );
-
-  function togglePanel(key: string) {
-    setOpenPanels((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   async function reload() {
     const [nextDefinitions, assignmentGroups] = await Promise.all([
@@ -146,7 +137,7 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
       setDefinitionForm(emptyDefinition);
       await reload();
       setFeedback({ tone: "success", message: "Maintenance item saved. You can now add it to an aircraft." });
-      setOpenPanels((current) => new Set(current).add("assignments"));
+      setActiveDrawer(null);
     } catch (error) {
       setFeedback({
         tone: "error",
@@ -187,7 +178,7 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
       setAssignmentForm(emptyAssignment);
       await reload();
       setFeedback({ tone: "success", message: "Maintenance due limit added to the aircraft." });
-      setOpenPanels((current) => new Set(current).add("saved"));
+      setActiveDrawer(null);
     } catch (error) {
       setFeedback({
         tone: "error",
@@ -256,17 +247,92 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-3">
-        <AdminCollapsibleSection
-          id="new-inspection-definition"
-          title="1. Create a maintenance item"
-          description="Enter what must be completed and how its due limit is measured."
-          summary={`${definitions.length} saved`}
-          open={openPanels.has("definitions")}
-          onToggle={() => togglePanel("definitions")}
+      <div className="mt-2 flex flex-wrap justify-end gap-2">
+        <button
+          className="cursor-pointer rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+          type="button"
+          onClick={() => setActiveDrawer("definition")}
         >
+          Add maintenance item
+        </button>
+        <button
+          className="cursor-pointer rounded-md border border-blue-600 bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          type="button"
+          disabled={activeDefinitions.length === 0}
+          onClick={() => setActiveDrawer("assignment")}
+        >
+          Assign to aircraft
+        </button>
+      </div>
+
+      <div className="mt-2 grid gap-3">
+        <AdminDataTable label="Maintenance items">
+          <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+            <tr>
+              <th className="border-b border-slate-200 px-3 py-2">Maintenance item</th>
+              <th className="border-b border-slate-200 px-3 py-2">Tracked by</th>
+              <th className="border-b border-slate-200 px-3 py-2">Aircraft models</th>
+              <th className="border-b border-slate-200 px-3 py-2">Warning</th>
+              <th className="border-b border-slate-200 px-3 py-2">Aircraft</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {definitions.length === 0 ? (
+              <tr><td className="px-3 py-4 text-sm text-slate-500" colSpan={6}>No additional maintenance items.</td></tr>
+            ) : definitions.map((definition) => (
+              <tr key={definition.id} className="hover:bg-blue-50/40">
+                <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-900">{definition.name}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-700">{formatBasisCompact(definition.basis)}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-700">{definition.model_id ? modelById.get(definition.model_id)?.name ?? "Selected model" : "All models"}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-700">{formatWarning(definition)}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-xs tabular-nums text-slate-700">{assignments.filter((item) => item.definition_id === definition.id).length}</td>
+                <td className="border-b border-slate-100 px-3 py-1.5 text-right">
+                  <button className="cursor-pointer rounded px-2 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50" type="button" disabled={saving} onClick={() => void removeDefinition(definition)}>Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </AdminDataTable>
+
+        <AdminDataTable label="Aircraft maintenance due limits">
+          <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+            <tr>
+              <th className="border-b border-slate-200 px-3 py-2">Aircraft</th>
+              <th className="border-b border-slate-200 px-3 py-2">Maintenance item</th>
+              <th className="border-b border-slate-200 px-3 py-2">Due</th>
+              <th className="border-b border-slate-200 px-3 py-2">Note</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {assignments.length === 0 ? (
+              <tr><td className="px-3 py-4 text-sm text-slate-500" colSpan={5}>No aircraft due limits.</td></tr>
+            ) : assignments.map((assignment) => {
+              const definition = definitions.find((item) => item.id === assignment.definition_id);
+              return (
+                <tr key={assignment.id} className="hover:bg-blue-50/40">
+                  <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-900">{aircraftById.get(assignment.aircraft_id)?.tail_number ?? "Aircraft"}</td>
+                  <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-700">{definition?.name ?? "Maintenance item"}</td>
+                  <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-700">{formatDue(assignment, definition?.basis ?? "calendar")}</td>
+                  <td className="max-w-64 truncate border-b border-slate-100 px-3 py-2 text-xs text-slate-600" title={assignment.notes ?? ""}>{assignment.notes || "—"}</td>
+                  <td className="border-b border-slate-100 px-3 py-1.5 text-right">
+                    <button className="cursor-pointer rounded px-2 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50" type="button" disabled={saving} onClick={() => void removeAssignment(assignment)}>Remove</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </AdminDataTable>
+      </div>
+
+      <DetailDrawer
+        open={activeDrawer === "definition"}
+        title="Add maintenance item"
+        description="Create a reusable maintenance requirement."
+        onClose={() => setActiveDrawer(null)}
+      >
         <form className="grid gap-3" onSubmit={handleSaveDefinition}>
-          <h3 className="text-sm font-semibold text-slate-900">New maintenance item</h3>
           <Field label="What is required?">
             <input value={definitionForm.name} onChange={(event) => setDefinitionForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Main rotor grip inspection" required />
           </Field>
@@ -278,131 +344,58 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
               <option value="whichever_first">By date and meter — whichever comes first</option>
             </select>
           </Field>
-          <Field label="Which aircraft models does this apply to?">
+          <Field label="Aircraft models">
             <select value={definitionForm.model_id} onChange={(event) => setDefinitionForm((current) => ({ ...current, model_id: event.target.value }))}>
               <option value="">Every aircraft model</option>
               {models.filter((model) => !model.organization_id || model.organization_id === organizationId).map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
             </select>
           </Field>
           <div className={`grid gap-3 ${definitionForm.basis === "whichever_first" ? "sm:grid-cols-2" : ""}`}>
-            {usesCalendar(definitionForm.basis) ? (
-              <Field label="Warn this many days before it is due">
-                <input type="number" min="0" value={definitionForm.warning_days} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_days: event.target.value }))} />
-              </Field>
-            ) : null}
-            {usesMeter(definitionForm.basis) ? (
-              <Field label="Warn this many hours before it is due">
-                <input type="number" min="0" step="any" value={definitionForm.warning_hours} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_hours: event.target.value }))} />
-              </Field>
-            ) : null}
+            {usesCalendar(definitionForm.basis) ? <Field label="Warning days"><input type="number" min="0" value={definitionForm.warning_days} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_days: event.target.value }))} /></Field> : null}
+            {usesMeter(definitionForm.basis) ? <Field label="Warning hours"><input type="number" min="0" step="any" value={definitionForm.warning_hours} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_hours: event.target.value }))} /></Field> : null}
           </div>
-          <Field label="Instructions or reference (optional)">
-            <textarea rows={2} value={definitionForm.notes} onChange={(event) => setDefinitionForm((current) => ({ ...current, notes: event.target.value }))} placeholder="e.g. AD number, service bulletin, or inspection instructions" />
+          <Field label="Instructions or reference">
+            <textarea rows={3} value={definitionForm.notes} onChange={(event) => setDefinitionForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional AD number, service bulletin, or instructions" />
           </Field>
-          <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save maintenance item"}</button>
+          <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+            <button className="ghost-button" type="button" onClick={() => setActiveDrawer(null)}>Cancel</button>
+            <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save item"}</button>
+          </div>
         </form>
-        </AdminCollapsibleSection>
+      </DetailDrawer>
 
-        <AdminCollapsibleSection
-          id="assign-custom-inspection"
-          title="2. Add it to an aircraft"
-          description="Choose the aircraft and enter its next due limit."
-          summary={`${assignments.length} aircraft limits`}
-          open={openPanels.has("assignments")}
-          onToggle={() => togglePanel("assignments")}
-        >
+      <DetailDrawer
+        open={activeDrawer === "assignment"}
+        title="Assign maintenance to aircraft"
+        description="Set the next due date or meter reading."
+        onClose={() => setActiveDrawer(null)}
+      >
         <form className="grid gap-3" onSubmit={handleSaveAssignment}>
-          <h3 className="text-sm font-semibold text-slate-900">Set the next due limit</h3>
           <Field label="Maintenance item">
-            <select
-              value={assignmentForm.definition_id}
-              onChange={(event) => setAssignmentForm((current) => ({
-                ...current,
-                definition_id: event.target.value,
-                aircraft_id: "",
-                due_date: "",
-                due_meter: "",
-              }))}
-              required
-            >
+            <select value={assignmentForm.definition_id} onChange={(event) => setAssignmentForm((current) => ({ ...current, definition_id: event.target.value, aircraft_id: "", due_date: "", due_meter: "" }))} required>
               <option value="">Choose a maintenance item</option>
               {activeDefinitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.name}</option>)}
             </select>
           </Field>
-          {activeDefinitions.length === 0 ? (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">Create a maintenance item in step 1 before adding it to an aircraft.</p>
-          ) : null}
-          <Field label={selectedDefinition?.model_id ? `Aircraft (${modelById.get(selectedDefinition.model_id)?.name ?? "matching model"} only)` : "Aircraft"}>
+          <Field label={selectedDefinition?.model_id ? `Aircraft — ${modelById.get(selectedDefinition.model_id)?.name ?? "matching model"}` : "Aircraft"}>
             <select disabled={!selectedDefinition} value={assignmentForm.aircraft_id} onChange={(event) => setAssignmentForm((current) => ({ ...current, aircraft_id: event.target.value }))} required>
               <option value="">{selectedDefinition ? "Choose an aircraft" : "Choose a maintenance item first"}</option>
               {applicableAircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}</option>)}
             </select>
           </Field>
-          {selectedDefinition && applicableAircraft.length === 0 ? (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">No aircraft in this fleet match the model selected for this maintenance item.</p>
-          ) : null}
           <div className={`grid gap-3 ${selectedDefinition?.basis === "whichever_first" ? "sm:grid-cols-2" : ""}`}>
-            {selectedDefinition && usesCalendar(selectedDefinition.basis) ? (
-              <Field label="Next due date">
-                <input type="date" value={assignmentForm.due_date} onChange={(event) => setAssignmentForm((current) => ({ ...current, due_date: event.target.value }))} required />
-              </Field>
-            ) : null}
-            {selectedDefinition && usesMeter(selectedDefinition.basis) ? (
-              <Field label={`Due at ${meterName(selectedDefinition.basis)} reading`}>
-                <input type="number" min="0" step="any" value={assignmentForm.due_meter} onChange={(event) => setAssignmentForm((current) => ({ ...current, due_meter: event.target.value }))} placeholder="e.g. 2150.0" required />
-              </Field>
-            ) : null}
+            {selectedDefinition && usesCalendar(selectedDefinition.basis) ? <Field label="Next due date"><input type="date" value={assignmentForm.due_date} onChange={(event) => setAssignmentForm((current) => ({ ...current, due_date: event.target.value }))} required /></Field> : null}
+            {selectedDefinition && usesMeter(selectedDefinition.basis) ? <Field label={`Due at ${meterName(selectedDefinition.basis)} reading`}><input type="number" min="0" step="any" value={assignmentForm.due_meter} onChange={(event) => setAssignmentForm((current) => ({ ...current, due_meter: event.target.value }))} placeholder="e.g. 2150.0" required /></Field> : null}
           </div>
-          <Field label="Note for this aircraft (optional)">
-            <textarea rows={2} value={assignmentForm.notes} onChange={(event) => setAssignmentForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Add aircraft-specific context" />
+          <Field label="Aircraft note">
+            <textarea rows={3} value={assignmentForm.notes} onChange={(event) => setAssignmentForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional aircraft-specific context" />
           </Field>
-          <button className="primary-button" type="submit" disabled={saving || activeDefinitions.length === 0 || applicableAircraft.length === 0}>
-            {saving ? "Saving..." : "Add due limit to aircraft"}
-          </button>
-        </form>
-        </AdminCollapsibleSection>
-
-        <AdminCollapsibleSection
-          id="saved-custom-inspections"
-          title="3. Review saved requirements"
-          description="See what applies to each aircraft and remove limits that are no longer used."
-          summary={`${definitions.length} items · ${assignments.length} aircraft limits`}
-          open={openPanels.has("saved")}
-          onToggle={() => togglePanel("saved")}
-        >
-      <div className="grid gap-3">
-        {definitions.length === 0 ? <p className="saas-empty-state">No additional maintenance requirements have been created.</p> : null}
-        {definitions.map((definition) => (
-          <div key={definition.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{definition.name}</p>
-                <p className="saas-meta-text">{formatBasis(definition.basis)} · {definition.model_id ? modelById.get(definition.model_id)?.name ?? "Selected model" : "Every aircraft model"}</p>
-                <p className="saas-meta-text mt-1">{formatWarning(definition)}</p>
-                {definition.notes ? <p className="mt-2 text-sm text-slate-700">{definition.notes}</p> : null}
-              </div>
-              <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void removeDefinition(definition)}>Delete item</button>
-            </div>
-            <div className="mt-3 grid gap-2">
-              {assignments.filter((assignment) => assignment.definition_id === definition.id).length === 0 ? (
-                <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">Not added to any aircraft yet.</p>
-              ) : null}
-              {assignments.filter((assignment) => assignment.definition_id === definition.id).map((assignment) => (
-                <div key={assignment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                  <span>
-                    <strong>{aircraftById.get(assignment.aircraft_id)?.tail_number ?? "Aircraft"}</strong>
-                    {" · "}
-                    {formatDue(assignment, definition.basis)}
-                  </span>
-                  <button className="ghost-button" type="button" disabled={saving} onClick={() => void removeAssignment(assignment)}>Remove from aircraft</button>
-                </div>
-              ))}
-            </div>
+          <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+            <button className="ghost-button" type="button" onClick={() => setActiveDrawer(null)}>Cancel</button>
+            <button className="primary-button" type="submit" disabled={saving || activeDefinitions.length === 0 || applicableAircraft.length === 0}>{saving ? "Saving..." : "Assign"}</button>
           </div>
-        ))}
-      </div>
-        </AdminCollapsibleSection>
-      </div>
+        </form>
+      </DetailDrawer>
     </section>
   );
 }
@@ -418,11 +411,11 @@ function optionalNonNegativeNumber(value: string, label: string) {
   return parsed;
 }
 
-function formatBasis(value: InspectionBasis) {
-  if (value === "calendar") return "Tracked by calendar date";
-  if (value === "hobbs") return "Tracked by Hobbs reading";
-  if (value === "tach") return "Tracked by tachometer reading";
-  return "Date and meter — whichever comes first";
+function formatBasisCompact(value: InspectionBasis) {
+  if (value === "calendar") return "Calendar";
+  if (value === "hobbs") return "Hobbs";
+  if (value === "tach") return "Tach";
+  return "Date or meter";
 }
 
 function usesCalendar(value: InspectionBasis) {

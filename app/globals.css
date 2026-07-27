@@ -20,6 +20,51 @@
   --radius-xl: 20px;
 }
 
+@media print {
+  @page {
+    size: landscape;
+    margin: 0.35in;
+  }
+
+  body:has(.fleet-report-print-preview) > *:not([role="presentation"]) {
+    display: none !important;
+  }
+
+  body > [role="presentation"]:has(.fleet-report-print-preview) {
+    position: static !important;
+    display: block !important;
+  }
+
+  body > [role="presentation"]:has(.fleet-report-print-preview) > button,
+  body > [role="presentation"]:has(.fleet-report-print-preview) [role="dialog"] > header {
+    display: none !important;
+  }
+
+  body > [role="presentation"]:has(.fleet-report-print-preview) [role="dialog"] {
+    position: static !important;
+    max-width: none !important;
+    box-shadow: none !important;
+  }
+
+  body > [role="presentation"]:has(.fleet-report-print-preview) [role="dialog"] > div {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .fleet-report-print-preview {
+    overflow: visible !important;
+    border: 0 !important;
+    background: white !important;
+    padding: 0 !important;
+  }
+
+  .fleet-report-print-preview > section {
+    min-width: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

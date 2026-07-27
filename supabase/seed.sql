@@ -1,0 +1,8 @@
+-- Intentionally contains no schema changes and no production-derived data.
+--
+-- Login-capable synthetic users and related application fixtures are created
+-- after `supabase db reset --local` by:
+--
+--   npm run seed:local
+--
+-- That script uses only the local Auth Admin API and refuses non-loopback URLs.
