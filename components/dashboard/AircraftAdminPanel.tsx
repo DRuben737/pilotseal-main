@@ -12,6 +12,10 @@ import {
   DetailDrawer,
   EmptyState,
   StatusBadge,
+  WorksheetCell,
+  WorksheetGrid,
+  WorksheetHeader,
+  worksheetInputClass,
 } from "@/components/admin/AdminConsole";
 import {
   approveAircraftUpdateRequest,
@@ -163,7 +167,15 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
             latArm: station.latArm != null ? String(station.latArm) : "",
             weightPerGallon: station.weightPerGallon != null ? String(station.weightPerGallon) : "",
             fixedWeight: station.fixedWeight != null ? String(station.fixedWeight) : "",
-            maxWeight: station.maxWeight != null ? String(station.maxWeight) : "",
+            maxWeight:
+              station.maxWeight != null &&
+              station.kind === "fuel" &&
+              station.weightPerGallon != null &&
+              station.weightPerGallon > 0
+                ? String(station.maxWeight / station.weightPerGallon)
+                : station.maxWeight != null
+                  ? String(station.maxWeight)
+                  : "",
             inputType: station.inputType === "checkbox" ? "checkbox" : "number",
             crewRole:
               station.crewRole === "pilot" || station.crewRole === "copilot"
@@ -943,7 +955,7 @@ export default function AircraftAdminPanel() {
         return {
           id: getUniqueStationId(station, stationIndex, usedStationIds),
           name: station.name.trim(),
-          kind: inferAircraftStationKind({
+          kind: station.kind || inferAircraftStationKind({
             ...station,
             kind: undefined,
             weightPerGallon,
@@ -952,7 +964,12 @@ export default function AircraftAdminPanel() {
           latArm: toOptionalNumber(station.latArm),
           weightPerGallon,
           fixedWeight: toOptionalNumber(station.fixedWeight),
-          maxWeight: toOptionalNumber(station.maxWeight),
+          maxWeight:
+            station.kind === "fuel" &&
+            toOptionalNumber(station.maxWeight) != null &&
+            weightPerGallon != null
+              ? Number(toOptionalNumber(station.maxWeight)) * weightPerGallon
+              : toOptionalNumber(station.maxWeight),
           inputType: station.inputType,
           crewRole: station.crewRole || null,
         };
@@ -1845,6 +1862,548 @@ export default function AircraftAdminPanel() {
     </div>
   );
 
+  const renderCompactModelForm = () => {
+    const controlClass = (error?: string) =>
+      `${worksheetInputClass} ${
+        error ? "bg-rose-50 text-rose-900 ring-1 ring-inset ring-rose-500" : ""
+      }`;
+    const stationGroups: Array<{
+      kind: AircraftStationKind;
+      title: string;
+      itemLabel: string;
+    }> = [
+      { kind: "seat", title: "Seats", itemLabel: "Seat" },
+      { kind: "fuel", title: "Fuel tanks", itemLabel: "Tank" },
+      { kind: "baggage", title: "Baggage / cargo", itemLabel: "Area" },
+      { kind: "equipment", title: "Installed equipment", itemLabel: "Item" },
+    ];
+
+    const addStation = (kind: AircraftStationKind) => {
+      updateModelField("stations", [
+        ...modelForm.stations,
+        {
+          clientKey: crypto.randomUUID(),
+          id: "",
+          name: "",
+          kind,
+          arm: "",
+          latArm: "",
+          weightPerGallon: kind === "fuel" ? "6" : "",
+          fixedWeight: "",
+          maxWeight: "",
+          inputType: "number",
+          crewRole: "",
+        },
+      ]);
+    };
+
+    return (
+      <form
+        className="grid gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSaveModel();
+        }}
+      >
+        {Object.keys(modelErrors).length > 0 ? (
+          <div
+            className="border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900"
+            role="alert"
+          >
+            <p className="font-semibold">Check the highlighted cells.</p>
+            <ul className="mt-1 list-disc pl-4">
+              {Array.from(new Set(Object.values(modelErrors))).slice(0, 5).map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <WorksheetGrid label="Aircraft model details" minWidth={720}>
+          <thead>
+            <tr>
+              <WorksheetHeader>Model</WorksheetHeader>
+              <WorksheetHeader>Aircraft type</WorksheetHeader>
+              <WorksheetHeader>Fuel burn (gph)</WorksheetHeader>
+              <WorksheetHeader>Max takeoff (lb)</WorksheetHeader>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <WorksheetCell>
+                <input
+                  autoFocus
+                  required
+                  aria-label="Aircraft model name"
+                  aria-invalid={Boolean(modelErrors["model.name"])}
+                  className={controlClass(modelErrors["model.name"])}
+                  value={modelForm.name}
+                  onChange={(event) => updateModelField("name", event.target.value)}
+                  placeholder="Cessna 172S"
+                />
+              </WorksheetCell>
+              <WorksheetCell>
+                <select
+                  aria-label="Aircraft type"
+                  className={worksheetInputClass}
+                  value={modelForm.category}
+                  onChange={(event) =>
+                    updateModelField(
+                      "category",
+                      event.target.value as ModelFormState["category"]
+                    )
+                  }
+                >
+                  <option value="airplane">Airplane</option>
+                  <option value="helicopter">Helicopter</option>
+                </select>
+              </WorksheetCell>
+              <WorksheetCell>
+                <input
+                  aria-label="Typical fuel burn in gallons per hour"
+                  aria-invalid={Boolean(modelErrors["model.avg_fuel_burn_rate"])}
+                  className={controlClass(modelErrors["model.avg_fuel_burn_rate"])}
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={modelForm.avg_fuel_burn_rate}
+                  onChange={(event) =>
+                    updateModelField("avg_fuel_burn_rate", event.target.value)
+                  }
+                />
+              </WorksheetCell>
+              <WorksheetCell>
+                <input
+                  aria-label="Maximum takeoff weight in pounds"
+                  aria-invalid={Boolean(modelErrors["model.max_weight"])}
+                  className={controlClass(modelErrors["model.max_weight"])}
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={modelForm.max_weight}
+                  onChange={(event) => updateModelField("max_weight", event.target.value)}
+                />
+              </WorksheetCell>
+            </tr>
+          </tbody>
+        </WorksheetGrid>
+
+        {stationGroups.map(({ kind, title, itemLabel }) => {
+          const rows = modelForm.stations
+            .map((station, index) => ({ station, index }))
+            .filter(({ station }) => station.kind === kind);
+          const columnCount = kind === "baggage" ? 5 : 6;
+
+          return (
+            <section key={kind} className="border border-slate-300 bg-white">
+              <div className="flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-800 px-2 py-1 text-white">
+                <h3 className="text-[11px] font-bold uppercase tracking-wide">{title}</h3>
+                <CompactButton
+                  type="button"
+                  className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                  onClick={() => addStation(kind)}
+                >
+                  Add
+                </CompactButton>
+              </div>
+              <div className="max-w-full overflow-x-auto">
+                <table
+                  aria-label={`${title} worksheet`}
+                  className="w-full min-w-[760px] border-collapse text-left text-xs"
+                >
+                  <thead>
+                    <tr>
+                      <WorksheetHeader>{itemLabel}</WorksheetHeader>
+                      <WorksheetHeader>Arm (in)</WorksheetHeader>
+                      <WorksheetHeader>Lat arm</WorksheetHeader>
+                      {kind === "fuel" ? (
+                        <>
+                          <WorksheetHeader>Capacity (gal)</WorksheetHeader>
+                          <WorksheetHeader>lb/gal</WorksheetHeader>
+                        </>
+                      ) : kind === "equipment" ? (
+                        <>
+                          <WorksheetHeader>Weight (lb)</WorksheetHeader>
+                          <WorksheetHeader>Use</WorksheetHeader>
+                        </>
+                      ) : (
+                        <WorksheetHeader>Max load (lb)</WorksheetHeader>
+                      )}
+                      {kind === "seat" ? <WorksheetHeader>Crew seat</WorksheetHeader> : null}
+                      <WorksheetHeader className="w-20 text-right">Action</WorksheetHeader>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={columnCount}
+                          className="h-8 border-b border-slate-200 px-2 text-xs text-slate-400"
+                        >
+                          No {title.toLowerCase()} entered.
+                        </td>
+                      </tr>
+                    ) : null}
+                    {rows.map(({ station, index }) => {
+                      const prefix = `station.${station.clientKey}`;
+                      return (
+                        <tr key={station.clientKey}>
+                          <WorksheetCell>
+                            <input
+                              aria-label={`${itemLabel} name`}
+                              aria-invalid={Boolean(modelErrors[`${prefix}.name`])}
+                              className={controlClass(modelErrors[`${prefix}.name`])}
+                              value={station.name}
+                              onChange={(event) => updateStation(index, "name", event.target.value)}
+                            />
+                          </WorksheetCell>
+                          <WorksheetCell>
+                            <input
+                              aria-label={`${station.name || itemLabel} arm`}
+                              aria-invalid={Boolean(modelErrors[`${prefix}.arm`])}
+                              className={controlClass(modelErrors[`${prefix}.arm`])}
+                              type="number"
+                              step="any"
+                              value={station.arm}
+                              onChange={(event) => updateStation(index, "arm", event.target.value)}
+                            />
+                          </WorksheetCell>
+                          <WorksheetCell>
+                            <input
+                              aria-label={`${station.name || itemLabel} lateral arm`}
+                              aria-invalid={Boolean(modelErrors[`${prefix}.latArm`])}
+                              className={controlClass(modelErrors[`${prefix}.latArm`])}
+                              type="number"
+                              step="any"
+                              value={station.latArm}
+                              onChange={(event) =>
+                                updateStation(index, "latArm", event.target.value)
+                              }
+                            />
+                          </WorksheetCell>
+                          {kind === "fuel" ? (
+                            <>
+                              <WorksheetCell>
+                                <input
+                                  aria-label={`${station.name || itemLabel} capacity in gallons`}
+                                  aria-invalid={Boolean(modelErrors[`${prefix}.maxWeight`])}
+                                  className={controlClass(modelErrors[`${prefix}.maxWeight`])}
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={station.maxWeight}
+                                  onChange={(event) =>
+                                    updateStation(index, "maxWeight", event.target.value)
+                                  }
+                                />
+                              </WorksheetCell>
+                              <WorksheetCell>
+                                <input
+                                  aria-label={`${station.name || itemLabel} fuel pounds per gallon`}
+                                  aria-invalid={Boolean(
+                                    modelErrors[`${prefix}.weightPerGallon`]
+                                  )}
+                                  className={controlClass(
+                                    modelErrors[`${prefix}.weightPerGallon`]
+                                  )}
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={station.weightPerGallon}
+                                  onChange={(event) =>
+                                    updateStation(
+                                      index,
+                                      "weightPerGallon",
+                                      event.target.value
+                                    )
+                                  }
+                                />
+                              </WorksheetCell>
+                            </>
+                          ) : kind === "equipment" ? (
+                            <>
+                              <WorksheetCell>
+                                <input
+                                  aria-label={`${station.name || itemLabel} installed weight`}
+                                  aria-invalid={Boolean(modelErrors[`${prefix}.fixedWeight`])}
+                                  className={controlClass(modelErrors[`${prefix}.fixedWeight`])}
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={station.fixedWeight}
+                                  onChange={(event) =>
+                                    updateStation(index, "fixedWeight", event.target.value)
+                                  }
+                                />
+                              </WorksheetCell>
+                              <WorksheetCell>
+                                <select
+                                  aria-label={`${station.name || itemLabel} usage`}
+                                  className={worksheetInputClass}
+                                  value={station.inputType}
+                                  onChange={(event) =>
+                                    updateStation(index, "inputType", event.target.value)
+                                  }
+                                >
+                                  <option value="number">Always included</option>
+                                  <option value="checkbox">Optional</option>
+                                </select>
+                              </WorksheetCell>
+                            </>
+                          ) : (
+                            <WorksheetCell>
+                              <input
+                                aria-label={`${station.name || itemLabel} maximum load`}
+                                aria-invalid={Boolean(modelErrors[`${prefix}.maxWeight`])}
+                                className={controlClass(modelErrors[`${prefix}.maxWeight`])}
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={station.maxWeight}
+                                onChange={(event) =>
+                                  updateStation(index, "maxWeight", event.target.value)
+                                }
+                              />
+                            </WorksheetCell>
+                          )}
+                          {kind === "seat" ? (
+                            <WorksheetCell>
+                              <select
+                                aria-label={`${station.name || itemLabel} crew assignment`}
+                                className={worksheetInputClass}
+                                value={station.crewRole}
+                                onChange={(event) =>
+                                  updateStation(index, "crewRole", event.target.value)
+                                }
+                              >
+                                <option value="">Passenger / none</option>
+                                <option value="pilot">Pilot</option>
+                                <option value="copilot">Co-pilot</option>
+                              </select>
+                            </WorksheetCell>
+                          ) : null}
+                          <WorksheetCell className="px-1 text-right">
+                            <button
+                              type="button"
+                              className="h-7 px-1 text-xs font-semibold text-rose-700"
+                              aria-label={`Remove ${station.name || itemLabel}`}
+                              onClick={() =>
+                                updateModelField(
+                                  "stations",
+                                  modelForm.stations.filter(
+                                    (item) => item.clientKey !== station.clientKey
+                                  )
+                                )
+                              }
+                            >
+                              Remove
+                            </button>
+                          </WorksheetCell>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        })}
+
+        {modelForm.category === "airplane" ? (
+          <section className="border border-slate-300 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-800 px-2 py-1 text-white">
+              <div>
+                <h3 className="text-[11px] font-bold uppercase tracking-wide">CG envelope</h3>
+                <p className="text-[10px] text-slate-300">Minimum 3 boundary points</p>
+              </div>
+              <CompactButton
+                type="button"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                onClick={() =>
+                  updateModelField("envelope", [
+                    ...modelForm.envelope,
+                    { clientKey: crypto.randomUUID(), cg: "", weight: "" },
+                  ])
+                }
+              >
+                Add point
+              </CompactButton>
+            </div>
+            <WorksheetGrid label="CG envelope points" minWidth={520}>
+              <thead>
+                <tr>
+                  <WorksheetHeader>#</WorksheetHeader>
+                  <WorksheetHeader>CG (in)</WorksheetHeader>
+                  <WorksheetHeader>Weight (lb)</WorksheetHeader>
+                  <WorksheetHeader className="w-20 text-right">Action</WorksheetHeader>
+                </tr>
+              </thead>
+              <tbody>
+                {modelForm.envelope.map((point, index) => {
+                  const prefix = `envelope.${point.clientKey}`;
+                  return (
+                    <tr key={point.clientKey}>
+                      <WorksheetCell className="px-2 text-slate-500">{index + 1}</WorksheetCell>
+                      <WorksheetCell>
+                        <input
+                          aria-label={`Envelope point ${index + 1} CG`}
+                          aria-invalid={Boolean(modelErrors[`${prefix}.cg`])}
+                          className={controlClass(modelErrors[`${prefix}.cg`])}
+                          type="number"
+                          step="any"
+                          value={point.cg}
+                          onChange={(event) => updateEnvelope(index, "cg", event.target.value)}
+                        />
+                      </WorksheetCell>
+                      <WorksheetCell>
+                        <input
+                          aria-label={`Envelope point ${index + 1} weight`}
+                          aria-invalid={Boolean(modelErrors[`${prefix}.weight`])}
+                          className={controlClass(modelErrors[`${prefix}.weight`])}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={point.weight}
+                          onChange={(event) =>
+                            updateEnvelope(index, "weight", event.target.value)
+                          }
+                        />
+                      </WorksheetCell>
+                      <WorksheetCell className="px-1 text-right">
+                        <button
+                          type="button"
+                          className="h-7 px-1 text-xs font-semibold text-rose-700"
+                          onClick={() =>
+                            updateModelField(
+                              "envelope",
+                              modelForm.envelope.filter(
+                                (item) => item.clientKey !== point.clientKey
+                              )
+                            )
+                          }
+                        >
+                          Remove
+                        </button>
+                      </WorksheetCell>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </WorksheetGrid>
+          </section>
+        ) : (
+          <div className="grid gap-3 xl:grid-cols-2">
+            {(["topView", "sideView"] as const).map((section) => {
+              const points = modelForm[section];
+              const title = section === "topView" ? "Top-view CG envelope" : "Side-view weight envelope";
+              return (
+                <section key={section} className="border border-slate-300 bg-white">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-800 px-2 py-1 text-white">
+                    <div>
+                      <h3 className="text-[11px] font-bold uppercase tracking-wide">{title}</h3>
+                      <p className="text-[10px] text-slate-300">
+                        {section === "topView" ? "Minimum 3 points" : "Optional"}
+                      </p>
+                    </div>
+                    <CompactButton
+                      type="button"
+                      className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                      onClick={() =>
+                        updateModelField(section, [
+                          ...points,
+                          { clientKey: crypto.randomUUID(), x: "", y: "" },
+                        ])
+                      }
+                    >
+                      Add point
+                    </CompactButton>
+                  </div>
+                  <WorksheetGrid label={title} minWidth={480}>
+                    <thead>
+                      <tr>
+                        <WorksheetHeader>Fwd/aft CG (in)</WorksheetHeader>
+                        <WorksheetHeader>
+                          {section === "topView" ? "Left/right CG (in)" : "Weight (lb)"}
+                        </WorksheetHeader>
+                        <WorksheetHeader className="w-20 text-right">Action</WorksheetHeader>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {points.map((point, index) => {
+                        const prefix = `${section}.${point.clientKey}`;
+                        return (
+                          <tr key={point.clientKey}>
+                            <WorksheetCell>
+                              <input
+                                aria-label={`${title} point ${index + 1} forward aft CG`}
+                                aria-invalid={Boolean(modelErrors[`${prefix}.x`])}
+                                className={controlClass(modelErrors[`${prefix}.x`])}
+                                type="number"
+                                step="any"
+                                value={point.x}
+                                onChange={(event) =>
+                                  section === "topView"
+                                    ? updateTopView(index, "x", event.target.value)
+                                    : updateSideView(index, "x", event.target.value)
+                                }
+                              />
+                            </WorksheetCell>
+                            <WorksheetCell>
+                              <input
+                                aria-label={`${title} point ${index + 1} ${
+                                  section === "topView" ? "left right CG" : "weight"
+                                }`}
+                                aria-invalid={Boolean(modelErrors[`${prefix}.y`])}
+                                className={controlClass(modelErrors[`${prefix}.y`])}
+                                type="number"
+                                step="any"
+                                value={point.y}
+                                onChange={(event) =>
+                                  section === "topView"
+                                    ? updateTopView(index, "y", event.target.value)
+                                    : updateSideView(index, "y", event.target.value)
+                                }
+                              />
+                            </WorksheetCell>
+                            <WorksheetCell className="px-1 text-right">
+                              <button
+                                type="button"
+                                className="h-7 px-1 text-xs font-semibold text-rose-700"
+                                onClick={() =>
+                                  updateModelField(
+                                    section,
+                                    points.filter(
+                                      (item) => item.clientKey !== point.clientKey
+                                    )
+                                  )
+                                }
+                              >
+                                Remove
+                              </button>
+                            </WorksheetCell>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </WorksheetGrid>
+                </section>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="sticky -bottom-5 flex justify-end gap-2 border-t border-slate-200 bg-white/95 py-3 backdrop-blur">
+          <CompactButton type="button" onClick={() => setShowModelForm(false)}>
+            Cancel
+          </CompactButton>
+          <CompactButton type="submit" tone="primary" disabled={saving}>
+            {saving ? "Saving…" : modelForm.id ? "Save model" : "Add model"}
+          </CompactButton>
+        </div>
+      </form>
+    );
+  };
+
   const renderAircraftForm = () => (
     <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
       <div className="flex items-center justify-between gap-3">
@@ -2054,7 +2613,7 @@ export default function AircraftAdminPanel() {
       {status ? <p className="saas-meta-text">{status}</p> : null}
 
       <DetailDrawer open={showModelForm} width="wide" onClose={() => setShowModelForm(false)} title={modelForm.id ? "Edit aircraft model" : "Add aircraft model"} description="Model identity, loading locations, and approved envelopes.">
-        {renderModelForm()}
+        {renderCompactModelForm()}
       </DetailDrawer>
       <DetailDrawer open={showAircraftForm} width="wide" onClose={() => setShowAircraftForm(false)} title={aircraftForm.id ? "Edit aircraft" : "Add aircraft"} description="Aircraft identity and weight-and-balance record.">
         {renderAircraftForm()}

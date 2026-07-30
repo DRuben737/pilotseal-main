@@ -479,7 +479,9 @@ begin
         using errcode = '55000';
     end if;
 
-    if maintenance_row.current_meter_value is not null and p_meter_value < maintenance_row.current_meter_value then
+    if maintenance_row.current_meter_type = p_meter_type
+      and maintenance_row.current_meter_value is not null
+      and p_meter_value < maintenance_row.current_meter_value then
       raise exception 'The meter reading is lower than the current MX value (%).', maintenance_row.current_meter_value
         using errcode = '22023';
     end if;
@@ -506,7 +508,12 @@ begin
       observed_at, submitted_by, source, flight_brief_id
     ) values (
       target.aircraft_id, target.organization_id, p_meter_type,
-      maintenance_row.current_meter_value, p_meter_value,
+      case
+        when maintenance_row.current_meter_type = p_meter_type
+          then maintenance_row.current_meter_value
+        else null
+      end,
+      p_meter_value,
       p_observed_at, auth.uid(), 'preflight', target.id
     ) on conflict (flight_brief_id) where flight_brief_id is not null do nothing;
 

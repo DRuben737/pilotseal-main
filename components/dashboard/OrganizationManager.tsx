@@ -524,12 +524,12 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       empty_lat_arm: item.empty_lat_arm == null ? "" : String(item.empty_lat_arm),
       hundred_hour_due_hours:
         item.hundred_hour_due_hours == null ? "" : String(item.hundred_hour_due_hours),
-      annual_due_date: item.annual_due_date ?? "",
-      static_due_date: item.static_due_date ?? "",
-      transponder_due_date: item.transponder_due_date ?? "",
-      elt_due_date: item.elt_due_date ?? "",
-      adsb_due_date: item.adsb_due_date ?? "",
-      registration_due_date: item.registration_due_date ?? "",
+      annual_due_date: toMonthInput(item.annual_due_date),
+      static_due_date: toMonthInput(item.static_due_date),
+      transponder_due_date: toMonthInput(item.transponder_due_date),
+      elt_due_date: toMonthInput(item.elt_due_date),
+      adsb_due_date: toMonthInput(item.adsb_due_date),
+      registration_due_date: toMonthInput(item.registration_due_date),
       operational_status: item.operational_status ?? "available",
       operational_status_note: item.operational_status_note ?? "",
       current_meter_type: item.current_meter_type ?? "hobbs",
@@ -607,12 +607,12 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
       const maintenance: OrganizationAircraftMaintenanceInput = {
         hundred_hour_due_hours: hundredHourDue,
-        annual_due_date: aircraftForm.annual_due_date || null,
-        static_due_date: aircraftForm.static_due_date || null,
-        transponder_due_date: aircraftForm.transponder_due_date || null,
-        elt_due_date: aircraftForm.elt_due_date || null,
-        adsb_due_date: aircraftForm.adsb_due_date || null,
-        registration_due_date: aircraftForm.registration_due_date || null,
+        annual_due_date: monthEndDate(aircraftForm.annual_due_date),
+        static_due_date: monthEndDate(aircraftForm.static_due_date),
+        transponder_due_date: monthEndDate(aircraftForm.transponder_due_date),
+        elt_due_date: monthEndDate(aircraftForm.elt_due_date),
+        adsb_due_date: monthEndDate(aircraftForm.adsb_due_date),
+        registration_due_date: monthEndDate(aircraftForm.registration_due_date),
         operational_status: aircraftForm.operational_status,
         operational_status_note: statusNote || null,
       };
@@ -1855,9 +1855,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                   <tr>
                     <GridCell><AircraftWorksheetInput ariaLabel="Next 100-hour inspection meter reading" type="number" min={0} value={aircraftForm.hundred_hour_due_hours} onChange={(value) => updateAircraftField("hundred_hour_due_hours", value)} /></GridCell>
                     {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date"] as const).map((key) => (
-                      <GridCell key={key}><AircraftWorksheetInput ariaLabel={formatDueLabel(key)} type="date" value={aircraftForm[key]} onChange={(value) => updateAircraftField(key, value)} /></GridCell>
+                      <GridCell key={key}><AircraftWorksheetInput ariaLabel={`${formatDueLabel(key)} month and year`} type="month" value={aircraftForm[key]} onChange={(value) => updateAircraftField(key, value)} /></GridCell>
                     ))}
-                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel={formatDueLabel("registration_due_date")} type="date" value={aircraftForm.registration_due_date} onChange={(value) => updateAircraftField("registration_due_date", value)} /></td>
+                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel={`${formatDueLabel("registration_due_date")} month and year`} type="month" value={aircraftForm.registration_due_date} onChange={(value) => updateAircraftField("registration_due_date", value)} /></td>
                   </tr>
                 </tbody>
               </table>
@@ -2515,6 +2515,7 @@ function AircraftWorksheetInput({
       aria-label={ariaLabel}
       className={`${gridControlClass} ${type === "number" ? "font-mono tabular-nums" : ""} disabled:bg-slate-100 ${className}`}
       data-grid-cell
+      lang={type === "month" ? "en-US" : props.lang}
       step={type === "number" ? "any" : props.step}
       type={type}
       onChange={(event) => onChange(event.target.value)}
@@ -2793,6 +2794,20 @@ function toDateTimeLocal(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "";
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function toMonthInput(value?: string | null) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})/);
+  return match ? `${match[1]}-${match[2]}` : "";
+}
+
+function monthEndDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
 }
 
 function formatOperationalStatus(value?: AircraftOperationalStatus) {

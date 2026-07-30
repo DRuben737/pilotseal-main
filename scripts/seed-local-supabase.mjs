@@ -70,11 +70,19 @@ const syntheticUsers = [
     email: "pilot.one@example.test",
     password: "LocalPilot!2026",
     displayName: "Avery Testpilot",
+    profileRole: "user",
   },
   {
     email: "instructor.one@example.test",
     password: "LocalInstructor!2026",
     displayName: "Morgan Testflight",
+    profileRole: "user",
+  },
+  {
+    email: "platform.admin@example.test",
+    password: "LocalPlatform!2026",
+    displayName: "PilotSeal Platform Admin",
+    profileRole: "admin",
   },
 ];
 
@@ -123,7 +131,7 @@ const operations = [
         id: user.id,
         email: user.email,
         display_name: user.displayName,
-        role: "user",
+        role: user.profileRole,
       })),
       { onConflict: "id" },
     ),
@@ -216,5 +224,5 @@ const { error: assignmentError } = await admin
 if (assignmentError) throw assignmentError;
 
 console.log(
-  "Seeded 2 synthetic local users, 1 organization, 1 model, and 1 aircraft.",
+  "Seeded 3 synthetic local users, 1 organization, 1 model, and 1 aircraft.",
 );

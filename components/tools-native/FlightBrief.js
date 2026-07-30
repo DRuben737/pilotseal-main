@@ -917,8 +917,7 @@ export default function FlightBrief() {
   const setMxNow = useCallback((value) => setBriefField("mxNow", value), [setBriefField]);
   const mxDue = brief.mxDue ?? "";
   const setMxDue = useCallback((value) => setBriefField("mxDue", value), [setBriefField]);
-  const meterType = brief.meterType ?? "hobbs";
-  const setMeterType = useCallback((value) => setBriefField("meterType", value), [setBriefField]);
+  const meterType = "tach";
   const meterObservedAt = brief.meterObservedAt ?? "";
   const setMeterObservedAt = useCallback((value) => setBriefField("meterObservedAt", value), [setBriefField]);
   const plannedMeterIncrease = brief.plannedMeterIncrease ?? "";
@@ -1360,7 +1359,7 @@ export default function FlightBrief() {
       return {
         ...current,
         mxDue: nextMxDue,
-        meterType: selectedSavedAircraft.current_meter_type ?? current.meterType ?? "hobbs",
+        meterType: "tach",
         aircraftDueSourceTail: selectedTail,
       };
     });
@@ -1928,7 +1927,7 @@ ${riskComments}
     }
 
     if (stepIndex === 1) {
-      if (!String(mxNow).trim()) missing.push("Current Hobbs or tachometer reading");
+      if (!String(mxNow).trim()) missing.push("Current Tach reading");
       if (
         !String(mxDue).trim() &&
         !(selectedSavedAircraft?.source === "organization" && selectedSavedAircraft.hundred_hour_due_hours == null)
@@ -2031,7 +2030,7 @@ ${riskComments}
         return;
       }
       if (!Number.isFinite(meterValue) || meterValue < 0) {
-        setRecordStatus("Enter the current Hobbs or Tach reading.");
+        setRecordStatus("Enter the current Tach reading.");
         return;
       }
       if (!meterObservedAt) {
@@ -2039,6 +2038,7 @@ ${riskComments}
         return;
       }
       if (
+        selectedSavedAircraft.current_meter_type === "tach" &&
         selectedSavedAircraft.current_meter_value != null &&
         meterValue < Number(selectedSavedAircraft.current_meter_value)
       ) {
@@ -2482,15 +2482,12 @@ ${riskComments}
                   <small>{fuelTimeMeta.detail}</small>
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="mx-now">Current Meter Reading:</label>
-                  <input type="number" min="0" step="any" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder={selectedSavedAircraft?.current_meter_value == null ? "Check the aircraft meter" : `Saved reading ${selectedSavedAircraft.current_meter_value}`} />
+                  <label className="label" htmlFor="mx-now">Current Tach Reading:</label>
+                  <input type="number" min="0" step="any" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder={selectedSavedAircraft?.current_meter_type === "tach" && selectedSavedAircraft?.current_meter_value != null ? `Saved Tach ${selectedSavedAircraft.current_meter_value}` : "Check the aircraft Tach"} />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="meter-type">Meter Type:</label>
-                  <select id="meter-type" className="input-field" value={meterType} onChange={(e) => setMeterType(e.target.value)}>
-                    <option value="hobbs">Hobbs</option>
-                    <option value="tach">Tach</option>
-                  </select>
+                  <span className="label">Meter:</span>
+                  <strong className="input-field" aria-label="Meter type">Tach</strong>
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="meter-observed-at">Reading Checked At:</label>
