@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 
+import {
+  CompactButton,
+  DetailDrawer,
+  WorksheetCell,
+  WorksheetGrid,
+  WorksheetHeader,
+  worksheetInputClass,
+} from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
@@ -94,22 +101,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function scrollEditorIntoView(targetId: string, scrollContainer: HTMLElement | null | undefined) {
-  const runScroll = () => {
-    const element = document.getElementById(targetId);
-    if (!element || !(scrollContainer instanceof HTMLElement)) {
-      return;
-    }
-
-    const top = element.offsetTop - 24;
-    scrollContainer.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-  };
-
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(runScroll);
-  });
-}
-
 function formatDateLabel(value: string | null | undefined) {
   if (!value) {
     return "";
@@ -162,43 +153,8 @@ export default function MyAircraftManager() {
   const [form, setForm] = useState<AircraftFormState>(emptyForm);
   const [editingAircraftId, setEditingAircraftId] = useState("");
   const [conflict, setConflict] = useState<AttachAircraftConflict | null>(null);
-  const [showManager, setShowManager] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const isPlatformAdmin = profileRole === "admin";
-
-  useEffect(() => {
-    setPortalRoot(document.body);
-  }, []);
-
-  useEffect(() => {
-    if (!showManager) {
-      return;
-    }
-
-    const scrollY = window.scrollY;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const previousOverflow = document.body.style.overflow;
-    const previousPosition = document.body.style.position;
-    const previousTop = document.body.style.top;
-    const previousWidth = document.body.style.width;
-
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-
-    return () => {
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      document.body.style.overflow = previousOverflow;
-      document.body.style.position = previousPosition;
-      document.body.style.top = previousTop;
-      document.body.style.width = previousWidth;
-      window.scrollTo({ top: scrollY, behavior: "auto" });
-    };
-  }, [showManager]);
 
   useEffect(() => {
     let cancelled = false;
@@ -267,27 +223,6 @@ export default function MyAircraftManager() {
     };
   }, [activeOrganization?.id, session?.user?.id]);
 
-  useEffect(() => {
-    if (showManager && showForm) {
-      scrollEditorIntoView("my-aircraft-editor", scrollRef.current);
-    }
-  }, [showForm, showManager]);
-
-  useEffect(() => {
-    if (showManager && showForm && conflict) {
-      scrollEditorIntoView("my-aircraft-conflict", scrollRef.current);
-    }
-  }, [conflict, showForm, showManager]);
-
-  useEffect(() => {
-    if (showManager && assigningAircraftId) {
-      scrollEditorIntoView(
-        `my-aircraft-organizations-${assigningAircraftId}`,
-        scrollRef.current
-      );
-    }
-  }, [assigningAircraftId, showManager]);
-
   const modelNameById = useMemo(
     () => new Map(models.map((model) => [model.id, model.name])),
     [models]
@@ -317,19 +252,12 @@ export default function MyAircraftManager() {
     setSelectedOrganizationIds(getAircraftOrganizationIds(aircraft.id));
     setAssigningAircraftId(aircraft.id);
     setShowForm(false);
-    setShowManager(true);
     setStatus("");
   }
 
   function closeOrganizationAssignments() {
     setAssigningAircraftId("");
     setSelectedOrganizationIds([]);
-  }
-
-  function closeManager() {
-    setShowManager(false);
-    closeForm();
-    closeOrganizationAssignments();
   }
 
   function toggleOrganizationAssignment(organizationId: string) {
@@ -437,8 +365,9 @@ export default function MyAircraftManager() {
     setForm(emptyForm);
     setEditingAircraftId("");
     setConflict(null);
+    setStatus("");
     setShowForm(true);
-    setShowManager(true);
+    closeOrganizationAssignments();
   }
 
   function openEditForm(aircraft: AircraftRecord) {
@@ -457,8 +386,9 @@ export default function MyAircraftManager() {
     });
     setEditingAircraftId(aircraft.id);
     setConflict(null);
+    setStatus("");
     setShowForm(true);
-    setShowManager(true);
+    closeOrganizationAssignments();
   }
 
   function closeForm() {
@@ -666,13 +596,9 @@ export default function MyAircraftManager() {
             </p>
             <p className="mt-1 text-sm font-medium text-slate-700">{sharedAircraft.length} aircraft</p>
           </div>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setShowManager(true)}
-          >
-            Manage
-          </button>
+          <CompactButton type="button" tone="primary" onClick={openAddForm}>
+            Add aircraft
+          </CompactButton>
         </div>
 
         {status ? <p className="saas-meta-text mt-3">{status}</p> : null}
@@ -810,385 +736,178 @@ export default function MyAircraftManager() {
         </section>
       ) : null}
 
-      {showManager && portalRoot
-        ? createPortal(
-            <div className="Overlay" onClick={closeManager}>
-              <div className="Modal" onClick={(event) => event.stopPropagation()}>
-                <div className="tools-child-shell flex h-full min-h-0 flex-col">
-                  <div className="tools-child-header">
-                    <div>
-                      <p className="saas-kicker">Aircraft</p>
-                      <h2 className="tools-child-title">My Aircraft</h2>
-                    </div>
-                    <div className="tools-child-actions">
-                      <button type="button" className="ghost-button" onClick={openAddForm}>
-                        Add aircraft
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={closeManager}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
+      <DetailDrawer
+        open={showForm}
+        width="wide"
+        title={editingAircraftId ? "Edit aircraft" : "Add aircraft"}
+        description={editingAircraftId
+          ? "Edit aircraft details and personal maintenance due values in compact worksheets."
+          : "Add a tail number or attach an existing shared aircraft."
+        }
+        onClose={closeForm}
+      >
+        <form
+          className="overflow-hidden border border-slate-300 bg-white shadow-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleAttach();
+          }}
+        >
+          {status ? (
+            <div className="border-b border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert">
+              {status}
+            </div>
+          ) : null}
 
-                  <div
-                    ref={scrollRef}
-                    className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]"
+          <div className="border-b border-slate-300 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-800">
+            Aircraft details
+          </div>
+          <WorksheetGrid label="Personal aircraft details" minWidth={760}>
+            <thead>
+              <tr>
+                <WorksheetHeader className="min-w-48">Model</WorksheetHeader>
+                <WorksheetHeader className="min-w-36">Tail number</WorksheetHeader>
+                <WorksheetHeader>Empty weight (lb)</WorksheetHeader>
+                <WorksheetHeader>Longitudinal arm (in)</WorksheetHeader>
+                <WorksheetHeader>Lateral arm (in)</WorksheetHeader>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <WorksheetCell>
+                  <select
+                    required
+                    aria-label="Aircraft model"
+                    className={worksheetInputClass}
+                    value={form.model_id}
+                    onChange={(event) => updateField("model_id", event.target.value)}
                   >
-                    <div className="grid gap-3">
-                      {myAircraft.map((aircraft) => (
-                        <div
-                          key={aircraft.id}
-                          className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{aircraft.tail_number}</p>
-                              <p className="saas-meta-text">
-                                {modelNameById.get(aircraft.model_id ?? "") ?? aircraft.model?.name ?? "Unknown model"}
-                              </p>
-                              <p className="saas-meta-text mt-2">
-                                Empty {aircraft.empty_weight ?? "--"} lbs · Arm {aircraft.empty_arm ?? "--"}
-                                {aircraft.empty_lat_arm != null ? ` · Lat ${aircraft.empty_lat_arm}` : ""}
-                              </p>
-                              <p className="saas-meta-text mt-1">
-                                Updated {formatDateLabel(aircraft.updated_at) || "--"}
-                                {getDueSummary(aircraft) ? ` · ${getDueSummary(aircraft)}` : ""}
-                              </p>
-                              {canAssignAircraft(aircraft) ? (
-                                <p className="saas-meta-text mt-1">
-                                  Organization access: {getAircraftOrganizationIds(aircraft.id).length > 0
-                                    ? getAircraftOrganizationIds(aircraft.id)
-                                        .map((organizationId) => organizationNameById.get(organizationId) ?? "Unknown organization")
-                                        .join(", ")
-                                    : "None"}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {canAssignAircraft(aircraft) ? (
-                                <button
-                                  type="button"
-                                  className="ghost-button"
-                                  disabled={saving}
-                                  onClick={() => openOrganizationAssignments(aircraft)}
-                                >
-                                  Organizations ({getAircraftOrganizationIds(aircraft.id).length})
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="ghost-button"
-                                disabled={saving}
-                                onClick={() => openEditForm(aircraft)}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className="danger-button-compact"
-                                disabled={saving}
-                                onClick={() => void handleRemove(aircraft.id)}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-                          {assigningAircraftId === aircraft.id ? (
-                            <div
-                              id={`my-aircraft-organizations-${aircraft.id}`}
-                              className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-4"
-                            >
-                              <h3 className="text-sm font-semibold text-slate-900">Organization access</h3>
-                              <p className="saas-meta-text mt-1">
-                                Select one or more organizations that may use {aircraft.tail_number}. The aircraft stays private and remains owned by your account.
-                              </p>
-                              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                                {platformOrganizations.map((organization) => (
-                                  <label
-                                    key={organization.id}
-                                    className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      className="mt-0.5"
-                                      checked={selectedOrganizationIds.includes(organization.id)}
-                                      disabled={saving}
-                                      onChange={() => toggleOrganizationAssignment(organization.id)}
-                                    />
-                                    <span>
-                                      <span className="block font-medium text-slate-900">{organization.name}</span>
-                                      <span className="block text-xs text-slate-500">
-                                        Owner: {organization.owner_display_name || organization.owner_email || "Unavailable"}
-                                      </span>
-                                    </span>
-                                  </label>
-                                ))}
-                              </div>
-                              {platformOrganizations.length === 0 ? (
-                                <p className="saas-meta-text mt-3">No organizations are available.</p>
-                              ) : null}
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  className="primary-button"
-                                  disabled={saving}
-                                  onClick={() => void handleSaveOrganizationAssignments()}
-                                >
-                                  {saving ? "Saving..." : "Save organization access"}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ghost-button"
-                                  disabled={saving}
-                                  onClick={closeOrganizationAssignments}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
+                    <option value="">Select model</option>
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input
+                    required
+                    aria-label="Tail number"
+                    className={worksheetInputClass}
+                    value={form.tail_number}
+                    onChange={(event) => updateField("tail_number", event.target.value.toUpperCase())}
+                    placeholder="N12345"
+                  />
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input required aria-label="Empty weight in pounds" className={worksheetInputClass} type="number" step="any" min="0" value={form.empty_weight} onChange={(event) => updateField("empty_weight", event.target.value)} />
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input required aria-label="Longitudinal arm in inches" className={worksheetInputClass} type="number" step="any" value={form.empty_arm} onChange={(event) => updateField("empty_arm", event.target.value)} />
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input aria-label="Lateral arm in inches" className={worksheetInputClass} type="number" step="any" value={form.empty_lat_arm} onChange={(event) => updateField("empty_lat_arm", event.target.value)} />
+                </WorksheetCell>
+              </tr>
+            </tbody>
+          </WorksheetGrid>
 
-                      {showForm ? (
-                        <div
-                          id="my-aircraft-editor"
-                          className="mt-3 rounded-2xl border border-[var(--border)] bg-white/85 p-4"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <h3 className="text-sm font-semibold text-slate-900">
-                              {editingAircraftId ? "Edit aircraft" : "Add aircraft"}
-                            </h3>
-                            <button type="button" className="ghost-button" onClick={closeForm}>
-                              Close
-                            </button>
-                          </div>
+          <div className="border-b border-t border-slate-300 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-800">
+            Personal maintenance due
+          </div>
+          <WorksheetGrid label="Personal aircraft maintenance due values" minWidth={700}>
+            <thead>
+              <tr>
+                <WorksheetHeader>100-hour (Hobbs)</WorksheetHeader>
+                <WorksheetHeader>Annual</WorksheetHeader>
+                <WorksheetHeader>91.411 static</WorksheetHeader>
+                <WorksheetHeader>91.413 transponder</WorksheetHeader>
+                <WorksheetHeader>ELT</WorksheetHeader>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <WorksheetCell>
+                  <input aria-label="100-hour inspection due Hobbs" className={worksheetInputClass} type="number" step="0.1" min="0" value={form.hundred_hour_due_hours} onChange={(event) => updateField("hundred_hour_due_hours", event.target.value)} />
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input aria-label="Annual inspection due month" className={worksheetInputClass} type="month" value={form.annual_due_date} onChange={(event) => updateField("annual_due_date", event.target.value)} />
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input aria-label="Static inspection due month" className={worksheetInputClass} type="month" value={form.static_due_date} onChange={(event) => updateField("static_due_date", event.target.value)} />
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input aria-label="Transponder inspection due month" className={worksheetInputClass} type="month" value={form.transponder_due_date} onChange={(event) => updateField("transponder_due_date", event.target.value)} />
+                </WorksheetCell>
+                <WorksheetCell>
+                  <input aria-label="ELT inspection due month" className={worksheetInputClass} type="month" value={form.elt_due_date} onChange={(event) => updateField("elt_due_date", event.target.value)} />
+                </WorksheetCell>
+              </tr>
+            </tbody>
+          </WorksheetGrid>
 
-                          <p className="saas-meta-text mt-3">
-                            {editingAircraftId
-                              ? "Update this aircraft. Private aircraft save directly; shared aircraft changes submit an update request."
-                              : "Add a tail number to your aircraft list or attach an existing shared aircraft."}
-                          </p>
+          {editingAircraftId ? (
+            <p className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+              Last updated {formatDateLabel(myAircraft.find((aircraft) => aircraft.id === editingAircraftId)?.updated_at) || "--"}
+            </p>
+          ) : null}
 
-                          <div className="mt-4 grid gap-4 md:grid-cols-2">
-                            <label className="grid gap-2 text-sm md:col-span-2">
-                              <span>Model</span>
-                              <select
-                                className="rounded-xl border border-slate-300 px-3 py-2"
-                                value={form.model_id}
-                                onChange={(event) => updateField("model_id", event.target.value)}
-                              >
-                                <option value="">Select a model</option>
-                                {models.map((model) => (
-                                  <option key={model.id} value={model.id}>
-                                    {model.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="grid gap-2 text-sm md:col-span-2">
-                              <span>Tail number</span>
-                              <input
-                                className="rounded-xl border border-slate-300 px-3 py-2"
-                                value={form.tail_number}
-                                onChange={(event) =>
-                                  updateField("tail_number", event.target.value.toUpperCase())
-                                }
-                              />
-                            </label>
-                            <label className="grid gap-2 text-sm">
-                              <span>Empty weight</span>
-                              <input
-                                className="rounded-xl border border-slate-300 px-3 py-2"
-                                type="number"
-                                value={form.empty_weight}
-                                onChange={(event) => updateField("empty_weight", event.target.value)}
-                              />
-                            </label>
-                            <label className="grid gap-2 text-sm">
-                              <span>Empty arm</span>
-                              <input
-                                className="rounded-xl border border-slate-300 px-3 py-2"
-                                type="number"
-                                value={form.empty_arm}
-                                onChange={(event) => updateField("empty_arm", event.target.value)}
-                              />
-                            </label>
-                            <label className="grid gap-2 text-sm">
-                              <span>Empty lat arm</span>
-                              <input
-                                className="rounded-xl border border-slate-300 px-3 py-2"
-                                type="number"
-                                value={form.empty_lat_arm}
-                                onChange={(event) => updateField("empty_lat_arm", event.target.value)}
-                              />
-                            </label>
-                          </div>
-
-                          <div className="mt-5 border-t border-slate-200/80 pt-4">
-                            <div className="flex flex-wrap items-end justify-between gap-2">
-                              <div>
-                                <h4 className="text-sm font-semibold text-slate-900">Personal due info</h4>
-                                <p className="saas-meta-text mt-1">
-                                  These values stay on your saved aircraft record.
-                                </p>
-                              </div>
-                              {editingAircraftId ? (
-                                <p className="saas-meta-text">
-                                  Updated{" "}
-                                  {formatDateLabel(
-                                    myAircraft.find((aircraft) => aircraft.id === editingAircraftId)?.updated_at
-                                  ) || "--"}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <div className="mt-4 grid gap-3 md:grid-cols-5">
-                              <label className="grid gap-2 text-sm">
-                                <span>100hr due</span>
-                                <input
-                                  className="rounded-xl border border-slate-300 px-3 py-2"
-                                  type="number"
-                                  step="0.1"
-                                  value={form.hundred_hour_due_hours}
-                                  onChange={(event) =>
-                                    updateField("hundred_hour_due_hours", event.target.value)
-                                  }
-                                />
-                              </label>
-                              <label className="grid gap-2 text-sm">
-                                <span>Annual</span>
-                                <input
-                                  className="rounded-xl border border-slate-300 px-3 py-2"
-                                  type="month"
-                                  value={form.annual_due_date}
-                                  onChange={(event) => updateField("annual_due_date", event.target.value)}
-                                />
-                              </label>
-                              <label className="grid gap-2 text-sm">
-                                <span>91.411 (PS)</span>
-                                <input
-                                  className="rounded-xl border border-slate-300 px-3 py-2"
-                                  type="month"
-                                  value={form.static_due_date}
-                                  onChange={(event) => updateField("static_due_date", event.target.value)}
-                                />
-                              </label>
-                              <label className="grid gap-2 text-sm">
-                                <span>91.413 (TX)</span>
-                                <input
-                                  className="rounded-xl border border-slate-300 px-3 py-2"
-                                  type="month"
-                                  value={form.transponder_due_date}
-                                  onChange={(event) => updateField("transponder_due_date", event.target.value)}
-                                />
-                              </label>
-                              <label className="grid gap-2 text-sm">
-                                <span>ELT</span>
-                                <input
-                                  className="rounded-xl border border-slate-300 px-3 py-2"
-                                  type="month"
-                                  value={form.elt_due_date}
-                                  onChange={(event) => updateField("elt_due_date", event.target.value)}
-                                />
-                              </label>
-                            </div>
-                          </div>
-
-                          <div className="mt-6 flex items-center justify-end gap-3">
-                            <button
-                              type="button"
-                              className="primary-button"
-                              disabled={saving}
-                              onClick={() => void handleAttach()}
-                            >
-                              {saving ? "Working..." : editingAircraftId ? "Save aircraft" : "Add to My Aircraft"}
-                            </button>
-                          </div>
-
-                          {conflict ? (
-                            <div
-                              id="my-aircraft-conflict"
-                              className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/80 p-4"
-                            >
-                              <h2 className="text-sm font-semibold text-slate-950">Existing aircraft found</h2>
-                              <p className="saas-meta-text mt-2">
-                                The tail number already exists, but your weight-and-balance values do not match the current shared
-                                record.
-                              </p>
-
-                              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                <div className="rounded-2xl border border-slate-200/80 bg-white p-4">
-                                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                    Current shared record
-                                  </p>
-                                  <div className="mt-3 space-y-2 text-sm text-slate-700">
-                                    <p>Tail: {conflict.aircraft.tail_number}</p>
-                                    <p>
-                                      Model: {modelNameById.get(conflict.aircraft.model_id ?? "") ?? "Unknown"}
-                                    </p>
-                                    <p>Empty weight: {conflict.aircraft.empty_weight ?? "--"}</p>
-                                    <p>Empty arm: {conflict.aircraft.empty_arm ?? "--"}</p>
-                                    <p>Empty lat arm: {conflict.aircraft.empty_lat_arm ?? "--"}</p>
-                                  </div>
-                                </div>
-
-                                <div className="rounded-2xl border border-slate-200/80 bg-white p-4">
-                                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                    Your submitted values
-                                  </p>
-                                  <div className="mt-3 space-y-2 text-sm text-slate-700">
-                                    <p>Tail: {conflict.proposed.tail_number}</p>
-                                    <p>Model: {modelNameById.get(conflict.proposed.model_id) ?? "Unknown"}</p>
-                                    <p>Empty weight: {conflict.proposed.empty_weight}</p>
-                                    <p>Empty arm: {conflict.proposed.empty_arm}</p>
-                                    <p>Empty lat arm: {conflict.proposed.empty_lat_arm ?? "--"}</p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="mt-5 flex flex-wrap items-center gap-3">
-                                <button
-                                  type="button"
-                                  className="secondary-button"
-                                  disabled={saving}
-                                  onClick={() => void handleUseCurrentAircraft()}
-                                >
-                                  Use current aircraft
-                                </button>
-                                <button
-                                  type="button"
-                                  className="primary-button"
-                                  disabled={saving}
-                                  onClick={() => void handleSubmitUpdateRequest()}
-                                >
-                                  Submit weight-and-balance update
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ghost-button"
-                                  disabled={saving}
-                                  onClick={() => setConflict(null)}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
+          {conflict ? (
+            <div className="border-t border-amber-300 bg-amber-50 p-3">
+              <p className="text-xs font-semibold text-amber-950">Existing shared aircraft found</p>
+              <p className="mt-1 text-xs text-amber-800">
+                The tail number exists with different weight-and-balance values. Use the current record or submit your values for review.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <CompactButton type="button" disabled={saving} onClick={() => void handleUseCurrentAircraft()}>
+                  Use current record
+                </CompactButton>
+                <CompactButton type="button" tone="primary" disabled={saving} onClick={() => void handleSubmitUpdateRequest()}>
+                  Submit update for review
+                </CompactButton>
+                <CompactButton type="button" disabled={saving} onClick={() => setConflict(null)}>
+                  Cancel
+                </CompactButton>
               </div>
-            </div>,
-            portalRoot
-          )
-        : null}
+            </div>
+          ) : null}
+
+          <div className="flex items-center justify-end gap-2 border-t border-slate-300 bg-slate-50 px-3 py-2">
+            <CompactButton type="button" disabled={saving} onClick={closeForm}>Cancel</CompactButton>
+            <CompactButton type="submit" tone="primary" disabled={saving}>
+              {saving ? "Saving..." : editingAircraftId ? "Save aircraft" : "Add aircraft"}
+            </CompactButton>
+          </div>
+        </form>
+      </DetailDrawer>
+
+      <DetailDrawer
+        open={Boolean(assigningAircraftId)}
+        title="Organization access"
+        description={`Choose which organizations may use ${myAircraft.find((aircraft) => aircraft.id === assigningAircraftId)?.tail_number ?? "this aircraft"}.`}
+        onClose={closeOrganizationAssignments}
+      >
+        <div className="overflow-hidden border border-slate-300 bg-white">
+          <div className="grid divide-y divide-slate-200">
+            {platformOrganizations.map((organization) => (
+              <label key={organization.id} className="flex min-h-9 cursor-pointer items-center gap-3 px-3 py-2 text-xs hover:bg-blue-50">
+                <input type="checkbox" checked={selectedOrganizationIds.includes(organization.id)} disabled={saving} onChange={() => toggleOrganizationAssignment(organization.id)} />
+                <span className="min-w-0 flex-1 font-medium text-slate-900">{organization.name}</span>
+                <span className="truncate text-slate-500">{organization.owner_display_name || organization.owner_email || "Owner unavailable"}</span>
+              </label>
+            ))}
+            {platformOrganizations.length === 0 ? (
+              <p className="px-3 py-6 text-center text-xs text-slate-500">No organizations are available.</p>
+            ) : null}
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-300 bg-slate-50 px-3 py-2">
+            <CompactButton type="button" disabled={saving} onClick={closeOrganizationAssignments}>Cancel</CompactButton>
+            <CompactButton type="button" tone="primary" disabled={saving} onClick={() => void handleSaveOrganizationAssignments()}>
+              {saving ? "Saving..." : "Apply access"}
+            </CompactButton>
+          </div>
+        </div>
+      </DetailDrawer>
+
     </>
   );
 }
