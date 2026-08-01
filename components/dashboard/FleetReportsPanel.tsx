@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { DetailDrawer } from "@/components/admin/AdminConsole";
 import type { AircraftModelRecord, AircraftRecord } from "@/lib/aircraft";
+import { formatUsDate, formatUsMonthYear } from "@/lib/date-format";
 import {
   fetchAircraftInspectionAssignments,
   type AircraftInspectionAssignment,
@@ -182,7 +183,7 @@ function FleetReportPreview({
           </h3>
           <div className="flex items-center justify-between border-t-2 border-slate-900 px-3 py-1 text-[10px] font-semibold">
             <span>{organizationName}</span>
-            <span>{new Date().toLocaleDateString()}</span>
+            <span>{formatUsDate(new Date().toISOString())}</span>
           </div>
         </div>
 
@@ -256,11 +257,7 @@ function formatPreviewValue(value?: number | null) {
 }
 
 function formatPreviewDate(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  return formatUsMonthYear(value);
 }
 
 function formatPreviewStatus(value?: AircraftRecord["operational_status"]) {

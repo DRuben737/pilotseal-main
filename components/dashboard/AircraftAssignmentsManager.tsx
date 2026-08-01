@@ -23,6 +23,7 @@ import {
 } from "@/lib/aircraft";
 import { fetchPlatformOrganizations, type PlatformOrganization } from "@/lib/platform-admin";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { formatUsDateTime } from "@/lib/date-format";
 
 const PAGE_SIZE = 25;
 
@@ -237,5 +238,5 @@ export default function AircraftAssignmentsManager() {
 }
 
 function Metric({ label, value }: { label: string; value: number }) { return <div><p className="text-xl font-semibold text-slate-950">{value}</p><p className="text-xs text-slate-500">{label}</p></div>; }
-function formatDate(value?: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date); }
+function formatDate(value?: string | null) { return formatUsDateTime(value); }
 function formatStatus(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }

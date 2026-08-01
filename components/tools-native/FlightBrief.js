@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { UsDateInput, UsDateTimeInput } from "@/components/forms/UsDateInput";
+import { formatUsDate, formatUsMonthYear } from "@/lib/date-format";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { fetchSavedPeople } from "@/lib/saved-people";
 import { fetchPersonCertificates } from "@/lib/person-certificates";
@@ -121,17 +123,7 @@ function formatDueMonth(value) {
     return "";
   }
 
-  const [datePart] = value.split("T");
-  const [year, month, day] = datePart.split("-");
-  if (!year || !month) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day || "1"))));
+  return formatUsMonthYear(value, value);
 }
 
 function parseDueDateMs(value) {
@@ -692,14 +684,7 @@ function RiskItemCopy({ risk, className = "risk-item-copy" }) {
 }
 
 function formatDisplayDate(value) {
-  if (!value) return "Not set";
-  const date = new Date(`${value}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatUsDate(value, "Not set");
 }
 
 function formatDisplayTime(value) {
@@ -2327,11 +2312,10 @@ ${riskComments}
                     editingKey={mobileEditingField}
                     setEditingKey={setMobileEditingField}
                     renderEditor={(close) => (
-                      <input
+                      <UsDateInput
                         autoFocus
-                        type="date"
                         value={flightDate}
-                        onChange={(e) => setFlightDate(e.target.value)}
+                        onChange={setFlightDate}
                         onBlur={close}
                       />
                     )}
@@ -2413,7 +2397,7 @@ ${riskComments}
 
                 <div className="inline-label-input inline-label-input-compact">
                   <label className="label" htmlFor="flightDate">Select Date</label>
-                  <input type="date" id="flightDate" className="input-field" value={flightDate} onChange={(e) => setFlightDate(e.target.value)} required title="Select date" lang="en" />
+                  <UsDateInput id="flightDate" className="input-field" value={flightDate} onChange={setFlightDate} required title="Select date (MM/DD/YYYY)" />
                 </div>
 
                 <div className="inline-label-input inline-label-input-compact">
@@ -2491,7 +2475,7 @@ ${riskComments}
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="meter-observed-at">Reading Checked At:</label>
-                  <input type="datetime-local" id="meter-observed-at" className="input-field" value={meterObservedAt} onChange={(e) => setMeterObservedAt(e.target.value)} />
+                  <UsDateTimeInput id="meter-observed-at" className="input-field" value={meterObservedAt} onChange={setMeterObservedAt} />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="mx-due">Next Maintenance Due At:</label>

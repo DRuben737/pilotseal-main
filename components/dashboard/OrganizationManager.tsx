@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { UsDateInput, UsDateTimeInput } from "@/components/forms/UsDateInput";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   createAircraftModel,
@@ -62,6 +63,7 @@ import {
   WorksheetHeader,
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
+import { formatUsMonthYear } from "@/lib/date-format";
 
 export type OrganizationManagerView = "overview" | "people" | "fleet" | "messages" | "endorsements";
 type FleetWorkspace = "aircraft" | "records" | "models" | "inspections";
@@ -1831,7 +1833,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                       </select>
                     </GridCell>
                     <GridCell><AircraftWorksheetInput ariaLabel="Current meter reading" type="number" min={0} value={aircraftForm.current_meter_value} onChange={(value) => updateAircraftField("current_meter_value", value)} /></GridCell>
-                    <GridCell><AircraftWorksheetInput ariaLabel="Meter reading observed at" type="datetime-local" max={toDateTimeLocal(new Date().toISOString())} value={aircraftForm.meter_observed_at} onChange={(value) => updateAircraftField("meter_observed_at", value)} /></GridCell>
+                    <GridCell><UsDateTimeInput aria-label="Meter reading observed at" className={gridControlClass} max={toDateTimeLocal(new Date().toISOString())} value={aircraftForm.meter_observed_at} onChange={(value) => updateAircraftField("meter_observed_at", value)} /></GridCell>
                     <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel="Meter change reason" value={aircraftForm.meter_change_reason} onChange={(value) => updateAircraftField("meter_change_reason", value)} placeholder="Required when reading changes" /></td>
                   </tr>
                 </tbody>
@@ -1855,9 +1857,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                   <tr>
                     <GridCell><AircraftWorksheetInput ariaLabel="Next 100-hour inspection meter reading" type="number" min={0} value={aircraftForm.hundred_hour_due_hours} onChange={(value) => updateAircraftField("hundred_hour_due_hours", value)} /></GridCell>
                     {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date"] as const).map((key) => (
-                      <GridCell key={key}><AircraftWorksheetInput ariaLabel={`${formatDueLabel(key)} month and year`} type="month" value={aircraftForm[key]} onChange={(value) => updateAircraftField(key, value)} /></GridCell>
+                      <GridCell key={key}><UsDateInput precision="month" aria-label={`${formatDueLabel(key)} MM/YYYY`} className={gridControlClass} value={aircraftForm[key]} onChange={(value) => updateAircraftField(key, value)} /></GridCell>
                     ))}
-                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel={`${formatDueLabel("registration_due_date")} month and year`} type="month" value={aircraftForm.registration_due_date} onChange={(value) => updateAircraftField("registration_due_date", value)} /></td>
+                    <td className="border-t border-slate-200 p-0"><UsDateInput precision="month" aria-label={`${formatDueLabel("registration_due_date")} MM/YYYY`} className={gridControlClass} value={aircraftForm.registration_due_date} onChange={(value) => updateAircraftField("registration_due_date", value)} /></td>
                   </tr>
                 </tbody>
               </table>
@@ -2887,11 +2889,5 @@ function formatChartType(value?: string | null) {
 }
 
 function formatFleetDate(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    year: "2-digit",
-  }).format(date);
+  return formatUsMonthYear(value);
 }

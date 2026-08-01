@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
+import { formatUsDateTime } from "@/lib/date-format";
 import {
   createFlightBriefRevision,
   fetchMyFlightBriefs,
@@ -193,9 +194,7 @@ function formatStatus(status: FlightBriefRecord["status"]) {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return "--";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return formatUsDateTime(value, "--");
 }
 
 function getErrorMessage(error: unknown, fallback: string) {

@@ -14,6 +14,7 @@ import {
   type NotificationRecord,
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { formatUsDate } from "@/lib/date-format";
 import {
   fetchEndorsementRecords,
   type EndorsementRecord,
@@ -54,16 +55,7 @@ function formatMedicalExam(value: string | null | undefined) {
 }
 
 function formatRelativeDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(date);
+  return formatUsDate(value, "");
 }
 
 export default function DashboardOverview() {

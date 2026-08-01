@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import {
@@ -29,7 +28,6 @@ import {
   fetchMyAircraft,
   fetchSharedAircraft,
   inferAircraftStationKind,
-  makeAircraftPrivateForUser,
   rejectAircraftUpdateRequest,
   parseAircraftEnvelopeSet,
   parseAircraftStations,
@@ -514,41 +512,6 @@ function validateAircraftForm(
   return errors;
 }
 
-function fieldClass(hasError: boolean) {
-  return `rounded-xl border px-3 py-2 ${
-    hasError
-      ? "border-rose-500 bg-rose-50/40 outline-none ring-2 ring-rose-200"
-      : "border-slate-300"
-  }`;
-}
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  return message ? (
-    <span id={id} className="text-xs font-medium text-rose-700">
-      {message}
-    </span>
-  ) : null;
-}
-
-function scrollEditorIntoView(
-  targetId: string,
-  scrollContainer: HTMLElement | null | undefined
-) {
-  const runScroll = () => {
-    const element = document.getElementById(targetId);
-    if (!element || !(scrollContainer instanceof HTMLElement)) {
-      return;
-    }
-
-    const top = element.offsetTop - 24;
-    scrollContainer.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-  };
-
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(runScroll);
-  });
-}
-
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -595,54 +558,10 @@ export default function AircraftAdminPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
-  const [showModelsModal, setShowModelsModal] = useState(false);
-  const [showAircraftModal, setShowAircraftModal] = useState(false);
-  const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showModelForm, setShowModelForm] = useState(false);
   const [showAircraftForm, setShowAircraftForm] = useState(false);
-  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
-  const modelsScrollRef = useRef<HTMLDivElement | null>(null);
-  const aircraftScrollRef = useRef<HTMLDivElement | null>(null);
 
   const isAdmin = profileRole === "admin";
-
-  useEffect(() => {
-    setPortalRoot(document.body);
-  }, []);
-
-  useEffect(() => {
-    if (!showModelsModal && !showAircraftModal) {
-      if (!showRequestsModal) {
-        return;
-      }
-    }
-
-    if (!showModelsModal && !showAircraftModal && !showRequestsModal) {
-      return;
-    }
-
-    const scrollY = window.scrollY;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const previousOverflow = document.body.style.overflow;
-    const previousPosition = document.body.style.position;
-    const previousTop = document.body.style.top;
-    const previousWidth = document.body.style.width;
-
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-
-    return () => {
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      document.body.style.overflow = previousOverflow;
-      document.body.style.position = previousPosition;
-      document.body.style.top = previousTop;
-      document.body.style.width = previousWidth;
-      window.scrollTo({ top: scrollY, behavior: "auto" });
-    };
-  }, [showAircraftModal, showModelsModal, showRequestsModal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -786,27 +705,13 @@ export default function AircraftAdminPanel() {
     setModelForm(nextForm);
     setModelErrors({});
     setShowModelForm(true);
-    setShowModelsModal(false);
   }
 
   function openAircraftEditor(nextForm = emptyAircraftForm) {
     setAircraftForm(nextForm);
     setAircraftErrors({});
     setShowAircraftForm(true);
-    setShowAircraftModal(false);
   }
-
-  useEffect(() => {
-    if (showModelsModal && showModelForm && !modelForm.id) {
-      scrollEditorIntoView("model-editor-new", modelsScrollRef.current);
-    }
-  }, [showModelsModal, showModelForm, modelForm.id]);
-
-  useEffect(() => {
-    if (showAircraftModal && showAircraftForm && !aircraftForm.id) {
-      scrollEditorIntoView("aircraft-editor-new", aircraftScrollRef.current);
-    }
-  }, [showAircraftModal, showAircraftForm, aircraftForm.id]);
 
   function updateModelField<K extends keyof ModelFormState>(key: K, value: ModelFormState[K]) {
     setModelForm((current) => ({ ...current, [key]: value }));
@@ -1145,24 +1050,6 @@ export default function AircraftAdminPanel() {
     }
   }
 
-  async function handleMakeAircraftPrivate(aircraftId: string) {
-    if (!session?.user?.id) {
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      await makeAircraftPrivateForUser(session.user.id, aircraftId);
-      setAircraft((current) => current.filter((item) => item.id !== aircraftId));
-      setStatus("Aircraft moved to My Aircraft and removed from shared registry.");
-    } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to make this aircraft private."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleDeleteModel(id: string) {
     const confirmed = window.confirm(
       "Delete this aircraft model? This will remove the saved model information."
@@ -1277,590 +1164,6 @@ export default function AircraftAdminPanel() {
   if (!isAdmin) {
     return <div className="saas-panel">Platform administrator access is required.</div>;
   }
-
-  const renderModelForm = () => (
-    <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">
-          {modelForm.id ? "Edit aircraft model" : "Add aircraft model"}
-        </h3>
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => {
-            setModelForm(emptyModelForm);
-            setModelErrors({});
-            setShowModelForm(false);
-          }}
-        >
-          Close
-        </button>
-      </div>
-
-      <p className="saas-meta-text mt-3">
-        Enter the values from the aircraft flight manual or approved weight-and-balance
-        records. Nothing changes until you save.
-      </p>
-
-      {Object.keys(modelErrors).length > 0 ? (
-        <div
-          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
-          role="alert"
-          aria-live="polite"
-        >
-          <p className="font-semibold">Some information needs attention.</p>
-          <p className="mt-1 text-rose-800">
-            Check the highlighted fields below. Incomplete rows will not be silently skipped.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <label className="grid gap-2 text-sm">
-          <span>Model name <span className="text-rose-700">(required)</span></span>
-          <input
-            className={fieldClass(Boolean(modelErrors["model.name"]))}
-            id="aircraft-model-name"
-            value={modelForm.name}
-            onChange={(event) => updateModelField("name", event.target.value)}
-            aria-invalid={Boolean(modelErrors["model.name"])}
-            aria-describedby={modelErrors["model.name"] ? "aircraft-model-name-error" : undefined}
-          />
-          <FieldError id="aircraft-model-name-error" message={modelErrors["model.name"]} />
-        </label>
-        <label className="grid gap-2 text-sm">
-          <span>Aircraft type</span>
-          <select
-            className="rounded-xl border border-slate-300 px-3 py-2"
-            value={modelForm.category}
-            onChange={(event) =>
-              updateModelField("category", event.target.value as "airplane" | "helicopter")
-            }
-          >
-            <option value="airplane">Airplane</option>
-            <option value="helicopter">Helicopter</option>
-          </select>
-        </label>
-        <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Typical fuel burn (gallons per hour)</span>
-          <input
-            className={fieldClass(Boolean(modelErrors["model.avg_fuel_burn_rate"]))}
-            type="number"
-            min="0"
-            step="0.1"
-            value={modelForm.avg_fuel_burn_rate}
-            onChange={(event) => updateModelField("avg_fuel_burn_rate", event.target.value)}
-            placeholder="e.g. 8.5"
-            aria-invalid={Boolean(modelErrors["model.avg_fuel_burn_rate"])}
-            aria-describedby={
-              modelErrors["model.avg_fuel_burn_rate"] ? "aircraft-model-fuel-burn-error" : undefined
-            }
-          />
-          <FieldError
-            id="aircraft-model-fuel-burn-error"
-            message={modelErrors["model.avg_fuel_burn_rate"]}
-          />
-        </label>
-        <label className="grid gap-2 text-sm md:col-span-2">
-          <span>Maximum takeoff weight (lb)</span>
-          <input
-            className={fieldClass(Boolean(modelErrors["model.max_weight"]))}
-            type="number"
-            min="0"
-            step="0.1"
-            value={modelForm.max_weight}
-            onChange={(event) => updateModelField("max_weight", event.target.value)}
-            placeholder="e.g. 2400"
-            aria-invalid={Boolean(modelErrors["model.max_weight"])}
-            aria-describedby={
-              modelErrors["model.max_weight"] ? "aircraft-model-max-weight-error" : undefined
-            }
-          />
-          <FieldError
-            id="aircraft-model-max-weight-error"
-            message={modelErrors["model.max_weight"]}
-          />
-        </label>
-      </div>
-
-      <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900">Loading locations</h4>
-            <p className="saas-meta-text mt-1">
-              Add each seat, baggage area, fuel tank, or permanently installed item. At
-              least one complete location is required.
-            </p>
-            <FieldError id="aircraft-model-stations-error" message={modelErrors.stations} />
-          </div>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() =>
-              updateModelField("stations", [
-                ...modelForm.stations,
-                {
-                  clientKey: crypto.randomUUID(),
-                  id: "",
-                  name: "",
-                  kind: "seat",
-                  arm: "",
-                  latArm: "",
-                  weightPerGallon: "",
-                  fixedWeight: "",
-                  maxWeight: "",
-                  inputType: "number",
-                  crewRole: "",
-                },
-              ])
-            }
-          >
-            Add loading location
-          </button>
-        </div>
-        <div className="grid gap-3">
-          {modelForm.stations.map((station, index) => (
-            <div
-              key={station.clientKey}
-              className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-2 lg:grid-cols-3 ${
-                Object.keys(modelErrors).some((key) =>
-                  key.startsWith(`station.${station.clientKey}.`)
-                )
-                  ? "border-rose-300"
-                  : "border-[var(--border)]"
-              }`}
-            >
-              <label className="grid gap-2 text-sm">
-                <span>Location name <span className="text-rose-700">(required)</span></span>
-                <input
-                  className={fieldClass(
-                    Boolean(modelErrors[`station.${station.clientKey}.name`])
-                  )}
-                  value={station.name}
-                  onChange={(event) => updateStation(index, "name", event.target.value)}
-                  placeholder="e.g. Pilot seat or Main fuel tank"
-                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.name`])}
-                  aria-describedby={
-                    modelErrors[`station.${station.clientKey}.name`]
-                      ? `station-${station.clientKey}-name-error`
-                      : undefined
-                  }
-                />
-                <FieldError
-                  id={`station-${station.clientKey}-name-error`}
-                  message={modelErrors[`station.${station.clientKey}.name`]}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Arm from datum (in) <span className="text-rose-700">(required)</span></span>
-                <input
-                  className={fieldClass(
-                    Boolean(modelErrors[`station.${station.clientKey}.arm`])
-                  )}
-                  type="number"
-                  value={station.arm}
-                  onChange={(event) => updateStation(index, "arm", event.target.value)}
-                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.arm`])}
-                  aria-describedby={
-                    modelErrors[`station.${station.clientKey}.arm`]
-                      ? `station-${station.clientKey}-arm-error`
-                      : undefined
-                  }
-                />
-                <FieldError
-                  id={`station-${station.clientKey}-arm-error`}
-                  message={modelErrors[`station.${station.clientKey}.arm`]}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Left/right arm (in, optional)</span>
-                <input
-                  className={fieldClass(
-                    Boolean(modelErrors[`station.${station.clientKey}.latArm`])
-                  )}
-                  type="number"
-                  value={station.latArm}
-                  onChange={(event) => updateStation(index, "latArm", event.target.value)}
-                  aria-invalid={Boolean(modelErrors[`station.${station.clientKey}.latArm`])}
-                />
-                <FieldError
-                  id={`station-${station.clientKey}-lat-arm-error`}
-                  message={modelErrors[`station.${station.clientKey}.latArm`]}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Fuel weight (lb per gallon)</span>
-                <input
-                  className={fieldClass(
-                    Boolean(modelErrors[`station.${station.clientKey}.weightPerGallon`])
-                  )}
-                  type="number"
-                  value={station.weightPerGallon}
-                  onChange={(event) => updateStation(index, "weightPerGallon", event.target.value)}
-                  placeholder={/fuel/i.test(station.id) || /fuel/i.test(station.name) ? "6" : ""}
-                  aria-invalid={Boolean(
-                    modelErrors[`station.${station.clientKey}.weightPerGallon`]
-                  )}
-                />
-                <FieldError
-                  id={`station-${station.clientKey}-fuel-weight-error`}
-                  message={modelErrors[`station.${station.clientKey}.weightPerGallon`]}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Always-loaded weight (lb)</span>
-                <input
-                  className={fieldClass(
-                    Boolean(modelErrors[`station.${station.clientKey}.fixedWeight`])
-                  )}
-                  type="number"
-                  value={station.fixedWeight}
-                  onChange={(event) => updateStation(index, "fixedWeight", event.target.value)}
-                  aria-invalid={Boolean(
-                    modelErrors[`station.${station.clientKey}.fixedWeight`]
-                  )}
-                />
-                <FieldError
-                  id={`station-${station.clientKey}-fixed-weight-error`}
-                  message={modelErrors[`station.${station.clientKey}.fixedWeight`]}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Maximum allowed load (lb)</span>
-                <input
-                  className={fieldClass(
-                    Boolean(modelErrors[`station.${station.clientKey}.maxWeight`])
-                  )}
-                  type="number"
-                  value={station.maxWeight}
-                  onChange={(event) => updateStation(index, "maxWeight", event.target.value)}
-                  aria-invalid={Boolean(
-                    modelErrors[`station.${station.clientKey}.maxWeight`]
-                  )}
-                />
-                <FieldError
-                  id={`station-${station.clientKey}-max-weight-error`}
-                  message={modelErrors[`station.${station.clientKey}.maxWeight`]}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>How users enter the load</span>
-                <select
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  value={station.inputType}
-                  onChange={(event) =>
-                    updateStation(index, "inputType", event.target.value as "number" | "checkbox")
-                  }
-                >
-                  <option value="number">Enter a weight or quantity</option>
-                  <option value="checkbox">Included / not included</option>
-                </select>
-              </label>
-              <label className="grid gap-2 text-sm">
-                <span>Seat assignment</span>
-                <select
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  value={station.crewRole}
-                  onChange={(event) =>
-                    updateStation(index, "crewRole", event.target.value as "" | "pilot" | "copilot")
-                  }
-                >
-                  <option value="">Not a crew seat</option>
-                  <option value="pilot">Pilot seat</option>
-                  <option value="copilot">Co-pilot seat</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                className="danger-button-compact self-end"
-                onClick={() =>
-                  updateModelField(
-                    "stations",
-                    modelForm.stations.filter((_, stationIndex) => stationIndex !== index)
-                  )
-                }
-              >
-                Remove location
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {modelForm.category === "helicopter" ? (
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h4 className="text-sm font-semibold text-slate-900">
-                  Center-of-gravity limits — top view
-                </h4>
-                <p className="saas-meta-text mt-1">
-                  Enter at least three complete forward/aft and left/right CG boundary
-                  points.
-                </p>
-                <FieldError id="aircraft-model-top-view-error" message={modelErrors.topView} />
-              </div>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() =>
-                  updateModelField("topView", [
-                    ...modelForm.topView,
-                    { clientKey: crypto.randomUUID(), x: "", y: "" },
-                  ])
-                }
-              >
-                Add limit point
-              </button>
-            </div>
-            <div className="grid gap-3">
-              {modelForm.topView.map((point, index) => (
-                <div
-                  key={point.clientKey}
-                  className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] ${
-                    Object.keys(modelErrors).some((key) =>
-                      key.startsWith(`topView.${point.clientKey}.`)
-                    )
-                      ? "border-rose-300"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <label className="grid gap-2 text-sm">
-                    <span>Forward/aft CG (in)</span>
-                    <input
-                      className={fieldClass(
-                        Boolean(modelErrors[`topView.${point.clientKey}.x`])
-                      )}
-                      type="number"
-                      value={point.x}
-                      onChange={(event) => updateTopView(index, "x", event.target.value)}
-                      aria-invalid={Boolean(modelErrors[`topView.${point.clientKey}.x`])}
-                    />
-                    <FieldError
-                      id={`top-view-${point.clientKey}-x-error`}
-                      message={modelErrors[`topView.${point.clientKey}.x`]}
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm">
-                    <span>Left/right CG (in)</span>
-                    <input
-                      className={fieldClass(
-                        Boolean(modelErrors[`topView.${point.clientKey}.y`])
-                      )}
-                      type="number"
-                      value={point.y}
-                      onChange={(event) => updateTopView(index, "y", event.target.value)}
-                      aria-invalid={Boolean(modelErrors[`topView.${point.clientKey}.y`])}
-                    />
-                    <FieldError
-                      id={`top-view-${point.clientKey}-y-error`}
-                      message={modelErrors[`topView.${point.clientKey}.y`]}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="danger-button-compact self-end"
-                    onClick={() =>
-                      updateModelField(
-                        "topView",
-                        modelForm.topView.filter((_, pointIndex) => pointIndex !== index)
-                      )
-                    }
-                  >
-                    Remove point
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h4 className="text-sm font-semibold text-slate-900">
-                  Center-of-gravity and weight limits
-                </h4>
-                <p className="saas-meta-text mt-1">
-                  Optional. If used, enter at least three complete points.
-                </p>
-                <FieldError id="aircraft-model-side-view-error" message={modelErrors.sideView} />
-              </div>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() =>
-                  updateModelField("sideView", [
-                    ...modelForm.sideView,
-                    { clientKey: crypto.randomUUID(), x: "", y: "" },
-                  ])
-                }
-              >
-                Add limit point
-              </button>
-            </div>
-            <div className="grid gap-3">
-              {modelForm.sideView.map((point, index) => (
-                <div
-                  key={point.clientKey}
-                  className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] ${
-                    Object.keys(modelErrors).some((key) =>
-                      key.startsWith(`sideView.${point.clientKey}.`)
-                    )
-                      ? "border-rose-300"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <label className="grid gap-2 text-sm">
-                    <span>Forward/aft CG (in)</span>
-                    <input
-                      className={fieldClass(
-                        Boolean(modelErrors[`sideView.${point.clientKey}.x`])
-                      )}
-                      type="number"
-                      value={point.x}
-                      onChange={(event) => updateSideView(index, "x", event.target.value)}
-                      aria-invalid={Boolean(modelErrors[`sideView.${point.clientKey}.x`])}
-                    />
-                    <FieldError
-                      id={`side-view-${point.clientKey}-x-error`}
-                      message={modelErrors[`sideView.${point.clientKey}.x`]}
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm">
-                    <span>Aircraft weight (lb)</span>
-                    <input
-                      className={fieldClass(
-                        Boolean(modelErrors[`sideView.${point.clientKey}.y`])
-                      )}
-                      type="number"
-                      value={point.y}
-                      onChange={(event) => updateSideView(index, "y", event.target.value)}
-                      aria-invalid={Boolean(modelErrors[`sideView.${point.clientKey}.y`])}
-                    />
-                    <FieldError
-                      id={`side-view-${point.clientKey}-y-error`}
-                      message={modelErrors[`sideView.${point.clientKey}.y`]}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="danger-button-compact self-end"
-                    onClick={() =>
-                      updateModelField(
-                        "sideView",
-                        modelForm.sideView.filter((_, pointIndex) => pointIndex !== index)
-                      )
-                    }
-                  >
-                    Remove point
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-6">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h4 className="text-sm font-semibold text-slate-900">
-                Center-of-gravity and weight limits
-              </h4>
-              <p className="saas-meta-text mt-1">
-                Enter at least three complete points from the approved CG envelope.
-              </p>
-              <FieldError id="aircraft-model-envelope-error" message={modelErrors.envelope} />
-            </div>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() =>
-                updateModelField("envelope", [
-                  ...modelForm.envelope,
-                  { clientKey: crypto.randomUUID(), cg: "", weight: "" },
-                ])
-              }
-            >
-              Add limit point
-            </button>
-          </div>
-          <div className="grid gap-3">
-            {modelForm.envelope.map((point, index) => (
-              <div
-                key={point.clientKey}
-                className={`grid gap-3 rounded-2xl border bg-white/80 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] ${
-                  Object.keys(modelErrors).some((key) =>
-                    key.startsWith(`envelope.${point.clientKey}.`)
-                  )
-                    ? "border-rose-300"
-                    : "border-[var(--border)]"
-                }`}
-              >
-                <label className="grid gap-2 text-sm">
-                  <span>CG position (in)</span>
-                  <input
-                    className={fieldClass(
-                      Boolean(modelErrors[`envelope.${point.clientKey}.cg`])
-                    )}
-                    type="number"
-                    value={point.cg}
-                    onChange={(event) => updateEnvelope(index, "cg", event.target.value)}
-                    aria-invalid={Boolean(modelErrors[`envelope.${point.clientKey}.cg`])}
-                  />
-                  <FieldError
-                    id={`envelope-${point.clientKey}-cg-error`}
-                    message={modelErrors[`envelope.${point.clientKey}.cg`]}
-                  />
-                </label>
-                <label className="grid gap-2 text-sm">
-                  <span>Aircraft weight (lb)</span>
-                  <input
-                    className={fieldClass(
-                      Boolean(modelErrors[`envelope.${point.clientKey}.weight`])
-                    )}
-                    type="number"
-                    value={point.weight}
-                    onChange={(event) => updateEnvelope(index, "weight", event.target.value)}
-                    aria-invalid={Boolean(
-                      modelErrors[`envelope.${point.clientKey}.weight`]
-                    )}
-                  />
-                  <FieldError
-                    id={`envelope-${point.clientKey}-weight-error`}
-                    message={modelErrors[`envelope.${point.clientKey}.weight`]}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="danger-button-compact self-end"
-                  onClick={() =>
-                    updateModelField(
-                      "envelope",
-                      modelForm.envelope.filter((_, pointIndex) => pointIndex !== index)
-                    )
-                  }
-                >
-                  Remove point
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 flex items-center justify-end gap-3">
-        <button
-          type="button"
-          className="primary-button"
-          disabled={saving}
-          onClick={() => void handleSaveModel()}
-        >
-          {saving ? "Saving..." : modelForm.id ? "Save changes" : "Add aircraft model"}
-        </button>
-      </div>
-    </div>
-  );
 
   const renderCompactModelForm = () => {
     const controlClass = (error?: string) =>
@@ -2404,170 +1707,122 @@ export default function AircraftAdminPanel() {
     );
   };
 
-  const renderAircraftForm = () => (
-    <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/85 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">
-          {aircraftForm.id ? "Edit aircraft" : "Add aircraft"}
-        </h3>
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => {
-            setAircraftForm(emptyAircraftForm);
-            setAircraftErrors({});
-            setShowAircraftForm(false);
-          }}
-        >
-          Close
-        </button>
-      </div>
+  const renderAircraftForm = () => {
+    const controlClass = (error?: string) =>
+      `${worksheetInputClass} ${error ? "bg-rose-50 text-rose-900 ring-1 ring-inset ring-rose-500" : ""}`;
 
-      <p className="saas-meta-text mt-3">
-        Copy these values from the aircraft&apos;s current weight-and-balance record.
-        Nothing changes until you save.
-      </p>
+    return (
+      <form
+        className="grid gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSaveAircraft();
+        }}
+      >
+        {Object.keys(aircraftErrors).length > 0 ? (
+          <div className="border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900" role="alert">
+            Check the highlighted cells before saving.
+          </div>
+        ) : null}
 
-      {Object.keys(aircraftErrors).length > 0 ? (
-        <div
-          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
-          role="alert"
-          aria-live="polite"
-        >
-          <p className="font-semibold">Some aircraft information needs attention.</p>
-          <p className="mt-1 text-rose-800">
-            Check the highlighted fields before saving.
+        <WorksheetGrid label="Platform aircraft details" minWidth={820}>
+          <thead>
+            <tr>
+              <WorksheetHeader className="min-w-48">Model</WorksheetHeader>
+              <WorksheetHeader className="min-w-36">Tail number</WorksheetHeader>
+              <WorksheetHeader>Empty weight (lb)</WorksheetHeader>
+              <WorksheetHeader>Longitudinal arm (in)</WorksheetHeader>
+              <WorksheetHeader>Lateral arm (in)</WorksheetHeader>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <WorksheetCell>
+                <select
+                  autoFocus
+                  required
+                  aria-label="Aircraft model"
+                  aria-invalid={Boolean(aircraftErrors.model_id)}
+                  className={controlClass(aircraftErrors.model_id)}
+                  value={aircraftForm.model_id}
+                  onChange={(event) => updateAircraftField("model_id", event.target.value)}
+                >
+                  <option value="">Select model</option>
+                  {models.map((model) => (
+                    <option key={model.id} value={model.id}>{model.name}</option>
+                  ))}
+                </select>
+              </WorksheetCell>
+              <WorksheetCell>
+                <input
+                  required
+                  aria-label="Registration or tail number"
+                  aria-invalid={Boolean(aircraftErrors.name)}
+                  className={controlClass(aircraftErrors.name)}
+                  value={aircraftForm.name}
+                  onChange={(event) => updateAircraftField("name", event.target.value.toUpperCase())}
+                  placeholder="N5520X"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                />
+              </WorksheetCell>
+              <WorksheetCell>
+                <input
+                  required
+                  aria-label="Basic empty weight in pounds"
+                  aria-invalid={Boolean(aircraftErrors.empty_weight)}
+                  className={controlClass(aircraftErrors.empty_weight)}
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={aircraftForm.empty_weight}
+                  onChange={(event) => updateAircraftField("empty_weight", event.target.value)}
+                />
+              </WorksheetCell>
+              <WorksheetCell>
+                <input
+                  required
+                  aria-label="Empty weight longitudinal arm in inches"
+                  aria-invalid={Boolean(aircraftErrors.empty_arm)}
+                  className={controlClass(aircraftErrors.empty_arm)}
+                  type="number"
+                  step="0.01"
+                  value={aircraftForm.empty_arm}
+                  onChange={(event) => updateAircraftField("empty_arm", event.target.value)}
+                />
+              </WorksheetCell>
+              <WorksheetCell>
+                <input
+                  aria-label="Empty weight lateral arm in inches"
+                  aria-invalid={Boolean(aircraftErrors.empty_lat_arm)}
+                  className={controlClass(aircraftErrors.empty_lat_arm)}
+                  type="number"
+                  step="0.01"
+                  value={aircraftForm.empty_lat_arm}
+                  onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)}
+                />
+              </WorksheetCell>
+            </tr>
+          </tbody>
+        </WorksheetGrid>
+
+        {aircraftForm.model_id ? (
+          <p className="px-1 text-[11px] text-slate-500">
+            {selectedAircraftModel?.max_weight != null
+              ? `Model maximum: ${selectedAircraftModel.max_weight.toLocaleString()} lb`
+              : "No maximum weight is saved for this model."}
           </p>
+        ) : null}
+
+        <div className="sticky -bottom-5 flex justify-end gap-2 border-t border-slate-200 bg-white/95 py-3 backdrop-blur">
+          <CompactButton type="button" onClick={() => setShowAircraftForm(false)}>Cancel</CompactButton>
+          <CompactButton type="submit" tone="primary" disabled={saving}>
+            {saving ? "Saving…" : aircraftForm.id ? "Save aircraft" : "Add aircraft"}
+          </CompactButton>
         </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <label className="grid gap-2 text-sm md:col-span-2">
-          <span>
-            Aircraft model <span className="text-rose-700">(required)</span>
-          </span>
-          <select
-            className={fieldClass(Boolean(aircraftErrors.model_id))}
-            value={aircraftForm.model_id}
-            onChange={(event) => updateAircraftField("model_id", event.target.value)}
-            aria-invalid={Boolean(aircraftErrors.model_id)}
-            aria-describedby={
-              aircraftErrors.model_id ? "aircraft-model-selection-error" : undefined
-            }
-          >
-            <option value="">Select a model</option>
-            {models.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-          <FieldError
-            id="aircraft-model-selection-error"
-            message={aircraftErrors.model_id}
-          />
-          {aircraftForm.model_id ? (
-            <span className="text-xs text-slate-500">
-              {selectedAircraftModel?.max_weight != null
-                ? `This model's maximum weight is ${selectedAircraftModel.max_weight.toLocaleString()} lb.`
-                : "No maximum weight is saved for this model."}
-            </span>
-          ) : null}
-        </label>
-        <label className="grid gap-2 text-sm md:col-span-2">
-          <span>
-            Registration / tail number <span className="text-rose-700">(required)</span>
-          </span>
-          <input
-            className={fieldClass(Boolean(aircraftErrors.name))}
-            value={aircraftForm.name}
-            onChange={(event) =>
-              updateAircraftField("name", event.target.value.toUpperCase())
-            }
-            placeholder="e.g. N5520X"
-            autoCapitalize="characters"
-            spellCheck={false}
-            aria-invalid={Boolean(aircraftErrors.name)}
-            aria-describedby={
-              aircraftErrors.name ? "aircraft-tail-number-error" : undefined
-            }
-          />
-          <FieldError id="aircraft-tail-number-error" message={aircraftErrors.name} />
-        </label>
-        <label className="grid gap-2 text-sm">
-          <span>
-            Basic empty weight (lb) <span className="text-rose-700">(required)</span>
-          </span>
-          <input
-            className={fieldClass(Boolean(aircraftErrors.empty_weight))}
-            type="number"
-            min="0"
-            step="0.1"
-            value={aircraftForm.empty_weight}
-            onChange={(event) => updateAircraftField("empty_weight", event.target.value)}
-            placeholder="From the current weight-and-balance record"
-            aria-invalid={Boolean(aircraftErrors.empty_weight)}
-            aria-describedby={
-              aircraftErrors.empty_weight ? "aircraft-empty-weight-error" : undefined
-            }
-          />
-          <FieldError
-            id="aircraft-empty-weight-error"
-            message={aircraftErrors.empty_weight}
-          />
-        </label>
-        <label className="grid gap-2 text-sm">
-          <span>
-            Empty-weight arm from datum (in){" "}
-            <span className="text-rose-700">(required)</span>
-          </span>
-          <input
-            className={fieldClass(Boolean(aircraftErrors.empty_arm))}
-            type="number"
-            step="0.01"
-            value={aircraftForm.empty_arm}
-            onChange={(event) => updateAircraftField("empty_arm", event.target.value)}
-            placeholder="From the current weight-and-balance record"
-            aria-invalid={Boolean(aircraftErrors.empty_arm)}
-            aria-describedby={
-              aircraftErrors.empty_arm ? "aircraft-empty-arm-error" : undefined
-            }
-          />
-          <FieldError id="aircraft-empty-arm-error" message={aircraftErrors.empty_arm} />
-        </label>
-        <label className="grid gap-2 text-sm">
-          <span>Empty-weight left/right arm (in, optional)</span>
-          <input
-            className={fieldClass(Boolean(aircraftErrors.empty_lat_arm))}
-            type="number"
-            step="0.01"
-            value={aircraftForm.empty_lat_arm}
-            onChange={(event) => updateAircraftField("empty_lat_arm", event.target.value)}
-            placeholder="Helicopters, when provided"
-            aria-invalid={Boolean(aircraftErrors.empty_lat_arm)}
-            aria-describedby={
-              aircraftErrors.empty_lat_arm ? "aircraft-empty-lateral-arm-error" : undefined
-            }
-          />
-          <FieldError
-            id="aircraft-empty-lateral-arm-error"
-            message={aircraftErrors.empty_lat_arm}
-          />
-        </label>
-      </div>
-
-      <div className="mt-6 flex items-center justify-end gap-3">
-        <button
-          type="button"
-          className="primary-button"
-          disabled={saving}
-          onClick={() => void handleSaveAircraft()}
-        >
-          {saving ? "Saving..." : aircraftForm.id ? "Save aircraft" : "Add aircraft"}
-        </button>
-      </div>
-    </div>
-  );
+      </form>
+    );
+  };
 
   return (
     <>
@@ -2623,333 +1878,6 @@ export default function AircraftAdminPanel() {
         <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => { setAssigningAircraftId(""); setSelectedOrganizationIds([]); }}>Cancel</CompactButton><CompactButton type="button" tone="primary" disabled={saving} onClick={() => void handleSaveOrganizationAssignments()}>{saving ? "Saving…" : "Save access"}</CompactButton></div>
       </DetailDrawer>
 
-      {showModelsModal && portalRoot
-        ? createPortal(
-            <div className="Overlay" onClick={() => setShowModelsModal(false)}>
-              <div className="Modal" onClick={(event) => event.stopPropagation()}>
-                <div className="tools-child-shell flex h-full min-h-0 flex-col">
-                  <div className="tools-child-header">
-                    <div>
-                      <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Aircraft Models</h2>
-                    </div>
-                    <div className="tools-child-actions">
-                      <button type="button" className="ghost-button" onClick={() => openModelEditor()}>
-                        Add aircraft model
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => setShowModelsModal(false)}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-
-                  <div
-                    ref={modelsScrollRef}
-                    className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]"
-                  >
-                    <div className="grid gap-3">
-                      {models.map((model) => (
-                        <div key={model.id} id={`model-editor-${model.id}`}>
-                          <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{model.name}</p>
-                                <p className="saas-meta-text">
-                                  {model.category === "helicopter" ? "Helicopter" : "Airplane"}
-                                  {" · Typical fuel use: "}
-                                  {typeof model.avg_fuel_burn_rate === "number"
-                                    ? `${model.avg_fuel_burn_rate} gal/hr`
-                                    : "not entered"}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap justify-end gap-2">
-                                <button
-                                  type="button"
-                                  className="ghost-button"
-                                  onClick={() => openModelEditor(normalizeModelForm(model))}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  className="danger-button-compact"
-                                  disabled={saving}
-                                  onClick={() => void handleDeleteModel(model.id)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {showModelForm && modelForm.id === model.id ? renderModelForm() : null}
-                        </div>
-                      ))}
-
-                      {showModelForm && !modelForm.id ? (
-                        <div id="model-editor-new">{renderModelForm()}</div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            portalRoot
-          )
-        : null}
-
-      {showAircraftModal && portalRoot
-        ? createPortal(
-            <div className="Overlay" onClick={() => setShowAircraftModal(false)}>
-              <div className="Modal" onClick={(event) => event.stopPropagation()}>
-                <div className="tools-child-shell flex h-full min-h-0 flex-col">
-                  <div className="tools-child-header">
-                    <div>
-                      <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Fleet Aircraft</h2>
-                    </div>
-                    <div className="tools-child-actions">
-                      <button type="button" className="ghost-button" onClick={() => openAircraftEditor()}>
-                        Add aircraft
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => setShowAircraftModal(false)}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-
-                  <div
-                    ref={aircraftScrollRef}
-                    className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]"
-                  >
-                    <div className="grid gap-3">
-                      {aircraft.map((item) => (
-                        <div key={item.id} id={`aircraft-editor-${item.id}`}>
-                          <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {item.tail_number ?? item.name}
-                                </p>
-                                <p className="saas-meta-text">
-                                  {modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Model"} · Empty{" "}
-                                  {item.empty_weight ?? "--"} lbs
-                                </p>
-                                <p className="saas-meta-text mt-1">
-                                  {item.visibility === "private" ? "Your private aircraft" : "Shared platform aircraft"}
-                                  {organizationAssignments.filter((assignment) => assignment.aircraft_id === item.id).length > 0
-                                    ? ` · ${organizationAssignments.filter((assignment) => assignment.aircraft_id === item.id).length} organization assignment(s)`
-                                    : ""}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap justify-end gap-2">
-                                {item.visibility === "shared" ? <button
-                                  type="button"
-                                  className="ghost-button"
-                                  disabled={saving}
-                                  onClick={() => void handleMakeAircraftPrivate(item.id)}
-                                >
-                                  Make private
-                                </button> : null}
-                                {item.visibility === "private" && item.owner_user_id === session?.user?.id ? (
-                                  <button
-                                    type="button"
-                                    className="ghost-button"
-                                    disabled={saving}
-                                    onClick={() => openOrganizationAssignments(item)}
-                                  >
-                                    Organizations
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className="ghost-button"
-                                  onClick={() => openAircraftEditor(normalizeAircraftForm(item))}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  className="danger-button-compact"
-                                  disabled={saving}
-                                  onClick={() => void handleDeleteAircraft(item.id)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {assigningAircraftId === item.id ? (
-                            <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
-                              <h3 className="text-sm font-semibold text-slate-900">Organization access</h3>
-                              <p className="saas-meta-text mt-1">
-                                Select every organization that may use {item.tail_number}. The aircraft remains private to your account.
-                              </p>
-                              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                                {organizations.map((organization) => (
-                                  <label key={organization.id} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      className="mt-0.5"
-                                      checked={selectedOrganizationIds.includes(organization.id)}
-                                      onChange={() => toggleOrganizationAssignment(organization.id)}
-                                    />
-                                    <span>
-                                      <span className="block font-medium text-slate-900">{organization.name}</span>
-                                      <span className="block text-xs text-slate-500">Owner: {organization.owner_display_name || organization.owner_email || "Unavailable"}</span>
-                                    </span>
-                                  </label>
-                                ))}
-                              </div>
-                              {organizations.length === 0 ? <p className="saas-meta-text mt-3">No organizations are available.</p> : null}
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSaveOrganizationAssignments()}>
-                                  {saving ? "Saving..." : "Save organization access"}
-                                </button>
-                                <button type="button" className="ghost-button" disabled={saving} onClick={() => { setAssigningAircraftId(""); setSelectedOrganizationIds([]); }}>
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
-
-                          {showAircraftForm && aircraftForm.id === item.id ? renderAircraftForm() : null}
-                        </div>
-                      ))}
-
-                      {showAircraftForm && !aircraftForm.id ? (
-                        <div id="aircraft-editor-new">{renderAircraftForm()}</div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            portalRoot
-          )
-        : null}
-
-      {showRequestsModal && portalRoot
-        ? createPortal(
-            <div className="Overlay" onClick={() => setShowRequestsModal(false)}>
-              <div className="Modal" onClick={(event) => event.stopPropagation()}>
-                <div className="tools-child-shell flex h-full min-h-0 flex-col">
-                  <div className="tools-child-header">
-                    <div>
-                      <p className="saas-kicker">Admin</p>
-                      <h2 className="tools-child-title">Pending Weight-and-Balance Changes</h2>
-                    </div>
-                    <div className="tools-child-actions">
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => setShowRequestsModal(false)}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
-                    <div className="grid gap-3">
-                      {updateRequests.filter((request) => request.status === "pending").length === 0 ? (
-                        <div className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3">
-                          <p className="text-sm font-medium text-slate-900">No pending requests.</p>
-                          <p className="saas-meta-text mt-1">
-                            Submitted weight-and-balance changes will appear here for review.
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {updateRequests
-                        .filter((request) => request.status === "pending")
-                        .map((request) => (
-                          <div
-                            key={request.id}
-                            className="rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-4"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {request.aircraft_tail_number}
-                                </p>
-                                <p className="saas-meta-text mt-1">
-                                  Submitted by {request.submitted_by_label} ·{" "}
-                                  {request.created_at
-                                    ? new Date(request.created_at).toLocaleString()
-                                    : "Unknown time"}
-                                </p>
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  className="ghost-button"
-                                  disabled={saving}
-                                  onClick={() => void handleApproveRequest(request)}
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  className="danger-button-compact"
-                                  disabled={saving}
-                                  onClick={() => void handleRejectRequest(request)}
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="mt-4 grid gap-3 md:grid-cols-2">
-                              <div className="rounded-2xl border border-[var(--border)] bg-white/85 p-3">
-                                <p className="saas-meta-text">Current shared values</p>
-                                <p className="mt-2 text-sm text-slate-900">
-                                  Empty weight: {request.current_empty_weight ?? "--"} lbs
-                                </p>
-                                <p className="mt-1 text-sm text-slate-900">
-                                  Empty arm: {request.current_empty_arm ?? "--"}
-                                </p>
-                                <p className="mt-1 text-sm text-slate-900">
-                                  Empty lat arm: {request.current_empty_lat_arm ?? "--"}
-                                </p>
-                              </div>
-
-                              <div className="rounded-2xl border border-[var(--border)] bg-white/85 p-3">
-                                <p className="saas-meta-text">Proposed values</p>
-                                <p className="mt-2 text-sm text-slate-900">
-                                  Empty weight: {request.proposed_empty_weight ?? "--"} lbs
-                                </p>
-                                <p className="mt-1 text-sm text-slate-900">
-                                  Empty arm: {request.proposed_empty_arm ?? "--"}
-                                </p>
-                                <p className="mt-1 text-sm text-slate-900">
-                                  Empty lat arm: {request.proposed_empty_lat_arm ?? "--"}
-                                </p>
-                              </div>
-                            </div>
-
-                            {request.note ? (
-                              <p className="saas-meta-text mt-3">Note: {request.note}</p>
-                            ) : null}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            portalRoot
-          )
-        : null}
     </>
   );
 }

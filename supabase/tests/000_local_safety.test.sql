@@ -28,8 +28,8 @@ select is(
 
 select is(
   (select count(*) from public.profiles),
-  2::bigint,
-  'only the two synthetic local profiles exist'
+  3::bigint,
+  'only the three synthetic local profiles exist'
 );
 
 select is(

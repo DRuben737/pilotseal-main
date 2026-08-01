@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { DateTime } from "luxon";
+import { UsDateInput } from "@/components/forms/UsDateInput";
 
 const NightTimeCalculator = () => {
   const [location, setLocation] = useState("");
@@ -155,10 +156,9 @@ const NightTimeCalculator = () => {
 
           <label className="night-tool-field">
             <span>Date</span>
-            <input
-              type="date"
+            <UsDateInput
               value={date}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={setDate}
             />
           </label>
         </div>

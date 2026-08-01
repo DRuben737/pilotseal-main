@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { AdminDataTable, DetailDrawer } from "@/components/admin/AdminConsole";
+import {
+  AdminDataTable,
+  CompactButton,
+  DetailDrawer,
+  WorksheetCell,
+  WorksheetGrid,
+  WorksheetHeader,
+  worksheetInputClass,
+} from "@/components/admin/AdminConsole";
+import { UsDateInput } from "@/components/forms/UsDateInput";
 import type { AircraftModelRecord, AircraftRecord } from "@/lib/aircraft";
 import {
   deleteAircraftInspectionAssignment,
@@ -15,6 +24,7 @@ import {
   type InspectionBasis,
   type OrganizationInspectionDefinition,
 } from "@/lib/preflight";
+import { formatUsDate } from "@/lib/date-format";
 
 type Props = {
   organizationId: string;
@@ -332,34 +342,44 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
         description="Create a reusable maintenance requirement."
         onClose={() => setActiveDrawer(null)}
       >
-        <form className="grid gap-3" onSubmit={handleSaveDefinition}>
-          <Field label="What is required?">
-            <input value={definitionForm.name} onChange={(event) => setDefinitionForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Main rotor grip inspection" required />
-          </Field>
-          <Field label="How is it tracked?">
-            <select value={definitionForm.basis} onChange={(event) => setDefinitionForm((current) => ({ ...current, basis: event.target.value as InspectionBasis }))}>
-              <option value="calendar">By calendar date</option>
-              <option value="hobbs">By Hobbs reading</option>
-              <option value="tach">By tachometer reading</option>
-              <option value="whichever_first">By date and meter — whichever comes first</option>
-            </select>
-          </Field>
-          <Field label="Aircraft models">
-            <select value={definitionForm.model_id} onChange={(event) => setDefinitionForm((current) => ({ ...current, model_id: event.target.value }))}>
-              <option value="">Every aircraft model</option>
-              {models.filter((model) => !model.organization_id || model.organization_id === organizationId).map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </Field>
-          <div className={`grid gap-3 ${definitionForm.basis === "whichever_first" ? "sm:grid-cols-2" : ""}`}>
-            {usesCalendar(definitionForm.basis) ? <Field label="Warning days"><input type="number" min="0" value={definitionForm.warning_days} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_days: event.target.value }))} /></Field> : null}
-            {usesMeter(definitionForm.basis) ? <Field label="Warning hours"><input type="number" min="0" step="any" value={definitionForm.warning_hours} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_hours: event.target.value }))} /></Field> : null}
-          </div>
-          <Field label="Instructions or reference">
-            <textarea rows={3} value={definitionForm.notes} onChange={(event) => setDefinitionForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional AD number, service bulletin, or instructions" />
-          </Field>
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
-            <button className="ghost-button" type="button" onClick={() => setActiveDrawer(null)}>Cancel</button>
-            <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save item"}</button>
+        <form onSubmit={handleSaveDefinition}>
+          <WorksheetGrid label="Maintenance item definition" minWidth={860}>
+            <thead>
+              <tr>
+                <WorksheetHeader className="min-w-52">Maintenance item</WorksheetHeader>
+                <WorksheetHeader>Tracked by</WorksheetHeader>
+                <WorksheetHeader>Aircraft models</WorksheetHeader>
+                <WorksheetHeader>Warning days</WorksheetHeader>
+                <WorksheetHeader>Warning hours</WorksheetHeader>
+                <WorksheetHeader>Instructions / reference</WorksheetHeader>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <WorksheetCell><input autoFocus required aria-label="Maintenance item name" className={worksheetInputClass} value={definitionForm.name} onChange={(event) => setDefinitionForm((current) => ({ ...current, name: event.target.value }))} placeholder="Main rotor grip inspection" /></WorksheetCell>
+                <WorksheetCell>
+                  <select aria-label="Tracking method" className={worksheetInputClass} value={definitionForm.basis} onChange={(event) => setDefinitionForm((current) => ({ ...current, basis: event.target.value as InspectionBasis }))}>
+                    <option value="calendar">Calendar date</option>
+                    <option value="hobbs">Hobbs</option>
+                    <option value="tach">Tach</option>
+                    <option value="whichever_first">Date or meter, first due</option>
+                  </select>
+                </WorksheetCell>
+                <WorksheetCell>
+                  <select aria-label="Applicable aircraft models" className={worksheetInputClass} value={definitionForm.model_id} onChange={(event) => setDefinitionForm((current) => ({ ...current, model_id: event.target.value }))}>
+                    <option value="">Every model</option>
+                    {models.filter((model) => !model.organization_id || model.organization_id === organizationId).map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                  </select>
+                </WorksheetCell>
+                <WorksheetCell>{usesCalendar(definitionForm.basis) ? <input aria-label="Warning days" className={worksheetInputClass} type="number" min="0" value={definitionForm.warning_days} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_days: event.target.value }))} /> : <span className="block h-8 px-2 py-2 text-slate-400">—</span>}</WorksheetCell>
+                <WorksheetCell>{usesMeter(definitionForm.basis) ? <input aria-label="Warning hours" className={worksheetInputClass} type="number" min="0" step="any" value={definitionForm.warning_hours} onChange={(event) => setDefinitionForm((current) => ({ ...current, warning_hours: event.target.value }))} /> : <span className="block h-8 px-2 py-2 text-slate-400">—</span>}</WorksheetCell>
+                <WorksheetCell><input aria-label="Instructions or reference" className={worksheetInputClass} value={definitionForm.notes} onChange={(event) => setDefinitionForm((current) => ({ ...current, notes: event.target.value }))} /></WorksheetCell>
+              </tr>
+            </tbody>
+          </WorksheetGrid>
+          <div className="flex justify-end gap-2 border-t border-slate-300 bg-slate-50 px-3 py-2">
+            <CompactButton type="button" onClick={() => setActiveDrawer(null)}>Cancel</CompactButton>
+            <CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Saving..." : "Save item"}</CompactButton>
           </div>
         </form>
       </DetailDrawer>
@@ -370,38 +390,53 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
         description="Set the next due date or meter reading."
         onClose={() => setActiveDrawer(null)}
       >
-        <form className="grid gap-3" onSubmit={handleSaveAssignment}>
-          <Field label="Maintenance item">
-            <select value={assignmentForm.definition_id} onChange={(event) => setAssignmentForm((current) => ({ ...current, definition_id: event.target.value, aircraft_id: "", due_date: "", due_meter: "" }))} required>
-              <option value="">Choose a maintenance item</option>
-              {activeDefinitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.name}</option>)}
-            </select>
-          </Field>
-          <Field label={selectedDefinition?.model_id ? `Aircraft — ${modelById.get(selectedDefinition.model_id)?.name ?? "matching model"}` : "Aircraft"}>
-            <select disabled={!selectedDefinition} value={assignmentForm.aircraft_id} onChange={(event) => setAssignmentForm((current) => ({ ...current, aircraft_id: event.target.value }))} required>
-              <option value="">{selectedDefinition ? "Choose an aircraft" : "Choose a maintenance item first"}</option>
-              {applicableAircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}</option>)}
-            </select>
-          </Field>
-          <div className={`grid gap-3 ${selectedDefinition?.basis === "whichever_first" ? "sm:grid-cols-2" : ""}`}>
-            {selectedDefinition && usesCalendar(selectedDefinition.basis) ? <Field label="Next due date"><input type="date" value={assignmentForm.due_date} onChange={(event) => setAssignmentForm((current) => ({ ...current, due_date: event.target.value }))} required /></Field> : null}
-            {selectedDefinition && usesMeter(selectedDefinition.basis) ? <Field label={`Due at ${meterName(selectedDefinition.basis)} reading`}><input type="number" min="0" step="any" value={assignmentForm.due_meter} onChange={(event) => setAssignmentForm((current) => ({ ...current, due_meter: event.target.value }))} placeholder="e.g. 2150.0" required /></Field> : null}
-          </div>
-          <Field label="Aircraft note">
-            <textarea rows={3} value={assignmentForm.notes} onChange={(event) => setAssignmentForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional aircraft-specific context" />
-          </Field>
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
-            <button className="ghost-button" type="button" onClick={() => setActiveDrawer(null)}>Cancel</button>
-            <button className="primary-button" type="submit" disabled={saving || activeDefinitions.length === 0 || applicableAircraft.length === 0}>{saving ? "Saving..." : "Assign"}</button>
+        <form onSubmit={handleSaveAssignment}>
+          <WorksheetGrid label="Aircraft maintenance assignment" minWidth={820}>
+            <thead>
+              <tr>
+                <WorksheetHeader className="min-w-52">Maintenance item</WorksheetHeader>
+                <WorksheetHeader>Aircraft</WorksheetHeader>
+                <WorksheetHeader>Due date (MM/DD/YYYY)</WorksheetHeader>
+                <WorksheetHeader>Due meter</WorksheetHeader>
+                <WorksheetHeader>Aircraft note</WorksheetHeader>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <WorksheetCell>
+                  <select autoFocus required aria-label="Maintenance item" className={worksheetInputClass} value={assignmentForm.definition_id} onChange={(event) => setAssignmentForm((current) => ({ ...current, definition_id: event.target.value, aircraft_id: "", due_date: "", due_meter: "" }))}>
+                    <option value="">Choose item</option>
+                    {activeDefinitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.name}</option>)}
+                  </select>
+                </WorksheetCell>
+                <WorksheetCell>
+                  <select required aria-label="Aircraft" className={worksheetInputClass} disabled={!selectedDefinition} value={assignmentForm.aircraft_id} onChange={(event) => setAssignmentForm((current) => ({ ...current, aircraft_id: event.target.value }))}>
+                    <option value="">{selectedDefinition ? "Choose aircraft" : "Choose item first"}</option>
+                    {applicableAircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}</option>)}
+                  </select>
+                </WorksheetCell>
+                <WorksheetCell>
+                  {selectedDefinition && usesCalendar(selectedDefinition.basis)
+                    ? <UsDateInput required aria-label="Next due date" className={worksheetInputClass} value={assignmentForm.due_date} onChange={(value) => setAssignmentForm((current) => ({ ...current, due_date: value }))} />
+                    : <span className="block h-8 px-2 py-2 text-slate-400">—</span>}
+                </WorksheetCell>
+                <WorksheetCell>
+                  {selectedDefinition && usesMeter(selectedDefinition.basis)
+                    ? <input required aria-label="Due meter reading" className={worksheetInputClass} type="number" min="0" step="any" value={assignmentForm.due_meter} onChange={(event) => setAssignmentForm((current) => ({ ...current, due_meter: event.target.value }))} />
+                    : <span className="block h-8 px-2 py-2 text-slate-400">—</span>}
+                </WorksheetCell>
+                <WorksheetCell><input aria-label="Aircraft note" className={worksheetInputClass} value={assignmentForm.notes} onChange={(event) => setAssignmentForm((current) => ({ ...current, notes: event.target.value }))} /></WorksheetCell>
+              </tr>
+            </tbody>
+          </WorksheetGrid>
+          <div className="flex justify-end gap-2 border-t border-slate-300 bg-slate-50 px-3 py-2">
+            <CompactButton type="button" onClick={() => setActiveDrawer(null)}>Cancel</CompactButton>
+            <CompactButton type="submit" tone="primary" disabled={saving || activeDefinitions.length === 0 || applicableAircraft.length === 0}>{saving ? "Saving..." : "Assign"}</CompactButton>
           </div>
         </form>
       </DetailDrawer>
     </section>
   );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="saas-field"><span>{label}</span>{children}</label>;
 }
 
 function optionalNonNegativeNumber(value: string, label: string) {
@@ -456,21 +491,10 @@ function formatWarning(definition: OrganizationInspectionDefinition) {
 
 function formatDue(assignment: AircraftInspectionAssignment, basis: InspectionBasis) {
   const values = [
-    assignment.due_date ? `due ${formatDate(assignment.due_date)}` : "",
+    assignment.due_date ? `due ${formatUsDate(assignment.due_date)}` : "",
     assignment.due_meter == null ? "" : `due at ${meterName(basis)} ${assignment.due_meter}`,
   ].filter(Boolean);
   return values.join(" / ") || "No due limit";
-}
-
-function formatDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 function getErrorMessage(error: unknown, fallback: string) {

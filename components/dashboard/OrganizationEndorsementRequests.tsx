@@ -15,6 +15,7 @@ import {
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { formatUsDateTime } from "@/lib/date-format";
 import {
   fetchAdminEndorsementTemplates,
   fetchEndorsementTemplateChangeRequests,
@@ -147,7 +148,7 @@ export default function OrganizationEndorsementRequests({ organizationId, embedd
             <tr key={request.id} className="hover:bg-blue-50/40">
               <td className="px-3 py-2 font-semibold text-slate-950">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</td>
               <td className="px-3 py-2 text-xs text-slate-600">{request.action === "create" ? "New endorsement" : "Update"}</td>
-              <td className="px-3 py-2 text-xs text-slate-500">{new Date(request.submitted_at).toLocaleString()}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{formatUsDateTime(request.submitted_at)}</td>
               <td className="px-3 py-2"><StatusBadge tone={request.status === "approved" ? "success" : request.status === "rejected" ? "danger" : "warning"}>{formatStatus(request.status)}</StatusBadge></td>
               <td className="max-w-sm px-3 py-2 text-xs text-slate-600">{request.review_note || "—"}</td>
             </tr>

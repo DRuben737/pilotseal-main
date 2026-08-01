@@ -14,6 +14,7 @@ import {
   type EndorsementRecord,
 } from "@/lib/endorsement-records";
 import { canManageOrganization } from "@/lib/organizations";
+import { formatUsDate, formatUsDateTime } from "@/lib/date-format";
 
 function formatRecordDate(value: string) {
   if (!value) {
@@ -24,31 +25,11 @@ function formatRecordDate(value: string) {
     return value;
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(parsed);
+  return formatUsDate(value, value);
 }
 
 function formatCreatedAt(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(parsed);
+  return formatUsDateTime(value, "");
 }
 
 function formatFileSize(value: number | null) {

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
+import { UsDateInput } from "@/components/forms/UsDateInput";
 import {
   AIRCRAFT_DISCREPANCY_TYPES,
   fetchOrganizationAircraftReports,
@@ -19,6 +20,7 @@ import {
   type TriState,
 } from "@/lib/aircraft-reports";
 import { fetchOrganizationAircraft, type AircraftRecord } from "@/lib/aircraft";
+import { formatUsDateTime } from "@/lib/date-format";
 import { canManageOrganization } from "@/lib/organizations";
 
 type ReportForm = {
@@ -455,13 +457,10 @@ export default function AircraftReportsManager() {
               error={formErrors.reportDate}
               errorId="report-date-error"
             >
-              <input
-                type="date"
+              <UsDateInput
                 max={new Date().toISOString().slice(0, 10)}
                 value={form.reportDate}
-                onChange={(event) =>
-                  updateReportField("reportDate", event.target.value)
-                }
+                onChange={(value) => updateReportField("reportDate", value)}
                 aria-invalid={Boolean(formErrors.reportDate)}
                 aria-describedby={
                   formErrors.reportDate ? "report-date-error" : undefined
@@ -1117,9 +1116,7 @@ function formatEvent(value: AircraftDiscrepancyReport["events"][number]["event_t
 }
 
 function formatDateTime(value: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return formatUsDateTime(value);
 }
 
 function getErrorMessage(value: unknown, fallback: string) {

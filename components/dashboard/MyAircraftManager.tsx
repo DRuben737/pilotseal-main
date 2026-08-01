@@ -11,6 +11,7 @@ import {
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { UsDateInput } from "@/components/forms/UsDateInput";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   attachAircraftByTail,
@@ -18,9 +19,11 @@ import {
   fetchAircraftModels,
   fetchMyAircraft,
   fetchOrganizationAircraft,
+  fetchPersonalAircraftInspections,
   fetchSharedAircraft,
   removeMyAircraft,
   saveCurrentAircraftForUser,
+  savePersonalAircraftInspections,
   setPlatformAircraftOrganizations,
   submitAircraftUpdateRequest,
   updateMyAircraft,
@@ -29,8 +32,13 @@ import {
   type AircraftOrganizationAssignment,
   type AircraftRecord,
   type AttachAircraftConflict,
+  type PersonalAircraftInspectionBasis,
+  type PersonalAircraftInspectionDatePrecision,
+  type PersonalAircraftInspectionInput,
+  type PersonalAircraftInspectionRecord,
   type SavedAircraftDueInput,
 } from "@/lib/aircraft";
+import { formatUsDate, formatUsMonthYear, monthToLastIsoDate } from "@/lib/date-format";
 import {
   fetchPlatformOrganizations,
   type PlatformOrganization,
@@ -48,6 +56,17 @@ type AircraftFormState = {
   static_due_date: string;
   transponder_due_date: string;
   elt_due_date: string;
+};
+
+type PersonalInspectionDraft = {
+  clientKey: string;
+  id: string;
+  name: string;
+  basis: PersonalAircraftInspectionBasis;
+  date_precision: PersonalAircraftInspectionDatePrecision;
+  due_date: string;
+  due_meter: string;
+  notes: string;
 };
 
 const emptyForm: AircraftFormState = {
@@ -101,24 +120,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function formatDateLabel(value: string | null | undefined) {
-  if (!value) {
-    return "";
-  }
-
-  const [datePart] = value.split("T");
-  const [year, month, day] = datePart.split("-");
-  if (!year || !month) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day || "1"))));
-}
-
 function formatDateInput(value: string | null | undefined) {
   return value ? value.slice(0, 7) : "";
 }
@@ -126,10 +127,10 @@ function formatDateInput(value: string | null | undefined) {
 function getDueSummary(aircraft: AircraftRecord) {
   const items = [
     aircraft.hundred_hour_due_hours != null ? `100hr ${aircraft.hundred_hour_due_hours}` : "",
-    aircraft.annual_due_date ? `Annual ${formatDateLabel(aircraft.annual_due_date)}` : "",
-    aircraft.static_due_date ? `91.411 ${formatDateLabel(aircraft.static_due_date)}` : "",
-    aircraft.transponder_due_date ? `91.413 ${formatDateLabel(aircraft.transponder_due_date)}` : "",
-    aircraft.elt_due_date ? `ELT ${formatDateLabel(aircraft.elt_due_date)}` : "",
+    aircraft.annual_due_date ? `Annual ${formatUsMonthYear(aircraft.annual_due_date)}` : "",
+    aircraft.static_due_date ? `91.411 ${formatUsMonthYear(aircraft.static_due_date)}` : "",
+    aircraft.transponder_due_date ? `91.413 ${formatUsMonthYear(aircraft.transponder_due_date)}` : "",
+    aircraft.elt_due_date ? `ELT ${formatUsMonthYear(aircraft.elt_due_date)}` : "",
   ].filter(Boolean);
 
   return items.join(" · ");
@@ -148,6 +149,8 @@ export default function MyAircraftManager() {
   const [organizationAircraft, setOrganizationAircraft] = useState<AircraftRecord[]>([]);
   const [platformOrganizations, setPlatformOrganizations] = useState<PlatformOrganization[]>([]);
   const [organizationAssignments, setOrganizationAssignments] = useState<AircraftOrganizationAssignment[]>([]);
+  const [personalInspections, setPersonalInspections] = useState<PersonalAircraftInspectionRecord[]>([]);
+  const [inspectionDrafts, setInspectionDrafts] = useState<PersonalInspectionDraft[]>([]);
   const [assigningAircraftId, setAssigningAircraftId] = useState("");
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
   const [form, setForm] = useState<AircraftFormState>(emptyForm);
@@ -174,7 +177,7 @@ export default function MyAircraftManager() {
       setStatus("");
 
       try {
-        const [profile, modelList, sharedList, attachedList, organizationList] = await Promise.all([
+        const [profile, modelList, sharedList, attachedList, organizationList, personalInspectionList] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchAircraftModels(),
           fetchSharedAircraft(),
@@ -182,6 +185,7 @@ export default function MyAircraftManager() {
           activeOrganization?.id
             ? fetchOrganizationAircraft(activeOrganization.id)
             : Promise.resolve([]),
+          fetchPersonalAircraftInspections(session.user.id),
         ]);
         const nextProfileRole = String(profile?.role ?? "user").trim().toLowerCase();
         const adminOwnedAircraftIds = attachedList
@@ -204,6 +208,7 @@ export default function MyAircraftManager() {
           setOrganizationAircraft(organizationList);
           setPlatformOrganizations(availableOrganizations);
           setOrganizationAssignments(currentAssignments);
+          setPersonalInspections(personalInspectionList);
         }
       } catch (error) {
         if (!cancelled) {
@@ -236,6 +241,22 @@ export default function MyAircraftManager() {
     return organizationAssignments
       .filter((assignment) => assignment.aircraft_id === aircraftId)
       .map((assignment) => assignment.organization_id);
+  }
+
+  function getPersonalInspectionSummary(aircraftId: string) {
+    return personalInspections
+      .filter((item) => item.aircraft_id === aircraftId)
+      .map((item) => {
+        const dueDate = item.date_precision === "month"
+          ? formatUsMonthYear(item.due_date)
+          : formatUsDate(item.due_date);
+        if (item.basis === "calendar") return `${item.name} ${dueDate}`;
+        if (item.basis === "whichever_first") {
+          return `${item.name} ${dueDate} / ${item.due_meter ?? "—"}`;
+        }
+        return `${item.name} ${item.due_meter ?? "—"} ${item.basis === "tach" ? "Tach" : "Hobbs"}`;
+      })
+      .join(" · ");
   }
 
   function canAssignAircraft(aircraft: AircraftRecord) {
@@ -298,17 +319,19 @@ export default function MyAircraftManager() {
       return;
     }
 
-    const [sharedList, attachedList, organizationList] = await Promise.all([
+    const [sharedList, attachedList, organizationList, personalInspectionList] = await Promise.all([
       fetchSharedAircraft(),
       fetchMyAircraft(session.user.id),
       activeOrganization?.id
         ? fetchOrganizationAircraft(activeOrganization.id)
         : Promise.resolve([]),
+      fetchPersonalAircraftInspections(session.user.id),
     ]);
 
     setSharedAircraft(sharedList);
     setMyAircraft(attachedList);
     setOrganizationAircraft(organizationList);
+    setPersonalInspections(personalInspectionList);
     if (profileRole === "admin") {
       const adminOwnedAircraftIds = attachedList
         .filter((aircraft) =>
@@ -326,23 +349,63 @@ export default function MyAircraftManager() {
   }
 
   function getDueInputFromForm(): SavedAircraftDueInput {
-    const toStoredMonthEnd = (value: string) => {
-      const [year, month] = value.split("-").map(Number);
-      if (!year || !month) {
-        return null;
-      }
-
-      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-      return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-    };
-
     return {
       hundred_hour_due_hours: toNullableNumber(form.hundred_hour_due_hours),
-      annual_due_date: toStoredMonthEnd(form.annual_due_date),
-      static_due_date: toStoredMonthEnd(form.static_due_date),
-      transponder_due_date: toStoredMonthEnd(form.transponder_due_date),
-      elt_due_date: toStoredMonthEnd(form.elt_due_date),
+      annual_due_date: monthToLastIsoDate(form.annual_due_date),
+      static_due_date: monthToLastIsoDate(form.static_due_date),
+      transponder_due_date: monthToLastIsoDate(form.transponder_due_date),
+      elt_due_date: monthToLastIsoDate(form.elt_due_date),
     };
+  }
+
+  function getPersonalInspectionInputs(): PersonalAircraftInspectionInput[] {
+    const names = new Set<string>();
+    return inspectionDrafts.map((item) => {
+      const name = item.name.trim();
+      if (name.length < 2) throw new Error("Each inspection needs a name.");
+      const normalizedName = name.toLocaleLowerCase();
+      if (names.has(normalizedName)) throw new Error(`Inspection names must be unique: ${name}.`);
+      names.add(normalizedName);
+      const needsDate = item.basis === "calendar" || item.basis === "whichever_first";
+      const needsMeter = item.basis !== "calendar";
+      const dueMeter = toNullableNumber(item.due_meter);
+      const dateFormat = item.date_precision === "month" ? "MM/YYYY" : "MM/DD/YYYY";
+      if (needsDate && !item.due_date) throw new Error(`${name} needs a due date in ${dateFormat} format.`);
+      if (needsMeter && dueMeter === null) throw new Error(`${name} needs a due meter value.`);
+      return {
+        name,
+        basis: item.basis,
+        date_precision: item.date_precision,
+        due_date: needsDate
+          ? item.date_precision === "month" ? monthToLastIsoDate(item.due_date) : item.due_date
+          : null,
+        due_meter: needsMeter ? dueMeter : null,
+        notes: item.notes.trim() || null,
+      };
+    });
+  }
+
+  function updateInspectionDraft<K extends keyof PersonalInspectionDraft>(
+    clientKey: string,
+    key: K,
+    value: PersonalInspectionDraft[K]
+  ) {
+    setInspectionDrafts((current) => current.map((item) =>
+      item.clientKey === clientKey ? { ...item, [key]: value } : item
+    ));
+  }
+
+  function addInspectionDraft(name = "", datePrecision: PersonalAircraftInspectionDatePrecision = "day") {
+    setInspectionDrafts((current) => [...current, {
+      clientKey: crypto.randomUUID(),
+      id: "",
+      name,
+      basis: "calendar",
+      date_precision: datePrecision,
+      due_date: "",
+      due_meter: "",
+      notes: "",
+    }]);
   }
 
   function hasAircraftInfoChanges(aircraft: AircraftRecord, proposed: {
@@ -363,6 +426,7 @@ export default function MyAircraftManager() {
 
   function openAddForm() {
     setForm(emptyForm);
+    setInspectionDrafts([]);
     setEditingAircraftId("");
     setConflict(null);
     setStatus("");
@@ -384,6 +448,19 @@ export default function MyAircraftManager() {
       transponder_due_date: formatDateInput(aircraft.transponder_due_date),
       elt_due_date: formatDateInput(aircraft.elt_due_date),
     });
+    setInspectionDrafts(personalInspections
+      .filter((item) => item.aircraft_id === aircraft.id)
+      .map((item) => ({
+        clientKey: item.id,
+        id: item.id,
+        name: item.name,
+        basis: item.basis,
+        date_precision: item.date_precision,
+        due_date: item.date_precision === "month" ? formatDateInput(item.due_date) : item.due_date ?? "",
+        due_meter: item.due_meter != null ? String(item.due_meter) : "",
+        notes: item.notes ?? "",
+      }))
+    );
     setEditingAircraftId(aircraft.id);
     setConflict(null);
     setStatus("");
@@ -393,6 +470,7 @@ export default function MyAircraftManager() {
 
   function closeForm() {
     setForm(emptyForm);
+    setInspectionDrafts([]);
     setEditingAircraftId("");
     setConflict(null);
     setShowForm(false);
@@ -433,6 +511,7 @@ export default function MyAircraftManager() {
           empty_lat_arm: toNullableNumber(form.empty_lat_arm),
         };
         const dueInput = getDueInputFromForm();
+        const inspectionInputs = getPersonalInspectionInputs();
 
         if (currentAircraft.visibility === "private" && currentAircraft.owner_user_id === session.user.id) {
           await updateMyAircraft(session.user.id, editingAircraftId, {
@@ -443,6 +522,7 @@ export default function MyAircraftManager() {
             empty_lat_arm: proposed.empty_lat_arm,
           });
           await updateSavedAircraftDue(session.user.id, editingAircraftId, dueInput);
+          await savePersonalAircraftInspections(editingAircraftId, inspectionInputs);
           await reloadAircraftLists();
           closeForm();
           setStatus("Aircraft updated.");
@@ -451,6 +531,7 @@ export default function MyAircraftManager() {
 
         if (!hasAircraftInfoChanges(currentAircraft, proposed)) {
           await updateSavedAircraftDue(session.user.id, editingAircraftId, dueInput);
+          await savePersonalAircraftInspections(editingAircraftId, inspectionInputs);
           await reloadAircraftLists();
           closeForm();
           setStatus("Aircraft due info saved.");
@@ -483,6 +564,7 @@ export default function MyAircraftManager() {
       }
 
       await updateSavedAircraftDue(session.user.id, result.aircraft.id, dueInput);
+      await savePersonalAircraftInspections(result.aircraft.id, getPersonalInspectionInputs());
       await reloadAircraftLists();
       closeForm();
       setStatus(
@@ -508,6 +590,7 @@ export default function MyAircraftManager() {
     try {
       await saveCurrentAircraftForUser(session.user.id, conflict.aircraft.id);
       await updateSavedAircraftDue(session.user.id, conflict.aircraft.id, getDueInputFromForm());
+      await savePersonalAircraftInspections(conflict.aircraft.id, getPersonalInspectionInputs());
       await reloadAircraftLists();
       closeForm();
       setStatus("Current shared aircraft added to My Aircraft.");
@@ -529,6 +612,7 @@ export default function MyAircraftManager() {
     try {
       if (editingAircraftId) {
         await updateSavedAircraftDue(session.user.id, editingAircraftId, getDueInputFromForm());
+        await savePersonalAircraftInspections(editingAircraftId, getPersonalInspectionInputs());
       }
 
       await submitAircraftUpdateRequest({
@@ -630,9 +714,14 @@ export default function MyAircraftManager() {
                     {aircraft.empty_lat_arm != null ? ` · Lat ${aircraft.empty_lat_arm}` : ""}
                   </p>
                   <p className="my-aircraft-secondary my-aircraft-muted-line">
-                    Updated {formatDateLabel(aircraft.updated_at) || "--"}
+                    Updated {formatUsDate(aircraft.updated_at, "--")}
                     {getDueSummary(aircraft) ? ` · ${getDueSummary(aircraft)}` : ""}
                   </p>
+                  {getPersonalInspectionSummary(aircraft.id) ? (
+                    <p className="my-aircraft-secondary my-aircraft-muted-line">
+                      {getPersonalInspectionSummary(aircraft.id)}
+                    </p>
+                  ) : null}
                   {canAssignAircraft(aircraft) ? (
                     <p className="my-aircraft-secondary my-aircraft-muted-line">
                       Organizations: {getAircraftOrganizationIds(aircraft.id).length > 0
@@ -830,24 +919,85 @@ export default function MyAircraftManager() {
                   <input aria-label="100-hour inspection due Hobbs" className={worksheetInputClass} type="number" step="0.1" min="0" value={form.hundred_hour_due_hours} onChange={(event) => updateField("hundred_hour_due_hours", event.target.value)} />
                 </WorksheetCell>
                 <WorksheetCell>
-                  <input aria-label="Annual inspection due month" className={worksheetInputClass} type="month" value={form.annual_due_date} onChange={(event) => updateField("annual_due_date", event.target.value)} />
+                  <UsDateInput precision="month" aria-label="Annual inspection due month" className={worksheetInputClass} value={form.annual_due_date} onChange={(value) => updateField("annual_due_date", value)} />
                 </WorksheetCell>
                 <WorksheetCell>
-                  <input aria-label="Static inspection due month" className={worksheetInputClass} type="month" value={form.static_due_date} onChange={(event) => updateField("static_due_date", event.target.value)} />
+                  <UsDateInput precision="month" aria-label="Static inspection due month" className={worksheetInputClass} value={form.static_due_date} onChange={(value) => updateField("static_due_date", value)} />
                 </WorksheetCell>
                 <WorksheetCell>
-                  <input aria-label="Transponder inspection due month" className={worksheetInputClass} type="month" value={form.transponder_due_date} onChange={(event) => updateField("transponder_due_date", event.target.value)} />
+                  <UsDateInput precision="month" aria-label="Transponder inspection due month" className={worksheetInputClass} value={form.transponder_due_date} onChange={(value) => updateField("transponder_due_date", value)} />
                 </WorksheetCell>
                 <WorksheetCell>
-                  <input aria-label="ELT inspection due month" className={worksheetInputClass} type="month" value={form.elt_due_date} onChange={(event) => updateField("elt_due_date", event.target.value)} />
+                  <UsDateInput precision="month" aria-label="ELT inspection due month" className={worksheetInputClass} value={form.elt_due_date} onChange={(value) => updateField("elt_due_date", value)} />
                 </WorksheetCell>
               </tr>
             </tbody>
           </WorksheetGrid>
 
+          <div className="flex items-center justify-between gap-2 border-b border-t border-slate-300 bg-slate-800 px-2 py-1 text-white">
+            <span className="text-[11px] font-bold uppercase tracking-wide">Additional inspections</span>
+            <div className="flex gap-1">
+              <CompactButton type="button" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => addInspectionDraft("Registration", "month")}>Add registration</CompactButton>
+              <CompactButton type="button" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => addInspectionDraft()}>Add inspection</CompactButton>
+            </div>
+          </div>
+          <WorksheetGrid label="Additional personal aircraft inspections" minWidth={820}>
+            <thead>
+              <tr>
+                <WorksheetHeader>Inspection</WorksheetHeader>
+                <WorksheetHeader>Tracked by</WorksheetHeader>
+                <WorksheetHeader>Due date / month</WorksheetHeader>
+                <WorksheetHeader>Due meter</WorksheetHeader>
+                <WorksheetHeader>Notes</WorksheetHeader>
+                <WorksheetHeader className="w-20 text-right">Action</WorksheetHeader>
+              </tr>
+            </thead>
+            <tbody>
+              {inspectionDrafts.length === 0 ? (
+                <tr><td colSpan={6} className="h-8 border-b border-slate-200 px-2 text-xs text-slate-400">No additional inspections.</td></tr>
+              ) : null}
+              {inspectionDrafts.map((item) => {
+                const needsDate = item.basis === "calendar" || item.basis === "whichever_first";
+                const needsMeter = item.basis !== "calendar";
+                return (
+                  <tr key={item.clientKey}>
+                    <WorksheetCell><input required aria-label="Inspection name" className={worksheetInputClass} value={item.name} onChange={(event) => updateInspectionDraft(item.clientKey, "name", event.target.value)} placeholder="Registration" /></WorksheetCell>
+                    <WorksheetCell>
+                      <select
+                        aria-label={`${item.name || "Inspection"} tracking method`}
+                        className={worksheetInputClass}
+                        value={item.basis === "calendar" || item.basis === "whichever_first" ? `${item.basis}:${item.date_precision}` : item.basis}
+                        onChange={(event) => {
+                          const [basis, precision] = event.target.value.split(":") as [PersonalAircraftInspectionBasis, PersonalAircraftInspectionDatePrecision?];
+                          updateInspectionDraft(item.clientKey, "basis", basis);
+                          if (precision) updateInspectionDraft(item.clientKey, "date_precision", precision);
+                        }}
+                      >
+                        <option value="calendar:month">Calendar month</option>
+                        <option value="calendar:day">Calendar date</option>
+                        <option value="hobbs">Hobbs</option>
+                        <option value="tach">Tach</option>
+                        <option value="whichever_first:month">Month or meter, first due</option>
+                        <option value="whichever_first:day">Date or meter, first due</option>
+                      </select>
+                    </WorksheetCell>
+                    <WorksheetCell>
+                      {needsDate ? <UsDateInput required precision={item.date_precision} aria-label={`${item.name || "Inspection"} due ${item.date_precision === "month" ? "month" : "date"}`} className={worksheetInputClass} value={item.due_date} onChange={(value) => updateInspectionDraft(item.clientKey, "due_date", value)} /> : <span className="block h-8 px-2 py-2 text-slate-400">—</span>}
+                    </WorksheetCell>
+                    <WorksheetCell>
+                      {needsMeter ? <input required aria-label={`${item.name || "Inspection"} due meter`} className={worksheetInputClass} type="number" min="0" step="0.1" value={item.due_meter} onChange={(event) => updateInspectionDraft(item.clientKey, "due_meter", event.target.value)} /> : <span className="block h-8 px-2 py-2 text-slate-400">—</span>}
+                    </WorksheetCell>
+                    <WorksheetCell><input aria-label={`${item.name || "Inspection"} notes`} className={worksheetInputClass} value={item.notes} onChange={(event) => updateInspectionDraft(item.clientKey, "notes", event.target.value)} /></WorksheetCell>
+                    <WorksheetCell className="text-right"><CompactButton type="button" tone="danger" className="m-0.5" onClick={() => setInspectionDrafts((current) => current.filter((draft) => draft.clientKey !== item.clientKey))}>Remove</CompactButton></WorksheetCell>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </WorksheetGrid>
+
           {editingAircraftId ? (
             <p className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-              Last updated {formatDateLabel(myAircraft.find((aircraft) => aircraft.id === editingAircraftId)?.updated_at) || "--"}
+              Last updated {formatUsDate(myAircraft.find((aircraft) => aircraft.id === editingAircraftId)?.updated_at, "--")}
             </p>
           ) : null}
 

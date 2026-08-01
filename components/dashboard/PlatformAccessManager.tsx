@@ -17,6 +17,7 @@ import {
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { formatUsDateTime } from "@/lib/date-format";
 import Panel from "@/components/ui/Panel";
 import {
   createPlatformOrganization,
@@ -301,8 +302,7 @@ function DrawerActions({ busy, onCancel, submitLabel }: { busy: boolean; onCance
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return formatUsDateTime(value);
 }
 
 function errorMessage(error: unknown) {

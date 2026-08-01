@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { UsDateTimeInput } from "@/components/forms/UsDateInput";
 import {
   createNotification,
   deleteNotification,
@@ -24,6 +25,7 @@ import {
   type NotificationStatus,
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { formatUsDateTime } from "@/lib/date-format";
 
 const priorityOptions: NotificationPriority[] = ["low", "normal", "high", "critical"];
 const statusOptions: NotificationStatus[] = ["draft", "scheduled", "sent"];
@@ -299,7 +301,7 @@ export default function NotificationManager() {
                 </div>
                 {notification.source_label ? <p className="saas-list-meta">{notification.source_label}</p> : null}
                 <p className="saas-meta-text">{notification.message}</p>
-                <p className="saas-list-meta">{new Date(notification.created_at).toLocaleString()}</p>
+                <p className="saas-list-meta">{formatUsDateTime(notification.created_at)}</p>
               </div>
               {notification.action_url ? <Link className="secondary-button" href={notification.action_url} onClick={() => void handleRead(notification)}>Open</Link> : null}
             </article>
@@ -350,7 +352,7 @@ export default function NotificationManager() {
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="saas-field"><span>Priority</span><select value={form.priority} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value as NotificationPriority }))}>{priorityOptions.map((value) => <option key={value}>{value}</option>)}</select></label>
                 <label className="saas-field"><span>Status</span><select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as NotificationStatus }))}>{statusOptions.map((value) => <option key={value}>{value}</option>)}</select></label>
-                <label className="saas-field"><span>Scheduled time</span><input type="datetime-local" value={form.scheduledAt} onChange={(event) => setForm((current) => ({ ...current, scheduledAt: event.target.value }))} /></label>
+                <label className="saas-field"><span>Scheduled time</span><UsDateTimeInput value={form.scheduledAt} onChange={(value) => setForm((current) => ({ ...current, scheduledAt: value }))} /></label>
               </div>
               <div className="flex gap-2"><button className="primary-button" type="submit" disabled={saving || !form.title.trim() || !form.message.trim()}>{saving ? "Saving..." : form.id ? "Update" : "Create"}</button><button className="ghost-button" type="button" onClick={resetForm}>Clear</button></div>
             </form>
@@ -361,7 +363,7 @@ export default function NotificationManager() {
             <div className="mt-5 grid gap-3">
               {adminHistory.map((notification) => (
                 <article key={notification.id} className="saas-list-item saas-list-item-stack">
-                  <div><h3 className="saas-card-title">{notification.title}</h3><p className="saas-meta-text mt-2">{notification.message}</p><p className="saas-list-meta mt-2">{notification.status} · {new Date(notification.created_at).toLocaleString()}</p></div>
+                  <div><h3 className="saas-card-title">{notification.title}</h3><p className="saas-meta-text mt-2">{notification.message}</p><p className="saas-list-meta mt-2">{notification.status} · {formatUsDateTime(notification.created_at)}</p></div>
                   <div className="flex flex-wrap gap-2"><button className="ghost-button" type="button" onClick={() => handleEdit(notification)}>Edit</button><button className="secondary-button" type="button" disabled={saving || notification.status === "sent"} onClick={() => void handleSendNow(notification.id)}>Send now</button><button className="danger-button" type="button" disabled={saving} onClick={() => void handleDelete(notification.id)}>Delete</button></div>
                 </article>
               ))}

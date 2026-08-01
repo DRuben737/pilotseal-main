@@ -173,6 +173,33 @@ export type SavedAircraftDueInput = {
   elt_due_date?: string | null;
 };
 
+export type PersonalAircraftInspectionBasis =
+  | "calendar"
+  | "hobbs"
+  | "tach"
+  | "whichever_first";
+
+export type PersonalAircraftInspectionDatePrecision = "day" | "month";
+
+export type PersonalAircraftInspectionRecord = {
+  id: string;
+  user_id: string;
+  aircraft_id: string;
+  name: string;
+  basis: PersonalAircraftInspectionBasis;
+  date_precision: PersonalAircraftInspectionDatePrecision;
+  due_date: string | null;
+  due_meter: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonalAircraftInspectionInput = Pick<
+  PersonalAircraftInspectionRecord,
+  "name" | "basis" | "date_precision" | "due_date" | "due_meter" | "notes"
+>;
+
 export type OrganizationAircraftMaintenanceInput = SavedAircraftDueInput & {
   adsb_due_date?: string | null;
   registration_due_date?: string | null;
@@ -1066,6 +1093,33 @@ export async function updateSavedAircraftDue(
 
     throw error;
   }
+}
+
+export async function fetchPersonalAircraftInspections(userId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("personal_aircraft_inspections")
+    .select("id, user_id, aircraft_id, name, basis, date_precision, due_date, due_meter, notes, created_at, updated_at")
+    .eq("user_id", userId)
+    .order("name", { ascending: true });
+
+  if (error) {
+    if (isMissingRelationError(error)) return [] as PersonalAircraftInspectionRecord[];
+    throw error;
+  }
+  return (data ?? []) as PersonalAircraftInspectionRecord[];
+}
+
+export async function savePersonalAircraftInspections(
+  aircraftId: string,
+  items: PersonalAircraftInspectionInput[]
+) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("save_personal_aircraft_inspections", {
+    p_aircraft_id: aircraftId,
+    p_items: items,
+  });
+  if (error) throw error;
 }
 
 export async function updateMyAircraft(

@@ -14,6 +14,8 @@ import { useSearchParams } from "next/navigation";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
+import { UsDateInput } from "@/components/forms/UsDateInput";
+import { formatUsDateTime } from "@/lib/date-format";
 import {
   ASR_RISK_SCORES,
   closeAsrReport,
@@ -712,7 +714,7 @@ export default function AsrReportsManager() {
                   {discrepancies.map((report) => <option key={report.id} value={report.id}>{report.aircraft_tail_number} · {report.report_date} · {report.discrepancy_type}</option>)}
                 </select>
               </Field>
-              <Field label="Date of occurrence" required error={formErrors.occurrence_date}><input type="date" value={draftData.occurrence_date} onChange={(event) => updateDraft("occurrence_date", event.target.value)} /></Field>
+              <Field label="Date of occurrence" required error={formErrors.occurrence_date}><UsDateInput value={draftData.occurrence_date} onChange={(value) => updateDraft("occurrence_date", value)} /></Field>
               <Field label="Local time" required error={formErrors.occurrence_local_time}><input type="time" value={draftData.occurrence_local_time} onChange={(event) => updateDraft("occurrence_local_time", event.target.value)} /></Field>
               <Field label="Organization aircraft" error={formErrors.aircraft}>
                 <select value={draftData.aircraft_id} onChange={(event) => selectAircraft(event.target.value)} disabled={draftData.no_aircraft}>
@@ -944,7 +946,22 @@ function AsrReportDetail({
         <ReviewPanel title="Section 8–9 - Safety Review & External Notifications">
           <Field label="Safety Manager Comments"><textarea rows={6} value={safetyComments} onChange={(event) => setSafetyComments(event.target.value)} /></Field>
           <div className="mt-3 grid gap-3 md:grid-cols-3"><Field label="Hazard Log Reference"><input value={hazardReference} onChange={(event) => setHazardReference(event.target.value)} /></Field><Field label="Internal Investigation Reference"><input value={investigationReference} onChange={(event) => setInvestigationReference(event.target.value)} /></Field><Field label="Title"><input value={safetyTitle} onChange={(event) => setSafetyTitle(event.target.value)} /></Field></div>
-          <div className="mt-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-slate-900">External Notifications</h4><button className="ghost-button" type="button" onClick={() => setNotifications((current) => [...current, { agency: "", notified_on: "", contact_information: "" }])}>Add agency</button></div><div className="mt-3 grid gap-3">{notifications.map((notification, index) => <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[180px_160px_1fr_auto]"><Field label="Agency"><select value={notification.agency} onChange={(event) => updateNotification(setNotifications, index, "agency", event.target.value)}><option value="">Select agency</option>{agencyOptions.map((agency) => <option key={agency}>{agency}</option>)}</select></Field><Field label="Date Notified"><input type="date" value={notification.notified_on} onChange={(event) => updateNotification(setNotifications, index, "notified_on", event.target.value)} /></Field><Field label="Contact Information"><input value={notification.contact_information} onChange={(event) => updateNotification(setNotifications, index, "contact_information", event.target.value)} /></Field><button className="ghost-button self-end" type="button" onClick={() => setNotifications((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}</div></div>
+          <div className="mt-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-slate-900">External Notifications</h4>
+              <button className="ghost-button" type="button" onClick={() => setNotifications((current) => [...current, { agency: "", notified_on: "", contact_information: "" }])}>Add agency</button>
+            </div>
+            <div className="mt-3 grid gap-3">
+              {notifications.map((notification, index) => (
+                <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[180px_160px_1fr_auto]">
+                  <Field label="Agency"><select value={notification.agency} onChange={(event) => updateNotification(setNotifications, index, "agency", event.target.value)}><option value="">Select agency</option>{agencyOptions.map((agency) => <option key={agency}>{agency}</option>)}</select></Field>
+                  <Field label="Date Notified"><UsDateInput value={notification.notified_on} onChange={(value) => updateNotification(setNotifications, index, "notified_on", value)} /></Field>
+                  <Field label="Contact Information"><input value={notification.contact_information} onChange={(event) => updateNotification(setNotifications, index, "contact_information", event.target.value)} /></Field>
+                  <button className="ghost-button self-end" type="button" onClick={() => setNotifications((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+                </div>
+              ))}
+            </div>
+          </div>
           <button className="primary-button mt-4" disabled={busy} type="button" onClick={() => void run(() => closeAsrReport({ reportId: report.id, safetyComments, hazardLogReference: hazardReference, internalInvestigationReference: investigationReference, title: safetyTitle, externalNotifications: notifications }), "Safety review signed and ASR closed.")}>Sign Safety Review & Close ASR</button>
         </ReviewPanel>
       ) : null}
@@ -1039,7 +1056,7 @@ function RiskBadge({ score }: { score: number }) { const band = riskBand(score);
 function SignedReview({ comments, name, title, signedAt }: { comments: string | null; name: string | null; title: string | null; signedAt: string }) { return <div><p className="whitespace-pre-wrap text-sm text-slate-800">{comments}</p><p className="saas-meta-text mt-3">Signed by {name} · {title} · {formatDateTime(signedAt)}</p></div>; }
 function riskBand(score: number) { if (score <= 6) return "Low"; if (score <= 12) return "Medium"; return "High"; }
 function formatStatus(status: AsrReport["status"]) { if (status === "in_review") return "In review"; if (status === "closed") return "Closed"; if (status === "superseded") return "Superseded"; if (status === "draft") return "Draft"; return "Submitted"; }
-function formatDateTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString(); }
+function formatDateTime(value: string) { return formatUsDateTime(value); }
 function formatMaintenanceLabel(key: string) { return key.split("_").map((part) => part.toUpperCase() === "ATA" || part.toUpperCase() === "TTAF" ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1)).join(" "); }
 function updateNotification(setter: React.Dispatch<React.SetStateAction<AsrExternalNotification[]>>, index: number, key: keyof AsrExternalNotification, value: string) { setter((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item)); }
 function getErrorMessage(value: unknown, fallback: string) { if (value instanceof Error && value.message) return value.message; if (typeof value === "object" && value && "message" in value) return String((value as { message?: unknown }).message ?? fallback); return fallback; }
