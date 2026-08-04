@@ -322,10 +322,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 aria-label={`${workspaceLabel} sidebar`}
                 onPointerEnter={() => setSidebarHovered(true)}
                 onPointerLeave={() => setSidebarHovered(false)}
-                onFocusCapture={() => setSidebarHovered(true)}
-                onBlurCapture={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                    setSidebarHovered(false);
+                onClickCapture={(event) => {
+                  if (event.detail > 0) {
+                    const control = (event.target as HTMLElement | null)?.closest<HTMLElement>("a, button");
+                    requestAnimationFrame(() => control?.blur());
                   }
                 }}
                 onKeyDown={(event) => {

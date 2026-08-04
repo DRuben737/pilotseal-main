@@ -2581,33 +2581,33 @@ summary:focus-visible {
 
 /* Native hover/focus fallback keeps the rail usable before React hydration. */
 .dashboard-sidebar:hover,
-.dashboard-sidebar:focus-within {
+.dashboard-sidebar:has(:focus-visible) {
   width: 15.75rem;
   padding: 0.625rem;
   box-shadow: 0 22px 54px rgba(15, 23, 42, 0.24);
 }
 
 .dashboard-sidebar:hover .dashboard-sidebar-chevron,
-.dashboard-sidebar:focus-within .dashboard-sidebar-chevron {
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-chevron {
   transform: rotate(180deg);
 }
 
 .dashboard-sidebar:hover .dashboard-sidebar-pin,
-.dashboard-sidebar:focus-within .dashboard-sidebar-pin,
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-pin,
 .dashboard-sidebar:hover .dashboard-sidebar-copy,
-.dashboard-sidebar:focus-within .dashboard-sidebar-copy {
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-copy {
   opacity: 1;
   visibility: visible;
 }
 
 .dashboard-sidebar:hover .dashboard-sidebar-link .dashboard-sidebar-copy,
-.dashboard-sidebar:focus-within .dashboard-sidebar-link .dashboard-sidebar-copy {
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-link .dashboard-sidebar-copy {
   width: auto;
   flex: 1 1 0%;
 }
 
 .dashboard-sidebar:hover .dashboard-workspace-switcher,
-.dashboard-sidebar:focus-within .dashboard-workspace-switcher {
+.dashboard-sidebar:has(:focus-visible) .dashboard-workspace-switcher {
   max-height: 6rem;
   margin-top: 0.8rem;
   border-color: rgba(255, 255, 255, 0.1);
@@ -2617,7 +2617,7 @@ summary:focus-visible {
 }
 
 .dashboard-sidebar:hover .dashboard-sidebar-section-label,
-.dashboard-sidebar:focus-within .dashboard-sidebar-section-label {
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-section-label {
   min-width: 12rem;
   max-height: 1.4rem;
   padding: 0.15rem 0.75rem 0.3rem;
@@ -2625,7 +2625,7 @@ summary:focus-visible {
 }
 
 .dashboard-sidebar:hover .dashboard-sidebar-link,
-.dashboard-sidebar:focus-within .dashboard-sidebar-link {
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-link {
   width: 100%;
   min-width: 13.125rem;
   justify-content: flex-start;
