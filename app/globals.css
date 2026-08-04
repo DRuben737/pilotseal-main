@@ -2238,6 +2238,401 @@ summary:focus-visible {
   display: none;
 }
 
+.dashboard-sidebar-slot {
+  position: sticky;
+  top: 1rem;
+  z-index: 60;
+  flex: 0 0 3.625rem;
+  width: 3.625rem;
+  height: min(46rem, calc(100dvh - 9rem));
+  max-height: calc(100dvh - 2rem);
+  transition:
+    width 180ms ease,
+    flex-basis 180ms ease;
+}
+
+.dashboard-sidebar-slot-pinned {
+  flex-basis: 15.75rem;
+  width: 15.75rem;
+}
+
+.dashboard-sidebar {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: flex;
+  flex-direction: column;
+  width: 3.625rem;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background: linear-gradient(180deg, #173f5b 0%, #123149 100%);
+  padding: 0.25rem;
+  color: #fff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+  transition:
+    width 180ms ease,
+    padding 180ms ease,
+    box-shadow 180ms ease;
+  isolation: isolate;
+}
+
+.dashboard-sidebar[data-expanded="true"] {
+  width: 15.75rem;
+  padding: 0.625rem;
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.24);
+}
+
+.dashboard-sidebar-header,
+.dashboard-sidebar-footer {
+  flex: none;
+}
+
+.dashboard-sidebar-brand-row {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 14.375rem;
+}
+
+.dashboard-sidebar-logo {
+  position: relative;
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  line-height: 1;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.dashboard-sidebar-logo:hover,
+.dashboard-sidebar-logo:focus-visible {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.dashboard-sidebar-chevron {
+  position: absolute;
+  right: 0.3rem;
+  bottom: 0.23rem;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.72rem;
+  font-weight: 500;
+  transition: transform 180ms ease;
+}
+
+.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-chevron {
+  transform: rotate(180deg);
+}
+
+.dashboard-sidebar-pin {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.625rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    opacity 120ms ease;
+}
+
+.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-pin {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dashboard-sidebar-pin:hover,
+.dashboard-sidebar-pin:focus-visible,
+.dashboard-sidebar-pin[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.dashboard-sidebar-pin svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.dashboard-sidebar-copy {
+  white-space: nowrap;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 120ms ease 45ms,
+    visibility 0s linear 45ms;
+}
+
+.dashboard-sidebar[data-expanded="false"] .dashboard-sidebar-copy {
+  opacity: 0;
+  visibility: hidden;
+  transition-delay: 0s;
+}
+
+.dashboard-sidebar[data-expanded="false"] .dashboard-sidebar-link .dashboard-sidebar-copy {
+  width: 0;
+  flex: 0 0 0;
+  overflow: hidden;
+}
+
+.dashboard-workspace-switcher {
+  max-height: 6rem;
+  margin-top: 0.8rem;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.65rem;
+  opacity: 1;
+  transition:
+    max-height 180ms ease,
+    margin-top 180ms ease,
+    padding-top 180ms ease,
+    opacity 100ms ease 40ms;
+}
+
+.dashboard-sidebar[data-expanded="false"] .dashboard-workspace-switcher {
+  max-height: 0;
+  margin-top: 0;
+  border-color: transparent;
+  padding-top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 0s;
+}
+
+.dashboard-workspace-label,
+.dashboard-sidebar-section-label {
+  margin: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dashboard-workspace-label {
+  padding: 0 0.25rem 0.4rem;
+}
+
+.dashboard-workspace-grid {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  border-radius: 0.875rem;
+  background: rgba(255, 255, 255, 0.075);
+  padding: 0.25rem;
+}
+
+.dashboard-workspace-link {
+  display: flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  border-radius: 0.6875rem;
+  padding: 0.25rem 0.2rem;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.05;
+  text-align: center;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.dashboard-workspace-link:hover,
+.dashboard-workspace-link:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.dashboard-workspace-link-active {
+  background: #fff;
+  color: #172033;
+  box-shadow: 0 3px 10px rgba(6, 24, 38, 0.15);
+}
+
+.dashboard-workspace-link-active:hover,
+.dashboard-workspace-link-active:focus-visible {
+  background: #fff;
+  color: #172033;
+}
+
+.dashboard-workspace-link svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.dashboard-sidebar-nav {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.dashboard-sidebar-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.dashboard-sidebar-section-label {
+  min-width: 12rem;
+  max-height: 1.4rem;
+  padding: 0.15rem 0.75rem 0.3rem;
+  opacity: 1;
+  transition:
+    max-height 150ms ease,
+    padding 150ms ease,
+    opacity 100ms ease;
+}
+
+.dashboard-sidebar[data-expanded="false"] .dashboard-sidebar-section-label {
+  min-width: 0;
+  max-height: 0;
+  padding-block: 0;
+  opacity: 0;
+}
+
+.dashboard-sidebar-link {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.375rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: left;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-link {
+  width: 100%;
+  min-width: 13.125rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+}
+
+.dashboard-sidebar[data-expanded="false"] .dashboard-sidebar-link {
+  width: 3rem;
+}
+
+.dashboard-sidebar-link:hover,
+.dashboard-sidebar-link:focus-visible {
+  background: rgba(255, 255, 255, 0.085);
+  color: #fff;
+}
+
+.dashboard-sidebar-link-active,
+.dashboard-sidebar-link-active:hover,
+.dashboard-sidebar-link-active:focus-visible {
+  background: #2f80ed;
+  color: #fff;
+  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.3);
+}
+
+.dashboard-sidebar-footer {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.55rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.55rem;
+}
+
+/* Native hover/focus fallback keeps the rail usable before React hydration. */
+.dashboard-sidebar:hover,
+.dashboard-sidebar:focus-within {
+  width: 15.75rem;
+  padding: 0.625rem;
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.24);
+}
+
+.dashboard-sidebar:hover .dashboard-sidebar-chevron,
+.dashboard-sidebar:focus-within .dashboard-sidebar-chevron {
+  transform: rotate(180deg);
+}
+
+.dashboard-sidebar:hover .dashboard-sidebar-pin,
+.dashboard-sidebar:focus-within .dashboard-sidebar-pin,
+.dashboard-sidebar:hover .dashboard-sidebar-copy,
+.dashboard-sidebar:focus-within .dashboard-sidebar-copy {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dashboard-sidebar:hover .dashboard-sidebar-link .dashboard-sidebar-copy,
+.dashboard-sidebar:focus-within .dashboard-sidebar-link .dashboard-sidebar-copy {
+  width: auto;
+  flex: 1 1 0%;
+}
+
+.dashboard-sidebar:hover .dashboard-workspace-switcher,
+.dashboard-sidebar:focus-within .dashboard-workspace-switcher {
+  max-height: 6rem;
+  margin-top: 0.8rem;
+  border-color: rgba(255, 255, 255, 0.1);
+  padding-top: 0.65rem;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dashboard-sidebar:hover .dashboard-sidebar-section-label,
+.dashboard-sidebar:focus-within .dashboard-sidebar-section-label {
+  min-width: 12rem;
+  max-height: 1.4rem;
+  padding: 0.15rem 0.75rem 0.3rem;
+  opacity: 1;
+}
+
+.dashboard-sidebar:hover .dashboard-sidebar-link,
+.dashboard-sidebar:focus-within .dashboard-sidebar-link {
+  width: 100%;
+  min-width: 13.125rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+}
+
 .dashboard-mobile-top {
   align-items: center;
   justify-content: space-between;
@@ -3540,6 +3935,7 @@ summary:focus-visible {
     display: block;
   }
 
+  .dashboard-sidebar-slot,
   .dashboard-sidebar {
     display: none;
   }

@@ -147,6 +147,14 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="M18 12H9" />
         </svg>
       );
+    case "pin":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <path d="m9 4 6 6" />
+          <path d="m14.7 4.8 4.5 4.5-3 1.5-3.6 3.6-1.2 5.1-1.8-1.8-1.8-1.8 5.1-1.2 3.6-3.6 1.5-3Z" />
+          <path d="m8.8 15.2-4 4" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -177,6 +185,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
   }, [loading, pathname, router, session]);
+
+  useEffect(() => {
+    setSidebarHovered(false);
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -303,73 +315,86 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className="site-shell page-stack">
         {loading || !session?.user ? null : (
           <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
-            <aside
-              className={`dashboard-sidebar sticky top-4 max-h-[calc(100vh-2rem)] shrink-0 overflow-x-hidden overflow-y-auto rounded-[24px] bg-[linear-gradient(180deg,#173b56_0%,#123149_100%)] p-3 text-white shadow-[0_18px_44px_rgba(15,23,42,0.14)] transition-[width] duration-200 ${
-                sidebarExpanded ? "w-[240px]" : "w-[72px]"
-              }`}
-              onPointerEnter={() => setSidebarHovered(true)}
-              onPointerLeave={() => setSidebarHovered(false)}
-              onFocusCapture={() => setSidebarHovered(true)}
-              onBlurCapture={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                  setSidebarHovered(false);
-                }
-              }}
-            >
-              <div>
-                <div className="block">
-                  <div className="flex items-center gap-3 overflow-hidden px-1">
+            <div className={`dashboard-sidebar-slot ${sidebarPinned ? "dashboard-sidebar-slot-pinned" : ""}`}>
+              <aside
+                className="dashboard-sidebar"
+                data-expanded={sidebarExpanded}
+                aria-label={`${workspaceLabel} sidebar`}
+                onPointerEnter={() => setSidebarHovered(true)}
+                onPointerLeave={() => setSidebarHovered(false)}
+                onFocusCapture={() => setSidebarHovered(true)}
+                onBlurCapture={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setSidebarHovered(false);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setSidebarPinned(false);
+                    setSidebarHovered(false);
+                    (event.currentTarget.querySelector(":focus") as HTMLElement | null)?.blur();
+                  }
+                }}
+              >
+                <header className="dashboard-sidebar-header">
+                  <div className="dashboard-sidebar-brand-row">
+                    <Link
+                      href="/dashboard"
+                      className="dashboard-sidebar-logo"
+                      aria-label="PilotSeal dashboard"
+                      title="PilotSeal dashboard"
+                    >
+                      <span>PS</span>
+                      <span className="dashboard-sidebar-chevron" aria-hidden="true">›</span>
+                    </Link>
+                    <div className="dashboard-sidebar-copy min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">PilotSeal</p>
+                      <p className="truncate text-xs text-white/55">{identityLabel}</p>
+                    </div>
                     <button
                       type="button"
-                      className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/12 bg-white/8 text-sm font-semibold transition hover:bg-white/14"
+                      className="dashboard-sidebar-pin"
                       aria-pressed={sidebarPinned}
                       aria-label={sidebarPinned ? "Unpin sidebar" : "Keep sidebar open"}
                       title={sidebarPinned ? "Unpin sidebar" : "Keep sidebar open"}
                       onClick={() => setSidebarPinned((current) => !current)}
                     >
-                      PS
-                      <span
-                        aria-hidden="true"
-                        className="absolute bottom-0.5 right-1 text-[11px] font-normal text-white/55"
-                      >
-                        {sidebarExpanded ? "‹" : "›"}
-                      </span>
+                      <DashboardIcon kind="pin" />
                     </button>
-                    {sidebarExpanded ? (
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-white">PilotSeal</p>
-                        <p className="truncate text-xs text-white/55">{identityLabel}</p>
-                      </div>
-                    ) : null}
                   </div>
-                  <div className="mt-5 h-px w-full bg-white/10" />
-                </div>
 
-                {workspaceSwitches.length > 1 ? (
-                  <div
-                    className={`mt-4 grid gap-1 rounded-[14px] bg-white/8 p-1 ${
-                      sidebarExpanded ? "" : "grid-cols-1"
-                    }`}
-                    style={
-                      sidebarExpanded
-                        ? {
-                            gridTemplateColumns: `repeat(${workspaceSwitches.length}, minmax(0, 1fr))`,
-                          }
-                        : undefined
-                    }
-                    aria-label="Switch workspace"
-                  >
-                    {workspaceSwitches.map((item) => {
-                      const active = workspace === item.label.toLowerCase();
-                      return <Link key={item.href} href={item.href} aria-label={`${item.label} workspace`} title={`${item.label} workspace`} className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-[11px] px-1 text-[0.65rem] font-semibold transition-colors ${active ? "bg-white text-slate-900" : "text-white/65 hover:bg-white/10 hover:text-white"}`}><DashboardIcon kind={item.icon} />{sidebarExpanded ? <span>{item.label}</span> : null}</Link>;
-                    })}
-                  </div>
-                ) : null}
-
-                <nav aria-label={`${workspaceLabel} navigation`} className="mt-5 grid gap-1.5">
-                  {sidebarExpanded ? (
-                    <p className="px-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/45">{workspaceLabel}</p>
+                  {workspaceSwitches.length > 1 ? (
+                    <div className="dashboard-workspace-switcher">
+                      <p className="dashboard-workspace-label">Workspace</p>
+                      <nav
+                        className="dashboard-workspace-grid"
+                        style={{
+                          gridTemplateColumns: `repeat(${workspaceSwitches.length}, minmax(0, 1fr))`,
+                        }}
+                        aria-label="Switch workspace"
+                      >
+                        {workspaceSwitches.map((item) => {
+                          const active = workspace === item.label.toLowerCase();
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              aria-label={`${item.label} workspace`}
+                              title={`${item.label} workspace`}
+                              className={`dashboard-workspace-link ${active ? "dashboard-workspace-link-active" : ""}`}
+                            >
+                              <DashboardIcon kind={item.icon} />
+                              <span>{item.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </nav>
+                    </div>
                   ) : null}
+                </header>
+
+                <nav aria-label={`${workspaceLabel} navigation`} className="dashboard-sidebar-nav">
+                  <p className="dashboard-sidebar-section-label">{workspaceLabel}</p>
                   {visibleDashboardLinks.map((item) => {
                     const active = isDashboardLinkActive(item.href);
 
@@ -379,11 +404,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                         href={item.href}
                         aria-label={item.label}
                         title={item.label}
-                        className={`relative flex min-h-11 items-center gap-3 rounded-[13px] px-3 text-sm font-medium transition-colors duration-200 ${
-                          active
-                            ? "bg-blue-500 text-white shadow-[0_8px_20px_rgba(37,99,235,0.28)]"
-                            : "text-white/70 hover:bg-white/8 hover:text-white"
-                        }`}
+                        className={`dashboard-sidebar-link ${active ? "dashboard-sidebar-link-active" : ""}`}
                       >
                         <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
                           <DashboardIcon kind={item.label} />
@@ -393,40 +414,42 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                             </span>
                           ) : null}
                         </span>
-                        {sidebarExpanded ? <span className="min-w-0 flex-1 leading-5">{item.label}</span> : null}
+                        <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">{item.label}</span>
                       </Link>
                     );
                   })}
                 </nav>
 
-                <div className="mt-4 grid gap-2 border-t border-white/10 pt-4">
+                <footer className="dashboard-sidebar-footer">
                   <Link
                     href="/tools/endorsement-generator"
                     aria-label="New endorsement"
                     title="New endorsement"
-                    className="relative flex min-h-11 items-center gap-3 rounded-[13px] px-3 text-sm font-medium text-white/70 transition hover:bg-white/8 hover:text-white"
+                    className="dashboard-sidebar-link"
                   >
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                       <DashboardIcon kind="new" />
                     </span>
-                    {sidebarExpanded ? <span>New endorsement</span> : null}
+                    <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">New endorsement</span>
                   </Link>
                   <button
                     type="button"
                     aria-label="Sign out"
                     title={`Sign out ${identityLabel}`}
-                    className="relative flex min-h-11 w-full items-center gap-3 rounded-[13px] px-3 text-sm font-medium text-white/70 transition hover:bg-white/8 hover:text-white disabled:opacity-60"
+                    className="dashboard-sidebar-link w-full disabled:opacity-60"
                     disabled={!session?.user || signingOut}
                     onClick={handleSignOut}
                   >
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                       <DashboardIcon kind="signout" />
                     </span>
-                    {sidebarExpanded ? <span>{signingOut ? "Signing out..." : "Sign out"}</span> : null}
+                    <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">
+                      {signingOut ? "Signing out..." : "Sign out"}
+                    </span>
                   </button>
-                </div>
-              </div>
-            </aside>
+                </footer>
+              </aside>
+            </div>
 
             <div className="min-w-0 flex-1">
               <section className="dashboard-mobile-top">
