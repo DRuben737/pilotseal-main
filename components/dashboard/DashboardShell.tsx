@@ -323,10 +323,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 onPointerEnter={() => setSidebarHovered(true)}
                 onPointerLeave={() => setSidebarHovered(false)}
                 onClickCapture={(event) => {
-                  if (event.detail > 0) {
-                    const control = (event.target as HTMLElement | null)?.closest<HTMLElement>("a, button");
-                    requestAnimationFrame(() => control?.blur());
-                  }
+                  if (event.detail <= 0) return;
+
+                  const control = (event.target as HTMLElement | null)?.closest<HTMLElement>("a, button");
+                  if (!control || control.classList.contains("dashboard-sidebar-pin")) return;
+
+                  requestAnimationFrame(() => control.blur());
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {

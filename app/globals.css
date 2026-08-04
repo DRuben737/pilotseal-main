@@ -2486,6 +2486,7 @@ summary:focus-visible {
 .dashboard-sidebar-nav {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: max-content;
   width: 100%;
   min-height: 0;
   flex: 1 1 auto;
@@ -2495,11 +2496,21 @@ summary:focus-visible {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
 }
 
 .dashboard-sidebar-nav::-webkit-scrollbar {
-  display: none;
+  width: 0.25rem;
+}
+
+.dashboard-sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-sidebar-nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
 }
 
 .dashboard-sidebar-section-label {
@@ -2631,6 +2642,18 @@ summary:focus-visible {
   justify-content: flex-start;
   gap: 0.75rem;
   padding: 0.5rem 0.875rem;
+}
+
+.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-nav,
+.dashboard-sidebar:hover .dashboard-sidebar-nav,
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-nav {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-nav::-webkit-scrollbar-thumb,
+.dashboard-sidebar:hover .dashboard-sidebar-nav::-webkit-scrollbar-thumb,
+.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .dashboard-mobile-top {
