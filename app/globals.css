@@ -2251,11 +2251,6 @@ summary:focus-visible {
     flex-basis 180ms ease;
 }
 
-.dashboard-sidebar-slot-pinned {
-  flex-basis: 15.75rem;
-  width: 15.75rem;
-}
-
 .dashboard-sidebar {
   position: absolute;
   inset: 0 auto auto 0;
@@ -2290,7 +2285,7 @@ summary:focus-visible {
 
 .dashboard-sidebar-brand-row {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) 2rem;
+  grid-template-columns: 3rem minmax(0, 1fr);
   align-items: center;
   gap: 0.625rem;
   min-width: 14.375rem;
@@ -2318,54 +2313,6 @@ summary:focus-visible {
 .dashboard-sidebar-logo:focus-visible {
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.14);
-}
-
-.dashboard-sidebar-chevron {
-  position: absolute;
-  right: 0.3rem;
-  bottom: 0.23rem;
-  color: rgba(255, 255, 255, 0.48);
-  font-size: 0.72rem;
-  font-weight: 500;
-  transition: transform 180ms ease;
-}
-
-.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-chevron {
-  transform: rotate(180deg);
-}
-
-.dashboard-sidebar-pin {
-  display: grid;
-  width: 2rem;
-  height: 2rem;
-  place-items: center;
-  border: 0;
-  border-radius: 0.625rem;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.52);
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    opacity 120ms ease;
-}
-
-.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-pin {
-  opacity: 1;
-  visibility: visible;
-}
-
-.dashboard-sidebar-pin:hover,
-.dashboard-sidebar-pin:focus-visible,
-.dashboard-sidebar-pin[aria-pressed="true"] {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.dashboard-sidebar-pin svg {
-  width: 1rem;
-  height: 1rem;
 }
 
 .dashboard-sidebar-copy {
@@ -2598,13 +2545,6 @@ summary:focus-visible {
   box-shadow: 0 22px 54px rgba(15, 23, 42, 0.24);
 }
 
-.dashboard-sidebar:hover .dashboard-sidebar-chevron,
-.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-chevron {
-  transform: rotate(180deg);
-}
-
-.dashboard-sidebar:hover .dashboard-sidebar-pin,
-.dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-pin,
 .dashboard-sidebar:hover .dashboard-sidebar-copy,
 .dashboard-sidebar:has(:focus-visible) .dashboard-sidebar-copy {
   opacity: 1;

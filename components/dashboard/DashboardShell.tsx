@@ -176,9 +176,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [defaultCfiName, setDefaultCfiName] = useState("");
   const [profileRole, setProfileRole] = useState("");
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [sidebarPinned, setSidebarPinned] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
-  const sidebarExpanded = sidebarPinned || sidebarHovered;
+  const sidebarExpanded = sidebarHovered;
 
   useEffect(() => {
     if (!loading && !session?.user) {
@@ -315,7 +314,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className="site-shell page-stack">
         {loading || !session?.user ? null : (
           <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
-            <div className={`dashboard-sidebar-slot ${sidebarPinned ? "dashboard-sidebar-slot-pinned" : ""}`}>
+            <div className="dashboard-sidebar-slot">
               <aside
                 className="dashboard-sidebar"
                 data-expanded={sidebarExpanded}
@@ -326,13 +325,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   if (event.detail <= 0) return;
 
                   const control = (event.target as HTMLElement | null)?.closest<HTMLElement>("a, button");
-                  if (!control || control.classList.contains("dashboard-sidebar-pin")) return;
+                  if (!control) return;
 
                   requestAnimationFrame(() => control.blur());
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
-                    setSidebarPinned(false);
                     setSidebarHovered(false);
                     (event.currentTarget.querySelector(":focus") as HTMLElement | null)?.blur();
                   }
@@ -347,22 +345,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                       title="PilotSeal dashboard"
                     >
                       <span>PS</span>
-                      <span className="dashboard-sidebar-chevron" aria-hidden="true">›</span>
                     </Link>
                     <div className="dashboard-sidebar-copy min-w-0">
                       <p className="truncate text-sm font-semibold text-white">PilotSeal</p>
                       <p className="truncate text-xs text-white/55">{identityLabel}</p>
                     </div>
-                    <button
-                      type="button"
-                      className="dashboard-sidebar-pin"
-                      aria-pressed={sidebarPinned}
-                      aria-label={sidebarPinned ? "Unpin sidebar" : "Keep sidebar open"}
-                      title={sidebarPinned ? "Unpin sidebar" : "Keep sidebar open"}
-                      onClick={() => setSidebarPinned((current) => !current)}
-                    >
-                      <DashboardIcon kind="pin" />
-                    </button>
                   </div>
 
                   {workspaceSwitches.length > 1 ? (
