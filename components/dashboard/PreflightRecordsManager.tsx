@@ -13,12 +13,19 @@ import {
   type FlightBriefRecord,
 } from "@/lib/preflight";
 
+type PreflightStatusFilter = "all" | FlightBriefRecord["status"];
+const preflightStatusOrder: FlightBriefRecord["status"][] = ["draft", "finalized", "superseded"];
+
 export default function PreflightRecordsManager() {
   const { session } = useAuthSession();
   const { activeOrganization } = useOrganization();
   const [records, setRecords] = useState<FlightBriefRecord[]>([]);
   const [activeRecord, setActiveRecord] = useState<FlightBriefRecord | null>(null);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PreflightStatusFilter>("all");
+  const [collapsedStatuses, setCollapsedStatuses] = useState<Set<FlightBriefRecord["status"]>>(
+    () => new Set(["superseded"])
+  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -60,21 +67,40 @@ export default function PreflightRecordsManager() {
 
   const filteredRecords = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return records;
     return records.filter((record) =>
-      [
-        record.student_name,
-        record.instructor_name,
-        record.aircraft_tail_number,
-        record.route ?? "",
-        record.flight_date ?? "",
-        record.status,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle)
+      (statusFilter === "all" || record.status === statusFilter)
+      && (!needle || [
+          record.student_name,
+          record.instructor_name,
+          record.aircraft_tail_number,
+          record.route ?? "",
+          record.flight_date ?? "",
+          record.status,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle))
     );
-  }, [query, records]);
+  }, [query, records, statusFilter]);
+
+  const groupedRecords = useMemo(
+    () => preflightStatusOrder
+      .map((recordStatus) => ({
+        status: recordStatus,
+        records: filteredRecords.filter((record) => record.status === recordStatus),
+      }))
+      .filter((group) => group.records.length > 0),
+    [filteredRecords]
+  );
+
+  function toggleStatus(recordStatus: FlightBriefRecord["status"]) {
+    setCollapsedStatuses((current) => {
+      const next = new Set(current);
+      if (next.has(recordStatus)) next.delete(recordStatus);
+      else next.add(recordStatus);
+      return next;
+    });
+  }
 
   async function handleCreateRevision(record: FlightBriefRecord) {
     setBusy(true);
@@ -106,12 +132,30 @@ export default function PreflightRecordsManager() {
         <Link className="secondary-button" href="/tools/flight-brief">New Flight Brief</Link>
       </div>
 
-      <input
-        className="mt-5 w-full rounded-xl border border-slate-300 px-3 py-2"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search pilot, co-pilot, aircraft, route, or date"
-      />
+      <div className="mt-5 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search pilot, co-pilot, aircraft, route, or date"
+          aria-label="Search preflight records"
+        />
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value as PreflightStatusFilter)}
+          aria-label="Filter preflight records by status"
+        >
+          <option value="all">All statuses</option>
+          <option value="draft">Drafts</option>
+          <option value="finalized">Finalized</option>
+          <option value="superseded">Superseded</option>
+        </select>
+        {query || statusFilter !== "all" ? (
+          <button className="ghost-button" type="button" onClick={() => { setQuery(""); setStatusFilter("all"); }}>
+            Clear filters
+          </button>
+        ) : null}
+      </div>
       {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
 
       {loading ? <p className="saas-empty-state mt-5">Loading preflight records...</p> : null}
@@ -120,7 +164,21 @@ export default function PreflightRecordsManager() {
       ) : null}
 
       <div className="mt-5 grid gap-3">
-        {filteredRecords.map((record) => {
+        {groupedRecords.map((group) => {
+          const isCollapsed = collapsedStatuses.has(group.status);
+          return (
+          <section key={group.status} className="overflow-hidden rounded-2xl border border-slate-200 bg-white/70">
+            <button
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+              type="button"
+              aria-expanded={!isCollapsed}
+              onClick={() => toggleStatus(group.status)}
+            >
+              <span className="text-sm font-semibold text-slate-900">{formatStatus(group.status)}</span>
+              <span className="saas-pill">{group.records.length}</span>
+            </button>
+            {!isCollapsed ? <div className="grid gap-3 border-t border-slate-200 p-3">
+        {group.records.map((record) => {
           const isOwn = record.created_by === session?.user?.id;
           return (
             <article key={record.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
@@ -147,6 +205,10 @@ export default function PreflightRecordsManager() {
                 </div>
               </div>
             </article>
+          );
+        })}
+            </div> : null}
+          </section>
           );
         })}
       </div>

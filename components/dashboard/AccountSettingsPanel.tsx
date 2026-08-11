@@ -927,7 +927,7 @@ export default function AccountSettingsPanel() {
     <div className="dashboard-settings-list">
       {greeting ? <p className="saas-greeting">{greeting}</p> : null}
 
-      <OrganizationAccessManager showEmpty />
+      <OrganizationAccessManager />
 
       <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">

@@ -789,7 +789,10 @@ export default function AsrReportsManager() {
       ) : null}
 
       <section className="saas-panel">
-        <input className="w-full" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reference, aircraft, occurrence, description, or reporter" />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input className="min-w-0 flex-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reference, aircraft, occurrence, description, or reporter" />
+          {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
+        </div>
         {loading ? <p className="saas-empty-state mt-5">Loading ASR reports…</p> : null}
         {!loading && filteredReports.length === 0 ? <p className="saas-empty-state mt-5">No matching ASR reports.</p> : null}
         <div className="mt-5 grid gap-3">

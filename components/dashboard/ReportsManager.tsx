@@ -13,15 +13,6 @@ export default function ReportsManager() {
 
   return (
     <div className="space-y-4">
-      <header className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_6px_20px_rgba(15,23,42,0.04)]">
-        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-blue-700">
-          Safety reporting
-        </p>
-        <h1 className="mt-1 text-lg font-semibold text-slate-950">Safety Reports</h1>
-        <p className="mt-1 text-xs text-slate-600">
-          Submit an aircraft discrepancy or an internal ASR report.
-        </p>
-      </header>
       <nav
         className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
         aria-label="Report type"

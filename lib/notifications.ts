@@ -59,6 +59,18 @@ type NotificationUpdate = {
 const notificationSelect =
   "id, title, message, priority, status, scheduled_at, created_at, created_by, kind, recipient_user_id, organization_id, source_label, action_url";
 
+const notificationInboxChangedEvent = "pilotseal:notification-inbox-changed";
+
+function broadcastNotificationInboxChange(userId: string) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent(notificationInboxChangedEvent, {
+      detail: { userId },
+    })
+  );
+}
+
 function normalizeNotification(
   value: Record<string, unknown>,
   readsByNotificationId: Map<string, string> = new Map()
@@ -130,7 +142,7 @@ export async function fetchActiveNotifications() {
 
 export async function fetchInboxNotifications(userId: string) {
   const supabase = getSupabaseClient();
-  const [notificationsResult, readsResult, preferences] = await Promise.all([
+  const [notificationsResult, readsResult, deletionsResult, preferences] = await Promise.all([
     supabase
       .from("notifications")
       .select(notificationSelect)
@@ -141,17 +153,26 @@ export async function fetchInboxNotifications(userId: string) {
       .from("notification_reads")
       .select("notification_id, read_at")
       .eq("user_id", userId),
+    supabase
+      .from("notification_inbox_deletions")
+      .select("notification_id")
+      .eq("user_id", userId),
     fetchNotificationPreferences(userId),
   ]);
 
   if (notificationsResult.error) throw notificationsResult.error;
   if (readsResult.error) throw readsResult.error;
+  if (deletionsResult.error) throw deletionsResult.error;
 
   const readsByNotificationId = new Map(
     (readsResult.data ?? []).map((read) => [String(read.notification_id), String(read.read_at)])
   );
+  const deletedNotificationIds = new Set(
+    (deletionsResult.data ?? []).map((deletion) => String(deletion.notification_id))
+  );
   return (notificationsResult.data ?? [])
     .map((value) => normalizeNotification(value as Record<string, unknown>, readsByNotificationId))
+    .filter((notification) => !deletedNotificationIds.has(notification.id))
     .filter((notification) => notification.priority === "critical" || isNotificationKindEnabled(notification.kind, preferences));
 }
 
@@ -189,6 +210,7 @@ export async function updateNotificationPreferences(
     .single();
 
   if (error) throw error;
+  broadcastNotificationInboxChange(userId);
   return data as NotificationPreferences;
 }
 
@@ -206,6 +228,15 @@ export async function fetchUnreadNotificationCount(userId: string) {
 
 export function subscribeToNotificationChanges(userId: string, onChange: () => void) {
   const supabase = getSupabaseClient();
+  const handleLocalChange = (event: Event) => {
+    const changedUserId = (event as CustomEvent<{ userId?: string }>).detail?.userId;
+    if (changedUserId === userId) onChange();
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(notificationInboxChangedEvent, handleLocalChange);
+  }
+
   const channel = supabase
     .channel(`notification-inbox:${userId}`)
     .on(
@@ -220,12 +251,20 @@ export function subscribeToNotificationChanges(userId: string, onChange: () => v
     )
     .on(
       "postgres_changes",
+      { event: "*", schema: "public", table: "notification_inbox_deletions", filter: `user_id=eq.${userId}` },
+      onChange
+    )
+    .on(
+      "postgres_changes",
       { event: "*", schema: "public", table: "notification_preferences", filter: `user_id=eq.${userId}` },
       onChange
     )
     .subscribe();
 
   return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(notificationInboxChangedEvent, handleLocalChange);
+    }
     void supabase.removeChannel(channel);
   };
 }
@@ -306,6 +345,21 @@ export async function markNotificationRead(notificationId: string, userId: strin
     { onConflict: "notification_id,user_id" }
   );
   if (error) throw error;
+  broadcastNotificationInboxChange(userId);
+}
+
+export async function deleteInboxNotification(notificationId: string, userId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from("notification_inbox_deletions").upsert(
+    {
+      notification_id: notificationId,
+      user_id: userId,
+      deleted_at: new Date().toISOString(),
+    },
+    { onConflict: "notification_id,user_id" }
+  );
+  if (error) throw error;
+  broadcastNotificationInboxChange(userId);
 }
 
 export async function markAllNotificationsRead(notificationIds: string[], userId: string) {
@@ -321,6 +375,7 @@ export async function markAllNotificationsRead(notificationIds: string[], userId
     { onConflict: "notification_id,user_id" }
   );
   if (error) throw error;
+  broadcastNotificationInboxChange(userId);
 }
 
 export async function createOrganizationNotification(input: {

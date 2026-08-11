@@ -21,7 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const articles = getAllArticles();
 
   return [
-    { url: `${baseUrl}/`, lastModified: new Date() },
+    { url: `${baseUrl}/home`, lastModified: new Date() },
     { url: `${baseUrl}/read`, lastModified: new Date() },
     ...articles.map((article) => ({
       url: `${baseUrl}/read/${article.slug}`,

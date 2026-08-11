@@ -92,7 +92,7 @@ export default function RootLayout({
                     <div className="text-sm text-[var(--muted)]">
                       <p className="font-semibold text-[var(--foreground)]">Site</p>
                       <div className="mt-4 grid gap-3">
-                        <Link href="/">Home</Link>
+                        <Link href="/home">Home</Link>
                         <Link href="/tools">Tools</Link>
                         <Link href="/endorsements">Endorsements</Link>
                         <Link href="/read">Read</Link>

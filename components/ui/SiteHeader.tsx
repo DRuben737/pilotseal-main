@@ -8,7 +8,7 @@ import logoImage from "@/images/logo.png";
 
 export default function SiteHeader() {
   const pathname = usePathname();
-  const isHome = pathname === "/";
+  const isHome = pathname === "/home";
 
   return (
     <header
@@ -18,7 +18,7 @@ export default function SiteHeader() {
       ].join(" ")}
     >
       <div className="site-shell flex items-center justify-between gap-6 px-1 py-4">
-        <Link href="/" className="site-brand-link">
+        <Link href="/home" className="site-brand-link">
           <span className="site-brand-logo-wrap">
             <Image
               src={logoImage}

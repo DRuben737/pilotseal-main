@@ -21,7 +21,7 @@ export default function NotFound() {
             The page may have moved, or the link is no longer valid.
           </p>
           <div className="saas-empty-page-actions">
-            <Link href="/" className="site-nav-inline-link site-nav-inline-link-active">
+            <Link href="/home" className="site-nav-inline-link site-nav-inline-link-active">
               Back home
             </Link>
             <Link href="/tools" className="site-nav-inline-link">

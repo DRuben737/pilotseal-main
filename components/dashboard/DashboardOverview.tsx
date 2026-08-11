@@ -3,12 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { QuickEditPopover } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
 import {
-  formatTimeUntilDate,
-  resolveDisplayIdentity,
-} from "@/lib/identity";
+  DEFAULT_QUICK_ACTION_IDS,
+  fetchDashboardQuickActionIds,
+  QUICK_ACTIONS,
+  type QuickActionId,
+  updateDashboardQuickActionIds,
+} from "@/lib/dashboard-preferences";
+import { formatTimeUntilDate } from "@/lib/identity";
 import {
   fetchInboxNotifications,
   type NotificationRecord,
@@ -16,35 +21,20 @@ import {
 import { fetchCurrentProfile } from "@/lib/profile";
 import { formatUsDate } from "@/lib/date-format";
 import {
-  fetchEndorsementRecords,
-  type EndorsementRecord,
-} from "@/lib/endorsement-records";
-import {
   fetchDefaultCfi,
-  fetchSavedPeople,
   formatStoredDateForDisplay,
   type SavedPerson,
 } from "@/lib/saved-people";
 
 type OverviewState = {
-  cfis: SavedPerson[];
-  students: SavedPerson[];
-  records: EndorsementRecord[];
   notifications: NotificationRecord[];
-  role: string;
-  displayName: string;
   defaultCfi: SavedPerson | null;
   medicalLastExam: string;
   medicalExpiry: string;
 };
 
 const emptyState: OverviewState = {
-  cfis: [],
-  students: [],
-  records: [],
   notifications: [],
-  role: "",
-  displayName: "",
   defaultCfi: null,
   medicalLastExam: "",
   medicalExpiry: "",
@@ -60,9 +50,13 @@ function formatRelativeDate(value: string) {
 
 export default function DashboardOverview() {
   const { session } = useAuthSession();
-  const [loading, setLoading] = useState(true);
   const [statusNote, setStatusNote] = useState("");
   const [overview, setOverview] = useState<OverviewState>(emptyState);
+  const [quickActionIds, setQuickActionIds] = useState<QuickActionId[]>(DEFAULT_QUICK_ACTION_IDS);
+  const [quickActionDraft, setQuickActionDraft] = useState<QuickActionId[]>(DEFAULT_QUICK_ACTION_IDS);
+  const [customizingQuickActions, setCustomizingQuickActions] = useState(false);
+  const [savingQuickActions, setSavingQuickActions] = useState(false);
+  const [quickActionError, setQuickActionError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -71,55 +65,34 @@ export default function DashboardOverview() {
       if (!session?.user?.id) {
         if (!cancelled) {
           setOverview(emptyState);
-          setLoading(false);
+          setQuickActionIds(DEFAULT_QUICK_ACTION_IDS);
         }
         return;
       }
 
       try {
-        setLoading(true);
         setStatusNote("");
 
-        const [cfis, students, profile, defaultCfi] = await Promise.all([
-          fetchSavedPeople(session.user.id, "cfi"),
-          fetchSavedPeople(session.user.id, "student"),
+        const [profile, defaultCfi, notifications, selectedQuickActionIds] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchDefaultCfi(session.user.id),
+          fetchInboxNotifications(session.user.id),
+          fetchDashboardQuickActionIds(session.user.id),
         ]);
-
-        let records: EndorsementRecord[] = [];
-        try {
-          records = await fetchEndorsementRecords(session.user.id);
-        } catch (error) {
-          console.error("Unable to load endorsement records:", error);
-          if (!cancelled) {
-            setStatusNote("Endorsement records are temporarily unavailable.");
-          }
-        }
-
-        const notifications = await fetchInboxNotifications(session.user.id);
 
         if (!cancelled) {
           setOverview({
-            cfis,
-            students,
-            records,
             notifications,
-            role: profile?.role ?? "",
-            displayName: profile?.display_name ?? "",
             defaultCfi,
             medicalLastExam: formatMedicalExam(profile?.medical_exam_date),
             medicalExpiry: profile?.medical_exp_date ?? "",
           });
+          setQuickActionIds(selectedQuickActionIds);
         }
       } catch {
         if (!cancelled) {
           setOverview(emptyState);
           setStatusNote("Dashboard data is temporarily unavailable.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
         }
       }
     }
@@ -131,24 +104,43 @@ export default function DashboardOverview() {
     };
   }, [session?.user?.id]);
 
-  const identityLabel = resolveDisplayIdentity({
-    displayName: overview.displayName,
-    defaultCfiName: overview.defaultCfi?.display_name ?? "",
-    email: session?.user?.email,
-  });
+  const selectedQuickActions = useMemo(
+    () => QUICK_ACTIONS.filter((action) => quickActionIds.includes(action.id)),
+    [quickActionIds]
+  );
 
-  const metricItems = [
-    {
-      label: "Records",
-      value: loading ? "..." : String(overview.records.length),
-    },
-    {
-      label: "Notifications",
-      value: loading
-        ? "..."
-        : String(overview.notifications.filter((notification) => !notification.read_at).length),
-    },
-  ];
+  function setQuickActionCustomizerOpen(open: boolean) {
+    setCustomizingQuickActions(open);
+    setQuickActionError("");
+    if (open) setQuickActionDraft(quickActionIds);
+  }
+
+  function toggleQuickAction(id: QuickActionId) {
+    setQuickActionDraft((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+    setQuickActionError("");
+  }
+
+  async function saveQuickActions() {
+    if (!session?.user?.id) return;
+    if (quickActionDraft.length === 0) {
+      setQuickActionError("Select at least one quick action.");
+      return;
+    }
+
+    setSavingQuickActions(true);
+    setQuickActionError("");
+    try {
+      const saved = await updateDashboardQuickActionIds(session.user.id, quickActionDraft);
+      setQuickActionIds(saved);
+      setCustomizingQuickActions(false);
+    } catch {
+      setQuickActionError("Unable to save quick actions. Try again.");
+    } finally {
+      setSavingQuickActions(false);
+    }
+  }
 
   const notificationItems = useMemo(() => {
     const items: Array<{
@@ -219,38 +211,7 @@ export default function DashboardOverview() {
 
       <OrganizationAccessManager />
 
-      <section className="saas-panel">
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-slate-400">Overview</p>
-            <h1 className="mt-1 text-sm font-semibold text-slate-950">
-              {loading ? "Loading..." : identityLabel}
-            </h1>
-          </div>
-          <div className="hidden rounded-[14px] border border-slate-200/80 bg-white px-3 py-2 text-right shadow-[0_10px_24px_rgba(15,23,42,0.05)] sm:block">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-400">Session</p>
-            <p className="mt-1 text-sm font-medium text-slate-700">{overview.role || "User"}</p>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {metricItems.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-[18px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-medium text-slate-500">{item.label}</p>
-                <span className="h-2 w-2 rounded-full bg-sky-500" />
-              </div>
-              <p className="mt-3 text-sm font-semibold text-slate-950">{item.value}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-2">
-        <aside className="space-y-4">
+      <section className="grid items-start gap-4 lg:grid-cols-2">
           <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Notifications</h2>
@@ -275,15 +236,51 @@ export default function DashboardOverview() {
           <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Quick Actions</h2>
+              <QuickEditPopover
+                open={customizingQuickActions}
+                onOpenChange={setQuickActionCustomizerOpen}
+                label="Customize quick actions"
+                trigger={(
+                  <button type="button" className="text-sm font-medium text-[var(--accent-strong)]">
+                    Customize
+                  </button>
+                )}
+              >
+                <div className="max-h-72 overflow-y-auto pr-1">
+                  {QUICK_ACTIONS.map((action) => (
+                    <label key={action.id} className="flex min-h-9 cursor-pointer items-center gap-2 border-b border-slate-100 text-sm text-slate-700 last:border-0">
+                      <input
+                        type="checkbox"
+                        checked={quickActionDraft.includes(action.id)}
+                        onChange={() => toggleQuickAction(action.id)}
+                      />
+                      <span>{action.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {quickActionError ? <p role="alert" className="mt-2 text-xs text-rose-600">{quickActionError}</p> : null}
+                <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    disabled={savingQuickActions}
+                    onClick={() => setQuickActionCustomizerOpen(false)}
+                    className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingQuickActions}
+                    onClick={() => void saveQuickActions()}
+                    className="h-9 rounded-lg bg-blue-700 px-3 text-xs font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+                  >
+                    {savingQuickActions ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </QuickEditPopover>
             </div>
             <div className="mt-3 grid gap-3">
-              {[
-                { href: "/tools/endorsement-generator", label: "New Endorsement" },
-                { href: "/tools/flight-brief", label: "Create Flight Brief" },
-                { href: "/tools/wb", label: "Weight & Balance" },
-                { href: "/dashboard/records", label: "View Records" },
-                { href: "/dashboard/saved-people", label: "Manage People" },
-              ].map((action) => (
+              {selectedQuickActions.map((action) => (
                 <Link
                   key={action.href}
                   href={action.href}
@@ -294,7 +291,6 @@ export default function DashboardOverview() {
               ))}
             </div>
           </section>
-        </aside>
       </section>
     </div>
   );

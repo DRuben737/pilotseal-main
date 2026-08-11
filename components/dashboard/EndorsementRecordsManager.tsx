@@ -268,15 +268,18 @@ export default function EndorsementRecordsManager() {
           <span className="saas-pill">{filteredRecords.length}</span>
         </div>
 
-        <label className="saas-field mt-5">
-          <span>Search</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search student, certificate, instructor, date, or endorsement"
-          />
-        </label>
+        <div className="mt-5 flex flex-col items-end gap-2 sm:flex-row">
+          <label className="saas-field min-w-0 flex-1">
+            <span>Search</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search student, certificate, instructor, date, or endorsement"
+            />
+          </label>
+          {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
+        </div>
 
         {loading ? <p className="saas-meta-text mt-5">Loading records...</p> : null}
         {!loading && status ? <p className="saas-meta-text mt-5">{status}</p> : null}

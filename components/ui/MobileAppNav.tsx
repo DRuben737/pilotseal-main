@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   {
-    href: "/",
+    href: "/home",
     label: "Home",
     icon: (
       <path d="M4.5 10.7 12 4.5l7.5 6.2V20a1 1 0 0 1-1 1h-4.2v-5.4H9.7V21H5.5a1 1 0 0 1-1-1v-9.3Z" />

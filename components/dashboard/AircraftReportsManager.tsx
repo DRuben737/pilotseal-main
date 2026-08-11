@@ -623,7 +623,7 @@ export default function AircraftReportsManager() {
       ) : null}
 
       <section className="saas-panel">
-        <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aircraft, person, type, or description" />
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
             <option value="open">Open reports</option>
@@ -632,6 +632,11 @@ export default function AircraftReportsManager() {
             <option value="in_review">In review</option>
             <option value="closed">Closed</option>
           </select>
+          {query || statusFilter !== "open" ? (
+            <button className="ghost-button" type="button" onClick={() => { setQuery(""); setStatusFilter("open"); }}>
+              Clear filters
+            </button>
+          ) : null}
         </div>
 
         {loading ? <p className="saas-empty-state mt-5">Loading reports…</p> : null}

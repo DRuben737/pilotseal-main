@@ -10,11 +10,7 @@ import {
   type AvailableOrganization,
 } from "@/lib/organizations";
 
-type Props = {
-  showEmpty?: boolean;
-};
-
-export default function OrganizationAccessManager({ showEmpty = false }: Props) {
+export default function OrganizationAccessManager() {
   const { session } = useAuthSession();
   const { refreshOrganizations } = useOrganization();
   const [available, setAvailable] = useState<AvailableOrganization[]>([]);
@@ -57,7 +53,7 @@ export default function OrganizationAccessManager({ showEmpty = false }: Props) 
     }
   }
 
-  if (!loading && available.length === 0 && !showEmpty && !status) return null;
+  if (available.length === 0 && !status) return null;
 
   return (
     <section className="saas-panel dashboard-setting-row">

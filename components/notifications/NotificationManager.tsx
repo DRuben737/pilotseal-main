@@ -7,6 +7,7 @@ import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { UsDateTimeInput } from "@/components/forms/UsDateInput";
 import {
   createNotification,
+  deleteInboxNotification,
   deleteNotification,
   fetchInboxNotifications,
   fetchNotificationPreferences,
@@ -39,7 +40,7 @@ const emptyForm = {
 };
 type InboxFilter = "all" | "unread" | "reminder" | "organization" | "system";
 
-export default function NotificationManager() {
+export default function NotificationManager({ platformPublishingOnly = false }: { platformPublishingOnly?: boolean }) {
   const { session } = useAuthSession();
   const userId = session?.user?.id ?? "";
   const [loading, setLoading] = useState(true);
@@ -50,6 +51,7 @@ export default function NotificationManager() {
   const [adminHistory, setAdminHistory] = useState<NotificationRecord[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");
+  const [inboxQuery, setInboxQuery] = useState("");
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => defaultNotificationPreferences(userId));
   const [savingPreferences, setSavingPreferences] = useState(false);
 
@@ -58,10 +60,26 @@ export default function NotificationManager() {
     [inbox]
   );
   const visibleInbox = useMemo(() => {
-    if (inboxFilter === "all") return inbox;
-    if (inboxFilter === "unread") return inbox.filter((notification) => !notification.read_at);
-    return inbox.filter((notification) => notification.kind === inboxFilter);
-  }, [inbox, inboxFilter]);
+    const filteredByKind = inboxFilter === "all"
+      ? inbox
+      : inboxFilter === "unread"
+        ? inbox.filter((notification) => !notification.read_at)
+        : inbox.filter((notification) => notification.kind === inboxFilter);
+    const needle = inboxQuery.trim().toLowerCase();
+    if (!needle) return filteredByKind;
+    return filteredByKind.filter((notification) =>
+      [
+        notification.title,
+        notification.message,
+        notification.source_label ?? "",
+        notification.kind,
+        notification.priority,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    );
+  }, [inbox, inboxFilter, inboxQuery]);
 
   async function refreshInbox() {
     if (!userId) return;
@@ -85,13 +103,15 @@ export default function NotificationManager() {
       setLoading(true);
       setStatus("");
       try {
-        await refreshMyProfileReminders();
-        const profile = await fetchCurrentProfile(userId);
-        const nextIsAdmin = profile?.role === "admin";
+        if (!platformPublishingOnly) await refreshMyProfileReminders();
+        const profile = platformPublishingOnly ? await fetchCurrentProfile(userId) : null;
+        const nextIsAdmin = platformPublishingOnly && profile?.role === "admin";
         const [nextInbox, nextHistory, nextPreferences] = await Promise.all([
-          fetchInboxNotifications(userId),
+          platformPublishingOnly ? Promise.resolve([]) : fetchInboxNotifications(userId),
           nextIsAdmin ? fetchNotificationHistory() : Promise.resolve([]),
-          fetchNotificationPreferences(userId),
+          platformPublishingOnly
+            ? Promise.resolve(defaultNotificationPreferences(userId))
+            : fetchNotificationPreferences(userId),
         ]);
         if (!cancelled) {
           setIsAdmin(nextIsAdmin);
@@ -111,14 +131,14 @@ export default function NotificationManager() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [platformPublishingOnly, userId]);
 
   useEffect(() => {
-    if (!userId) return undefined;
+    if (!userId || platformPublishingOnly) return undefined;
     return subscribeToNotificationChanges(userId, () => void refreshInbox());
     // refreshInbox intentionally follows the current signed-in user.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [platformPublishingOnly, userId]);
 
   function resetForm() {
     setForm(emptyForm);
@@ -187,6 +207,22 @@ export default function NotificationManager() {
     }
   }
 
+  async function handleDeleteInbox(notification: NotificationRecord) {
+    if (!userId) return;
+    if (!window.confirm(`Delete “${notification.title}” from your inbox? This cannot be undone.`)) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await deleteInboxNotification(notification.id, userId);
+      setInbox((current) => current.filter((item) => item.id !== notification.id));
+      setStatus("Notification deleted from your inbox.");
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to delete this notification."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!userId || !isAdmin) return;
@@ -212,7 +248,7 @@ export default function NotificationManager() {
         setStatus("Platform notification created.");
       }
       resetForm();
-      await Promise.all([refreshInbox(), fetchNotificationHistory().then(setAdminHistory)]);
+      setAdminHistory(await fetchNotificationHistory());
     } catch (error) {
       setStatus(getErrorMessage(error, "Failed to save notification."));
     } finally {
@@ -225,7 +261,7 @@ export default function NotificationManager() {
     setSaving(true);
     try {
       await deleteNotification(id);
-      await Promise.all([refreshInbox(), fetchNotificationHistory().then(setAdminHistory)]);
+      setAdminHistory(await fetchNotificationHistory());
       if (form.id === id) resetForm();
       setStatus("Platform notification deleted.");
     } catch (error) {
@@ -240,7 +276,7 @@ export default function NotificationManager() {
     setSaving(true);
     try {
       await sendNotificationNow(id);
-      await Promise.all([refreshInbox(), fetchNotificationHistory().then(setAdminHistory)]);
+      setAdminHistory(await fetchNotificationHistory());
       setStatus("Platform notification sent.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Failed to send notification."));
@@ -250,11 +286,15 @@ export default function NotificationManager() {
   }
 
   if (loading) return <div className="saas-panel">Loading notifications...</div>;
+  if (platformPublishingOnly && !isAdmin) {
+    return <div className="saas-panel">Platform administrator access is required.</div>;
+  }
 
   return (
     <div className="grid gap-6">
       {status ? <p className="saas-panel text-sm text-slate-600">{status}</p> : null}
 
+      {!platformPublishingOnly ? <>
       <section className="saas-panel">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -268,6 +308,19 @@ export default function NotificationManager() {
         </div>
 
         <div className="mt-5 grid gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="search"
+              className="min-w-0 flex-1"
+              value={inboxQuery}
+              onChange={(event) => setInboxQuery(event.target.value)}
+              placeholder="Search title, message, source, type, or priority"
+              aria-label="Search notifications"
+            />
+            {inboxQuery ? (
+              <button className="ghost-button" type="button" onClick={() => setInboxQuery("")}>Clear search</button>
+            ) : null}
+          </div>
           <div className="flex flex-wrap gap-2">
             {([
               ["all", "All"],
@@ -303,7 +356,20 @@ export default function NotificationManager() {
                 <p className="saas-meta-text">{notification.message}</p>
                 <p className="saas-list-meta">{formatUsDateTime(notification.created_at)}</p>
               </div>
-              {notification.action_url ? <Link className="secondary-button" href={notification.action_url} onClick={() => void handleRead(notification)}>Open</Link> : null}
+              <div className="flex flex-wrap gap-2">
+                {notification.action_url ? <Link className="secondary-button" href={notification.action_url} onClick={() => void handleRead(notification)}>Open</Link> : null}
+                <button
+                  className="danger-button"
+                  type="button"
+                  disabled={saving}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleDeleteInbox(notification);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
             </article>
           ))}
         </div>
@@ -341,8 +407,15 @@ export default function NotificationManager() {
           ))}
         </div>
       </section>
+      </> : null}
 
-      {isAdmin ? (
+      {platformPublishingOnly && isAdmin ? (
+        <>
+        <section className="saas-panel">
+          <p className="saas-kicker">Platform administration</p>
+          <h1 className="tools-child-title">Platform notices</h1>
+          <p className="saas-meta-text mt-2">Create, schedule, and manage notices sent across PilotSeal.</p>
+        </section>
         <section className="saas-form-grid">
           <article className="saas-panel">
             <h2 className="saas-subsection-title">{form.id ? "Edit platform notice" : "Create platform notice"}</h2>
@@ -370,6 +443,7 @@ export default function NotificationManager() {
             </div>
           </article>
         </section>
+        </>
       ) : null}
     </div>
   );

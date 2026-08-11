@@ -37,11 +37,21 @@ create table if not exists public.notification_reads (
   primary key (notification_id, user_id)
 );
 
+create table if not exists public.notification_inbox_deletions (
+  notification_id uuid not null references public.notifications(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  deleted_at timestamptz not null default now(),
+  primary key (notification_id, user_id)
+);
+
 create index if not exists notification_reads_user_id_idx
   on public.notification_reads (user_id, read_at desc);
+create index if not exists notification_inbox_deletions_user_id_idx
+  on public.notification_inbox_deletions (user_id, deleted_at desc);
 
 alter table public.notifications enable row level security;
 alter table public.notification_reads enable row level security;
+alter table public.notification_inbox_deletions enable row level security;
 
 drop policy if exists "notifications_select_active" on public.notifications;
 drop policy if exists "notifications_insert_admin" on public.notifications;
@@ -62,6 +72,10 @@ drop policy if exists notification_reads_own_select on public.notification_reads
 drop policy if exists notification_reads_own_insert on public.notification_reads;
 drop policy if exists notification_reads_own_update on public.notification_reads;
 drop policy if exists notification_reads_own_delete on public.notification_reads;
+drop policy if exists notification_inbox_deletions_own_select on public.notification_inbox_deletions;
+drop policy if exists notification_inbox_deletions_own_insert on public.notification_inbox_deletions;
+drop policy if exists notification_inbox_deletions_own_update on public.notification_inbox_deletions;
+drop policy if exists notification_inbox_deletions_own_delete on public.notification_inbox_deletions;
 
 create policy notifications_public_sent_read
 on public.notifications for select to anon
@@ -145,6 +159,29 @@ create policy notification_reads_own_delete
 on public.notification_reads for delete to authenticated
 using (user_id = (select auth.uid()));
 
+create policy notification_inbox_deletions_own_select
+on public.notification_inbox_deletions for select to authenticated
+using (user_id = (select auth.uid()));
+
+create policy notification_inbox_deletions_own_insert
+on public.notification_inbox_deletions for insert to authenticated
+with check (
+  user_id = (select auth.uid())
+  and exists (
+    select 1 from public.notifications notification
+    where notification.id = notification_id
+  )
+);
+
+create policy notification_inbox_deletions_own_update
+on public.notification_inbox_deletions for update to authenticated
+using (user_id = (select auth.uid()))
+with check (user_id = (select auth.uid()));
+
+create policy notification_inbox_deletions_own_delete
+on public.notification_inbox_deletions for delete to authenticated
+using (user_id = (select auth.uid()));
+
 create or replace function public.create_organization_notification(
   p_organization_id uuid,
   p_title text,
@@ -222,11 +259,14 @@ $$;
 
 revoke all on table public.notifications from anon, authenticated;
 revoke all on table public.notification_reads from anon, authenticated;
+revoke all on table public.notification_inbox_deletions from anon, authenticated;
 grant select on table public.notifications to anon;
 grant select, insert, update, delete on table public.notifications to authenticated;
 grant select, insert, update, delete on table public.notification_reads to authenticated;
+grant select, insert, update, delete on table public.notification_inbox_deletions to authenticated;
 grant select, insert, update, delete on table public.notifications to service_role;
 grant select, insert, update, delete on table public.notification_reads to service_role;
+grant select, insert, update, delete on table public.notification_inbox_deletions to service_role;
 
 revoke all on function public.create_organization_notification(uuid, text, text, text, text) from public;
 revoke all on function public.create_organization_notification(uuid, text, text, text, text) from anon;
@@ -512,6 +552,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notification_reads'
   ) then
     alter publication supabase_realtime add table public.notification_reads;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notification_inbox_deletions'
+  ) then
+    alter publication supabase_realtime add table public.notification_inbox_deletions;
   end if;
 end
 $$;

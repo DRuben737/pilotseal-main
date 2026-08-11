@@ -12,7 +12,7 @@ import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
 
 const publicNavItems = [
-  { href: "/", label: "Home" },
+  { href: "/home", label: "Home" },
   { href: "/tools", label: "Tools" },
   { href: "/read", label: "Read" },
 ];

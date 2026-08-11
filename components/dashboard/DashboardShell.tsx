@@ -42,6 +42,7 @@ const platformLinks = [
   { href: "/dashboard/admin/aircraft", label: "Aircraft Library" },
   { href: "/dashboard/admin/aircraft-assignments", label: "Aircraft Assignments" },
   { href: "/dashboard/admin/endorsements", label: "Endorsement Approvals" },
+  { href: "/dashboard/admin/notifications", label: "Platform Notices" },
   { href: "/dashboard/admin/audit", label: "Audit Log" },
 ];
 
@@ -71,19 +72,37 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Records":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <path d="M3.8 7.5h6l1.6 2H20v9.2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.7V5.3A1.5 1.5 0 0 1 5.5 3.8h4.2l1.6 2h7.2" />
+        </svg>
+      );
     case "Safety Reports":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <path d="M12 3.5 19 6v5.2c0 4.1-2.8 7.6-7 9.3-4.2-1.7-7-5.2-7-9.3V6l7-2.5Z" />
+          <path d="M12 8v4.6" />
+          <path d="M12 16h.01" />
+        </svg>
+      );
     case "Preflight Records":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <circle cx="5" cy="17.5" r="1.5" />
+          <circle cx="18.5" cy="5.5" r="1.5" />
+          <path d="M6.5 17.2c4.8-.7 2.7-7 7.3-7.5 1.7-.2 3.3.4 4.2 1.5" strokeDasharray="2.2 2.2" />
+          <path d="m15.2 15.6 5.2-1.8-3.4-2.5-1.8-5-1.2.4.5 4.8-4.1 2.7.7 1 4.1-1.6Z" />
+        </svg>
+      );
     case "Audit Log":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
-          <path d="M7 3.8h7.2L18 7.6V20a1.2 1.2 0 0 1-1.2 1.2H7A1.2 1.2 0 0 1 5.8 20V5A1.2 1.2 0 0 1 7 3.8Z" />
-          <path d="M14 4v4h4" />
-          <path d="M8.8 12h6.4" />
-          <path d="M8.8 15.3h6.4" />
-          <path d="M8.8 18.6h3.8" />
+          <path d="M6 4h12v16H6z" />
+          <path d="M9 8h6M9 12h6M9 16h4" />
         </svg>
       );
     case "Notifications":
+    case "Platform Notices":
     case "Messages":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
@@ -111,11 +130,10 @@ function DashboardIcon({ kind }: { kind: string }) {
     case "Endorsement Approvals":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
-          <path d="M6.5 3.8h8.2L18 7.1V20a1.2 1.2 0 0 1-1.2 1.2H6.5A1.2 1.2 0 0 1 5.3 20V5a1.2 1.2 0 0 1 1.2-1.2Z" />
-          <path d="M14.3 4.2v3.4h3.3" />
-          <path d="M8.5 12h6.8" />
-          <path d="M8.5 15.2h6.8" />
-          <path d="M8.5 18.4h4.4" />
+          <path d="M6 3.8h12v16.4H6z" />
+          <path d="M9 8h6M9 11h4" />
+          <circle cx="14.8" cy="16" r="2.6" />
+          <path d="m13.7 18.3-.5 2.2 1.6-.8 1.6.8-.5-2.2" />
         </svg>
       );
     case "Access":
@@ -462,19 +480,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   })}
                 </nav>
               ) : null}
-              {!organizationsLoading && organizations.length > 0 && (profileRole !== "admin" || workspace === "organization") ? (
-                <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-slate-200/80 bg-white/80 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-                  <div>
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                      Current organization
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800">
-                      {activeOrganization?.name ?? "Select an organization"}
-                    </p>
-                  </div>
+              {!organizationsLoading && organizations.length > 1 && (profileRole !== "admin" || workspace === "organization") ? (
+                <div className="mb-3 flex justify-end">
                   <select
                     aria-label="Current organization"
-                    className="max-w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                    className="h-9 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
                     value={activeOrganizationId}
                     onChange={(event) => setActiveOrganizationId(event.target.value)}
                   >
@@ -484,7 +494,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                       </option>
                     ))}
                   </select>
-                </section>
+                </div>
               ) : null}
               {children}
             </div>

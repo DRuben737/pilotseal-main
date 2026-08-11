@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import { UsDateInput, UsDateTimeInput } from "@/components/forms/UsDateInput";
-import { formatUsDate, formatUsMonthYear } from "@/lib/date-format";
+import { UsDateInput } from "@/components/forms/UsDateInput";
+import { formatUsDate } from "@/lib/date-format";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { fetchSavedPeople } from "@/lib/saved-people";
 import { fetchPersonCertificates } from "@/lib/person-certificates";
@@ -118,14 +118,6 @@ function matchAircraftByTail(options, value) {
   );
 }
 
-function formatDueMonth(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return "";
-  }
-
-  return formatUsMonthYear(value, value);
-}
-
 function parseDueDateMs(value) {
   if (typeof value !== "string" || !value.trim()) {
     return null;
@@ -149,6 +141,14 @@ function getTodayUtcMs(referenceDate) {
   return Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
+function formatDaysUntil(dueMs, referenceMs) {
+  if (dueMs === null) return "";
+  const days = Math.ceil((dueMs - referenceMs) / 86400000);
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`;
+  if (days === 0) return "Due today";
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
 function getOperationalStatusCopy(status) {
   switch (status) {
     case "grounded":
@@ -169,6 +169,7 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
       detail: "Select a saved aircraft",
       ok: null,
       report: "(none saved)",
+      items: [],
       dispatchBlocked: false,
       blockingReason: "",
     };
@@ -193,12 +194,15 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
   if (aircraft.hundred_hour_due_hours != null) {
     const currentMx = parseFloat(String(mxNow ?? ""));
     if (Number.isFinite(currentMx)) {
-      const isCurrent = currentMx <= Number(aircraft.hundred_hour_due_hours);
+      const remainingHours = Number(aircraft.hundred_hour_due_hours) - currentMx;
+      const isCurrent = remainingHours >= 0;
       hasExpired = hasExpired || !isCurrent;
-      items.push(`100hr ${isCurrent ? "OK" : "overdue"} (${aircraft.hundred_hour_due_hours})`);
+      items.push(
+        `100hr · ${Math.abs(remainingHours).toFixed(1)} hr${isCurrent ? "" : " overdue"}`
+      );
     } else {
       needsMxTime = true;
-      items.push(`100hr check time (${aircraft.hundred_hour_due_hours})`);
+      items.push("100hr · Tach required");
     }
   }
 
@@ -217,7 +221,8 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
     const dueMs = parseDueDateMs(value);
     const isCurrent = dueMs === null || dueMs >= todayMs;
     hasExpired = hasExpired || !isCurrent;
-    items.push(`${label} ${isCurrent ? "OK through" : "expired"} ${formatDueMonth(value)}`);
+    const remaining = formatDaysUntil(dueMs, todayMs);
+    items.push(`${label}${remaining ? ` · ${remaining}` : ""}`);
   });
 
   if (items.length === 0) {
@@ -226,6 +231,7 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
       detail: "No due info saved",
       ok: null,
       report: "(none saved)",
+      items: [],
       dispatchBlocked: false,
       blockingReason: "",
     };
@@ -242,12 +248,13 @@ function getAircraftDueMeta(aircraft, mxNow, referenceDate) {
     detail: items.join(" · "),
     ok: hasExpired ? false : needsMxTime ? null : true,
     report: items.join("; "),
+    items,
     dispatchBlocked,
     blockingReason,
   };
 }
 
-function formatCustomInspection(item, mxNow, plannedIncrease, referenceDate) {
+function formatCustomInspection(item, mxNow, referenceDate) {
   const definition = item?.definition ?? {};
   const name = definition.name || "Custom inspection";
   const basis = definition.basis || "calendar";
@@ -264,13 +271,11 @@ function formatCustomInspection(item, mxNow, plannedIncrease, referenceDate) {
 
   if (item?.due_meter != null) {
     const current = parseFloat(String(mxNow ?? ""));
-    const expected = parseFloat(String(plannedIncrease ?? ""));
     if (Number.isFinite(current)) {
-      const projected = current + (Number.isFinite(expected) ? expected : 0);
-      const remaining = Number(item.due_meter) - projected;
+      const remaining = Number(item.due_meter) - current;
       const meterOk = remaining >= 0;
       ok = ok && meterOk;
-      details.push(`${remaining.toFixed(1)} hr remaining${Number.isFinite(expected) ? " at projected return" : " now"}`);
+      details.push(`${remaining.toFixed(1)} hr remaining`);
     } else {
       details.push(`due at ${item.due_meter}`);
     }
@@ -903,10 +908,6 @@ export default function FlightBrief() {
   const mxDue = brief.mxDue ?? "";
   const setMxDue = useCallback((value) => setBriefField("mxDue", value), [setBriefField]);
   const meterType = "tach";
-  const meterObservedAt = brief.meterObservedAt ?? "";
-  const setMeterObservedAt = useCallback((value) => setBriefField("meterObservedAt", value), [setBriefField]);
-  const plannedMeterIncrease = brief.plannedMeterIncrease ?? "";
-  const setPlannedMeterIncrease = useCallback((value) => setBriefField("plannedMeterIncrease", value), [setBriefField]);
   const [recordSaving, setRecordSaving] = useState(false);
   const [recordStatus, setRecordStatus] = useState("");
   const [customInspections, setCustomInspections] = useState([]);
@@ -969,25 +970,12 @@ export default function FlightBrief() {
       return { label: "--", detail: "Enter the current and next-due readings", ok: null };
     }
 
-    const expectedIncrease = parseFloat(String(plannedMeterIncrease));
-    if (Number.isNaN(expectedIncrease)) {
-      return {
-        label: `${mxRemaining.toFixed(1)} hr`,
-        detail: "Before-flight margin; expected meter increase is optional",
-        ok: null,
-      };
-    }
-
-    const mxMargin = mxRemaining - expectedIncrease;
-    const isSufficient = mxMargin >= 0;
     return {
       label: `${mxRemaining.toFixed(1)} hr`,
-      detail: isSufficient
-        ? `Projected return margin ${mxMargin.toFixed(1)} hr`
-        : `Projected return exceeds the limit by ${Math.abs(mxMargin).toFixed(1)} hr`,
-      ok: isSufficient,
+      detail: mxRemaining >= 0 ? "Remaining at the current Tach reading" : "Maintenance limit exceeded",
+      ok: mxRemaining >= 0,
     };
-  }, [mxRemaining, plannedMeterIncrease]);
+  }, [mxRemaining]);
 
   const avgFuelBurnRate = useMemo(() => {
     const value = briefSelectedAircraft?.model?.avg_fuel_burn_rate;
@@ -1322,8 +1310,8 @@ export default function FlightBrief() {
   }, [selectedSavedAircraft?.id, selectedSavedAircraft?.source]);
 
   const customInspectionSummary = useMemo(
-    () => customInspections.map((item) => formatCustomInspection(item, mxNow, plannedMeterIncrease, flightDate)),
-    [customInspections, flightDate, mxNow, plannedMeterIncrease]
+    () => customInspections.map((item) => formatCustomInspection(item, mxNow, flightDate)),
+    [customInspections, flightDate, mxNow]
   );
 
   useEffect(() => {
@@ -1771,9 +1759,6 @@ Gross Weight: ${grossWeight}
 CG: ${wbCg}
 Fuel Time: ${fuelTime}
 Mx Remaining: ${mxRemaining}
-Meter Type: ${meterType}
-Meter Observed At: ${meterObservedAt || "(not recorded)"}
-Expected Meter Increase: ${plannedMeterIncrease || "(not entered)"}
 Saved Aircraft Due: ${selectedAircraftDueMeta.label} - ${selectedAircraftDueMeta.report}
 Custom Inspections: ${customInspectionSummary.length ? customInspectionSummary.map((item) => `${item.label}: ${item.detail}`).join("; ") : "(none)"}
 
@@ -1833,9 +1818,6 @@ ${riskComments}
     wbCg,
     fuelTime,
     mxRemaining,
-    meterType,
-    meterObservedAt,
-    plannedMeterIncrease,
     selectedAircraftDueMeta,
     customInspectionSummary,
     staticChecked,
@@ -1917,9 +1899,6 @@ ${riskComments}
         !String(mxDue).trim() &&
         !(selectedSavedAircraft?.source === "organization" && selectedSavedAircraft.hundred_hour_due_hours == null)
       ) missing.push("Reading when the next maintenance is due");
-      if (selectedSavedAircraft?.source === "organization" && !meterObservedAt) {
-        missing.push("Meter observation time");
-      }
       if (briefSelectedAircraft && !withinLimitsConfirmed) {
         missing.push("Weight and balance within limits");
       }
@@ -1955,7 +1934,6 @@ ${riskComments}
     lessonPractice,
     mxDue,
     mxNow,
-    meterObservedAt,
     riskComments,
     routeMode,
     stops,
@@ -1997,9 +1975,7 @@ ${riskComments}
 
     const organizationAircraft = selectedSavedAircraft?.source === "organization";
     const meterValue = parseFloat(String(mxNow));
-    const plannedIncreaseValue = String(plannedMeterIncrease).trim()
-      ? parseFloat(String(plannedMeterIncrease))
-      : null;
+    const meterObservedAt = new Date().toISOString();
 
     if (organizationAircraft) {
       if (!selectedSavedAircraft?.organization_id || !activeOrganization?.id) {
@@ -2018,10 +1994,6 @@ ${riskComments}
         setRecordStatus("Enter the current Tach reading.");
         return;
       }
-      if (!meterObservedAt) {
-        setRecordStatus("Enter when the meter reading was observed.");
-        return;
-      }
       if (
         selectedSavedAircraft.current_meter_type === "tach" &&
         selectedSavedAircraft.current_meter_value != null &&
@@ -2033,11 +2005,6 @@ ${riskComments}
         return;
       }
     }
-    if (plannedIncreaseValue !== null && (!Number.isFinite(plannedIncreaseValue) || plannedIncreaseValue < 0)) {
-      setRecordStatus("Expected meter increase must be zero or greater.");
-      return;
-    }
-
     setRecordSaving(true);
     setRecordStatus("");
     try {
@@ -2086,7 +2053,6 @@ ${riskComments}
           mxDue,
           meterType,
           meterObservedAt,
-          plannedMeterIncrease,
           staticChecked,
           dynamicChecked,
           imsafe,
@@ -2129,8 +2095,8 @@ ${riskComments}
       const finalized = await finalizeFlightBrief(draft.id, {
         meterType: organizationAircraft ? meterType : null,
         meterValue: organizationAircraft ? meterValue : null,
-        observedAt: organizationAircraft ? new Date(meterObservedAt).toISOString() : null,
-        plannedMeterIncrease: organizationAircraft ? plannedIncreaseValue : null,
+        observedAt: organizationAircraft ? meterObservedAt : null,
+        plannedMeterIncrease: null,
       });
       setBrief((current) => ({
         ...current,
@@ -2470,20 +2436,8 @@ ${riskComments}
                   <input type="number" min="0" step="any" id="mx-now" className="input-field" value={mxNow} onChange={(e) => handleMxNowChange(e.target.value)} placeholder={selectedSavedAircraft?.current_meter_type === "tach" && selectedSavedAircraft?.current_meter_value != null ? `Saved Tach ${selectedSavedAircraft.current_meter_value}` : "Check the aircraft Tach"} />
                 </div>
                 <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <span className="label">Meter:</span>
-                  <strong className="input-field" aria-label="Meter type">Tach</strong>
-                </div>
-                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="meter-observed-at">Reading Checked At:</label>
-                  <UsDateTimeInput id="meter-observed-at" className="input-field" value={meterObservedAt} onChange={setMeterObservedAt} />
-                </div>
-                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
                   <label className="label" htmlFor="mx-due">Next Maintenance Due At:</label>
                   <input type="number" id="mx-due" className="input-field" readOnly={selectedSavedAircraft?.source === "organization"} value={mxDue} onChange={(e) => handleMxDueChange(e.target.value)} placeholder={selectedSavedAircraft?.source === "organization" ? "Managed by organization" : ""} />
-                </div>
-                <div className="inline-label-input inline-label-input-compact flightbrief-aircraft-inlineField">
-                  <label className="label" htmlFor="planned-meter-increase">Expected Increase During This Flight (optional):</label>
-                  <input type="number" min="0" step="any" id="planned-meter-increase" className="input-field" value={plannedMeterIncrease} onChange={(e) => setPlannedMeterIncrease(e.target.value)} placeholder="Not the same as ETE" />
                 </div>
                 <div className="flightbrief-kpi">
                   <span>Time Until Maintenance</span>
@@ -2505,7 +2459,9 @@ ${riskComments}
                   >
                     {selectedAircraftDueMeta.label}
                   </strong>
-                  <small>{selectedAircraftDueMeta.detail}</small>
+                  <ul className="flightbrief-maintenance-list">
+                    {selectedAircraftDueMeta.items.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
                 </div>
               </div>
 
