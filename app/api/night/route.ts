@@ -106,11 +106,14 @@ export async function POST(request: NextRequest) {
     }
 
     const localDate = DateTime.fromISO(date, { zone });
+    const previousLocalDate = localDate.minus({ days: 1 });
     const nextLocalDate = localDate.plus({ days: 1 });
+    const sunPreviousDate = buildLocalNoon(previousLocalDate.toISODate(), zone);
     const sunTodayDate = buildLocalNoon(localDate.toISODate(), zone);
     const sunNextDate = buildLocalNoon(nextLocalDate.toISODate(), zone);
 
-    const [sunToday, sunNext] = await Promise.all([
+    const [sunPrevious, sunToday, sunNext] = await Promise.all([
+      Promise.resolve(getSunTimes(coords.lat, coords.lon, sunPreviousDate)),
       Promise.resolve(getSunTimes(coords.lat, coords.lon, sunTodayDate)),
       Promise.resolve(getSunTimes(coords.lat, coords.lon, sunNextDate)),
     ]);
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       zone,
       displayName: coords.displayName,
+      sunPrevious,
       sunToday,
       sunNext,
     });

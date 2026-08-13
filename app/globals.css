@@ -5673,15 +5673,13 @@ summary:focus-visible {
   color: var(--muted);
 }
 
-.decoder-shell,
-.night-tool-shell {
+.decoder-shell {
   display: grid;
   gap: 1rem;
   align-items: start;
 }
 
-.decoder-pane,
-.night-tool-panel {
+.decoder-pane {
   border-radius: 24px;
   border: 1px solid rgba(18, 45, 68, 0.1);
   background: rgba(255, 255, 255, 0.98);
@@ -5689,19 +5687,16 @@ summary:focus-visible {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
 }
 
-.decoder-section-head,
-.night-tool-head {
+.decoder-section-head {
   margin-bottom: 1rem;
 }
 
-.decoder-section-head h2,
-.night-tool-head h2 {
+.decoder-section-head h2 {
   margin: 0;
   font-size: 1.15rem;
 }
 
-.decoder-section-head p,
-.night-tool-head p {
+.decoder-section-head p {
   margin: 0.45rem 0 0;
   color: var(--muted);
   font-size: 0.96rem;
@@ -5979,214 +5974,728 @@ summary:focus-visible {
   white-space: nowrap;
 }
 
-.night-tool-fields,
-.night-tool-card-grid {
+.tool-stage-nighttime {
+  min-width: 0;
+  padding: 0 !important;
+}
+
+.night-tool-shell {
   display: grid;
-  gap: 0.9rem;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  gap: clamp(1.35rem, 2.5vw, 2.25rem);
+  color: #0f172a;
+}
+
+.night-tool-inputSection {
+  padding: 0.35rem 0 0;
+}
+
+.night-tool-head {
+  max-width: 720px;
+  margin-bottom: 1rem;
+}
+
+.night-tool-eyebrow {
+  margin: 0 0 0.35rem;
+  color: #1d4ed8;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.night-tool-head h2,
+.night-tool-resultsHead h2 {
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.2rem);
+  letter-spacing: -0.02em;
+}
+
+.night-tool-head > p:last-child,
+.night-tool-resultsHead > p {
+  margin: 0.35rem 0 0;
+  color: #475569;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.night-tool-inputRow {
+  display: grid;
+  gap: 0.85rem;
+  align-items: end;
+  width: min(760px, 100%);
+}
+
+.night-tool-fields {
+  display: grid;
+  gap: 0.85rem;
 }
 
 .night-tool-field {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .night-tool-field span {
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: #334155;
 }
 
 .night-tool-field input {
   width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.45);
+  min-height: 42px;
+  border: 1px solid rgba(100, 116, 139, 0.3);
   border-radius: 14px;
-  background: white;
-  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0.58rem 0.78rem;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.night-tool-field input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.night-tool-dateControl {
+  position: relative;
+}
+
+.night-tool-dateControl > input:first-child {
+  padding-right: 3.2rem;
+}
+
+.night-tool-datePicker {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  width: 40px !important;
+  min-height: 38px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.night-tool-calendarIcon {
+  position: absolute;
+  top: 50%;
+  right: 0.9rem;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: #475569;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.night-tool-dateControl:focus-within .night-tool-calendarIcon {
+  stroke: #2563eb;
 }
 
 .night-tool-button {
-  margin-top: 1rem;
+  width: fit-content !important;
+  min-height: 40px;
+  padding: 0.52rem 0.85rem;
+  font-size: 0.76rem;
+  justify-self: start;
+  cursor: pointer;
 }
 
 .night-tool-results {
   display: grid;
-  gap: 1rem;
-  align-content: start;
-}
-
-.night-tool-card {
-  border-radius: 18px;
-  border: 1px solid rgba(18, 45, 68, 0.08);
-  background: #fbfcfd;
-  padding: 1rem;
-}
-
-.night-tool-card span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.night-tool-card strong {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: 1.05rem;
-}
-
-.night-tool-timeline {
-  display: grid;
   gap: 0.9rem;
-  padding: 1rem;
-  border-radius: 20px;
-  border: 1px solid rgba(18, 45, 68, 0.08);
-  background: linear-gradient(180deg, #fbfdff 0%, #f7fafc 100%);
+  min-width: 0;
+  padding-top: 1.1rem;
+  border-top: 1px solid rgba(100, 116, 139, 0.18);
 }
 
-.night-tool-timelineScale {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+.night-tool-resultsHead {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+}
+
+.night-tool-resultsHead > p {
+  max-width: 520px;
   font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.night-tool-timelineScale span:last-child {
   text-align: right;
 }
 
-.night-tool-track {
-  position: relative;
-  min-height: 2.8rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.25);
+.night-tool-visual {
+  min-width: 0;
 }
 
-.night-tool-trackMeta {
+.night-tool-sky {
+  position: relative;
+  min-height: 390px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  isolation: isolate;
+  background: #17191f;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.16);
+}
+
+.night-tool-sky:focus-within {
+  outline: 4px solid rgba(37, 99, 235, 0.26);
+  outline-offset: 3px;
+}
+
+.night-tool-scene {
+  position: relative;
+  min-height: 390px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.night-tool-scene > svg {
   position: absolute;
-  right: 0;
-  top: -2.25rem;
-  display: grid;
-  gap: 0.12rem;
-  min-width: 240px;
-  max-width: min(320px, 45vw);
-  padding: 0.6rem 0.75rem;
-  border-radius: 14px;
-  border: 1px solid rgba(18, 45, 68, 0.08);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  opacity: 0;
-  transform: translateY(4px);
-  pointer-events: none;
-  transition: opacity 140ms ease, transform 140ms ease;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.night-tool-selectedDay {
+  fill: rgba(255, 255, 255, 0.025);
+  stroke: rgba(255, 255, 255, 0.13);
+  stroke-width: 1;
+}
+
+.night-tool-chartGrid line {
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.night-tool-chartGrid line:nth-last-child(-n + 5) {
+  stroke-dasharray: 3 4;
+}
+
+.night-tool-horizon {
+  stroke: rgba(183, 202, 255, 0.46);
+  stroke-width: 2.2;
+}
+
+.night-tool-celestialPath {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: night-tool-path-reveal 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.night-tool-celestialPath.is-day {
+  stroke: rgba(225, 234, 246, 0.8);
+}
+
+.night-tool-celestialPath.is-night {
+  stroke: rgba(164, 172, 188, 0.24);
+}
+
+@keyframes night-tool-path-reveal {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.night-tool-eventPoint line {
+  stroke: rgba(255, 255, 255, 0.68);
+  stroke-width: 1.25;
+}
+
+.night-tool-eventPoint circle {
+  fill: #fff;
+  stroke: rgba(15, 23, 42, 0.32);
+  stroke-width: 1.2;
+}
+
+.night-tool-eventPoint.is-twilight circle {
+  fill: #d8d4ff;
+}
+
+.night-tool-celestialCursor {
+  position: absolute;
   z-index: 2;
-}
-
-.night-tool-track:hover .night-tool-trackMeta,
-.night-tool-track:focus-within .night-tool-trackMeta {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.night-tool-trackMeta strong {
-  font-size: 0.8rem;
-}
-
-.night-tool-trackMeta span {
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.night-tool-trackLabel {
-  position: absolute;
-  left: 0;
-  top: -0.72rem;
-  padding-right: 0.4rem;
-  background: #fbfdff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.night-tool-segment {
-  position: absolute;
-  top: 0.95rem;
-  height: 0.48rem;
-  border-radius: 999px;
-}
-
-.night-tool-segment.is-lights {
-  background: rgba(245, 158, 11, 0.62);
-}
-
-.night-tool-segment.is-day {
-  background: rgba(37, 99, 235, 0.2);
-}
-
-.night-tool-segment.is-night {
-  background: rgba(15, 23, 42, 0.55);
-}
-
-.night-tool-segment.is-currency {
-  background: rgba(59, 130, 246, 0.72);
-}
-
-.night-tool-timeline.is-active-lights .night-tool-marker-sunrise .night-tool-markerDot,
-.night-tool-timeline.is-active-lights .night-tool-marker-sunset .night-tool-markerDot {
-  background: rgba(245, 158, 11, 1);
-  transform: scale(1.18);
-}
-
-.night-tool-timeline.is-active-night .night-tool-marker-civil-dawn .night-tool-markerDot,
-.night-tool-timeline.is-active-night .night-tool-marker-civil-dusk .night-tool-markerDot {
-  background: rgba(15, 23, 42, 1);
-  transform: scale(1.18);
-}
-
-.night-tool-timeline.is-active-currency .night-tool-marker-night-end .night-tool-markerDot,
-.night-tool-timeline.is-active-currency .night-tool-marker-night-begin .night-tool-markerDot {
-  background: rgba(37, 99, 235, 1);
-  transform: scale(1.18);
-}
-
-.night-tool-axis {
-  position: relative;
-  min-height: 1.8rem;
-  border-top: 2px solid rgba(18, 45, 68, 0.12);
-}
-
-.night-tool-marker {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  width: 10px;
-}
-
-.night-tool-markerLine {
-  display: block;
-  width: 1px;
-  height: 1.35rem;
-  margin: 0 auto;
-  background: rgba(18, 45, 68, 0.24);
-}
-
-.night-tool-markerDot {
-  display: block;
-  width: 8px;
-  height: 8px;
-  margin: -0.18rem auto 0;
-  border-radius: 999px;
-  background: rgba(30, 41, 59, 0.8);
-  transition: transform 140ms ease, background-color 140ms ease;
-}
-
-.night-tool-copy {
   display: grid;
-  gap: 0.8rem;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  will-change: left, top;
+  animation: night-tool-celestial-in 220ms ease-out both;
 }
 
-.night-tool-copy p {
+.night-tool-celestialCursor svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 8px rgba(255, 220, 132, 0.52));
+}
+
+.night-tool-celestialCursor circle {
+  fill: #fff;
+}
+
+.night-tool-celestialCursor path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+}
+
+.night-tool-celestialCursor.is-moon {
+  width: 24px;
+  height: 24px;
+}
+
+.night-tool-celestialCursor.is-moon svg {
+  filter: drop-shadow(0 0 7px rgba(222, 230, 255, 0.5));
+}
+
+.night-tool-celestialCursor.is-moon path {
+  fill: #fff;
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 0.45;
+}
+
+.night-tool-celestialCursor.is-twilight {
+  opacity: 0.92;
+}
+
+@keyframes night-tool-celestial-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.night-tool-cursorLine {
+  position: absolute;
+  inset-block: 0;
+  z-index: 1;
+  width: 1px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.75) 22%, rgba(255, 255, 255, 0.75) 78%, transparent);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.night-tool-cursorReadout {
+  position: absolute;
+  top: 1rem;
+  z-index: 2;
+  display: grid;
+  min-width: 150px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(16, 18, 24, 0.78);
+  color: #fff;
+  box-shadow: 0 8px 28px rgba(7, 12, 27, 0.18);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.night-tool-cursorReadout.is-left {
+  transform: none;
+}
+
+.night-tool-cursorReadout.is-right {
+  transform: translateX(-100%);
+}
+
+.night-tool-cursorReadout.is-moon {
+  transform: translateX(32px);
+}
+
+.night-tool-cursorReadout.is-moon.is-right {
+  transform: translateX(calc(-100% - 32px));
+}
+
+.night-tool-cursorReadout span,
+.night-tool-cursorReadout small {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.68rem;
+  font-style: normal;
+}
+
+.night-tool-cursorReadout strong {
+  margin: 0.1rem 0;
+  font-size: 0.92rem;
+}
+
+.night-tool-range {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  line-height: 1.75;
-  color: var(--muted);
+  cursor: ew-resize;
+  opacity: 0;
+}
+
+.night-tool-eventScale {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  color: #fff;
+  pointer-events: none;
+}
+
+.night-tool-eventGroup {
+  position: absolute;
+  top: 56%;
+  display: grid;
+  gap: 0.22rem;
+  width: 170px;
+  padding: 0.55rem 0.62rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.055), transparent 88%);
+  transform: translateX(-50%);
+  text-align: left;
+}
+
+.night-tool-eventStem {
+  position: absolute;
+  top: -36px;
+  left: 50%;
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.night-tool-eventDate {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 0.65rem;
+}
+
+.night-tool-eventTime {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.45rem;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.59rem;
+  line-height: 1.25;
+}
+
+.night-tool-eventTime i {
+  font-style: normal;
+}
+
+.night-tool-eventTime b {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28rem;
+  color: #fff;
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+
+.night-tool-eventTime b small {
+  color: rgba(226, 232, 240, 0.66);
+  font-size: 0.52rem;
+  font-weight: 600;
+}
+
+.night-tool-eventGroup.is-start {
+  transform: none;
+  border-left: 0;
+}
+
+.night-tool-eventGroup.is-start .night-tool-eventStem {
+  left: 0;
+}
+
+.night-tool-eventGroup.is-end {
+  transform: translateX(-100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 0;
+  border-radius: 10px 0 0 10px;
+  background: linear-gradient(-90deg, rgba(255, 255, 255, 0.055), transparent 88%);
+}
+
+.night-tool-eventGroup.is-end .night-tool-eventStem {
+  right: 0;
+  left: auto;
+}
+
+.night-tool-timeTicks {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 2;
+  height: 34px;
+  color: rgba(226, 232, 240, 0.58);
+  pointer-events: none;
+}
+
+.night-tool-timeTicks span {
+  position: absolute;
+  bottom: 0.5rem;
+  display: grid;
+  transform: translateX(-50%);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.night-tool-timeTicks b {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.night-tool-timeTicks small {
+  font-size: 0.52rem;
+}
+
+.night-tool-visualNote {
+  margin: 0 0 0.85rem;
+  color: #64748b;
+  font-size: 0.68rem;
+}
+
+.night-tool-bands {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.night-tool-band {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.2fr) minmax(0, 1fr) 72px;
+  gap: 0.8rem;
+  align-items: center;
+  min-height: 48px;
+}
+
+.night-tool-bandLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.night-tool-bandLabel span {
+  color: #64748b;
+  font-size: 0.64rem;
+}
+
+.night-tool-bandLabel strong {
+  font-size: 0.78rem;
+}
+
+.night-tool-bandRail {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: #e9eef5;
+}
+
+.night-tool-bandSegment {
+  position: absolute;
+  inset-block: 0;
+  min-width: 3px;
+  border-radius: 999px;
+  background: #f59e0b;
+}
+
+.night-tool-bandSegment::before,
+.night-tool-bandSegment::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
+.night-tool-bandSegment::before {
+  left: 2px;
+}
+
+.night-tool-bandSegment::after {
+  right: 2px;
+}
+
+.night-tool-band.is-night .night-tool-bandSegment {
+  color: #374151;
+  background: #475569;
+}
+
+.night-tool-band.is-currency .night-tool-bandSegment {
+  color: #2563eb;
+  background: #3b82f6;
+}
+
+.night-tool-band.is-lights .night-tool-bandSegment {
+  color: #d97706;
+}
+
+.night-tool-bandCursor {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 24px;
+  border-radius: 2px;
+  background: #0f172a;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
+  transform: translate(-50%, -50%);
+  transition: left 100ms ease-out;
+}
+
+.night-tool-status {
+  display: inline-flex;
+  justify-content: center;
+  padding: 0.3rem 0.48rem;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.night-tool-status.is-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.night-tool-empty {
+  display: grid;
+  gap: 0.18rem;
+  min-height: 110px;
+  place-content: center;
+  border-block: 1px solid rgba(100, 116, 139, 0.16);
+  color: #64748b;
+  text-align: center;
+}
+
+.night-tool-empty strong {
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.night-tool-empty span {
+  font-size: 0.76rem;
+}
+
+
+@media (max-width: 480px) {
+  .night-tool-shell {
+    gap: 1.75rem;
+  }
+
+  .night-tool-sky {
+    min-height: 400px;
+    border-radius: 20px;
+  }
+
+  .night-tool-scene {
+    min-height: 400px;
+  }
+
+  .night-tool-cursorReadout {
+    top: 0.7rem;
+    padding: 0.58rem 0.65rem;
+  }
+
+  .night-tool-eventScale {
+    position: absolute;
+    display: block;
+    inset: 0;
+    padding: 0;
+  }
+
+  .night-tool-eventGroup,
+  .night-tool-eventGroup.is-start,
+  .night-tool-eventGroup.is-end {
+    position: absolute;
+    top: 56%;
+    width: 88px;
+    min-width: 0;
+    padding: 0.42rem 0.34rem;
+  }
+
+  .night-tool-eventStem {
+    display: block;
+  }
+
+  .night-tool-eventTime {
+    display: grid;
+    gap: 0;
+  }
+
+  .night-tool-eventTime b {
+    display: grid;
+    gap: 0;
+    font-size: 0.58rem;
+    white-space: normal;
+  }
+
+  .night-tool-eventTime b small {
+    font-size: 0.49rem;
+  }
+
+  .night-tool-eventTime i,
+  .night-tool-eventDate {
+    font-size: 0.53rem;
+  }
+
+  .night-tool-timeTicks {
+    display: none;
+  }
+
+  .night-tool-band {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.4rem 0.7rem;
+    padding: 0.25rem 0;
+  }
+
+  .night-tool-bandRail {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .night-tool-status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .night-tool-celestialCursor,
+  .night-tool-celestialPath {
+    animation: none;
+  }
+
+  .night-tool-bandCursor,
+  .night-tool-field input {
+    transition: none;
+  }
 }
 
 .flight-computer-shell {
@@ -6731,19 +7240,21 @@ summary:focus-visible {
   }
 
   .decoder-shell,
-  .night-tool-shell,
   .flight-computer-converters {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
     align-items: start;
   }
 
-  .night-tool-fields,
-  .night-tool-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .night-tool-inputRow {
+    grid-template-columns: minmax(0, 624px) auto;
   }
 
-  .night-tool-card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .night-tool-fields {
+    grid-template-columns: minmax(260px, 420px) 190px;
+  }
+
+  .night-tool-button {
+    min-width: 108px;
   }
 
   .flight-computer-fieldGrid {
@@ -6875,36 +7386,42 @@ summary:focus-visible {
     border-top: 1px solid rgba(148, 163, 184, 0.14);
   }
 
-  .night-tool-timeline {
-    padding: 0.85rem;
+  .night-tool-resultsHead {
+    display: grid;
   }
 
-  .night-tool-trackMeta {
-    position: static;
-    min-width: 0;
-    max-width: none;
-    margin-bottom: 0.45rem;
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-    box-shadow: none;
+  .night-tool-resultsHead > p {
+    text-align: left;
   }
 
-  .night-tool-timeline {
-    padding: 0.85rem;
+  .night-tool-sky {
+    min-height: 220px;
+    border-radius: 20px;
   }
 
-  .night-tool-axis {
-    min-height: 10.5rem;
+  .night-tool-eventGroup {
+    width: 148px;
   }
 
-  .night-tool-marker {
-    width: min(112px, 28vw);
+  .night-tool-eventTime {
+    font-size: 0.57rem;
   }
 
-  .night-tool-markerLabel,
-  .night-tool-markerTime {
-    font-size: 0.66rem;
+  .night-tool-eventTime b {
+    font-size: 0.58rem;
+  }
+
+  .night-tool-band {
+    grid-template-columns: minmax(112px, 0.34fr) minmax(0, 1fr) 62px;
+    gap: 0.55rem;
+  }
+
+  .night-tool-bandLabel span {
+    font-size: 0.58rem;
+  }
+
+  .night-tool-bandLabel strong {
+    font-size: 0.68rem;
   }
 
   .flight-computer-resultCard {
@@ -6966,5 +7483,140 @@ summary:focus-visible {
   .wb-chart-wrap {
     padding: 0.45rem;
     border-radius: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .night-tool-shell {
+    gap: 1.25rem;
+    padding-bottom: 5.75rem;
+  }
+
+  .night-tool-results {
+    gap: 0.65rem;
+    padding-top: 0.85rem;
+  }
+
+  .night-tool-resultsHead {
+    gap: 0.4rem;
+  }
+
+  .night-tool-resultsHead > p {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.35;
+  }
+
+  .night-tool-sky,
+  .night-tool-scene {
+    min-height: 430px;
+  }
+
+  .night-tool-sky {
+    border-radius: 18px;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
+  }
+
+  .night-tool-range {
+    bottom: auto;
+    height: 52%;
+    touch-action: pan-y;
+  }
+
+  .night-tool-cursorLine {
+    bottom: auto;
+    height: 52%;
+  }
+
+  .night-tool-cursorReadout {
+    top: 0.65rem;
+    min-width: 132px;
+    padding: 0.52rem 0.62rem;
+    border-radius: 12px;
+  }
+
+  .night-tool-cursorReadout strong {
+    font-size: 0.8rem;
+  }
+
+  .night-tool-cursorReadout span,
+  .night-tool-cursorReadout small {
+    font-size: 0.58rem;
+  }
+
+  .night-tool-eventGroup,
+  .night-tool-eventGroup.is-start,
+  .night-tool-eventGroup.is-end {
+    top: 53%;
+    width: 92px;
+    padding: 0.38rem 0.32rem;
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .night-tool-eventGroup:nth-child(even) {
+    top: 77%;
+  }
+
+  .night-tool-eventGroup .night-tool-eventStem {
+    top: -30px;
+    height: 30px;
+  }
+
+  .night-tool-eventGroup:nth-child(even) .night-tool-eventStem {
+    top: -130px;
+    height: 130px;
+  }
+
+  .night-tool-eventTime {
+    font-size: 0.51rem;
+  }
+
+  .night-tool-eventTime b {
+    font-size: 0.56rem;
+  }
+
+  .night-tool-eventTime b small {
+    display: none;
+  }
+
+  .night-tool-visualNote {
+    display: none;
+  }
+
+  .night-tool-bands {
+    gap: 0.35rem;
+  }
+
+  .night-tool-band {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.34rem 0.65rem;
+    min-height: 50px;
+    padding: 0.3rem 0;
+  }
+
+  .night-tool-bandLabel {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .night-tool-bandLabel strong {
+    font-size: 0.7rem;
+  }
+
+  .night-tool-status {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0.25rem 0.42rem;
+    font-size: 0.58rem;
+  }
+
+  .night-tool-bandRail {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }

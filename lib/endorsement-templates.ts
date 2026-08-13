@@ -318,10 +318,21 @@ export async function fetchEndorsementTemplateSettings() {
     .from("endorsement_template_settings")
     .select(ENDORSEMENT_TEMPLATE_SETTINGS_SELECT)
     .eq("id", "default")
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw error;
+  }
+
+  if (!data) {
+    return {
+      id: "default",
+      source: "",
+      source_date: "",
+      updated_date: "",
+      updated_at: null,
+      updated_by: null,
+    } satisfies EndorsementTemplateSettings;
   }
 
   return normalizeSettingsRecord(data as Record<string, unknown>);

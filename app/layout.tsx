@@ -51,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body className={`${inter.variable} ${inter.className} app-body text-black`}>
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-5VFT1X8VN2"

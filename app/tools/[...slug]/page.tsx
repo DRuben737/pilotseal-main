@@ -227,7 +227,13 @@ export default async function EmbeddedToolPage({ params }: ToolPageProps) {
           </nav>
         </section>
 
-        <section className="content-card tool-stage p-3 sm:p-4">
+        <section
+          className={
+            slugKey === "nighttime"
+              ? "tool-stage tool-stage-nighttime"
+              : "content-card tool-stage p-3 sm:p-4"
+          }
+        >
           {toolContent}
         </section>
       </div>
