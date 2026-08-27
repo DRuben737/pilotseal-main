@@ -20,15 +20,19 @@ import {
 } from "@/lib/person-certificates";
 import {
   createSavedPerson,
+  cancelSavedPersonAccountLinkRequest,
   deleteSavedPerson,
   fetchSavedPersonAccountLinks,
+  fetchSavedPersonAccountLinkRequests,
   fetchSavedPeople,
   formatUsDateInput,
-  linkSavedPersonAccount,
+  requestSavedPersonAccountLink,
+  respondSavedPersonAccountLinkRequest,
   unlinkSavedPersonAccount,
   updateSavedPerson,
   type SavedPerson,
   type SavedPersonAccountLink,
+  type SavedPersonAccountLinkRequest,
 } from "@/lib/saved-people";
 
 const emptyPersonForm = {
@@ -344,6 +348,7 @@ export default function SavedPeopleManager() {
   const [status, setStatus] = useState("");
   const [people, setPeople] = useState<SavedPerson[]>([]);
   const [accountLinks, setAccountLinks] = useState<SavedPersonAccountLink[]>([]);
+  const [accountLinkRequests, setAccountLinkRequests] = useState<SavedPersonAccountLinkRequest[]>([]);
   const [certificates, setCertificates] = useState<PersonCertificate[]>([]);
   const [certificatesAvailable, setCertificatesAvailable] = useState(true);
   const [personForm, setPersonForm] = useState(emptyPersonForm);
@@ -367,6 +372,7 @@ export default function SavedPeopleManager() {
         if (!cancelled) {
           setPeople([]);
           setAccountLinks([]);
+          setAccountLinkRequests([]);
           setCertificates([]);
           setLoading(false);
         }
@@ -376,7 +382,7 @@ export default function SavedPeopleManager() {
       try {
         setLoading(true);
         setStatus("");
-        const [nextPeople, nextCertificates, nextProfile, nextAccountLinks] = await Promise.all([
+        const [nextPeople, nextCertificates, nextProfile, nextAccountLinks, nextLinkRequests] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchPersonCertificates(session.user.id).catch((error) => {
             console.error("Unable to load person certificates:", error);
@@ -385,6 +391,7 @@ export default function SavedPeopleManager() {
           }),
           fetchCurrentProfile(session.user.id).catch(() => null),
           fetchSavedPersonAccountLinks(session.user.id),
+          fetchSavedPersonAccountLinkRequests(),
         ]);
 
         if (!cancelled) {
@@ -393,6 +400,7 @@ export default function SavedPeopleManager() {
           )));
           setCertificates(nextCertificates);
           setAccountLinks(nextAccountLinks);
+          setAccountLinkRequests(nextLinkRequests);
         }
       } catch (error) {
         if (!cancelled) {
@@ -427,6 +435,21 @@ export default function SavedPeopleManager() {
     [accountLinks],
   );
 
+  const pendingRequests = useMemo(
+    () => accountLinkRequests.filter((request) => request.status === "pending"),
+    [accountLinkRequests],
+  );
+
+  const incomingIdentityRequests = useMemo(
+    () => accountLinkRequests.filter((request) => request.direction === "incoming" && (request.status === "pending" || request.status === "accepted")),
+    [accountLinkRequests],
+  );
+
+  const outgoingRequestsByPerson = useMemo(
+    () => new Map(pendingRequests.filter((request) => request.direction === "outgoing").map((request) => [request.saved_person_id, request])),
+    [pendingRequests],
+  );
+
   const filteredPeople = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) {
@@ -459,7 +482,7 @@ export default function SavedPeopleManager() {
       return;
     }
 
-    const [nextPeople, nextCertificates, nextProfile, nextAccountLinks] = await Promise.all([
+    const [nextPeople, nextCertificates, nextProfile, nextAccountLinks, nextLinkRequests] = await Promise.all([
       fetchSavedPeople(session.user.id),
       certificatesAvailable
         ? fetchPersonCertificates(session.user.id).catch(() => {
@@ -469,6 +492,7 @@ export default function SavedPeopleManager() {
         : Promise.resolve([]),
       fetchCurrentProfile(session.user.id).catch(() => null),
       fetchSavedPersonAccountLinks(session.user.id),
+      fetchSavedPersonAccountLinkRequests(),
     ]);
 
     setPeople(normalizePeople(nextPeople).filter((person) => (
@@ -476,6 +500,7 @@ export default function SavedPeopleManager() {
     )));
     setCertificates(nextCertificates);
     setAccountLinks(nextAccountLinks);
+    setAccountLinkRequests(nextLinkRequests);
   }
 
   async function handleLinkAccount(person: SavedPerson) {
@@ -488,11 +513,11 @@ export default function SavedPeopleManager() {
     setSaving(true);
     setStatus("");
     try {
-      await linkSavedPersonAccount(person.id, email);
+      await requestSavedPersonAccountLink(person.id, email);
       await refreshPeople();
       setLinkingPersonId(null);
       setLinkEmailDrafts((current) => ({ ...current, [person.id]: "" }));
-      setStatus(`${person.display_name} is linked to a verified PilotSeal account.`);
+      setStatus(`Confirmation request sent to ${person.display_name}. The link becomes active only after the student accepts.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to link this platform account.");
     } finally {
@@ -500,7 +525,36 @@ export default function SavedPeopleManager() {
     }
   }
 
+  async function handleRespondToLinkRequest(request: SavedPersonAccountLinkRequest, accepted: boolean) {
+    setSaving(true);
+    setStatus("");
+    try {
+      await respondSavedPersonAccountLinkRequest(request.request_id, accepted ? "accepted" : "rejected");
+      await refreshPeople();
+      setStatus(accepted ? `Linked student record from ${request.other_party_name}.` : "Link request declined.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to respond to the link request.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCancelLinkRequest(request: SavedPersonAccountLinkRequest) {
+    setSaving(true);
+    setStatus("");
+    try {
+      await cancelSavedPersonAccountLinkRequest(request.request_id);
+      await refreshPeople();
+      setStatus("Link request cancelled.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to cancel the link request.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleUnlinkAccount(person: SavedPerson) {
+    if (!window.confirm(`Unlink ${person.display_name} from the platform account? Historical records keep their stable student identity.`)) return;
     setSaving(true);
     setStatus("");
     try {
@@ -509,6 +563,21 @@ export default function SavedPeopleManager() {
       setStatus(`${person.display_name} is no longer linked to a platform account.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to unlink this platform account.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUnlinkAcceptedRequest(request: SavedPersonAccountLinkRequest) {
+    if (!window.confirm(`Unlink the saved student identity from ${request.other_party_name}? Historical endorsements remain readable.`)) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await unlinkSavedPersonAccount(request.saved_person_id);
+      await refreshPeople();
+      setStatus("Student identity link removed.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to unlink this student identity.");
     } finally {
       setSaving(false);
     }
@@ -848,6 +917,39 @@ export default function SavedPeopleManager() {
         </p>
       ) : null}
 
+      {incomingIdentityRequests.length > 0 ? (
+        <section className="saas-subpanel mt-3" aria-label="Student identity requests">
+          <div className="people-toolbar">
+            <div>
+              <h4 className="saas-card-title">Student identity requests</h4>
+              <p className="saas-meta-text">Accept only if this instructor&apos;s saved entry represents you.</p>
+            </div>
+          </div>
+          <div className="people-table">
+            {incomingIdentityRequests.map((request) => (
+              <div className="people-row" key={request.request_id}>
+                <div className="people-name-cell">
+                  <p className="saas-card-title">{request.saved_person_name}</p>
+                  <p className="saas-meta-text">Requested by {request.other_party_name}</p>
+                </div>
+                <span className="saas-meta-text">{request.status === "pending" ? "Pending confirmation" : "Linked"}</span>
+                <span />
+                <div className="saas-inline-actions people-row-actions">
+                  {request.status === "pending" ? (
+                    <>
+                      <button className="primary-button" type="button" disabled={saving} onClick={() => void handleRespondToLinkRequest(request, true)}>Accept</button>
+                      <button className="secondary-button" type="button" disabled={saving} onClick={() => void handleRespondToLinkRequest(request, false)}>Decline</button>
+                    </>
+                  ) : (
+                    <button className="secondary-button" type="button" disabled={saving} onClick={() => void handleUnlinkAcceptedRequest(request)}>Unlink</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {showPersonForm ? (
         <div className="people-edit-row">
           <label className="saas-field">
@@ -935,6 +1037,7 @@ export default function SavedPeopleManager() {
           const personCertificates = certificatesByPerson.get(person.id) ?? [];
           const form = certificateForms[person.id] ?? emptyCertificateForm;
           const accountLink = accountLinksByPerson.get(person.id) ?? null;
+          const outgoingRequest = outgoingRequestsByPerson.get(person.id) ?? null;
 
           return (
             <div key={person.id} className="people-row-group">
@@ -1002,6 +1105,7 @@ export default function SavedPeopleManager() {
                       <div className="people-cert-title">
                         <p className="saas-card-title">{person.display_name}</p>
                         {accountLink ? <Badge tone="success">Platform linked</Badge> : null}
+                        {outgoingRequest ? <Badge tone="warning">Awaiting student</Badge> : null}
                         {(accountLink?.shared_organization_names ?? []).map((organizationName) => (
                           <Badge key={organizationName} tone="neutral">{organizationName}</Badge>
                         ))}
@@ -1070,6 +1174,15 @@ export default function SavedPeopleManager() {
                       >
                         Unlink
                       </button>
+                    ) : outgoingRequest ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={saving}
+                        onClick={() => void handleCancelLinkRequest(outgoingRequest)}
+                      >
+                        Cancel request
+                      </button>
                     ) : linkingPersonId === person.id ? (
                       <div className="people-account-link-form">
                         <label className="saas-field">
@@ -1094,7 +1207,7 @@ export default function SavedPeopleManager() {
                             disabled={saving || !(linkEmailDrafts[person.id]?.trim())}
                             onClick={() => void handleLinkAccount(person)}
                           >
-                            Apply link
+                            Send request
                           </button>
                           <button
                             type="button"

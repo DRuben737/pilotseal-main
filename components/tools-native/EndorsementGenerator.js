@@ -30,7 +30,6 @@ import {
   getEndorsementTemplateCategory,
 } from '@/lib/endorsement-template-categories';
 import {
-  ACTIVE_ORGANIZATION_STORAGE_KEY,
   fetchOrganizationStudents,
   fetchUserOrganizations,
 } from '@/lib/organizations';
@@ -265,11 +264,14 @@ function getUniqueSavedPeopleByName(options) {
 
   return options.filter((person) => {
     const normalizedName = person.display_name?.trim().toLowerCase();
-    if (!normalizedName || seen.has(normalizedName)) {
+    const identityKey = person.organization_id
+      ? `${normalizedName}:organization:${person.organization_id}`
+      : normalizedName;
+    if (!normalizedName || seen.has(identityKey)) {
       return false;
     }
 
-    seen.add(normalizedName);
+    seen.add(identityKey);
     return true;
   });
 }
@@ -631,7 +633,11 @@ function EndorsementGenerator() {
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedStudentOrganizationId, setSelectedStudentOrganizationId] = useState('');
+  const [selectedStudentUserId, setSelectedStudentUserId] = useState('');
   const [activeOrganizationId, setActiveOrganizationId] = useState('');
+  const [availableOrganizations, setAvailableOrganizations] = useState([]);
+  const [recordScope, setRecordScope] = useState('personal');
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signaturePreviewDataUrl, setSignaturePreviewDataUrl] = useState('');
@@ -845,6 +851,8 @@ function EndorsementGenerator() {
         if (!session?.user) {
           setSavedCfis([]);
           setSavedStudents([]);
+          setAvailableOrganizations([]);
+          setActiveOrganizationId('');
           defaultCfiAppliedRef.current = false;
           return;
         }
@@ -855,12 +863,14 @@ function EndorsementGenerator() {
           fetchUserOrganizations().catch(() => []),
         ]);
 
-        const preferredOrganizationId = window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY) || '';
-        const activeOrganization = organizations.find((organization) => organization.id === preferredOrganizationId) || organizations[0] || null;
-        setActiveOrganizationId(activeOrganization?.id || '');
-        const organizationStudents = activeOrganization
-          ? await fetchOrganizationStudents(activeOrganization.id).catch(() => [])
-          : [];
+        setAvailableOrganizations(organizations);
+        setActiveOrganizationId('');
+        const organizationStudentGroups = await Promise.all(
+          organizations.map(async (organization) => ({
+            organization,
+            students: await fetchOrganizationStudents(organization.id).catch(() => []),
+          }))
+        );
 
         const certificates = await fetchPersonCertificates(session.user.id).catch((error) => {
           console.error('Unable to load person certificates:', error);
@@ -919,16 +929,20 @@ function EndorsementGenerator() {
         ));
 
         setSavedCfis(certificateCfis);
-        const organizationStudentOptions = organizationStudents.map((student) => ({
-          id: `organization:${student.student_user_id}`,
+        const organizationStudentOptions = organizationStudentGroups.flatMap(({ organization, students }) => students.map((student) => ({
+          id: `organization:${organization.id}:${student.student_user_id}`,
           person_id: student.person_id,
           endorsement_record_person_id: student.person_id || '',
+          organization_id: organization.id,
+          student_user_id: student.student_user_id,
+          identity_status: 'organization_member',
           role: 'student',
           display_name: student.display_name,
+          suggestion_label: `${student.display_name} (${organization.name})`,
           cert_number: student.certificate_number,
           cert_exp_date: null,
           is_default: false,
-        }));
+        })));
         setSavedStudents([...organizationStudentOptions, ...certificatePilots, ...savedStudentPeople]);
         setSessionIdentity(profile?.display_name || session.user.email || '');
 
@@ -1205,6 +1219,8 @@ function EndorsementGenerator() {
             );
 
         setSelectedStudentId(getStudentRecordPersonId(selected));
+        setSelectedStudentOrganizationId(selected?.organization_id || '');
+        setSelectedStudentUserId(selected?.student_user_id || '');
         if (selected && matchingCertificates.length === 1) {
           nextForm.studentCertNumber = selected.cert_number || '';
         } else if (matchingCertificates.length > 1 && !selected) {
@@ -1218,6 +1234,8 @@ function EndorsementGenerator() {
         );
 
         setSelectedStudentId(getStudentRecordPersonId(selected));
+        setSelectedStudentOrganizationId(selected?.organization_id || '');
+        setSelectedStudentUserId(selected?.student_user_id || '');
       }
 
       return nextForm;
@@ -1261,17 +1279,18 @@ function EndorsementGenerator() {
       if (field === 'studentName') {
         const nextName = person.display_name || '';
         nextForm.studentName = nextName;
-        const matchingCertificates = getSavedPeopleByName(savedStudents, nextName);
-        const selected = matchingCertificates.length === 1 ? matchingCertificates[0] : null;
-
-        setSelectedStudentId(getStudentRecordPersonId(selected));
-        nextForm.studentCertNumber = selected?.cert_number || '';
+        setSelectedStudentId(getStudentRecordPersonId(person));
+        setSelectedStudentOrganizationId(person?.organization_id || '');
+        setSelectedStudentUserId(person?.student_user_id || '');
+        nextForm.studentCertNumber = person?.cert_number || '';
       }
 
       if (field === 'studentCertNumber') {
         nextForm.studentName = person.display_name || nextForm.studentName;
         nextForm.studentCertNumber = person.cert_number || '';
         setSelectedStudentId(getStudentRecordPersonId(person));
+        setSelectedStudentOrganizationId(person?.organization_id || '');
+        setSelectedStudentUserId(person?.student_user_id || '');
       }
 
       return nextForm;
@@ -1651,7 +1670,7 @@ function EndorsementGenerator() {
     }
   };
 
-  const savePrintedRecord = async (pdfBlob, organizationId = activeOrganizationId) => {
+  const savePrintedRecord = async (pdfBlob, organizationId = null) => {
     if (!session?.user?.id || !pdfBlob) {
       return;
     }
@@ -1912,12 +1931,17 @@ function EndorsementGenerator() {
     }
 
     if (generatorMode === 'customized' && session?.user?.id) {
-      let organizationId = activeOrganizationId;
-      if (!organizationId) {
-        const organizations = await fetchUserOrganizations().catch(() => []);
-        const preferredId = window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY) || '';
-        organizationId = organizations.find((organization) => organization.id === preferredId)?.id || organizations[0]?.id || '';
-        if (organizationId) setActiveOrganizationId(organizationId);
+      const organizationId = recordScope === 'organization' ? activeOrganizationId : '';
+      if (recordScope === 'organization' && !organizationId) {
+        setStatusMessage('Choose the organization that should receive this endorsement record.');
+        return;
+      }
+      if (
+        organizationId &&
+        (selectedStudentOrganizationId !== organizationId || !selectedStudentUserId)
+      ) {
+        setStatusMessage('Organization records require a registered, current student selected from that organization.');
+        return;
       }
       const saved = await savePrintedRecord(printablePdf.blob, organizationId);
       if (organizationId && !saved) {
@@ -1975,7 +1999,7 @@ function EndorsementGenerator() {
   const getSuggestionLabel = (fieldKey, person) => (
     fieldKey === 'instructorCertNumber' || fieldKey === 'studentCertNumber'
       ? person.cert_number
-      : person.display_name
+      : person.suggestion_label || person.display_name
   );
 
   const renderFieldInput = (field) => {
@@ -2186,6 +2210,32 @@ function EndorsementGenerator() {
             ) : null}
 
             <div className={styles.card}>
+              {generatorMode === 'customized' && session?.user?.id ? (
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <h2>Record destination</h2>
+                    <p className={styles.sectionCopy}>Personal records are private. Organization sharing requires a registered current student and is immutable after saving.</p>
+                  </div>
+                  <label className={styles.field}>
+                    <span>Save record to</span>
+                    <select value={recordScope} onChange={(event) => setRecordScope(event.target.value)}>
+                      <option value="personal">Personal</option>
+                      <option value="organization">Organization</option>
+                    </select>
+                  </label>
+                  {recordScope === 'organization' ? (
+                    <label className={styles.field}>
+                      <span>Organization *</span>
+                      <select value={activeOrganizationId} onChange={(event) => setActiveOrganizationId(event.target.value)}>
+                        <option value="">Choose organization</option>
+                        {availableOrganizations.map((organization) => (
+                          <option key={organization.id} value={organization.id}>{organization.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
               <p className={styles.mobileStepLabel}>4 Signature</p>
               <div className={styles.sectionHeader}>
                 <div>
@@ -2247,7 +2297,7 @@ function EndorsementGenerator() {
               <p className={styles.printHint}>
                 You can choose a print format after clicking Print: standard Letter paper or Avery 5163 labels.
                 {generatorMode === 'customized' && session?.user?.id
-                  ? ' Printing automatically saves the PDF to your dashboard records.'
+                  ? ` Printing saves the PDF to ${recordScope === 'organization' ? 'the selected organization' : 'Personal records'}.`
                   : ''}
               </p>
               {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}

@@ -26,7 +26,7 @@ export type OrganizationStudent = {
   certificate_number: string | null;
 };
 
-export type OrganizationPersonStatus = "pending" | "linked";
+export type OrganizationPersonStatus = "pending" | "linked" | "left";
 
 export type OrganizationPerson = {
   id: string;
@@ -224,6 +224,15 @@ export async function removeOrganizationMember(organizationId: string, userId: s
   }
 }
 
+export async function leaveOrganization(organizationId: string, reason?: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("leave_organization", {
+    p_organization_id: organizationId,
+    p_reason: reason?.trim() || null,
+  });
+  if (error) throw error;
+}
+
 export async function transferOrganizationOwnership(organizationId: string, userId: string) {
   const supabase = getSupabaseClient();
   const { error } = await supabase.rpc("transfer_organization_ownership", {
@@ -287,7 +296,10 @@ function normalizeOrganizationPerson(value: unknown): OrganizationPerson {
     internal_id: optionalText(record.internal_id),
     notes: optionalText(record.notes),
     user_id: optionalText(record.user_id),
-    status: record.status === "linked" ? "linked" : "pending",
+    status:
+      record.status === "linked" || record.status === "left"
+        ? record.status
+        : "pending",
     member_role:
       record.member_role === "owner" ||
       record.member_role === "organization_admin" ||

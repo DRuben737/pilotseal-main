@@ -13,6 +13,7 @@ export type FlightBriefRecord = {
   id: string;
   created_by: string;
   organization_id: string | null;
+  membership_period_id: string | null;
   aircraft_id: string | null;
   aircraft_tail_number: string;
   student_name: string;
@@ -106,7 +107,7 @@ export type AircraftInspectionAssignment = {
 };
 
 const FLIGHT_BRIEF_SELECT =
-  "id, created_by, organization_id, aircraft_id, aircraft_tail_number, student_name, instructor_name, flight_date, etd, eta, ete, flight_rules, route, status, revision_number, supersedes_id, brief_data, mx_snapshot, weather_snapshot, notam_snapshot, wb_snapshot, finalized_at, created_at, updated_at";
+  "id, created_by, organization_id, membership_period_id, aircraft_id, aircraft_tail_number, student_name, instructor_name, flight_date, etd, eta, ete, flight_rules, route, status, revision_number, supersedes_id, brief_data, mx_snapshot, weather_snapshot, notam_snapshot, wb_snapshot, finalized_at, created_at, updated_at";
 
 export async function createFlightBriefDraft(input: FlightBriefDraftInput) {
   const supabase = getSupabaseClient();
@@ -156,6 +157,15 @@ export async function finalizeFlightBrief(id: string, input: FinalizeFlightBrief
 export async function createFlightBriefRevision(id: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("create_flight_brief_revision", {
+    p_brief_id: id,
+  });
+  if (error) throw error;
+  return String(data ?? "");
+}
+
+export async function copyFlightBriefToPersonal(id: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("copy_flight_brief_to_personal", {
     p_brief_id: id,
   });
   if (error) throw error;
@@ -364,6 +374,7 @@ function normalizeFlightBrief(value: unknown): FlightBriefRecord {
     id: String(record.id ?? ""),
     created_by: String(record.created_by ?? ""),
     organization_id: typeof record.organization_id === "string" ? record.organization_id : null,
+    membership_period_id: typeof record.membership_period_id === "string" ? record.membership_period_id : null,
     aircraft_id: typeof record.aircraft_id === "string" ? record.aircraft_id : null,
     aircraft_tail_number: String(record.aircraft_tail_number ?? ""),
     student_name: String(record.student_name ?? ""),

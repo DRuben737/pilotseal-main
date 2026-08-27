@@ -32,6 +32,7 @@ import {
   canManageOrganizationAdmins,
   fetchOrganizationMembers,
   fetchOrganizationPeople,
+  leaveOrganization,
   removeOrganizationMember,
   setOrganizationMemberRole,
   setOrganizationMemberTeachingRole,
@@ -467,6 +468,24 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setStatus("Member removed. Their PilotSeal account was not changed.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to remove this member."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLeaveOrganization() {
+    if (!activeOrganization?.id || role === "owner") return;
+    const confirmed = window.confirm(
+      `Leave ${activeOrganization.name}? Historical organization training records remain with the organization. New endorsements and flight briefs created after you leave will not be shared with it.`
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await leaveOrganization(activeOrganization.id, "Member self-service exit");
+      await refreshOrganizations();
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to leave this organization."));
     } finally {
       setSaving(false);
     }
@@ -1189,7 +1208,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   if (!activeOrganization) {
     return <div className="saas-panel">This account does not belong to an organization.</div>;
   }
-  if (!canManage && view !== "fleet") {
+  if (!canManage && view !== "fleet" && view !== "overview") {
     return (
       <div className="saas-panel">
         This organization page is available to organization managers.
@@ -1233,13 +1252,24 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       ) : null}
 
       {view === "overview" ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <OverviewLink href="/dashboard/organization/people" label="People" value={members.length + pendingPeople.length} detail={`${pendingPeople.length} pending`} />
-          <OverviewLink href="/dashboard/organization/fleet" label="Aircraft & Maintenance" value={aircraft.length} detail={`${models.length} aircraft models`} />
-          <OverviewLink href="/dashboard/organization/reports" label="Safety Reports" value="Submit" detail="Aircraft discrepancy or ASR" />
-          <OverviewLink href="/dashboard/organization/briefs" label="Preflight Records" value="Open" detail="Finalized student briefs" />
-          <OverviewLink href="/dashboard/organization/endorsements" label="Endorsements" value="Review" detail="Organization change requests" />
-        </section>
+        <>
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {canManage ? <OverviewLink href="/dashboard/organization/people" label="People" value={members.length + pendingPeople.length} detail={`${pendingPeople.length} pending`} /> : null}
+            <OverviewLink href="/dashboard/organization/fleet" label="Aircraft & Maintenance" value={aircraft.length} detail={`${models.length} aircraft models`} />
+            <OverviewLink href="/dashboard/organization/reports" label="Safety Reports" value="Submit" detail="Aircraft discrepancy or ASR" />
+            <OverviewLink href="/dashboard/organization/briefs" label="Preflight Records" value="Open" detail="Finalized student briefs" />
+            {canManage ? <OverviewLink href="/dashboard/organization/endorsements" label="Endorsements" value="Review" detail="Organization change requests" /> : null}
+          </section>
+          {role !== "owner" ? (
+            <section className="rounded-xl border border-rose-200 bg-white p-3">
+              <h3 className="text-sm font-semibold text-slate-950">Organization membership</h3>
+              <p className="mt-1 text-xs text-slate-600">Leaving freezes historical organization training records. Records created afterward stay outside this organization.</p>
+              <button type="button" className="danger-button mt-3" disabled={saving} onClick={() => void handleLeaveOrganization()}>
+                Leave organization
+              </button>
+            </section>
+          ) : null}
+        </>
       ) : null}
 
       {view === "messages" ? (

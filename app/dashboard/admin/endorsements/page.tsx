@@ -1,4 +1,5 @@
 import EndorsementTemplateAdminPanel from "@/components/dashboard/EndorsementTemplateAdminPanel";
+import LegacyEndorsementReviewPanel from "@/components/dashboard/LegacyEndorsementReviewPanel";
 
 export const metadata = {
   title: "Endorsement Templates Admin | PilotSeal",
@@ -6,5 +7,10 @@ export const metadata = {
 };
 
 export default function DashboardEndorsementsAdminPage() {
-  return <EndorsementTemplateAdminPanel />;
+  return (
+    <>
+      <LegacyEndorsementReviewPanel />
+      <EndorsementTemplateAdminPanel />
+    </>
+  );
 }

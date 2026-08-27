@@ -7,6 +7,7 @@ import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { formatUsDateTime } from "@/lib/date-format";
 import {
+  copyFlightBriefToPersonal,
   createFlightBriefRevision,
   fetchMyFlightBriefs,
   fetchOrganizationStudentBriefs,
@@ -119,6 +120,23 @@ export default function PreflightRecordsManager() {
     }
   }
 
+  async function handleCopyToPersonal(record: FlightBriefRecord) {
+    setBusy(true);
+    setStatus("");
+    try {
+      const copyId = await copyFlightBriefToPersonal(record.id);
+      const refreshed = session?.user?.id ? await fetchMyFlightBriefs(session.user.id) : [];
+      setRecords((current) =>
+        Array.from(new Map([...refreshed, ...current].map((item) => [item.id, item])).values())
+      );
+      setStatus(`Personal draft created (${copyId.slice(0, 8)}). It has no organization or maintenance side effects.`);
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to copy this brief to Personal."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="saas-panel">
       <div className="people-toolbar">
@@ -201,6 +219,9 @@ export default function PreflightRecordsManager() {
                   ) : null}
                   {isOwn && record.status !== "draft" ? (
                     <button className="ghost-button" type="button" disabled={busy} onClick={() => void handleCreateRevision(record)}>Create revision</button>
+                  ) : null}
+                  {isOwn && record.organization_id ? (
+                    <button className="ghost-button" type="button" disabled={busy} onClick={() => void handleCopyToPersonal(record)}>Copy to Personal</button>
                   ) : null}
                 </div>
               </div>

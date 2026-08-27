@@ -9,7 +9,9 @@ import {
   createEndorsementRecordSignedUrl,
   deleteEndorsementRecord,
   fetchEndorsementRecords,
+  fetchIssuedOrganizationEndorsementRecords,
   fetchOrganizationEndorsementRecords,
+  fetchReceivedEndorsementRecords,
   updateEndorsementRecord,
   type EndorsementRecord,
 } from "@/lib/endorsement-records";
@@ -122,6 +124,7 @@ export default function EndorsementRecordsManager() {
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [expandedStudent, setExpandedStudent] = useState("");
   const [editingRecord, setEditingRecord] = useState<EndorsementRecord | null>(null);
+  const [view, setView] = useState<"personal" | "received" | "organization">("personal");
 
   useEffect(() => {
     setPortalRoot(document.body);
@@ -143,8 +146,12 @@ export default function EndorsementRecordsManager() {
         setLoading(true);
         setStatus("");
         const [ownRecords, organizationRecords] = await Promise.all([
-          fetchEndorsementRecords(session.user.id),
-          activeOrganization?.id && canViewOrganizationRecords
+          view === "personal"
+            ? fetchEndorsementRecords(session.user.id)
+            : view === "received"
+              ? fetchReceivedEndorsementRecords(session.user.id)
+              : fetchIssuedOrganizationEndorsementRecords(session.user.id),
+          view === "organization" && activeOrganization?.id && canViewOrganizationRecords
             ? fetchOrganizationEndorsementRecords(activeOrganization.id)
             : Promise.resolve([]),
         ]);
@@ -170,7 +177,7 @@ export default function EndorsementRecordsManager() {
     return () => {
       cancelled = true;
     };
-  }, [activeOrganization?.id, canViewOrganizationRecords, session?.user?.id]);
+  }, [activeOrganization?.id, canViewOrganizationRecords, session?.user?.id, view]);
 
   const filteredRecords = useMemo(
     () => records.filter((record) => matchesRecord(record, query)),
@@ -232,7 +239,7 @@ export default function EndorsementRecordsManager() {
 
   async function handleEditSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editingRecord || editingRecord.user_id !== session?.user?.id) return;
+    if (!editingRecord || editingRecord.user_id !== session?.user?.id || editingRecord.scope_status !== "personal" || editingRecord.organization_id) return;
     setBusy(true);
     setStatus("");
     try {
@@ -261,12 +268,28 @@ export default function EndorsementRecordsManager() {
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <h2 className="saas-section-title">Endorsement Records</h2>
-            {canViewOrganizationRecords && activeOrganization ? (
-              <p className="saas-meta-text">Your records and read-only records from {activeOrganization.name}</p>
-            ) : null}
+            <p className="saas-meta-text">Personal records, endorsements issued to you, and immutable organization history stay separate.</p>
           </div>
           <span className="saas-pill">{filteredRecords.length}</span>
         </div>
+
+        <nav className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Endorsement record views">
+          {([
+            ["personal", "Personal"],
+            ["received", "My Endorsements"],
+            ["organization", "Organization"],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-current={view === key ? "page" : undefined}
+              className={`min-h-8 shrink-0 rounded-lg px-3 text-xs font-semibold ${view === key ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-white"}`}
+              onClick={() => setView(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
 
         <div className="mt-5 flex flex-col items-end gap-2 sm:flex-row">
           <label className="saas-field min-w-0 flex-1">
@@ -320,6 +343,8 @@ export default function EndorsementRecordsManager() {
                                 : "Endorsement PDF"}
                             </h4>
                             <span className="saas-pill">{formatRecordDate(record.endorsement_date)}</span>
+                            {record.scope_status === "pending_review" ? <span className="saas-pill">Pending legacy review</span> : null}
+                            {record.scope_status === "confirmed" ? <span className="saas-pill">Organization · immutable</span> : null}
                           </div>
                           <p className="saas-meta-text">
                             Instructor: {record.instructor_name}
@@ -346,12 +371,12 @@ export default function EndorsementRecordsManager() {
                           >
                             <ActionIcon kind="open" />
                           </button>
-                          {record.user_id === session?.user?.id ? (
+                          {record.user_id === session?.user?.id && record.scope_status === "personal" && !record.organization_id ? (
                             <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingRecord(record)}>
                               Edit
                             </button>
                           ) : null}
-                          {record.user_id === session?.user?.id ? <button
+                          {record.user_id === session?.user?.id && record.scope_status === "personal" && !record.organization_id ? <button
                             type="button"
                             className="danger-button icon-button"
                             aria-label="Delete endorsement record"
@@ -392,7 +417,7 @@ export default function EndorsementRecordsManager() {
                           <ActionIcon kind="external" />
                         </a>
                       ) : null}
-                      {activeRecord.user_id === session?.user?.id ? <button
+                      {activeRecord.user_id === session?.user?.id && activeRecord.scope_status === "personal" && !activeRecord.organization_id ? <button
                         type="button"
                         className="danger-button icon-button"
                         aria-label="Delete endorsement record"

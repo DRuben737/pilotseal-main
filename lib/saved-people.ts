@@ -23,6 +23,16 @@ export type SavedPersonAccountLink = {
   shared_organization_names: string[];
 };
 
+export type SavedPersonAccountLinkRequest = {
+  request_id: string;
+  direction: "incoming" | "outgoing";
+  saved_person_id: string;
+  saved_person_name: string;
+  other_party_name: string;
+  status: "pending" | "accepted" | "rejected" | "cancelled" | "unlinked";
+  requested_at: string;
+};
+
 export type CfiExpirationStatus = "valid" | "expiring-soon" | "expired" | "unknown";
 
 const SAVED_PERSON_SELECTS = [
@@ -253,15 +263,42 @@ export async function fetchSavedPersonAccountLinks(userId: string) {
     }));
 }
 
-export async function linkSavedPersonAccount(personId: string, email: string) {
+export async function requestSavedPersonAccountLink(personId: string, email: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("link_saved_person_account", {
+  const { data, error } = await supabase.rpc("request_saved_person_account_link", {
     p_saved_person_id: personId,
     p_email: email.trim(),
   });
 
   if (error) throw error;
-  return data as SavedPersonAccountLink;
+  return data as string;
+}
+
+export async function fetchSavedPersonAccountLinkRequests() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_my_saved_person_link_requests");
+  if (error) throw error;
+  return (data ?? []) as SavedPersonAccountLinkRequest[];
+}
+
+export async function respondSavedPersonAccountLinkRequest(
+  requestId: string,
+  decision: "accepted" | "rejected"
+) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("respond_saved_person_account_link_request", {
+    p_request_id: requestId,
+    p_accept: decision === "accepted",
+  });
+  if (error) throw error;
+}
+
+export async function cancelSavedPersonAccountLinkRequest(requestId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("cancel_saved_person_account_link_request", {
+    p_request_id: requestId,
+  });
+  if (error) throw error;
 }
 
 export async function unlinkSavedPersonAccount(personId: string) {
