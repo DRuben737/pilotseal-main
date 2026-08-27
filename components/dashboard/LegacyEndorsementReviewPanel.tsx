@@ -21,6 +21,7 @@ export default function LegacyEndorsementReviewPanel() {
   const [confirmHistoricalEvidence, setConfirmHistoricalEvidence] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [reviewStatus, setReviewStatus] = useState<{ tone: "error" | "success"; message: string } | null>(null);
 
   async function load() {
     try {
@@ -38,6 +39,7 @@ export default function LegacyEndorsementReviewPanel() {
     setConfirmHistoricalEvidence(false);
     setNote("");
     setStatus("");
+    setReviewStatus(null);
     setContextLoading(true);
     try {
       setReviewContext(await fetchLegacyEndorsementReviewContext(record.id));
@@ -54,16 +56,29 @@ export default function LegacyEndorsementReviewPanel() {
     setReviewContext(null);
     setConfirmHistoricalEvidence(false);
     setNote("");
+    setReviewStatus(null);
   }
 
   async function decide(decision: "personal" | "confirmed" | "defer") {
     if (!selected) return;
-    if (decision !== "defer" && !note.trim()) {
-      setStatus("Enter the audit reason before making a final decision.");
+    const trimmedNote = note.trim();
+    if (decision !== "defer" && !trimmedNote) {
+      setReviewStatus({ tone: "error", message: "Enter the audit reason before making a final decision." });
+      return;
+    }
+    if (decision === "confirmed" && reviewContext?.requires_historical_attestation && trimmedNote.length < 12) {
+      setReviewStatus({
+        tone: "error",
+        message: `Describe the historical evidence in at least 12 characters (${trimmedNote.length}/12).`,
+      });
+      return;
+    }
+    if (decision === "confirmed" && reviewContext?.requires_historical_attestation && !confirmHistoricalEvidence) {
+      setReviewStatus({ tone: "error", message: "Check the historical membership evidence box before confirming this record." });
       return;
     }
     setBusy(true);
-    setStatus("");
+    setReviewStatus(null);
     try {
       await reviewLegacyEndorsementScope({
         recordId: selected.id,
@@ -77,14 +92,22 @@ export default function LegacyEndorsementReviewPanel() {
         setReviewContext(null);
         setNote("");
         setConfirmHistoricalEvidence(false);
+        setStatus(decision === "confirmed" ? "Record confirmed for the organization." : "Record moved to Personal.");
+      } else {
+        setReviewStatus({ tone: "success", message: "Record remains quarantined. The review decision was logged." });
       }
-      setStatus(decision === "defer" ? "Record remains quarantined." : "Legacy review decision saved.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to save this review decision.");
+      setReviewStatus({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Unable to save this review decision.",
+      });
     } finally {
       setBusy(false);
     }
   }
+
+  const trimmedNoteLength = note.trim().length;
+  const historicalNoteTooShort = Boolean(reviewContext?.requires_historical_attestation) && trimmedNoteLength < 12;
 
   return (
     <section className="saas-panel mb-4">
@@ -138,22 +161,57 @@ export default function LegacyEndorsementReviewPanel() {
 
             {reviewContext.account_linked && reviewContext.organization_student && reviewContext.requires_historical_attestation ? (
               <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-sm">
-                <input className="mt-0.5" type="checkbox" checked={confirmHistoricalEvidence} onChange={(event) => setConfirmHistoricalEvidence(event.target.checked)} />
+                <input
+                  className="mt-0.5"
+                  type="checkbox"
+                  checked={confirmHistoricalEvidence}
+                  onChange={(event) => {
+                    setConfirmHistoricalEvidence(event.target.checked);
+                    setReviewStatus(null);
+                  }}
+                />
                 <span><strong className="block text-slate-950">I verified historical membership evidence</strong>The audit reason below identifies the document or source showing both parties belonged to the organization when this record was created.</span>
               </label>
             ) : null}
 
-            <label className="saas-field"><span>Audit reason *</span><textarea rows={4} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Describe the decision and supporting evidence." /></label>
+            <label className="saas-field">
+              <span>Audit reason *</span>
+              <textarea
+                rows={4}
+                value={note}
+                onChange={(event) => {
+                  setNote(event.target.value);
+                  setReviewStatus(null);
+                }}
+                placeholder="Describe the decision and supporting evidence."
+                aria-describedby="legacy-review-note-help"
+              />
+              <span id="legacy-review-note-help" className={historicalNoteTooShort && trimmedNoteLength > 0 ? "text-amber-700" : "text-slate-500"}>
+                {reviewContext.requires_historical_attestation
+                  ? `At least 12 characters are required to identify the evidence (${trimmedNoteLength}/12).`
+                  : "Required for a final review decision."}
+              </span>
+            </label>
+
+            {reviewStatus ? (
+              <div
+                className={`rounded-xl border p-3 text-sm ${reviewStatus.tone === "error" ? "border-rose-300 bg-rose-50 text-rose-800" : "border-emerald-300 bg-emerald-50 text-emerald-800"}`}
+                role={reviewStatus.tone === "error" ? "alert" : "status"}
+                aria-live="polite"
+              >
+                {reviewStatus.message}
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-4">
-              <button className="primary-button" type="button" disabled={busy || !note.trim()} onClick={() => void decide("personal")}>Move to Personal</button>
+              <button className="primary-button" type="button" disabled={busy} onClick={() => void decide("personal")}>{busy ? "Saving…" : "Move to Personal"}</button>
               <button
                 className="secondary-button"
                 type="button"
-                disabled={busy || !note.trim() || !reviewContext.account_linked || !reviewContext.organization_student || (reviewContext.requires_historical_attestation && !confirmHistoricalEvidence)}
+                disabled={busy || !reviewContext.account_linked || !reviewContext.organization_student}
                 onClick={() => void decide("confirmed")}
               >
-                Confirm for organization
+                {busy ? "Saving…" : "Confirm for organization"}
               </button>
               <button className="ghost-button" type="button" disabled={busy} onClick={() => void decide("defer")}>Keep quarantined</button>
               <button className="ghost-button" type="button" disabled={busy} onClick={closeReview}>Cancel</button>
