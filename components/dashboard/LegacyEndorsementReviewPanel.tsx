@@ -153,7 +153,17 @@ export default function LegacyEndorsementReviewPanel() {
               </dl>
             </section>
 
-            {reviewContext.blocker ? (
+            {reviewContext.requires_historical_attestation && reviewContext.account_linked && reviewContext.organization_student ? (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" role="status">
+                <strong className="block">Historical membership needs manual verification</strong>
+                <ol className="mt-2 list-decimal space-y-1 pl-5">
+                  <li>Check that you verified a reliable historical source.</li>
+                  <li>Describe that source in at least 12 characters below.</li>
+                  <li>Select “Confirm for organization.”</li>
+                </ol>
+                <p className="mt-2 text-xs text-amber-800">No document upload is required. The audit log stores your evidence description and confirmation.</p>
+              </div>
+            ) : reviewContext.blocker ? (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
                 {reviewContext.blocker}
               </div>
@@ -170,12 +180,12 @@ export default function LegacyEndorsementReviewPanel() {
                     setReviewStatus(null);
                   }}
                 />
-                <span><strong className="block text-slate-950">I verified historical membership evidence</strong>The audit reason below identifies the document or source showing both parties belonged to the organization when this record was created.</span>
+                <span><strong className="block text-slate-950">Step 1 — I verified historical membership evidence</strong>Use a roster, enrollment record, contract, scheduling record, or another reliable source showing both parties belonged to the organization when this record was created.</span>
               </label>
             ) : null}
 
             <label className="saas-field">
-              <span>Audit reason *</span>
+              <span>{reviewContext.requires_historical_attestation ? "Step 2 — Evidence source *" : "Audit reason *"}</span>
               <textarea
                 rows={4}
                 value={note}
@@ -183,7 +193,7 @@ export default function LegacyEndorsementReviewPanel() {
                   setNote(event.target.value);
                   setReviewStatus(null);
                 }}
-                placeholder="Describe the decision and supporting evidence."
+                placeholder={reviewContext.requires_historical_attestation ? "Example: Verified archived student roster dated January 2020." : "Describe the decision and supporting evidence."}
                 aria-describedby="legacy-review-note-help"
               />
               <span id="legacy-review-note-help" className={historicalNoteTooShort && trimmedNoteLength > 0 ? "text-amber-700" : "text-slate-500"}>
@@ -211,7 +221,7 @@ export default function LegacyEndorsementReviewPanel() {
                 disabled={busy || !reviewContext.account_linked || !reviewContext.organization_student}
                 onClick={() => void decide("confirmed")}
               >
-                {busy ? "Saving…" : "Confirm for organization"}
+                {busy ? "Saving…" : reviewContext.requires_historical_attestation ? "Step 3 — Confirm for organization" : "Confirm for organization"}
               </button>
               <button className="ghost-button" type="button" disabled={busy} onClick={() => void decide("defer")}>Keep quarantined</button>
               <button className="ghost-button" type="button" disabled={busy} onClick={closeReview}>Cancel</button>
