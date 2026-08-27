@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(19);
 
 select has_table('public', 'legacy_endorsement_review_audit', 'legacy review audit table exists');
 select has_function('public', 'get_legacy_endorsement_review_context', array['uuid'], 'legacy review context RPC exists');
@@ -57,17 +57,18 @@ select is(
 select throws_ok(
   $$select public.review_legacy_endorsement_scope_v2('60000000-0000-4000-8000-000000000034', 'confirmed', 'Reviewed roster document', false)$$,
   '42501',
-  'Membership periods do not cover the original record time. Confirm documentary evidence to continue.',
+  'Confirm historical membership evidence to continue.',
   'legacy confirmation requires explicit historical evidence attestation'
 );
 select lives_ok(
-  $$select public.review_legacy_endorsement_scope_v2('60000000-0000-4000-8000-000000000034', 'confirmed', 'Verified archived enrollment roster dated January 2020.', true)$$,
-  'platform admin can confirm a linked organization student with documented historical evidence'
+  $$select public.review_legacy_endorsement_scope_v2('60000000-0000-4000-8000-000000000034', 'confirmed', '', true)$$,
+  'platform admin can confirm historical membership without a written note'
 );
 reset role;
 
 select is((select scope_status from public.endorsement_records where id = '60000000-0000-4000-8000-000000000034'), 'confirmed', 'review makes the endorsement organization-visible');
 select is((select count(*) from public.legacy_endorsement_review_audit where record_id = '60000000-0000-4000-8000-000000000034' and evidence_kind = 'reviewer_attestation'), 1::bigint, 'historical attestation is audited');
+select is((select note from public.legacy_endorsement_review_audit where record_id = '60000000-0000-4000-8000-000000000034'), null::text, 'historical attestation note is optional');
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;

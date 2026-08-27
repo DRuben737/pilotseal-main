@@ -62,15 +62,8 @@ export default function LegacyEndorsementReviewPanel() {
   async function decide(decision: "personal" | "confirmed" | "defer") {
     if (!selected) return;
     const trimmedNote = note.trim();
-    if (decision !== "defer" && !trimmedNote) {
+    if (decision === "personal" && !trimmedNote) {
       setReviewStatus({ tone: "error", message: "Enter the audit reason before making a final decision." });
-      return;
-    }
-    if (decision === "confirmed" && reviewContext?.requires_historical_attestation && trimmedNote.length < 12) {
-      setReviewStatus({
-        tone: "error",
-        message: `Describe the historical evidence in at least 12 characters (${trimmedNote.length}/12).`,
-      });
       return;
     }
     if (decision === "confirmed" && reviewContext?.requires_historical_attestation && !confirmHistoricalEvidence) {
@@ -105,9 +98,6 @@ export default function LegacyEndorsementReviewPanel() {
       setBusy(false);
     }
   }
-
-  const trimmedNoteLength = note.trim().length;
-  const historicalNoteTooShort = Boolean(reviewContext?.requires_historical_attestation) && trimmedNoteLength < 12;
 
   return (
     <section className="saas-panel mb-4">
@@ -158,10 +148,9 @@ export default function LegacyEndorsementReviewPanel() {
                 <strong className="block">Historical membership needs manual verification</strong>
                 <ol className="mt-2 list-decimal space-y-1 pl-5">
                   <li>Check that you verified a reliable historical source.</li>
-                  <li>Describe that source in at least 12 characters below.</li>
                   <li>Select “Confirm for organization.”</li>
                 </ol>
-                <p className="mt-2 text-xs text-amber-800">No document upload is required. The audit log stores your evidence description and confirmation.</p>
+                <p className="mt-2 text-xs text-amber-800">No document upload or written description is required. Your confirmation is stored in the audit log.</p>
               </div>
             ) : reviewContext.blocker ? (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
@@ -185,7 +174,7 @@ export default function LegacyEndorsementReviewPanel() {
             ) : null}
 
             <label className="saas-field">
-              <span>{reviewContext.requires_historical_attestation ? "Step 2 — Evidence source *" : "Audit reason *"}</span>
+              <span>{reviewContext.requires_historical_attestation ? "Evidence note (optional)" : "Audit reason *"}</span>
               <textarea
                 rows={4}
                 value={note}
@@ -193,12 +182,12 @@ export default function LegacyEndorsementReviewPanel() {
                   setNote(event.target.value);
                   setReviewStatus(null);
                 }}
-                placeholder={reviewContext.requires_historical_attestation ? "Example: Verified archived student roster dated January 2020." : "Describe the decision and supporting evidence."}
+                placeholder={reviewContext.requires_historical_attestation ? "Optional: identify the source you checked." : "Describe the decision and supporting evidence."}
                 aria-describedby="legacy-review-note-help"
               />
-              <span id="legacy-review-note-help" className={historicalNoteTooShort && trimmedNoteLength > 0 ? "text-amber-700" : "text-slate-500"}>
+              <span id="legacy-review-note-help" className="text-slate-500">
                 {reviewContext.requires_historical_attestation
-                  ? `At least 12 characters are required to identify the evidence (${trimmedNoteLength}/12).`
+                  ? "You may leave this blank when confirming historical membership evidence."
                   : "Required for a final review decision."}
               </span>
             </label>
@@ -221,7 +210,7 @@ export default function LegacyEndorsementReviewPanel() {
                 disabled={busy || !reviewContext.account_linked || !reviewContext.organization_student}
                 onClick={() => void decide("confirmed")}
               >
-                {busy ? "Saving…" : reviewContext.requires_historical_attestation ? "Step 3 — Confirm for organization" : "Confirm for organization"}
+                {busy ? "Saving…" : reviewContext.requires_historical_attestation ? "Step 2 — Confirm for organization" : "Confirm for organization"}
               </button>
               <button className="ghost-button" type="button" disabled={busy} onClick={() => void decide("defer")}>Keep quarantined</button>
               <button className="ghost-button" type="button" disabled={busy} onClick={closeReview}>Cancel</button>
