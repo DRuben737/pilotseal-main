@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(30);
 
 select has_table('public', 'saved_person_account_links', 'saved person account links table exists');
 select has_table('public', 'saved_person_account_link_requests', 'saved person link requests table exists');
@@ -25,6 +25,28 @@ reset role;
 insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values ('40000000-0000-4000-8000-000000000001', (select id from public.profiles where email = 'pilot.one@example.test'), 'student', 'Linked Student Fixture', 'TEST-100');
 
+insert into public.endorsement_records (
+  id, user_id, student_id, student_user_id, student_name, instructor_name,
+  endorsement_date, template_titles, storage_path, scope_status
+) values
+(
+  '60000000-0000-4000-8000-000000000032',
+  (select id from public.profiles where email = 'pilot.one@example.test'),
+  '40000000-0000-4000-8000-000000000001', null,
+  'Linked Student Fixture', 'Owner Instructor', '08/27/2026', array['Historical endorsement'],
+  (select id::text from public.profiles where email = 'pilot.one@example.test') || '/60000000-0000-4000-8000-000000000032.pdf',
+  'personal'
+),
+(
+  '60000000-0000-4000-8000-000000000033',
+  (select id from public.profiles where email = 'pilot.one@example.test'),
+  '40000000-0000-4000-8000-000000000001',
+  (select id from public.profiles where email = 'platform.admin@example.test'),
+  'Conflicting Identity Fixture', 'Owner Instructor', '08/27/2026', array['Existing identity'],
+  (select id::text from public.profiles where email = 'pilot.one@example.test') || '/60000000-0000-4000-8000-000000000033.pdf',
+  'personal'
+);
+
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
 select lives_ok($$select public.request_saved_person_account_link('40000000-0000-4000-8000-000000000001', 'instructor.one@example.test')$$, 'owner can request a link to a verified account');
@@ -36,12 +58,19 @@ reset role;
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
 select is((select count(*) from public.list_my_saved_person_link_requests() where direction = 'incoming' and status = 'pending'), 1::bigint, 'target sees the pending request');
+select is((select count(*) from public.endorsement_records where id = '60000000-0000-4000-8000-000000000032'), 0::bigint, 'target cannot read historical endorsements before accepting the identity link');
 select lives_ok($$select public.respond_saved_person_account_link_request((select id from public.saved_person_account_link_requests where saved_person_id = '40000000-0000-4000-8000-000000000001'), true)$$, 'target can accept the request');
+select is((select count(*) from public.endorsement_records where id = '60000000-0000-4000-8000-000000000032'), 1::bigint, 'acceptance makes historical endorsements visible to the linked student');
 select is((select count(*) from public.saved_person_account_links), 0::bigint, 'target cannot read the owner private link row');
 select is((select count(*) from public.list_my_saved_person_account_links()), 0::bigint, 'target cannot discover owner context through the owner RPC');
 select is((select count(*) from public.list_my_saved_person_link_requests() where status = 'accepted'), 1::bigint, 'target sees the accepted identity request');
 
 reset role;
+select is(
+  (select student_user_id from public.endorsement_records where id = '60000000-0000-4000-8000-000000000033'),
+  (select id from public.profiles where email = 'platform.admin@example.test'),
+  'acceptance never replaces an endorsement identity that is already recorded'
+);
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
 select ok((select linked_user_id is not null from public.saved_person_account_links where saved_person_id = '40000000-0000-4000-8000-000000000001'), 'acceptance creates the formal logical link');

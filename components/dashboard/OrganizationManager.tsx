@@ -227,10 +227,6 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
-  const [memberDisplayName, setMemberDisplayName] = useState("");
-  const [memberTeachingRole, setMemberTeachingRole] = useState<OrganizationTeachingRole | "">("");
-  const [memberInternalId, setMemberInternalId] = useState("");
-  const [memberNotes, setMemberNotes] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [messageTitle, setMessageTitle] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -329,19 +325,11 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       const invitation = await createOrganizationMemberInvitation({
         organizationId: activeOrganization.id,
         email: memberEmail,
-        displayName: memberDisplayName,
-        teachingRole: memberTeachingRole || null,
-        internalId: memberInternalId,
-        notes: memberNotes,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
       const nextInviteLink = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
       setInviteLink(nextInviteLink);
       setMemberEmail("");
-      setMemberDisplayName("");
-      setMemberTeachingRole("");
-      setMemberInternalId("");
-      setMemberNotes("");
       const [nextMembers, nextPeople, nextInvitations] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
@@ -366,10 +354,6 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       const invitation = await createOrganizationMemberInvitation({
         organizationId: activeOrganization.id,
         email: person.email,
-        displayName: person.organization_display_name ?? undefined,
-        teachingRole: person.teaching_role,
-        internalId: person.internal_id ?? undefined,
-        notes: person.notes ?? undefined,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
       const link = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
@@ -1773,18 +1757,15 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             </tbody>
           </AdminDataTable>
 
-          <AdminDataTable label="Pending organization people">
-            <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Pending person</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
+          <AdminDataTable label="Pending organization invitations">
+            <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Email</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {!pendingPeople.length ? <tr><td colSpan={6}><EmptyState title="No pending accounts" description="Unregistered email invitations will appear here." /></td></tr> : null}
+              {!pendingPeople.length ? <tr><td colSpan={3}><EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /></td></tr> : null}
               {pendingPeople.map((person) => (
                 <tr key={person.id} className="hover:bg-amber-50/50">
-                  <td className="px-3 py-2 font-semibold text-slate-950">{person.organization_display_name || person.email}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{person.email}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{person.teaching_role ? formatTeachingRole(person.teaching_role) : "—"}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{person.internal_id || "—"}</td>
-                  <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={person.notes ?? ""}>{person.notes || "—"}</td>
-                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" onClick={() => startEditOrganizationPerson(person)}>Edit</CompactButton><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>New link</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
+                  <td className="px-3 py-2 font-semibold text-slate-950">{person.email}</td>
+                  <td className="px-3 py-2"><StatusBadge tone="warning">Awaiting registration</StatusBadge></td>
+                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>New link</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
                 </tr>
               ))}
             </tbody>
@@ -1797,17 +1778,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                 <p className="text-xs text-slate-600">This link expires in 14 days. Creating a new link for the same email invalidates this one.</p>
                 <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Done</CompactButton><CompactButton type="button" tone="primary" onClick={() => void navigator.clipboard.writeText(inviteLink)}>Copy link</CompactButton></div>
               </div>
-            ) : <form onSubmit={handleAddMember}>
-              <WorksheetGrid label="New organization person" minWidth={720}>
-                <thead><tr><WorksheetHeader>Email</WorksheetHeader><WorksheetHeader>Organization name</WorksheetHeader><WorksheetHeader>Teaching role</WorksheetHeader><WorksheetHeader>Internal ID</WorksheetHeader></tr></thead>
-                <tbody><tr>
-                  <WorksheetCell><input autoFocus required type="email" aria-label="Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} className={worksheetInputClass} placeholder="person@example.com" /></WorksheetCell>
-                  <WorksheetCell><input aria-label="Organization name" value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} className={worksheetInputClass} /></WorksheetCell>
-                  <WorksheetCell><select aria-label="Teaching role" value={memberTeachingRole} onChange={(event) => setMemberTeachingRole(event.target.value as OrganizationTeachingRole | "")} className={worksheetInputClass}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></WorksheetCell>
-                  <WorksheetCell><input aria-label="Internal ID" maxLength={120} value={memberInternalId} onChange={(event) => setMemberInternalId(event.target.value)} className={worksheetInputClass} /></WorksheetCell>
-                </tr></tbody>
-              </WorksheetGrid>
-              <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Organization notes<textarea rows={3} maxLength={2000} value={memberNotes} onChange={(event) => setMemberNotes(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
+            ) : <form className="grid gap-4" onSubmit={handleAddMember}>
+              <label className="grid gap-1 text-xs font-semibold text-slate-700">Email<input autoFocus required type="email" aria-label="Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950" placeholder="person@example.com" /></label>
+              <p className="text-xs text-slate-600">The member can be assigned a name, teaching role, internal ID, and organization notes after joining.</p>
               <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Creating…" : "Create invitation"}</CompactButton></div>
             </form>}
           </DetailDrawer>
@@ -2930,10 +2903,6 @@ function memberConfirmationLabel(confirmation: MemberConfirmation | null) {
   if (confirmation.action === "role") return confirmation.member.member_role === "organization_admin" ? "Remove admin access" : "Grant admin access";
   if (confirmation.action === "transfer") return "Transfer ownership";
   return "Remove";
-}
-
-function formatTeachingRole(role: string) {
-  return role === "instructor" ? "Instructor" : "Student";
 }
 
 function formatDueLabel(key: string) {
