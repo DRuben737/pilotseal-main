@@ -2854,6 +2854,29 @@ summary:focus-visible {
   padding: 0 0.45rem 0.75rem 2.95rem;
 }
 
+.people-account-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 12px;
+  background: rgba(239, 246, 255, 0.55);
+  padding: 0.7rem;
+}
+
+.people-account-link-copy,
+.people-account-link-form {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.people-account-link-form {
+  grid-template-columns: minmax(12rem, 20rem) auto;
+  align-items: end;
+}
+
 .people-cert-list {
   display: grid;
 }
@@ -3122,6 +3145,11 @@ summary:focus-visible {
   }
 
   .people-cert-row {
+    grid-template-columns: 1fr;
+  }
+
+  .people-account-link,
+  .people-account-link-form {
     grid-template-columns: 1fr;
   }
 

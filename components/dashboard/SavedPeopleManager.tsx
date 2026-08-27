@@ -21,10 +21,14 @@ import {
 import {
   createSavedPerson,
   deleteSavedPerson,
+  fetchSavedPersonAccountLinks,
   fetchSavedPeople,
   formatUsDateInput,
+  linkSavedPersonAccount,
+  unlinkSavedPersonAccount,
   updateSavedPerson,
   type SavedPerson,
+  type SavedPersonAccountLink,
 } from "@/lib/saved-people";
 
 const emptyPersonForm = {
@@ -127,7 +131,7 @@ function normalizePeople(people: SavedPerson[]) {
 function ActionIcon({
   kind,
 }: {
-  kind: "add" | "save" | "cancel" | "edit" | "delete" | "default" | "expand" | "search";
+  kind: "add" | "save" | "cancel" | "edit" | "delete" | "default" | "expand" | "search" | "link";
 }) {
   const common = "h-4 w-4";
 
@@ -184,6 +188,14 @@ function ActionIcon({
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
           <circle cx="11" cy="11" r="6" />
           <path d="M16 16l4 4" />
+        </svg>
+      );
+    case "link":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={common}>
+          <path d="M9.5 14.5 14.5 9.5" />
+          <path d="M7.4 16.6 5.8 18.2a3.1 3.1 0 0 1-4.4-4.4l3.2-3.2A3.1 3.1 0 0 1 9 10.5" />
+          <path d="m16.6 7.4 1.6-1.6a3.1 3.1 0 0 1 4.4 4.4l-3.2 3.2a3.1 3.1 0 0 1-4.4.1" />
         </svg>
       );
   }
@@ -331,6 +343,7 @@ export default function SavedPeopleManager() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [people, setPeople] = useState<SavedPerson[]>([]);
+  const [accountLinks, setAccountLinks] = useState<SavedPersonAccountLink[]>([]);
   const [certificates, setCertificates] = useState<PersonCertificate[]>([]);
   const [certificatesAvailable, setCertificatesAvailable] = useState(true);
   const [personForm, setPersonForm] = useState(emptyPersonForm);
@@ -343,6 +356,8 @@ export default function SavedPeopleManager() {
   const [drafts, setDrafts] = useState<Record<string, PersonDraft>>({});
   const [certificateDrafts, setCertificateDrafts] = useState<Record<string, CertificateForm>>({});
   const [search, setSearch] = useState("");
+  const [linkingPersonId, setLinkingPersonId] = useState<string | null>(null);
+  const [linkEmailDrafts, setLinkEmailDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -351,6 +366,7 @@ export default function SavedPeopleManager() {
       if (!session?.user?.id) {
         if (!cancelled) {
           setPeople([]);
+          setAccountLinks([]);
           setCertificates([]);
           setLoading(false);
         }
@@ -360,7 +376,7 @@ export default function SavedPeopleManager() {
       try {
         setLoading(true);
         setStatus("");
-        const [nextPeople, nextCertificates, nextProfile] = await Promise.all([
+        const [nextPeople, nextCertificates, nextProfile, nextAccountLinks] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchPersonCertificates(session.user.id).catch((error) => {
             console.error("Unable to load person certificates:", error);
@@ -368,6 +384,7 @@ export default function SavedPeopleManager() {
             return [];
           }),
           fetchCurrentProfile(session.user.id).catch(() => null),
+          fetchSavedPersonAccountLinks(session.user.id),
         ]);
 
         if (!cancelled) {
@@ -375,6 +392,7 @@ export default function SavedPeopleManager() {
             person.role !== "self" && person.id !== nextProfile?.self_person_id
           )));
           setCertificates(nextCertificates);
+          setAccountLinks(nextAccountLinks);
         }
       } catch (error) {
         if (!cancelled) {
@@ -404,6 +422,11 @@ export default function SavedPeopleManager() {
     return groups;
   }, [certificates]);
 
+  const accountLinksByPerson = useMemo(
+    () => new Map(accountLinks.map((link) => [link.saved_person_id, link])),
+    [accountLinks],
+  );
+
   const filteredPeople = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) {
@@ -415,6 +438,7 @@ export default function SavedPeopleManager() {
       const searchable = [
         person.display_name,
         person.cert_number,
+        accountLinksByPerson.has(person.id) ? "linked platform account" : "",
         typeof person.weight_lbs === "number" ? String(person.weight_lbs) : "",
         ...personCertificates.flatMap((certificate) => [
           CERTIFICATE_TYPE_LABELS[certificate.certificate_type],
@@ -428,14 +452,14 @@ export default function SavedPeopleManager() {
 
       return searchable.includes(query);
     });
-  }, [certificatesByPerson, people, search]);
+  }, [accountLinksByPerson, certificatesByPerson, people, search]);
 
   async function refreshPeople() {
     if (!session?.user?.id) {
       return;
     }
 
-    const [nextPeople, nextCertificates, nextProfile] = await Promise.all([
+    const [nextPeople, nextCertificates, nextProfile, nextAccountLinks] = await Promise.all([
       fetchSavedPeople(session.user.id),
       certificatesAvailable
         ? fetchPersonCertificates(session.user.id).catch(() => {
@@ -444,12 +468,50 @@ export default function SavedPeopleManager() {
           })
         : Promise.resolve([]),
       fetchCurrentProfile(session.user.id).catch(() => null),
+      fetchSavedPersonAccountLinks(session.user.id),
     ]);
 
     setPeople(normalizePeople(nextPeople).filter((person) => (
       person.role !== "self" && person.id !== nextProfile?.self_person_id
     )));
     setCertificates(nextCertificates);
+    setAccountLinks(nextAccountLinks);
+  }
+
+  async function handleLinkAccount(person: SavedPerson) {
+    const email = linkEmailDrafts[person.id]?.trim() ?? "";
+    if (!email) {
+      setStatus("Enter the student's verified PilotSeal account email.");
+      return;
+    }
+
+    setSaving(true);
+    setStatus("");
+    try {
+      await linkSavedPersonAccount(person.id, email);
+      await refreshPeople();
+      setLinkingPersonId(null);
+      setLinkEmailDrafts((current) => ({ ...current, [person.id]: "" }));
+      setStatus(`${person.display_name} is linked to a verified PilotSeal account.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to link this platform account.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUnlinkAccount(person: SavedPerson) {
+    setSaving(true);
+    setStatus("");
+    try {
+      await unlinkSavedPersonAccount(person.id);
+      await refreshPeople();
+      setStatus(`${person.display_name} is no longer linked to a platform account.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to unlink this platform account.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function toggleExpanded(id: string) {
@@ -872,6 +934,7 @@ export default function SavedPeopleManager() {
           const draft = drafts[person.id] ?? createDraft(person);
           const personCertificates = certificatesByPerson.get(person.id) ?? [];
           const form = certificateForms[person.id] ?? emptyCertificateForm;
+          const accountLink = accountLinksByPerson.get(person.id) ?? null;
 
           return (
             <div key={person.id} className="people-row-group">
@@ -936,7 +999,13 @@ export default function SavedPeopleManager() {
                 ) : (
                   <>
                     <div className="people-name-cell">
-                      <p className="saas-card-title">{person.display_name}</p>
+                      <div className="people-cert-title">
+                        <p className="saas-card-title">{person.display_name}</p>
+                        {accountLink ? <Badge tone="success">Platform linked</Badge> : null}
+                        {(accountLink?.shared_organization_names ?? []).map((organizationName) => (
+                          <Badge key={organizationName} tone="neutral">{organizationName}</Badge>
+                        ))}
+                      </div>
                       <p className="saas-meta-text">{person.cert_number || "No primary certificate number"}</p>
                     </div>
                     <div className="people-cert-summary">
@@ -979,9 +1048,78 @@ export default function SavedPeopleManager() {
                 )}
               </div>
 
-              {isExpanded && certificatesAvailable ? (
+              {isExpanded ? (
                 <div className="people-detail-row">
-                  <div className="people-cert-list">
+                  <section className="people-account-link" aria-label={`Platform account for ${person.display_name}`}>
+                    <div className="people-account-link-copy">
+                      <p className="saas-card-title">Platform account</p>
+                      <p className="saas-meta-text">
+                        {accountLink
+                          ? (accountLink.shared_organization_names ?? []).length > 0
+                            ? `Linked by verified email and matched in ${(accountLink.shared_organization_names ?? []).join(", ")}. Your private record remains private.`
+                            : "Linked by verified email. Your private record and certificates remain private."
+                          : "Link this private record to the student's verified PilotSeal identity."}
+                      </p>
+                    </div>
+                    {accountLink ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={saving}
+                        onClick={() => void handleUnlinkAccount(person)}
+                      >
+                        Unlink
+                      </button>
+                    ) : linkingPersonId === person.id ? (
+                      <div className="people-account-link-form">
+                        <label className="saas-field">
+                          <span>Verified account email</span>
+                          <input
+                            type="email"
+                            autoComplete="off"
+                            value={linkEmailDrafts[person.id] ?? ""}
+                            onChange={(event) => setLinkEmailDrafts((current) => ({
+                              ...current,
+                              [person.id]: event.target.value,
+                            }))}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") setLinkingPersonId(null);
+                            }}
+                          />
+                        </label>
+                        <div className="saas-inline-actions">
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={saving || !(linkEmailDrafts[person.id]?.trim())}
+                            onClick={() => void handleLinkAccount(person)}
+                          >
+                            Apply link
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={saving}
+                            onClick={() => setLinkingPersonId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={saving}
+                        onClick={() => setLinkingPersonId(person.id)}
+                      >
+                        <ActionIcon kind="link" />
+                        Link account
+                      </button>
+                    )}
+                  </section>
+
+                  {certificatesAvailable ? <div className="people-cert-list">
                     {personCertificates.length > 0 ? (
                       personCertificates.map((certificate) => {
                         const draftForm = certificateDrafts[certificate.id] ?? createCertificateDraft(certificate);
@@ -1052,9 +1190,9 @@ export default function SavedPeopleManager() {
                     ) : (
                       <p className="saas-empty-state">No certificates saved for this person.</p>
                     )}
-                  </div>
+                  </div> : null}
 
-                  {isAddingCertificate ? (
+                  {certificatesAvailable && isAddingCertificate ? (
                     <CertificateFormFields
                       form={form}
                       saving={saving}
@@ -1063,7 +1201,7 @@ export default function SavedPeopleManager() {
                       onCancel={() => toggleCertificateForm(person.id)}
                       onSubmit={() => void handleCreateCertificate(person.id)}
                     />
-                  ) : (
+                  ) : certificatesAvailable ? (
                     <button
                       type="button"
                       className="secondary-button icon-button"
@@ -1074,7 +1212,7 @@ export default function SavedPeopleManager() {
                     >
                       <ActionIcon kind="add" />
                     </button>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
             </div>

@@ -15,6 +15,14 @@ export type SavedPerson = {
   created_at: string;
 };
 
+export type SavedPersonAccountLink = {
+  saved_person_id: string;
+  owner_user_id: string;
+  linked_user_id: string;
+  linked_at: string;
+  shared_organization_names: string[];
+};
+
 export type CfiExpirationStatus = "valid" | "expiring-soon" | "expired" | "unknown";
 
 const SAVED_PERSON_SELECTS = [
@@ -222,6 +230,47 @@ export async function fetchSavedPeople(userId: string, role?: SavedPersonRole) {
   }
 
   return withWeightFallback((legacyData as unknown) as Record<string, unknown>[]);
+}
+
+export async function fetchSavedPersonAccountLinks(userId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_my_saved_person_account_links");
+
+  if (error) {
+    if (error.code === "42P01") {
+      return [] as SavedPersonAccountLink[];
+    }
+    throw error;
+  }
+
+  return ((data ?? []) as SavedPersonAccountLink[])
+    .filter((link) => link.owner_user_id === userId)
+    .map((link) => ({
+      ...link,
+      shared_organization_names: Array.isArray(link.shared_organization_names)
+        ? link.shared_organization_names
+        : [],
+    }));
+}
+
+export async function linkSavedPersonAccount(personId: string, email: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("link_saved_person_account", {
+    p_saved_person_id: personId,
+    p_email: email.trim(),
+  });
+
+  if (error) throw error;
+  return data as SavedPersonAccountLink;
+}
+
+export async function unlinkSavedPersonAccount(personId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("unlink_saved_person_account", {
+    p_saved_person_id: personId,
+  });
+
+  if (error) throw error;
 }
 
 export async function fetchDefaultCfi(userId: string) {

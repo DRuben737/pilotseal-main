@@ -17,7 +17,10 @@ as $$
   select
     organizations.id,
     organizations.name,
-    organization_members.role as member_role,
+    case
+      when private.is_platform_admin(auth.uid()) then 'platform_admin'
+      else organization_members.role
+    end as member_role,
     organizations.created_at
   from public.organization_members
   join public.organizations
