@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(22);
 select set_config('pilotseal_test.instructor_id', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 select set_config('pilotseal_test.student_id', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 
@@ -69,9 +69,19 @@ reset role;
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
 select lives_ok(
-  $$select public.add_organization_member_by_email('10000000-0000-4000-8000-000000000001', 'pilot.one@example.test');
-    select public.set_organization_member_teaching_role('10000000-0000-4000-8000-000000000001', current_setting('pilotseal_test.student_id')::uuid, 'student')$$,
-  'organization owner can re-add the registered student'
+  $$select set_config('pilotseal_test.rejoin_token', invite_token, true)
+    from public.create_organization_member_invitation(
+      '10000000-0000-4000-8000-000000000001', 'pilot.one@example.test',
+      'Avery Testpilot', 'student', null, 'Rejoin test'
+    )$$,
+  'organization owner can invite the former student again'
+);
+reset role;
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
+set local role authenticated;
+select lives_ok(
+  $$select public.accept_organization_member_invitation(current_setting('pilotseal_test.rejoin_token'))$$,
+  'former student can rejoin with the email-bound invitation'
 );
 reset role;
 select is((select count(*) from public.organization_membership_periods where organization_id = '10000000-0000-4000-8000-000000000001' and user_id = (select id from public.profiles where email = 'pilot.one@example.test')), 2::bigint, 'rejoining creates a distinct membership period');

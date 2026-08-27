@@ -54,6 +54,25 @@ export type AvailableOrganization = {
   added_at: string;
 };
 
+export type OrganizationMemberInvitation = {
+  id: string;
+  organization_person_id: string;
+  invited_email: string;
+  status: "pending" | "accepted" | "revoked" | "expired";
+  invited_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+};
+
+export type OrganizationInvitationPreview = {
+  organization_name: string;
+  invited_email: string;
+  display_name: string | null;
+  teaching_role: OrganizationTeachingRole | null;
+  status: "pending" | "accepted" | "revoked" | "expired";
+  expires_at: string;
+};
+
 export const ACTIVE_ORGANIZATION_STORAGE_KEY = "pilotseal.activeOrganizationId";
 
 export async function fetchUserOrganizations(): Promise<Organization[]> {
@@ -111,6 +130,64 @@ export async function addOrganizationPerson(input: {
   });
   if (error) throw error;
   return data as unknown as OrganizationPerson;
+}
+
+export async function createOrganizationMemberInvitation(input: {
+  organizationId: string;
+  email: string;
+  displayName?: string;
+  teachingRole?: OrganizationTeachingRole | null;
+  internalId?: string;
+  notes?: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("create_organization_member_invitation", {
+    p_organization_id: input.organizationId,
+    p_email: input.email.trim(),
+    p_display_name: input.displayName?.trim() || null,
+    p_teaching_role: input.teachingRole ?? null,
+    p_internal_id: input.internalId?.trim() || null,
+    p_notes: input.notes?.trim() || null,
+  });
+  if (error) throw error;
+  return ((data ?? [])[0] ?? null) as {
+    invitation_id: string;
+    organization_person_id: string;
+    invited_email: string;
+    invite_token: string;
+    expires_at: string;
+  } | null;
+}
+
+export async function fetchOrganizationMemberInvitations(organizationId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_organization_member_invitations", {
+    p_organization_id: organizationId,
+  });
+  if (error) throw error;
+  return (data ?? []) as OrganizationMemberInvitation[];
+}
+
+export async function fetchOrganizationInvitation(token: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_organization_invitation", { p_token: token });
+  if (error) throw error;
+  return ((data ?? [])[0] ?? null) as OrganizationInvitationPreview | null;
+}
+
+export async function acceptOrganizationMemberInvitation(token: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("accept_organization_member_invitation", { p_token: token });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function revokeOrganizationMemberInvitation(invitationId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("revoke_organization_member_invitation", {
+    p_invitation_id: invitationId,
+  });
+  if (error) throw error;
 }
 
 export async function updateOrganizationPerson(input: {

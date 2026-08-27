@@ -23,15 +23,18 @@ import {
   createPlatformOrganization,
   fetchPlatformAdminAuditLog,
   fetchPlatformAdmins,
+  fetchPlatformOrganizationRequests,
   fetchPlatformOrganizations,
   type PlatformAdminAccount,
   type PlatformAdminAuditEntry,
   type PlatformOrganization,
+  type PlatformOrganizationRequest,
+  reviewPlatformOrganizationRequest,
   setPlatformAdminByEmail,
 } from "@/lib/platform-admin";
 import { fetchCurrentProfile } from "@/lib/profile";
 
-type DrawerMode = "organization" | "admin" | "revoke" | null;
+type DrawerMode = "organization" | "admin" | "revoke" | "request" | null;
 
 export default function PlatformAccessManager() {
   const { loading: authLoading, session } = useAuthSession();
@@ -39,6 +42,7 @@ export default function PlatformAccessManager() {
   const [admins, setAdmins] = useState<PlatformAdminAccount[]>([]);
   const [auditLog, setAuditLog] = useState<PlatformAdminAuditEntry[]>([]);
   const [organizations, setOrganizations] = useState<PlatformOrganization[]>([]);
+  const [organizationRequests, setOrganizationRequests] = useState<PlatformOrganizationRequest[]>([]);
   const [organizationName, setOrganizationName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [organizationReason, setOrganizationReason] = useState("");
@@ -46,6 +50,8 @@ export default function PlatformAccessManager() {
   const [grantReason, setGrantReason] = useState("");
   const [revokeTarget, setRevokeTarget] = useState<PlatformAdminAccount | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
+  const [reviewRequest, setReviewRequest] = useState<PlatformOrganizationRequest | null>(null);
+  const [reviewReason, setReviewReason] = useState("");
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [revokeConfirmOpen, setRevokeConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -63,14 +69,16 @@ export default function PlatformAccessManager() {
       const isAdmin = profile?.role === "admin";
       setAuthorized(isAdmin);
       if (!isAdmin) return;
-      const [nextAdmins, nextAuditLog, nextOrganizations] = await Promise.all([
+      const [nextAdmins, nextAuditLog, nextOrganizations, nextRequests] = await Promise.all([
         fetchPlatformAdmins(),
         fetchPlatformAdminAuditLog(),
         fetchPlatformOrganizations(),
+        fetchPlatformOrganizationRequests(),
       ]);
       setAdmins(nextAdmins);
       setAuditLog(nextAuditLog);
       setOrganizations(nextOrganizations);
+      setOrganizationRequests(nextRequests);
     } catch (nextError) {
       setError(errorMessage(nextError));
     } finally {
@@ -156,6 +164,25 @@ export default function PlatformAccessManager() {
     }
   }
 
+  async function handleReviewRequest(decision: "approved" | "rejected") {
+    if (!reviewRequest) return;
+    setBusy(true);
+    setError("");
+    setStatus("");
+    try {
+      await reviewPlatformOrganizationRequest({ requestId: reviewRequest.id, decision, reason: reviewReason });
+      setStatus(`${reviewRequest.requested_name} was ${decision}.`);
+      setReviewRequest(null);
+      setReviewReason("");
+      setDrawerMode(null);
+      await loadData();
+    } catch (nextError) {
+      setError(errorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (authLoading || loading) {
     return <Panel className="p-4 text-sm text-slate-500">Loading platform access…</Panel>;
   }
@@ -178,6 +205,26 @@ export default function PlatformAccessManager() {
       />
       {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
       {status ? <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{status}</p> : null}
+
+      <AdminDataTable label="Company registration requests">
+        <thead>
+          <tr><th colSpan={6} className="p-0 font-normal"><CompactToolbar resultLabel={`${organizationRequests.filter((request) => request.status === "pending").length} pending · ${organizationRequests.length} total`} /></th></tr>
+          <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Company</th><th className="px-3 py-2">Requester</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Submitted</th><th className="px-3 py-2 text-right">Actions</th></tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {!organizationRequests.length ? <tr><td colSpan={6}><EmptyState title="No company requests" description="Company registrations awaiting platform approval will appear here." /></td></tr> : null}
+          {organizationRequests.map((request) => (
+            <tr key={request.id} className="hover:bg-blue-50/40">
+              <td className="px-3 py-2 font-semibold text-slate-950">{request.requested_name}</td>
+              <td className="px-3 py-2 text-xs text-slate-700">{request.requester_email}</td>
+              <td className="px-3 py-2"><StatusBadge tone={request.email_verified ? "success" : "warning"}>{request.email_verified ? "Verified" : "Unverified"}</StatusBadge></td>
+              <td className="px-3 py-2"><StatusBadge tone={request.status === "approved" ? "success" : request.status === "rejected" ? "danger" : "warning"}>{request.status}</StatusBadge></td>
+              <td className="px-3 py-2 text-xs text-slate-500">{formatDate(request.submitted_at)}</td>
+              <td className="px-3 py-2 text-right">{request.status === "pending" ? <CompactButton type="button" onClick={() => { setReviewRequest(request); setReviewReason(""); setDrawerMode("request"); }}>Review</CompactButton> : <span className="text-xs text-slate-500" title={request.review_reason ?? undefined}>{request.review_reason || "Reviewed"}</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </AdminDataTable>
 
       <AdminDataTable label="Organizations">
         <thead>
@@ -291,6 +338,17 @@ export default function PlatformAccessManager() {
       <DetailDrawer open={drawerMode === "revoke" && Boolean(revokeTarget)} onClose={() => setDrawerMode(null)} title={`Revoke ${revokeTarget?.email ?? "platform access"}`} description="The account and organization memberships will remain unchanged.">
         <label className="grid gap-1 text-xs font-semibold text-slate-700">Reason<textarea autoFocus required minLength={3} maxLength={500} rows={4} value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
         <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setDrawerMode(null)}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={revokeReason.trim().length < 3} onClick={() => setRevokeConfirmOpen(true)}>Continue</CompactButton></div>
+      </DetailDrawer>
+      <DetailDrawer open={drawerMode === "request" && Boolean(reviewRequest)} onClose={() => setDrawerMode(null)} title={`Review ${reviewRequest?.requested_name ?? "company"}`} description="Approval creates the organization and makes the verified requester its Owner. Rejection creates no organization.">
+        <div className="grid gap-3">
+          <WorksheetGrid label="Registration request">
+            <thead><tr><WorksheetHeader>Company</WorksheetHeader><WorksheetHeader>Requester email</WorksheetHeader></tr></thead>
+            <tbody><tr><WorksheetCell>{reviewRequest?.requested_name}</WorksheetCell><WorksheetCell>{reviewRequest?.requester_email}</WorksheetCell></tr></tbody>
+          </WorksheetGrid>
+          {!reviewRequest?.email_verified ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Approval is disabled until the requester verifies this email.</p> : null}
+          <label className="grid gap-1 text-xs font-semibold text-slate-700">Decision reason<textarea autoFocus required minLength={3} maxLength={500} rows={4} value={reviewReason} onChange={(event) => setReviewReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
+          <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => setDrawerMode(null)}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={busy || reviewReason.trim().length < 3} onClick={() => void handleReviewRequest("rejected")}>Reject</CompactButton><CompactButton type="button" tone="primary" disabled={busy || !reviewRequest?.email_verified || reviewReason.trim().length < 3} onClick={() => void handleReviewRequest("approved")}>Approve &amp; create</CompactButton></div>
+        </div>
       </DetailDrawer>
       <ConfirmDialog open={revokeConfirmOpen} title="Revoke platform access?" description={`This removes platform-level approval access from ${revokeTarget?.email ?? "this account"}. Organization memberships are not changed.`} confirmLabel="Revoke access" destructive busy={busy} onCancel={() => setRevokeConfirmOpen(false)} onConfirm={() => void handleRevoke()} />
     </div>

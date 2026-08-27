@@ -19,6 +19,7 @@ import {
   type NotificationRecord,
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { fetchMyOrganizationRegistrationRequests, type PlatformOrganizationRequest } from "@/lib/platform-admin";
 import { formatUsDate } from "@/lib/date-format";
 import {
   fetchDefaultCfi,
@@ -57,6 +58,7 @@ export default function DashboardOverview() {
   const [customizingQuickActions, setCustomizingQuickActions] = useState(false);
   const [savingQuickActions, setSavingQuickActions] = useState(false);
   const [quickActionError, setQuickActionError] = useState("");
+  const [companyRequest, setCompanyRequest] = useState<PlatformOrganizationRequest | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,11 +75,12 @@ export default function DashboardOverview() {
       try {
         setStatusNote("");
 
-        const [profile, defaultCfi, notifications, selectedQuickActionIds] = await Promise.all([
+        const [profile, defaultCfi, notifications, selectedQuickActionIds, companyRequests] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchDefaultCfi(session.user.id),
           fetchInboxNotifications(session.user.id),
           fetchDashboardQuickActionIds(session.user.id),
+          fetchMyOrganizationRegistrationRequests(),
         ]);
 
         if (!cancelled) {
@@ -88,6 +91,7 @@ export default function DashboardOverview() {
             medicalExpiry: profile?.medical_exp_date ?? "",
           });
           setQuickActionIds(selectedQuickActionIds);
+          setCompanyRequest(companyRequests[0] ?? null);
         }
       } catch {
         if (!cancelled) {
@@ -210,6 +214,11 @@ export default function DashboardOverview() {
       ) : null}
 
       <OrganizationAccessManager />
+
+      {companyRequest ? <section className={`rounded-[16px] border px-4 py-3 text-sm ${companyRequest.status === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : companyRequest.status === "rejected" ? "border-rose-200 bg-rose-50 text-rose-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+        <p className="font-semibold">{companyRequest.requested_name}: {companyRequest.status === "pending" ? "awaiting platform approval" : companyRequest.status}</p>
+        <p className="mt-1 text-xs">{companyRequest.status === "pending" ? "The organization has not been created yet. You will be notified after a platform administrator reviews it." : companyRequest.review_reason || "Review completed."}</p>
+      </section> : null}
 
       <section className="grid items-start gap-4 lg:grid-cols-2">
           <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">

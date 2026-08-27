@@ -26,19 +26,22 @@ import {
   type OrganizationAircraftMaintenanceInput,
 } from "@/lib/aircraft";
 import {
-  addOrganizationPerson,
   archivePendingOrganizationPerson,
   canManageOrganization,
   canManageOrganizationAdmins,
+  createOrganizationMemberInvitation,
+  fetchOrganizationMemberInvitations,
   fetchOrganizationMembers,
   fetchOrganizationPeople,
   leaveOrganization,
   removeOrganizationMember,
+  revokeOrganizationMemberInvitation,
   setOrganizationMemberRole,
   setOrganizationMemberTeachingRole,
   transferOrganizationOwnership,
   updateOrganizationPerson,
   type OrganizationMember,
+  type OrganizationMemberInvitation,
   type OrganizationPerson,
   type OrganizationTeachingRole,
 } from "@/lib/organizations";
@@ -228,6 +231,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [memberTeachingRole, setMemberTeachingRole] = useState<OrganizationTeachingRole | "">("");
   const [memberInternalId, setMemberInternalId] = useState("");
   const [memberNotes, setMemberNotes] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
   const [messageTitle, setMessageTitle] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [messagePriority, setMessagePriority] = useState<NotificationPriority>("normal");
@@ -235,6 +239,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [showAddPersonDrawer, setShowAddPersonDrawer] = useState(false);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [organizationPeople, setOrganizationPeople] = useState<OrganizationPerson[]>([]);
+  const [memberInvitations, setMemberInvitations] = useState<OrganizationMemberInvitation[]>([]);
   const [editingPersonId, setEditingPersonId] = useState("");
   const [personDraft, setPersonDraft] = useState({
     displayName: "",
@@ -282,6 +287,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     if (!activeOrganization?.id) {
       setMembers([]);
       setOrganizationPeople([]);
+      setMemberInvitations([]);
       setAircraft([]);
       setLoading(false);
       return;
@@ -290,16 +296,18 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     setLoading(true);
     setStatus("");
     try {
-      const [aircraftList, modelList, memberList, peopleList] = await Promise.all([
+      const [aircraftList, modelList, memberList, peopleList, invitationList] = await Promise.all([
         fetchOrganizationAircraft(activeOrganization.id),
         fetchAircraftModels(activeOrganization.id),
         canManage ? fetchOrganizationMembers(activeOrganization.id) : Promise.resolve([]),
         canManage ? fetchOrganizationPeople(activeOrganization.id) : Promise.resolve([]),
+        canManage ? fetchOrganizationMemberInvitations(activeOrganization.id) : Promise.resolve([]),
       ]);
       setAircraft(aircraftList);
       setModels(modelList);
       setMembers(memberList);
       setOrganizationPeople(peopleList);
+      setMemberInvitations(invitationList);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to load organization data."));
     } finally {
@@ -318,7 +326,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     setSaving(true);
     setStatus("");
     try {
-      const person = await addOrganizationPerson({
+      const invitation = await createOrganizationMemberInvitation({
         organizationId: activeOrganization.id,
         email: memberEmail,
         displayName: memberDisplayName,
@@ -326,21 +334,68 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         internalId: memberInternalId,
         notes: memberNotes,
       });
+      if (!invitation) throw new Error("Invitation could not be created.");
+      const nextInviteLink = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
+      setInviteLink(nextInviteLink);
       setMemberEmail("");
       setMemberDisplayName("");
       setMemberTeachingRole("");
       setMemberInternalId("");
       setMemberNotes("");
-      setShowAddPersonDrawer(false);
-      const [nextMembers, nextPeople] = await Promise.all([
+      const [nextMembers, nextPeople, nextInvitations] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
+        fetchOrganizationMemberInvitations(activeOrganization.id),
       ]);
       setMembers(nextMembers);
       setOrganizationPeople(nextPeople);
-      setStatus(person.user_id ? "Registered account linked and added." : "Pending person added. They can link this organization after registering with the same verified email.");
+      setMemberInvitations(nextInvitations);
+      setStatus("Invitation created. Copy the one-time link and send it to the invited email address.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to add this member."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRegenerateInvitation(person: OrganizationPerson) {
+    if (!activeOrganization?.id) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      const invitation = await createOrganizationMemberInvitation({
+        organizationId: activeOrganization.id,
+        email: person.email,
+        displayName: person.organization_display_name ?? undefined,
+        teachingRole: person.teaching_role,
+        internalId: person.internal_id ?? undefined,
+        notes: person.notes ?? undefined,
+      });
+      if (!invitation) throw new Error("Invitation could not be created.");
+      const link = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
+      await navigator.clipboard.writeText(link);
+      setMemberInvitations(await fetchOrganizationMemberInvitations(activeOrganization.id));
+      setStatus(`A new invitation link for ${person.email} was copied. The previous link is now invalid.`);
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to create a new invitation link."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRevokeInvitation(person: OrganizationPerson) {
+    const invitation = memberInvitations.find((item) => item.organization_person_id === person.id && item.status === "pending");
+    if (!invitation) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await revokeOrganizationMemberInvitation(invitation.id);
+      await archivePendingOrganizationPerson(person.id);
+      setOrganizationPeople((current) => current.filter((item) => item.id !== person.id));
+      setMemberInvitations((current) => current.map((item) => item.id === invitation.id ? { ...item, status: "revoked" } : item));
+      setStatus("Invitation revoked and pending roster entry removed.");
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to revoke this invitation."));
     } finally {
       setSaving(false);
     }
@@ -1686,7 +1741,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         <>
           <AdminDataTable label="Linked organization members">
             <thead>
-              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={<CompactButton type="button" tone="primary" onClick={() => setShowAddPersonDrawer(true)}>Add person</CompactButton>} /></th></tr>
+              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={<CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setShowAddPersonDrawer(true); }}>Invite by email</CompactButton>} /></th></tr>
               <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
                 <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
               </tr>
@@ -1729,14 +1784,20 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                   <td className="px-3 py-2 text-xs text-slate-600">{person.teaching_role ? formatTeachingRole(person.teaching_role) : "—"}</td>
                   <td className="px-3 py-2 text-xs text-slate-600">{person.internal_id || "—"}</td>
                   <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={person.notes ?? ""}>{person.notes || "—"}</td>
-                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" onClick={() => startEditOrganizationPerson(person)}>Edit</CompactButton><CompactButton type="button" tone="danger" onClick={() => setMemberConfirmation({ action: "pending", person })}>Remove</CompactButton></div></td>
+                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" onClick={() => startEditOrganizationPerson(person)}>Edit</CompactButton><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>New link</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
                 </tr>
               ))}
             </tbody>
           </AdminDataTable>
 
-          <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Add person" description="Registered accounts link immediately; other email addresses remain pending.">
-            <form onSubmit={handleAddMember}>
+          <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="The recipient must use the one-time link and verify the invited email before membership is created.">
+            {inviteLink ? (
+              <div className="grid gap-3">
+                <label className="grid gap-1 text-xs font-semibold text-slate-700">One-time registration link<textarea readOnly rows={4} value={inviteLink} className="rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 font-mono text-xs font-normal" /></label>
+                <p className="text-xs text-slate-600">This link expires in 14 days. Creating a new link for the same email invalidates this one.</p>
+                <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Done</CompactButton><CompactButton type="button" tone="primary" onClick={() => void navigator.clipboard.writeText(inviteLink)}>Copy link</CompactButton></div>
+              </div>
+            ) : <form onSubmit={handleAddMember}>
               <WorksheetGrid label="New organization person" minWidth={720}>
                 <thead><tr><WorksheetHeader>Email</WorksheetHeader><WorksheetHeader>Organization name</WorksheetHeader><WorksheetHeader>Teaching role</WorksheetHeader><WorksheetHeader>Internal ID</WorksheetHeader></tr></thead>
                 <tbody><tr>
@@ -1747,8 +1808,8 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                 </tr></tbody>
               </WorksheetGrid>
               <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Organization notes<textarea rows={3} maxLength={2000} value={memberNotes} onChange={(event) => setMemberNotes(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
-              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Adding…" : "Add person"}</CompactButton></div>
-            </form>
+              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Creating…" : "Create invitation"}</CompactButton></div>
+            </form>}
           </DetailDrawer>
           <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit organization person" description="These details are organization-only and do not change the personal account.">
             {editingPersonId ? renderOrganizationPersonEditor(organizationPeople.find((person) => person.id === editingPersonId) ?? ({ id: editingPersonId } as OrganizationPerson)) : null}

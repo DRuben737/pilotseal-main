@@ -14,11 +14,14 @@ import {
 import AuthShell from "@/components/auth/AuthShell";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { getSupabaseClient } from "@/lib/supabase";
+import { fetchOrganizationInvitation, type OrganizationInvitationPreview } from "@/lib/organizations";
 
 export default function RegisterForm({
   redirectTo = "/dashboard",
+  inviteToken = "",
 }: {
   redirectTo?: string;
+  inviteToken?: string;
 }) {
   const router = useRouter();
   const { loading, session } = useAuthSession();
@@ -30,6 +33,31 @@ export default function RegisterForm({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [existingAccountEmail, setExistingAccountEmail] = useState("");
+  const [invitation, setInvitation] = useState<OrganizationInvitationPreview | null>(null);
+  const [invitationLoading, setInvitationLoading] = useState(Boolean(inviteToken));
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    let cancelled = false;
+    void fetchOrganizationInvitation(inviteToken)
+      .then((preview) => {
+        if (cancelled) return;
+        setInvitation(preview);
+        if (!preview || preview.status !== "pending") {
+          setError("This organization invitation is invalid, expired, or already used.");
+          return;
+        }
+        setEmail(preview.invited_email);
+        setAccountType("personal");
+      })
+      .catch(() => {
+        if (!cancelled) setError("Unable to verify this organization invitation.");
+      })
+      .finally(() => {
+        if (!cancelled) setInvitationLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [inviteToken]);
 
   useEffect(() => {
     if (!loading && session?.user) {
@@ -48,6 +76,9 @@ export default function RegisterForm({
       const supabase = getSupabaseClient();
       const normalizedEmail = email.trim();
       const normalizedCompanyName = companyName.trim();
+      if (inviteToken && (!invitation || invitation.status !== "pending")) {
+        throw new Error("This organization invitation is not available.");
+      }
       if (accountType === "company" && normalizedCompanyName.length < 2) {
         throw new Error("Enter a company name with at least 2 characters.");
       }
@@ -65,7 +96,7 @@ export default function RegisterForm({
         options: {
           emailRedirectTo,
           data: {
-            account_type: accountType,
+            account_type: inviteToken ? "personal" : accountType,
             ...(accountType === "company" ? { company_name: normalizedCompanyName } : {}),
           },
         },
@@ -94,7 +125,7 @@ export default function RegisterForm({
         return;
       }
 
-      setStatus("Account created. Please sign in.");
+      setStatus(accountType === "company" && !inviteToken ? "Account created. Your company request is pending platform approval." : "Account created. Please sign in to finish joining the organization.");
       router.replace(`/login?next=${encodeURIComponent(redirectTo)}`);
     } catch (submitError) {
       setError(getAuthErrorMessage(submitError, "Registration failed. Please try again.", "password"));
@@ -139,7 +170,9 @@ export default function RegisterForm({
       <h1 className="text-3xl font-semibold text-slate-950">Register</h1>
 
       <form className="grid gap-6" onSubmit={handleSubmit}>
-        <fieldset className="grid gap-3">
+        {invitation ? <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">Invitation to join <strong>{invitation.organization_name}</strong>. Register with {invitation.invited_email}; membership is added after email verification.</p> : null}
+
+        {!inviteToken ? <fieldset className="grid gap-3">
           <legend className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
             Account type
           </legend>
@@ -159,7 +192,7 @@ export default function RegisterForm({
               </button>
             ))}
           </div>
-        </fieldset>
+        </fieldset> : null}
 
         {accountType === "company" ? (
           <label className="grid gap-2 border-b border-slate-200 pb-4">
@@ -188,6 +221,7 @@ export default function RegisterForm({
             autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
+            readOnly={Boolean(inviteToken)}
             placeholder="cfi@pilotseal.com"
             className="bg-transparent text-base text-slate-950 outline-none placeholder:text-slate-400"
             required
@@ -229,7 +263,7 @@ export default function RegisterForm({
           <button
             className="primary-button min-w-[10rem] justify-center"
             type="submit"
-            disabled={submitting}
+            disabled={submitting || invitationLoading || (Boolean(inviteToken) && !invitation)}
           >
             {submitting ? "Working..." : "Create account"}
           </button>
