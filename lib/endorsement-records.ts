@@ -23,6 +23,21 @@ export type EndorsementRecord = {
   created_at: string;
 };
 
+export type LegacyEndorsementReviewContext = {
+  record_id: string;
+  organization_id: string;
+  organization_name: string;
+  linked_student_user_id: string | null;
+  linked_student_name: string | null;
+  linked_student_email: string | null;
+  account_linked: boolean;
+  organization_student: boolean;
+  student_period_at_record: string | null;
+  instructor_period_at_record: string | null;
+  requires_historical_attestation: boolean;
+  blocker: string | null;
+};
+
 export type CreateEndorsementRecordInput = {
   id: string;
   userId: string;
@@ -158,18 +173,27 @@ export async function fetchPendingLegacyEndorsementRecords() {
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeRecord);
 }
 
+export async function fetchLegacyEndorsementReviewContext(recordId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_legacy_endorsement_review_context", {
+    p_record_id: recordId,
+  });
+  if (error) throw error;
+  return ((data ?? [])[0] ?? null) as LegacyEndorsementReviewContext | null;
+}
+
 export async function reviewLegacyEndorsementScope(input: {
   recordId: string;
   decision: "personal" | "confirmed" | "defer";
-  studentUserId?: string | null;
   note: string;
+  confirmHistoricalEvidence?: boolean;
 }) {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.rpc("review_legacy_endorsement_scope", {
+  const { error } = await supabase.rpc("review_legacy_endorsement_scope_v2", {
     p_record_id: input.recordId,
     p_decision: input.decision,
-    p_student_user_id: input.studentUserId?.trim() || null,
     p_note: input.note.trim(),
+    p_confirm_historical_evidence: input.confirmHistoricalEvidence ?? false,
   });
   if (error) throw error;
 }

@@ -172,6 +172,16 @@ export async function copyFlightBriefToPersonal(id: string) {
   return String(data ?? "");
 }
 
+export async function sharePersonalFlightBriefWithOrganization(id: string, organizationId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("share_personal_flight_brief_with_organization", {
+    p_brief_id: id,
+    p_organization_id: organizationId,
+  });
+  if (error) throw error;
+  return String(data ?? "");
+}
+
 export async function fetchMyFlightBriefs(userId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -189,7 +199,6 @@ export async function fetchOrganizationStudentBriefs(organizationId: string) {
     .from("flight_briefs")
     .select(FLIGHT_BRIEF_SELECT)
     .eq("organization_id", organizationId)
-    .in("status", ["finalized", "superseded"])
     .order("flight_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
