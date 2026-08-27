@@ -73,6 +73,16 @@ export type OrganizationInvitationPreview = {
   expires_at: string;
 };
 
+export type OrganizationInvitationCreation = {
+  invitation_id: string;
+  organization_person_id: string;
+  invited_email: string;
+  invite_token: string;
+  expires_at: string;
+  email_sent: boolean;
+  email_error_code: string | null;
+};
+
 export const ACTIVE_ORGANIZATION_STORAGE_KEY = "pilotseal.activeOrganizationId";
 
 export async function fetchUserOrganizations(): Promise<Organization[]> {
@@ -135,28 +145,22 @@ export async function addOrganizationPerson(input: {
 export async function createOrganizationMemberInvitation(input: {
   organizationId: string;
   email: string;
-  displayName?: string;
-  teachingRole?: OrganizationTeachingRole | null;
-  internalId?: string;
-  notes?: string;
 }) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("create_organization_member_invitation", {
-    p_organization_id: input.organizationId,
-    p_email: input.email.trim(),
-    p_display_name: input.displayName?.trim() || null,
-    p_teaching_role: input.teachingRole ?? null,
-    p_internal_id: input.internalId?.trim() || null,
-    p_notes: input.notes?.trim() || null,
+  const { data, error } = await supabase.functions.invoke("organization-invitation-email", {
+    body: {
+      organizationId: input.organizationId,
+      email: input.email.trim(),
+    },
   });
   if (error) throw error;
-  return ((data ?? [])[0] ?? null) as {
-    invitation_id: string;
-    organization_person_id: string;
-    invited_email: string;
-    invite_token: string;
-    expires_at: string;
-  } | null;
+  const invitation = data?.invitation as Omit<OrganizationInvitationCreation, "email_sent" | "email_error_code"> | undefined;
+  if (!invitation) return null;
+  return {
+    ...invitation,
+    email_sent: data?.email_sent === true,
+    email_error_code: typeof data?.email_error_code === "string" ? data.email_error_code : null,
+  } satisfies OrganizationInvitationCreation;
 }
 
 export async function fetchOrganizationMemberInvitations(organizationId: string) {

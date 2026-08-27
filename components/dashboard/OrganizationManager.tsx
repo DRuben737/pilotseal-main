@@ -228,6 +228,8 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [status, setStatus] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
+  const [inviteRecipient, setInviteRecipient] = useState("");
+  const [inviteEmailSent, setInviteEmailSent] = useState(false);
   const [messageTitle, setMessageTitle] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [messagePriority, setMessagePriority] = useState<NotificationPriority>("normal");
@@ -329,6 +331,8 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       if (!invitation) throw new Error("Invitation could not be created.");
       const nextInviteLink = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
       setInviteLink(nextInviteLink);
+      setInviteRecipient(invitation.invited_email);
+      setInviteEmailSent(invitation.email_sent);
       setMemberEmail("");
       const [nextMembers, nextPeople, nextInvitations] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
@@ -338,7 +342,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setMembers(nextMembers);
       setOrganizationPeople(nextPeople);
       setMemberInvitations(nextInvitations);
-      setStatus("Invitation created. Copy the one-time link and send it to the invited email address.");
+      setStatus(invitation.email_sent
+        ? `Invitation email sent to ${invitation.invited_email}.`
+        : `Invitation created, but the email could not be sent. Use the backup link.`);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to add this member."));
     } finally {
@@ -357,9 +363,16 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       });
       if (!invitation) throw new Error("Invitation could not be created.");
       const link = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
-      await navigator.clipboard.writeText(link);
       setMemberInvitations(await fetchOrganizationMemberInvitations(activeOrganization.id));
-      setStatus(`A new invitation link for ${person.email} was copied. The previous link is now invalid.`);
+      if (invitation.email_sent) {
+        setStatus(`A new invitation email was sent to ${person.email}. The previous link is now invalid.`);
+      } else {
+        setInviteLink(link);
+        setInviteRecipient(person.email);
+        setInviteEmailSent(false);
+        setShowAddPersonDrawer(true);
+        setStatus(`The new invitation email could not be sent. Use the backup link.`);
+      }
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to create a new invitation link."));
     } finally {
@@ -1725,7 +1738,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         <>
           <AdminDataTable label="Linked organization members">
             <thead>
-              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={<CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setShowAddPersonDrawer(true); }}>Invite by email</CompactButton>} /></th></tr>
+              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={<CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setInviteRecipient(""); setInviteEmailSent(false); setShowAddPersonDrawer(true); }}>Invite by email</CompactButton>} /></th></tr>
               <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
                 <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
               </tr>
@@ -1765,23 +1778,26 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                 <tr key={person.id} className="hover:bg-amber-50/50">
                   <td className="px-3 py-2 font-semibold text-slate-950">{person.email}</td>
                   <td className="px-3 py-2"><StatusBadge tone="warning">Awaiting registration</StatusBadge></td>
-                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>New link</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
+                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
                 </tr>
               ))}
             </tbody>
           </AdminDataTable>
 
-          <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="The recipient must use the one-time link and verify the invited email before membership is created.">
+          <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="PilotSeal emails a one-time registration link. Membership is created only after the invited email is verified.">
             {inviteLink ? (
               <div className="grid gap-3">
-                <label className="grid gap-1 text-xs font-semibold text-slate-700">One-time registration link<textarea readOnly rows={4} value={inviteLink} className="rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 font-mono text-xs font-normal" /></label>
-                <p className="text-xs text-slate-600">This link expires in 14 days. Creating a new link for the same email invalidates this one.</p>
+                <div className={`rounded-md border px-3 py-2 text-sm ${inviteEmailSent ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                  {inviteEmailSent ? `Invitation email sent to ${inviteRecipient}.` : `The invitation was created, but email delivery to ${inviteRecipient} failed.`}
+                </div>
+                <label className="grid gap-1 text-xs font-semibold text-slate-700">Backup invitation link<textarea readOnly rows={4} value={inviteLink} className="rounded-md border border-slate-300 bg-slate-50 px-2 py-1.5 font-mono text-xs font-normal" /></label>
+                <p className="text-xs text-slate-600">This link expires in 14 days. Resending creates a new link and invalidates the previous one.</p>
                 <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Done</CompactButton><CompactButton type="button" tone="primary" onClick={() => void navigator.clipboard.writeText(inviteLink)}>Copy link</CompactButton></div>
               </div>
             ) : <form className="grid gap-4" onSubmit={handleAddMember}>
               <label className="grid gap-1 text-xs font-semibold text-slate-700">Email<input autoFocus required type="email" aria-label="Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950" placeholder="person@example.com" /></label>
               <p className="text-xs text-slate-600">The member can be assigned a name, teaching role, internal ID, and organization notes after joining.</p>
-              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Creating…" : "Create invitation"}</CompactButton></div>
+              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Sending…" : "Send invitation"}</CompactButton></div>
             </form>}
           </DetailDrawer>
           <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit organization person" description="These details are organization-only and do not change the personal account.">

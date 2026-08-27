@@ -1,9 +1,15 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(31);
 
 select has_table('public', 'organization_registration_requests', 'company registration request table exists');
 select has_table('public', 'organization_member_invitations', 'organization invitation table exists');
+select has_column('public', 'organization_member_invitations', 'email_status', 'invitation stores email delivery status');
+select has_column('public', 'organization_member_invitations', 'email_attempt_count', 'invitation stores email attempt count');
+select has_column('public', 'organization_member_invitations', 'email_last_attempt_at', 'invitation stores the latest email attempt time');
+select has_column('public', 'organization_member_invitations', 'email_sent_at', 'invitation stores successful email delivery time');
+select has_column('public', 'organization_member_invitations', 'email_provider_message_id', 'invitation stores the Resend message ID');
+select has_column('public', 'organization_member_invitations', 'email_last_error_code', 'invitation stores a sanitized delivery error code');
 select has_function('public', 'review_organization_registration_request', array['uuid','text','text'], 'platform review RPC exists');
 select has_function('public', 'accept_organization_member_invitation', array['text'], 'invitation acceptance RPC exists');
 select ok(not has_function_privilege('authenticated', 'public.add_organization_person(uuid,text,text,text,text,text)', 'execute'), 'legacy direct roster add is unavailable to clients');
@@ -74,6 +80,8 @@ from public.create_organization_member_invitation(
 reset role;
 
 select ok(char_length(current_setting('pilotseal_test.invite_token')) = 64, 'invitation returns a high-entropy token once');
+select is((select email_status from public.organization_member_invitations where token_hash = encode(extensions.digest(current_setting('pilotseal_test.invite_token'), 'sha256'), 'hex')), 'not_sent', 'new invitation starts with email not sent');
+select is((select email_attempt_count from public.organization_member_invitations where token_hash = encode(extensions.digest(current_setting('pilotseal_test.invite_token'), 'sha256'), 'hex')), 0, 'new invitation starts with no email attempts');
 select ok(not exists (select 1 from public.organization_member_invitations where token_hash = current_setting('pilotseal_test.invite_token')), 'plaintext invitation token is not stored');
 select is((select count(*) from public.organization_member_invitations where token_hash = encode(extensions.digest(current_setting('pilotseal_test.invite_token'), 'sha256'), 'hex')), 1::bigint, 'only the invitation token hash is stored');
 
