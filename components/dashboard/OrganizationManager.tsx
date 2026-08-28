@@ -30,12 +30,14 @@ import {
   canManageOrganization,
   canManageOrganizationAdmins,
   createOrganizationMemberInvitation,
+  fetchManagedStudentProfile,
   fetchOrganizationMemberInvitations,
   fetchOrganizationMembers,
   fetchOrganizationPeople,
   leaveOrganization,
   removeOrganizationMember,
   revokeOrganizationMemberInvitation,
+  saveManagedStudentProfile,
   setOrganizationMemberRole,
   setOrganizationMemberTeachingRole,
   transferOrganizationOwnership,
@@ -221,6 +223,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const { activeOrganization, loading: organizationsLoading, refreshOrganizations } = useOrganization();
   const role = activeOrganization?.member_role;
   const canManage = canManageOrganization(role);
+  const canEditStudents = canManage || activeOrganization?.teaching_role === "instructor";
   const canManageFleet = role === "owner" || role === "organization_admin";
   const canManageAdmins = canManageOrganizationAdmins(role);
   const [loading, setLoading] = useState(true);
@@ -244,6 +247,15 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     teachingRole: "" as OrganizationTeachingRole | "",
     internalId: "",
     notes: "",
+    formalName: "",
+    accountNickname: "",
+    certificateId: "",
+    certificateNumber: "",
+    certificateLevel: "" as "" | "Student" | "Private" | "Commercial" | "ATP",
+    ratings: "",
+    additionalPrivileges: "",
+    issueDate: "",
+    certificateNotes: "",
   });
   const [models, setModels] = useState<AircraftModelRecord[]>([]);
   const [aircraft, setAircraft] = useState<AircraftRecord[]>([]);
@@ -297,8 +309,8 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       const [aircraftList, modelList, memberList, peopleList, invitationList] = await Promise.all([
         fetchOrganizationAircraft(activeOrganization.id),
         fetchAircraftModels(activeOrganization.id),
-        canManage ? fetchOrganizationMembers(activeOrganization.id) : Promise.resolve([]),
-        canManage ? fetchOrganizationPeople(activeOrganization.id) : Promise.resolve([]),
+        canEditStudents ? fetchOrganizationMembers(activeOrganization.id) : Promise.resolve([]),
+        canEditStudents ? fetchOrganizationPeople(activeOrganization.id) : Promise.resolve([]),
         canManage ? fetchOrganizationMemberInvitations(activeOrganization.id) : Promise.resolve([]),
       ]);
       setAircraft(aircraftList);
@@ -316,7 +328,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   useEffect(() => {
     void loadOrganizationData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOrganization?.id, canManage]);
+  }, [activeOrganization?.id, canEditStudents, canManage]);
 
   async function handleAddMember(event: React.FormEvent) {
     event.preventDefault();
@@ -412,14 +424,42 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     }
   }
 
-  function startEditOrganizationPerson(person: OrganizationPerson) {
+  async function startEditOrganizationPerson(person: OrganizationPerson) {
     setEditingPersonId(person.id);
     setPersonDraft({
       displayName: person.organization_display_name ?? "",
       teachingRole: person.teaching_role ?? "",
       internalId: person.internal_id ?? "",
       notes: person.notes ?? "",
+      formalName: "",
+      accountNickname: person.profile_display_name ?? "",
+      certificateId: "",
+      certificateNumber: "",
+      certificateLevel: "",
+      ratings: "",
+      additionalPrivileges: "",
+      issueDate: "",
+      certificateNotes: "",
     });
+    if (person.user_id && person.teaching_role === "student" && activeOrganization?.id) {
+      try {
+        const profile = await fetchManagedStudentProfile(person.user_id, activeOrganization.id);
+        setPersonDraft((current) => ({
+          ...current,
+          formalName: profile.formal_name,
+          accountNickname: profile.account_nickname,
+          certificateId: profile.certificate_id ?? "",
+          certificateNumber: profile.certificate_number ?? "",
+          certificateLevel: profile.certificate_level ?? "",
+          ratings: profile.ratings.join(", "),
+          additionalPrivileges: profile.additional_privileges.join(", "),
+          issueDate: profile.issue_date ?? "",
+          certificateNotes: profile.notes ?? "",
+        }));
+      } catch (error) {
+        setStatus(getErrorMessage(error, "Unable to load the student profile."));
+      }
+    }
   }
 
   async function handleSaveOrganizationPerson() {
@@ -427,13 +467,31 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     setSaving(true);
     setStatus("");
     try {
-      await updateOrganizationPerson({
-        personId: editingPersonId,
-        displayName: personDraft.displayName,
-        teachingRole: personDraft.teachingRole || null,
-        internalId: personDraft.internalId,
-        notes: personDraft.notes,
-      });
+      const person = organizationPeople.find((item) => item.id === editingPersonId);
+      if (!person) throw new Error("Organization person not found.");
+      if (canManage) {
+        await updateOrganizationPerson({
+          personId: editingPersonId,
+          displayName: personDraft.displayName,
+          teachingRole: personDraft.teachingRole || null,
+          internalId: personDraft.internalId,
+          notes: personDraft.notes,
+        });
+      }
+      if (person.user_id && person.teaching_role === "student") {
+        await saveManagedStudentProfile({
+          studentUserId: person.user_id,
+          organizationId: activeOrganization.id,
+          formalName: personDraft.formalName,
+          certificateId: personDraft.certificateId || null,
+          certificateNumber: personDraft.certificateNumber,
+          certificateLevel: personDraft.certificateLevel || null,
+          ratings: personDraft.ratings.split(",").map((value) => value.trim()).filter(Boolean),
+          additionalPrivileges: personDraft.additionalPrivileges.split(",").map((value) => value.trim()).filter(Boolean),
+          issueDate: personDraft.issueDate || null,
+          notes: personDraft.certificateNotes,
+        });
+      }
       const [nextMembers, nextPeople] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
@@ -441,7 +499,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setMembers(nextMembers);
       setOrganizationPeople(nextPeople);
       setEditingPersonId("");
-      setStatus("Organization person details updated. Personal account information was not changed.");
+      setStatus("The student's single formal profile was updated for every linked instructor and organization.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to update this organization person."));
     } finally {
@@ -1232,7 +1290,36 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     if (editingPersonId !== person.id) return null;
     return (
       <div className="mt-3 grid gap-3 rounded-xl border border-sky-200 bg-white p-3 md:grid-cols-2">
-        <Field label="Organization name">
+        {person.user_id && person.teaching_role === "student" ? <>
+        <div className="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          This is the student&apos;s single formal profile. Changes appear for the student, linked instructors, and every current organization. Account nickname: <strong>{personDraft.accountNickname || "Not set"}</strong>.
+        </div>
+        <Field label="Formal endorsement name">
+          <input required className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.formalName} onChange={(event) => setPersonDraft((current) => ({ ...current, formalName: event.target.value }))} />
+        </Field>
+        <Field label="Pilot certificate number">
+          <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.certificateNumber} onChange={(event) => setPersonDraft((current) => ({ ...current, certificateNumber: event.target.value }))} />
+        </Field>
+        <Field label="Certificate level">
+          <select className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.certificateLevel} onChange={(event) => setPersonDraft((current) => ({ ...current, certificateLevel: event.target.value as typeof current.certificateLevel }))}>
+            <option value="">Not specified</option><option value="Student">Student</option><option value="Private">Private</option><option value="Commercial">Commercial</option><option value="ATP">ATP</option>
+          </select>
+        </Field>
+        <Field label="Issue date">
+          <input type="date" className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.issueDate} onChange={(event) => setPersonDraft((current) => ({ ...current, issueDate: event.target.value }))} />
+        </Field>
+        <Field label="Ratings (comma separated)">
+          <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.ratings} onChange={(event) => setPersonDraft((current) => ({ ...current, ratings: event.target.value }))} />
+        </Field>
+        <Field label="Additional privileges (comma separated)">
+          <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.additionalPrivileges} onChange={(event) => setPersonDraft((current) => ({ ...current, additionalPrivileges: event.target.value }))} />
+        </Field>
+        <Field label="Certificate notes">
+          <textarea className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.certificateNotes} onChange={(event) => setPersonDraft((current) => ({ ...current, certificateNotes: event.target.value }))} rows={3} maxLength={2000} />
+        </Field>
+        </> : null}
+        {canManage ? <>
+        <Field label="Organization-only name">
           <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.displayName} onChange={(event) => setPersonDraft((current) => ({ ...current, displayName: event.target.value }))} />
         </Field>
         <Field label="Teaching role">
@@ -1248,8 +1335,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         <Field label="Organization notes">
           <textarea className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.notes} onChange={(event) => setPersonDraft((current) => ({ ...current, notes: event.target.value }))} rows={3} maxLength={2000} />
         </Field>
+        </> : null}
         <div className="flex gap-2 md:col-span-2">
-          <button className="primary-button" type="button" disabled={saving} onClick={() => void handleSaveOrganizationPerson()}>{saving ? "Saving..." : "Save organization details"}</button>
+          <button className="primary-button" type="button" disabled={saving || (person.teaching_role === "student" && !personDraft.formalName.trim())} onClick={() => void handleSaveOrganizationPerson()}>{saving ? "Saving..." : "Save student profile"}</button>
           <button className="ghost-button" type="button" disabled={saving} onClick={() => setEditingPersonId("")}>Cancel</button>
         </div>
       </div>
@@ -1260,7 +1348,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   if (!activeOrganization) {
     return <div className="saas-panel">This account does not belong to an organization.</div>;
   }
-  if (!canManage && view !== "fleet" && view !== "overview") {
+  if (!canManage && !(view === "people" && canEditStudents) && view !== "fleet" && view !== "overview") {
     return (
       <div className="saas-panel">
         This organization page is available to organization managers.
@@ -1738,7 +1826,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         <>
           <AdminDataTable label="Linked organization members">
             <thead>
-              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={<CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setInviteRecipient(""); setInviteEmailSent(false); setShowAddPersonDrawer(true); }}>Invite by email</CompactButton>} /></th></tr>
+              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManage ? <CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setInviteRecipient(""); setInviteEmailSent(false); setShowAddPersonDrawer(true); }}>Invite by email</CompactButton> : undefined} /></th></tr>
               <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
                 <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
               </tr>
@@ -1759,7 +1847,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                     <td className="px-3 py-2 text-xs text-slate-600">{organizationPerson?.internal_id || "—"}</td>
                     <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={organizationPerson?.notes ?? ""}>{organizationPerson?.notes || "—"}</td>
                     <td className="px-3 py-2"><div className="flex justify-end gap-1">
-                      {organizationPerson ? <CompactButton type="button" disabled={saving} onClick={() => startEditOrganizationPerson(organizationPerson)}>Edit</CompactButton> : null}
+                      {organizationPerson && (canManage || member.teaching_role === "student") ? <CompactButton type="button" disabled={saving} onClick={() => void startEditOrganizationPerson(organizationPerson)}>Edit profile</CompactButton> : null}
                       {canManageAdmins && !isOwner && !isSelf ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "role", member })}>{member.member_role === "organization_admin" ? "Make member" : "Make admin"}</CompactButton> : null}
                       {canManageAdmins && !isSelf && !isOwner ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member })}>Transfer owner</CompactButton> : null}
                       {canRemove ? <CompactButton type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member })}>Remove</CompactButton> : null}
@@ -1800,7 +1888,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Sending…" : "Send invitation"}</CompactButton></div>
             </form>}
           </DetailDrawer>
-          <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit organization person" description="These details are organization-only and do not change the personal account.">
+          <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit student profile" description="Formal identity and certificate changes update the student's single shared record.">
             {editingPersonId ? renderOrganizationPersonEditor(organizationPeople.find((person) => person.id === editingPersonId) ?? ({ id: editingPersonId } as OrganizationPerson)) : null}
           </DetailDrawer>
           <ConfirmDialog

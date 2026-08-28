@@ -46,6 +46,7 @@ type CertificateForm = {
   last_event_date: string;
   ratings: string[];
   level: string;
+  additional_privileges: string[];
   is_default_for_endorsements: boolean;
   notes: string;
 };
@@ -67,6 +68,7 @@ const emptyCertificateForm: CertificateForm = {
   last_event_date: "",
   ratings: [],
   level: "",
+  additional_privileges: [],
   is_default_for_endorsements: false,
   notes: "",
 };
@@ -97,6 +99,14 @@ const RATING_OPTIONS: Record<PersonCertificateType, string[]> = {
 };
 
 const PILOT_LEVEL_OPTIONS = ["Student", "Private", "Commercial", "ATP"];
+
+function lowerPrivilegeOptions(level: string) {
+  const levelIndex = PILOT_LEVEL_OPTIONS.indexOf(level);
+  if (levelIndex <= 0) return [];
+  return PILOT_LEVEL_OPTIONS.slice(0, levelIndex).flatMap((lowerLevel) =>
+    PILOT_RATING_OPTIONS.map((rating) => `${lowerLevel} — ${rating}`)
+  );
+}
 
 function formatMonthYearInput(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 6);
@@ -183,7 +193,8 @@ function buildCertificateForm(certificate: PersonCertificate): CertificateForm {
     certificate_type: certificate.certificate_type,
     last_event_date: formatIsoDateForDisplay(certificate.last_event_date),
     ratings: certificate.ratings,
-    level: certificate.certificate_type === "pilot" ? certificate.event_type ?? "" : "",
+    level: certificate.certificate_type === "pilot" ? certificate.certificate_level ?? "" : "",
+    additional_privileges: certificate.additional_privileges,
     is_default_for_endorsements: certificate.is_default_for_endorsements,
     notes: certificate.notes ?? "",
   };
@@ -318,7 +329,7 @@ function AccountCertificateForm({
         <input value={form.certificate_number} onChange={(event) => onChange("certificate_number", event.target.value)} />
       </label>
       {form.certificate_type === "pilot" ? (
-        <label className="saas-field">
+        <><label className="saas-field">
           <span>Level</span>
           <select value={form.level} onChange={(event) => onChange("level", event.target.value)}>
             <option value="">Select level</option>
@@ -328,7 +339,7 @@ function AccountCertificateForm({
               </option>
             ))}
           </select>
-        </label>
+        </label><label className="saas-field people-ratings-field"><span>Additional lower-level privileges</span><select multiple value={form.additional_privileges} onChange={(event) => onChange("additional_privileges", Array.from(event.target.selectedOptions, (option) => option.value))}>{lowerPrivilegeOptions(form.level).map((privilege) => <option key={privilege} value={privilege}>{privilege}</option>)}</select><small>Use Command/Ctrl to select multiple privileges.</small></label></>
       ) : null}
       <label className="saas-field people-ratings-field">
         <span>Ratings</span>
@@ -784,6 +795,8 @@ export default function AccountSettingsPanel() {
         issueDate: null,
         lastEventDate: certificateForm.last_event_date ? convertDisplayDateToIsoDate(certificateForm.last_event_date) : null,
         eventType: certificateForm.certificate_type === "pilot" ? certificateForm.level : null,
+        certificateLevel: certificateForm.certificate_type === "pilot" && certificateForm.level ? certificateForm.level as "Student" | "Private" | "Commercial" | "ATP" : null,
+        additionalPrivileges: certificateForm.certificate_type === "pilot" ? certificateForm.additional_privileges : [],
         isDefaultForEndorsements: certificateForm.is_default_for_endorsements,
         notes: certificateForm.notes,
       });
@@ -822,6 +835,8 @@ export default function AccountSettingsPanel() {
         issueDate: null,
         lastEventDate: draft.last_event_date ? convertDisplayDateToIsoDate(draft.last_event_date) : null,
         eventType: draft.certificate_type === "pilot" ? draft.level : null,
+        certificateLevel: draft.certificate_type === "pilot" && draft.level ? draft.level as "Student" | "Private" | "Commercial" | "ATP" : null,
+        additionalPrivileges: draft.certificate_type === "pilot" ? draft.additional_privileges : [],
         isDefaultForEndorsements: draft.is_default_for_endorsements,
         notes: draft.notes,
       });
@@ -1393,12 +1408,13 @@ export default function AccountSettingsPanel() {
                               {certificate.certificate_number || "No certificate number"} |{" "}
                               {getCertificateCurrencyLabel(certificate)}
                             </p>
-                            {certificate.certificate_type === "pilot" && certificate.event_type ? (
-                              <p className="saas-meta-text">Level: {certificate.event_type}</p>
+                            {certificate.certificate_type === "pilot" && certificate.certificate_level ? (
+                              <p className="saas-meta-text">Level: {certificate.certificate_level}</p>
                             ) : null}
                             {certificate.ratings.length > 0 ? (
                               <p className="saas-meta-text">Ratings: {certificate.ratings.join(", ")}</p>
                             ) : null}
+                            {certificate.additional_privileges.length > 0 ? <p className="saas-meta-text">Additional privileges: {certificate.additional_privileges.join(", ")}</p> : null}
                             {certificate.notes ? (
                               <p className="saas-meta-text">Notes: {certificate.notes}</p>
                             ) : null}

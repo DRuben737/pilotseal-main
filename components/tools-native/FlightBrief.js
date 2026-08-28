@@ -17,7 +17,7 @@ import {
   parseAircraftStations,
 } from "@/lib/aircraft";
 import {
-  createFlightBriefDraft,
+  createAndFinalizeFlightBrief,
   fetchAircraftInspectionAssignments,
   fetchFlightBriefById,
   finalizeFlightBrief,
@@ -763,7 +763,7 @@ async function postJson(url, body, signal) {
 /** ------------------ Component ------------------ */
 export default function FlightBrief() {
   const { session } = useAuthSession();
-  const { organizations } = useOrganization();
+  const { activeOrganization } = useOrganization();
   const { brief, setBrief, briefWb, briefSelectedAircraft } = useToolState();
   const stepperRef = useRef(null);
   const stepButtonRefs = useRef([]);
@@ -908,8 +908,6 @@ export default function FlightBrief() {
   const mxDue = brief.mxDue ?? "";
   const setMxDue = useCallback((value) => setBriefField("mxDue", value), [setBriefField]);
   const meterType = "tach";
-  const [recordScope, setRecordScope] = useState("personal");
-  const [recordOrganizationId, setRecordOrganizationId] = useState("");
   const [recordSaving, setRecordSaving] = useState(false);
   const [recordStatus, setRecordStatus] = useState("");
   const [customInspections, setCustomInspections] = useState([]);
@@ -928,8 +926,6 @@ export default function FlightBrief() {
           throw new Error("Only your own draft can be opened for editing.");
         }
         if (!cancelled) {
-          setRecordScope(record.organization_id ? "organization" : "personal");
-          setRecordOrganizationId(record.organization_id ?? "");
           setBrief((current) => ({
             ...current,
             ...record.brief_data,
@@ -1978,22 +1974,15 @@ ${riskComments}
     }
 
     const organizationAircraft = selectedSavedAircraft?.source === "organization";
-    const selectedRecordOrganizationId = recordScope === "organization" ? recordOrganizationId : "";
+    const selectedRecordOrganizationId = organizationAircraft
+      ? selectedSavedAircraft?.organization_id || activeOrganization?.id || ""
+      : "";
     const meterValue = parseFloat(String(mxNow));
     const meterObservedAt = new Date().toISOString();
-
-    if (recordScope === "organization" && !selectedRecordOrganizationId) {
-      setRecordStatus("Choose the organization that should receive this Flight Brief.");
-      return;
-    }
 
     if (organizationAircraft) {
       if (!selectedSavedAircraft?.organization_id) {
         setRecordStatus("The organization aircraft is missing its organization assignment.");
-        return;
-      }
-      if (recordScope !== "organization" || selectedRecordOrganizationId !== selectedSavedAircraft.organization_id) {
-        setRecordStatus("An organization aircraft must be saved to the organization that owns it.");
         return;
       }
       if (selectedAircraftDueMeta.dispatchBlocked) {
@@ -2101,17 +2090,16 @@ ${riskComments}
       };
 
       const existingDraftId = String(brief.flightBriefDraftId ?? "");
-      const draft = existingDraftId
-        ? await updateFlightBriefDraft(existingDraftId, recordInput)
-        : await createFlightBriefDraft(recordInput);
-      setBrief((current) => ({ ...current, flightBriefDraftId: draft.id }));
-
-      const finalized = await finalizeFlightBrief(draft.id, {
+      const finalizeInput = {
         meterType: organizationAircraft ? meterType : null,
         meterValue: organizationAircraft ? meterValue : null,
         observedAt: organizationAircraft ? meterObservedAt : null,
         plannedMeterIncrease: null,
-      });
+      };
+      const finalized = existingDraftId
+        ? await updateFlightBriefDraft(existingDraftId, recordInput)
+            .then((draft) => finalizeFlightBrief(draft.id, finalizeInput))
+        : await createAndFinalizeFlightBrief(recordInput, finalizeInput);
       setBrief((current) => ({
         ...current,
         flightBriefDraftId: finalized.id,
@@ -2136,44 +2124,9 @@ ${riskComments}
         </div>
       </div>
       {session?.user?.id ? (
-        <fieldset className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white p-4">
-          <legend className="px-1 text-sm font-semibold text-slate-950">Save this Flight Brief to</legend>
-          <div className="mt-1 flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="flight-brief-record-scope"
-                value="personal"
-                checked={recordScope === "personal"}
-                onChange={() => { setRecordScope("personal"); setRecordOrganizationId(""); }}
-              />
-              Personal
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="flight-brief-record-scope"
-                value="organization"
-                checked={recordScope === "organization"}
-                disabled={organizations.length === 0}
-                onChange={() => setRecordScope("organization")}
-              />
-              Organization
-            </label>
-          </div>
-          {recordScope === "organization" ? (
-            <label className="saas-field mt-3 max-w-md">
-              <span>Organization</span>
-              <select value={recordOrganizationId} onChange={(event) => setRecordOrganizationId(event.target.value)}>
-                <option value="">Choose organization</option>
-                {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
-              </select>
-            </label>
-          ) : null}
-          <p className="mt-2 text-xs text-slate-500">
-            Personal records remain private. Organization records are visible to authorized organization staff, including drafts.
-          </p>
-        </fieldset>
+        <p className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+          Only completed Flight Briefs are retained. Your record remains in Personal history and is also visible in the active organization context while your membership applies.
+        </p>
       ) : null}
       {recordStatus ? (
         <div className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700" role="status" aria-live="polite">

@@ -12,13 +12,17 @@ select is((select count(*) from public.organization_membership_periods where org
 insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values ('40000000-0000-4000-8000-000000000002', (select id from public.profiles where email = 'pilot.one@example.test'), 'self', 'Avery Testpilot', 'STUDENT-1');
 update public.profiles set self_person_id = '40000000-0000-4000-8000-000000000002' where email = 'pilot.one@example.test';
+insert into public.saved_people (id, user_id, role, display_name, cert_number)
+values ('40000000-0000-4000-8000-000000000003', (select id from public.profiles where email = 'instructor.one@example.test'), 'student', 'Avery Testpilot', 'STUDENT-1');
+insert into public.saved_person_account_links (owner_user_id, saved_person_id, linked_user_id)
+values ((select id from public.profiles where email = 'instructor.one@example.test'), '40000000-0000-4000-8000-000000000003', (select id from public.profiles where email = 'pilot.one@example.test'));
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.create_endorsement_record(
     '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
-    '40000000-0000-4000-8000-000000000002', 'Avery Testpilot', 'STUDENT-1',
+    '40000000-0000-4000-8000-000000000003', 'Avery Testpilot', 'STUDENT-1',
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['Test endorsement'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000001.pdf', 1000, null
   )$$,
@@ -39,31 +43,30 @@ select ok((select left_at is not null from public.organization_membership_period
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
-select throws_ok(
+select lives_ok(
   $$select public.create_endorsement_record(
     '60000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001',
-    '40000000-0000-4000-8000-000000000002', 'Avery Testpilot', 'STUDENT-1',
+    '40000000-0000-4000-8000-000000000003', 'Avery Testpilot', 'STUDENT-1',
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['Post-exit organization attempt'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000002.pdf', 1000, null
   )$$,
-  '42501', 'The registered student is not a current student member of this organization.',
-  'organization endorsement is rejected after the student exits'
+  'endorsement remains the instructor record after the student exits; organization scope is ignored and derived automatically'
 );
 select lives_ok(
   $$select public.create_endorsement_record(
     '60000000-0000-4000-8000-000000000003', null,
-    '40000000-0000-4000-8000-000000000002', 'Avery Testpilot', 'STUDENT-1',
+    '40000000-0000-4000-8000-000000000003', 'Avery Testpilot', 'STUDENT-1',
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['Post-exit personal'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000003.pdf', 1000, null
   )$$,
   'post-exit endorsement can be created as Personal'
 );
 reset role;
-select is((select organization_id from public.endorsement_records where id = '60000000-0000-4000-8000-000000000003'), null::uuid, 'post-exit personal endorsement has no organization');
+select is((select organization_id from public.endorsement_records where id = '60000000-0000-4000-8000-000000000002'), null::uuid, 'post-exit endorsement is not visible to the organization');
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
-select is((select count(*) from public.endorsement_records where id in ('60000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000003')), 2::bigint, 'student can read historical organization and post-exit personal endorsements');
+select is((select count(*) from public.endorsement_records where id in ('60000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000003')), 3::bigint, 'linked student can read all instructor-issued endorsements regardless of organization visibility');
 reset role;
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
@@ -91,7 +94,7 @@ set local role authenticated;
 select lives_ok(
   $$select public.create_endorsement_record(
     '60000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001',
-    '40000000-0000-4000-8000-000000000002', 'Avery Testpilot', 'STUDENT-1',
+    '40000000-0000-4000-8000-000000000003', 'Avery Testpilot', 'STUDENT-1',
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['After rejoin'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000004.pdf', 1000, null
   )$$,

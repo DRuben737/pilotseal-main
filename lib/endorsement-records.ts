@@ -41,7 +41,6 @@ export type LegacyEndorsementReviewContext = {
 export type CreateEndorsementRecordInput = {
   id: string;
   userId: string;
-  organizationId?: string | null;
   studentId?: string | null;
   studentName: string;
   studentCertNumber?: string | null;
@@ -99,7 +98,9 @@ export async function createEndorsementRecord(input: CreateEndorsementRecordInpu
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("create_endorsement_record", {
     p_id: input.id,
-    p_organization_id: input.organizationId ?? null,
+    // Kept in the database signature for older clients. The database derives
+    // organization visibility from the linked student and membership periods.
+    p_organization_id: null,
     p_student_id: input.studentId || null,
     p_student_name: input.studentName.trim(),
     p_student_cert_number: normalizeText(input.studentCertNumber),
@@ -125,7 +126,6 @@ export async function fetchEndorsementRecords(userId: string) {
       .from("endorsement_records")
       .select(select)
       .eq("user_id", userId)
-      .or("organization_id.is.null,scope_status.eq.pending_review")
       .order("created_at", { ascending: false });
 
     if (!error) {
@@ -200,12 +200,9 @@ export async function reviewLegacyEndorsementScope(input: {
 
 export async function fetchOrganizationEndorsementRecords(organizationId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("endorsement_records")
-    .select(ENDORSEMENT_RECORD_SELECTS[0])
-    .eq("organization_id", organizationId)
-    .eq("scope_status", "confirmed")
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("list_organization_endorsement_records", {
+    p_organization_id: organizationId,
+  });
   if (error) throw error;
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeRecord);
 }

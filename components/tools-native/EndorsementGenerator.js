@@ -16,7 +16,7 @@ import {
   fetchPersonCertificates,
   getCertificateCurrencyDueDate,
 } from '@/lib/person-certificates';
-import { fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people';
+import { fetchEndorsementPeople, fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people';
 import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
 import { createUuid } from '@/lib/uuid';
@@ -633,11 +633,6 @@ function EndorsementGenerator() {
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [selectedStudentOrganizationId, setSelectedStudentOrganizationId] = useState('');
-  const [selectedStudentUserId, setSelectedStudentUserId] = useState('');
-  const [activeOrganizationId, setActiveOrganizationId] = useState('');
-  const [availableOrganizations, setAvailableOrganizations] = useState([]);
-  const [recordScope, setRecordScope] = useState('personal');
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signaturePreviewDataUrl, setSignaturePreviewDataUrl] = useState('');
@@ -851,8 +846,6 @@ function EndorsementGenerator() {
         if (!session?.user) {
           setSavedCfis([]);
           setSavedStudents([]);
-          setAvailableOrganizations([]);
-          setActiveOrganizationId('');
           defaultCfiAppliedRef.current = false;
           return;
         }
@@ -863,8 +856,6 @@ function EndorsementGenerator() {
           fetchUserOrganizations().catch(() => []),
         ]);
 
-        setAvailableOrganizations(organizations);
-        setActiveOrganizationId('');
         const organizationStudentGroups = await Promise.all(
           organizations.map(async (organization) => ({
             organization,
@@ -872,10 +863,16 @@ function EndorsementGenerator() {
           }))
         );
 
-        const certificates = await fetchPersonCertificates(session.user.id).catch((error) => {
-          console.error('Unable to load person certificates:', error);
-          return [];
-        });
+        const [certificates, endorsementPeople] = await Promise.all([
+          fetchPersonCertificates(session.user.id).catch((error) => {
+            console.error('Unable to load person certificates:', error);
+            return [];
+          }),
+          fetchEndorsementPeople().catch((error) => {
+            console.error('Unable to load endorsement student profiles:', error);
+            return [];
+          }),
+        ]);
         const peopleById = new Map(allPeople.map((person) => [person.id, person]));
         const selfPersonId = profile?.self_person_id || '';
         const certificateCfis = certificates
@@ -903,47 +900,54 @@ function EndorsementGenerator() {
           })
           .filter(Boolean)
           .sort((left, right) => Number(right.is_default) - Number(left.is_default));
-        const certificatePilots = certificates
-          .filter((certificate) => certificate.certificate_type === 'pilot' && certificate.person_id !== selfPersonId)
-          .map((certificate) => {
-            const person = peopleById.get(certificate.person_id);
+        const savedStudentOptions = endorsementPeople
+          .map((endorsementPerson) => {
+            const person = peopleById.get(endorsementPerson.saved_person_id);
             if (!person) {
               return null;
             }
 
             return {
               ...person,
-              id: certificate.id,
+              id: `saved:${endorsementPerson.saved_person_id}`,
               person_id: person.id,
-              cert_number: certificate.certificate_number || person.cert_number,
+              endorsement_record_person_id: person.id,
+              student_user_id: endorsementPerson.linked_user_id || '',
+              display_name: endorsementPerson.formal_name,
+              account_nickname: endorsementPerson.account_nickname,
+              cert_number: endorsementPerson.effective_certificate_number,
+              certificate_source: endorsementPerson.certificate_source,
+              certificate_conflict: endorsementPerson.certificate_conflict,
+              endorsement_ready: endorsementPerson.endorsement_ready,
+              suggestion_label: endorsementPerson.account_nickname
+                ? `${endorsementPerson.formal_name} — linked account: ${endorsementPerson.account_nickname}`
+                : endorsementPerson.formal_name,
             };
           })
           .filter(Boolean);
-        const pilotCertificatePersonIds = new Set(
-          certificatePilots.map((person) => person.person_id)
-        );
-        const savedStudentPeople = allPeople.filter((person) => (
-          person.role === 'student' &&
-          person.id !== selfPersonId &&
-          !pilotCertificatePersonIds.has(person.id)
-        ));
 
         setSavedCfis(certificateCfis);
         const organizationStudentOptions = organizationStudentGroups.flatMap(({ organization, students }) => students.map((student) => ({
           id: `organization:${organization.id}:${student.student_user_id}`,
           person_id: student.person_id,
-          endorsement_record_person_id: student.person_id || '',
+          endorsement_record_person_id: student.saved_person_id || student.person_id || student.student_user_id,
           organization_id: organization.id,
           student_user_id: student.student_user_id,
           identity_status: 'organization_member',
           role: 'student',
-          display_name: student.display_name,
-          suggestion_label: `${student.display_name} (${organization.name})`,
-          cert_number: student.certificate_number,
+          display_name: student.formal_name || '',
+          account_nickname: student.account_nickname,
+          suggestion_label: student.endorsement_ready
+            ? `${student.formal_name} (${organization.name}; account: ${student.account_nickname})`
+            : `${student.account_nickname} (${organization.name}) — Complete Saved People profile`,
+          cert_number: student.effective_certificate_number,
+          certificate_source: student.certificate_source,
+          certificate_conflict: student.certificate_conflict,
+          endorsement_ready: student.endorsement_ready,
           cert_exp_date: null,
           is_default: false,
         })));
-        setSavedStudents([...organizationStudentOptions, ...certificatePilots, ...savedStudentPeople]);
+        setSavedStudents([...organizationStudentOptions, ...savedStudentOptions]);
         setSessionIdentity(profile?.display_name || session.user.email || '');
 
         const defaultCertificateCfi = certificateCfis.find((person) => person.is_default);
@@ -1219,8 +1223,6 @@ function EndorsementGenerator() {
             );
 
         setSelectedStudentId(getStudentRecordPersonId(selected));
-        setSelectedStudentOrganizationId(selected?.organization_id || '');
-        setSelectedStudentUserId(selected?.student_user_id || '');
         if (selected && matchingCertificates.length === 1) {
           nextForm.studentCertNumber = selected.cert_number || '';
         } else if (matchingCertificates.length > 1 && !selected) {
@@ -1234,8 +1236,6 @@ function EndorsementGenerator() {
         );
 
         setSelectedStudentId(getStudentRecordPersonId(selected));
-        setSelectedStudentOrganizationId(selected?.organization_id || '');
-        setSelectedStudentUserId(selected?.student_user_id || '');
       }
 
       return nextForm;
@@ -1244,6 +1244,15 @@ function EndorsementGenerator() {
   };
 
   const handleSavedPersonSuggestion = (field, person) => {
+    if ((field === 'studentName' || field === 'studentCertNumber') && person.endorsement_ready === false) {
+      setActiveSuggestionField('');
+      setStatusMessage(
+        person.certificate_conflict
+          ? 'This linked account has conflicting pilot certificate numbers. The student must correct the certificate information before endorsement.'
+          : 'Create and link a Saved People profile with the student’s formal endorsement name before issuing the endorsement.'
+      );
+      return;
+    }
     resetGeneratedPdf();
     setActiveSuggestionField('');
     setFormData((prev) => {
@@ -1280,8 +1289,6 @@ function EndorsementGenerator() {
         const nextName = person.display_name || '';
         nextForm.studentName = nextName;
         setSelectedStudentId(getStudentRecordPersonId(person));
-        setSelectedStudentOrganizationId(person?.organization_id || '');
-        setSelectedStudentUserId(person?.student_user_id || '');
         nextForm.studentCertNumber = person?.cert_number || '';
       }
 
@@ -1289,8 +1296,6 @@ function EndorsementGenerator() {
         nextForm.studentName = person.display_name || nextForm.studentName;
         nextForm.studentCertNumber = person.cert_number || '';
         setSelectedStudentId(getStudentRecordPersonId(person));
-        setSelectedStudentOrganizationId(person?.organization_id || '');
-        setSelectedStudentUserId(person?.student_user_id || '');
       }
 
       return nextForm;
@@ -1670,7 +1675,7 @@ function EndorsementGenerator() {
     }
   };
 
-  const savePrintedRecord = async (pdfBlob, organizationId = null) => {
+  const savePrintedRecord = async (pdfBlob) => {
     if (!session?.user?.id || !pdfBlob) {
       return;
     }
@@ -1698,7 +1703,6 @@ function EndorsementGenerator() {
       await createEndorsementRecord({
         id: recordId,
         userId: session.user.id,
-        organizationId: organizationId || null,
         studentId: selectedStudentId || null,
         studentName: formData.studentName.trim(),
         studentCertNumber: formData.studentCertNumber.trim() || null,
@@ -1717,9 +1721,7 @@ function EndorsementGenerator() {
       if (uploadedStoragePath) {
         await getSupabaseClient().storage.from(ENDORSEMENT_RECORDS_BUCKET).remove([uploadedStoragePath]).catch(() => {});
       }
-      setStatusMessage(organizationId
-        ? 'This organization requires a saved endorsement record. Printing was stopped because the record could not be saved.'
-        : 'The PDF could not be saved to your dashboard records.');
+      setStatusMessage('The PDF could not be saved to your dashboard records.');
       return false;
     } finally {
       setSavingRecord(false);
@@ -1931,20 +1933,8 @@ function EndorsementGenerator() {
     }
 
     if (generatorMode === 'customized' && session?.user?.id) {
-      const organizationId = recordScope === 'organization' ? activeOrganizationId : '';
-      if (recordScope === 'organization' && !organizationId) {
-        setStatusMessage('Choose the organization that should receive this endorsement record.');
-        return;
-      }
-      if (
-        organizationId &&
-        (selectedStudentOrganizationId !== organizationId || !selectedStudentUserId)
-      ) {
-        setStatusMessage('Organization records require a registered, current student selected from that organization.');
-        return;
-      }
-      const saved = await savePrintedRecord(printablePdf.blob, organizationId);
-      if (organizationId && !saved) {
+      const saved = await savePrintedRecord(printablePdf.blob);
+      if (!saved) {
         return;
       }
     }
@@ -1965,12 +1955,15 @@ function EndorsementGenerator() {
   };
 
   const savedInstructorNameOptions = getUniqueSavedPeopleByName(savedCfis);
-  const savedPilotNameOptions = getUniqueSavedPeopleByName(savedStudents);
+  const savedPilotNameOptions = [
+    ...getUniqueSavedPeopleByName(savedStudents.filter((person) => person.endorsement_ready !== false)),
+    ...savedStudents.filter((person) => person.endorsement_ready === false),
+  ];
   const uniqueMatchingInstructorCertificates = getUniqueSavedPeopleByCertificateNumber(
     savedCfis
   );
   const uniqueMatchingPilotCertificates = getUniqueSavedPeopleByCertificateNumber(
-    savedStudents
+    savedStudents.filter((person) => person.endorsement_ready !== false)
   );
   const getSuggestionOptions = (fieldKey) => {
     if (!sessionIdentity) {
@@ -2046,6 +2039,7 @@ function EndorsementGenerator() {
                 key={`${field.key}-${person.id}`}
                 type="button"
                 className={styles.comboOption}
+                aria-disabled={person.endorsement_ready === false}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => handleSavedPersonSuggestion(field.key, person)}
               >
@@ -2213,27 +2207,9 @@ function EndorsementGenerator() {
               {generatorMode === 'customized' && session?.user?.id ? (
                 <div className={styles.sectionHeader}>
                   <div>
-                    <h2>Record destination</h2>
-                    <p className={styles.sectionCopy}>Personal records are private. Organization sharing requires a registered current student and is immutable after saving.</p>
+                    <h2>Record visibility</h2>
+                    <p className={styles.sectionCopy}>The record always remains in your Personal history. Selecting a current organization member also makes it visible in that organization automatically.</p>
                   </div>
-                  <label className={styles.field}>
-                    <span>Save record to</span>
-                    <select value={recordScope} onChange={(event) => setRecordScope(event.target.value)}>
-                      <option value="personal">Personal</option>
-                      <option value="organization">Organization</option>
-                    </select>
-                  </label>
-                  {recordScope === 'organization' ? (
-                    <label className={styles.field}>
-                      <span>Organization *</span>
-                      <select value={activeOrganizationId} onChange={(event) => setActiveOrganizationId(event.target.value)}>
-                        <option value="">Choose organization</option>
-                        {availableOrganizations.map((organization) => (
-                          <option key={organization.id} value={organization.id}>{organization.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
                 </div>
               ) : null}
               <p className={styles.mobileStepLabel}>4 Signature</p>
@@ -2297,7 +2273,7 @@ function EndorsementGenerator() {
               <p className={styles.printHint}>
                 You can choose a print format after clicking Print: standard Letter paper or Avery 5163 labels.
                 {generatorMode === 'customized' && session?.user?.id
-                  ? ` Printing saves the PDF to ${recordScope === 'organization' ? 'the selected organization' : 'Personal records'}.`
+                  ? ' Printing saves the PDF to Personal history and automatically exposes it to the selected member’s organization when applicable.'
                   : ''}
               </p>
               {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}

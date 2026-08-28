@@ -5,11 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import Badge from "@/components/ui/Badge";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { saveManagedStudentProfile } from "@/lib/organizations";
 import {
   CERTIFICATE_TYPE_LABELS,
   convertDisplayDateToIsoDate,
   createPersonCertificate,
   deletePersonCertificate,
+  fetchLinkedPersonCertificates,
   fetchPersonCertificates,
   formatIsoDateForDisplay,
   getCertificateCurrencyLabel,
@@ -22,6 +24,7 @@ import {
   createSavedPerson,
   cancelSavedPersonAccountLinkRequest,
   deleteSavedPerson,
+  fetchEndorsementPeople,
   fetchSavedPersonAccountLinks,
   fetchSavedPersonAccountLinkRequests,
   fetchSavedPeople,
@@ -33,6 +36,7 @@ import {
   type SavedPerson,
   type SavedPersonAccountLink,
   type SavedPersonAccountLinkRequest,
+  type EndorsementPerson,
 } from "@/lib/saved-people";
 
 const emptyPersonForm = {
@@ -48,6 +52,7 @@ const emptyCertificateForm = {
   last_event_date: "",
   ratings: [] as string[],
   level: "",
+  additional_privileges: [] as string[],
   is_default_for_endorsements: false,
   notes: "",
 };
@@ -71,6 +76,14 @@ const PILOT_RATING_OPTIONS = [
 
 const PILOT_LEVEL_OPTIONS = ["Student", "Private", "Commercial", "ATP"];
 
+function lowerPrivilegeOptions(level: string) {
+  const levelIndex = PILOT_LEVEL_OPTIONS.indexOf(level);
+  if (levelIndex <= 0) return [];
+  return PILOT_LEVEL_OPTIONS.slice(0, levelIndex).flatMap((lowerLevel) =>
+    PILOT_RATING_OPTIONS.map((rating) => `${lowerLevel} — ${rating}`)
+  );
+}
+
 const RATING_OPTIONS: Record<PersonCertificateType, string[]> = {
   pilot: PILOT_RATING_OPTIONS,
   flight_instructor: PILOT_RATING_OPTIONS,
@@ -92,7 +105,8 @@ function createCertificateDraft(certificate: PersonCertificate): CertificateForm
     issue_date: formatIsoDateForDisplay(certificate.issue_date),
     last_event_date: formatIsoDateForDisplay(certificate.last_event_date),
     ratings: certificate.ratings,
-    level: certificate.certificate_type === "pilot" ? certificate.event_type ?? "" : "",
+    level: certificate.certificate_type === "pilot" ? certificate.certificate_level ?? "" : "",
+    additional_privileges: certificate.additional_privileges,
     is_default_for_endorsements: certificate.is_default_for_endorsements,
     notes: certificate.notes ?? "",
   };
@@ -271,7 +285,7 @@ function CertificateFormFields({
         />
       </label>
       {form.certificate_type === "pilot" ? (
-        <label className="saas-field">
+        <><label className="saas-field">
           <span>Level</span>
           <select value={form.level} onChange={(event) => onChange("level", event.target.value)}>
             <option value="">Select level</option>
@@ -281,7 +295,7 @@ function CertificateFormFields({
               </option>
             ))}
           </select>
-        </label>
+        </label><label className="saas-field people-ratings-field"><span>Additional lower-level privileges</span><select multiple value={form.additional_privileges} onChange={(event) => onChange("additional_privileges", Array.from(event.target.selectedOptions, (option) => option.value))}>{lowerPrivilegeOptions(form.level).map((privilege) => <option key={privilege} value={privilege}>{privilege}</option>)}</select><small>Use Command/Ctrl to select multiple privileges.</small></label></>
       ) : null}
       <label className="saas-field people-ratings-field">
         <span>Ratings</span>
@@ -350,6 +364,8 @@ export default function SavedPeopleManager() {
   const [accountLinks, setAccountLinks] = useState<SavedPersonAccountLink[]>([]);
   const [accountLinkRequests, setAccountLinkRequests] = useState<SavedPersonAccountLinkRequest[]>([]);
   const [certificates, setCertificates] = useState<PersonCertificate[]>([]);
+  const [linkedCertificates, setLinkedCertificates] = useState<PersonCertificate[]>([]);
+  const [endorsementPeople, setEndorsementPeople] = useState<EndorsementPerson[]>([]);
   const [certificatesAvailable, setCertificatesAvailable] = useState(true);
   const [personForm, setPersonForm] = useState(emptyPersonForm);
   const [certificateForms, setCertificateForms] = useState<Record<string, CertificateForm>>({});
@@ -374,6 +390,8 @@ export default function SavedPeopleManager() {
           setAccountLinks([]);
           setAccountLinkRequests([]);
           setCertificates([]);
+          setLinkedCertificates([]);
+          setEndorsementPeople([]);
           setLoading(false);
         }
         return;
@@ -382,13 +400,18 @@ export default function SavedPeopleManager() {
       try {
         setLoading(true);
         setStatus("");
-        const [nextPeople, nextCertificates, nextProfile, nextAccountLinks, nextLinkRequests] = await Promise.all([
+        const [nextPeople, nextCertificates, nextLinkedCertificates, nextEndorsementPeople, nextProfile, nextAccountLinks, nextLinkRequests] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchPersonCertificates(session.user.id).catch((error) => {
             console.error("Unable to load person certificates:", error);
             setCertificatesAvailable(false);
             return [];
           }),
+          fetchLinkedPersonCertificates().catch((error) => {
+            console.error("Unable to load linked account certificates:", error);
+            return [];
+          }),
+          fetchEndorsementPeople(),
           fetchCurrentProfile(session.user.id).catch(() => null),
           fetchSavedPersonAccountLinks(session.user.id),
           fetchSavedPersonAccountLinkRequests(),
@@ -399,6 +422,8 @@ export default function SavedPeopleManager() {
             person.role !== "self" && person.id !== nextProfile?.self_person_id
           )));
           setCertificates(nextCertificates);
+          setLinkedCertificates(nextLinkedCertificates);
+          setEndorsementPeople(nextEndorsementPeople);
           setAccountLinks(nextAccountLinks);
           setAccountLinkRequests(nextLinkRequests);
         }
@@ -423,16 +448,21 @@ export default function SavedPeopleManager() {
   const certificatesByPerson = useMemo(() => {
     const groups = new Map<string, PersonCertificate[]>();
 
-    certificates.forEach((certificate) => {
+    [...certificates, ...linkedCertificates].forEach((certificate) => {
       groups.set(certificate.person_id, [...(groups.get(certificate.person_id) ?? []), certificate]);
     });
 
     return groups;
-  }, [certificates]);
+  }, [certificates, linkedCertificates]);
 
   const accountLinksByPerson = useMemo(
     () => new Map(accountLinks.map((link) => [link.saved_person_id, link])),
     [accountLinks],
+  );
+
+  const endorsementPeopleByPerson = useMemo(
+    () => new Map(endorsementPeople.map((person) => [person.saved_person_id, person])),
+    [endorsementPeople],
   );
 
   const pendingRequests = useMemo(
@@ -482,7 +512,7 @@ export default function SavedPeopleManager() {
       return;
     }
 
-    const [nextPeople, nextCertificates, nextProfile, nextAccountLinks, nextLinkRequests] = await Promise.all([
+    const [nextPeople, nextCertificates, nextLinkedCertificates, nextEndorsementPeople, nextProfile, nextAccountLinks, nextLinkRequests] = await Promise.all([
       fetchSavedPeople(session.user.id),
       certificatesAvailable
         ? fetchPersonCertificates(session.user.id).catch(() => {
@@ -490,6 +520,8 @@ export default function SavedPeopleManager() {
             return [];
           })
         : Promise.resolve([]),
+      fetchLinkedPersonCertificates().catch(() => []),
+      fetchEndorsementPeople(),
       fetchCurrentProfile(session.user.id).catch(() => null),
       fetchSavedPersonAccountLinks(session.user.id),
       fetchSavedPersonAccountLinkRequests(),
@@ -499,6 +531,8 @@ export default function SavedPeopleManager() {
       person.role !== "self" && person.id !== nextProfile?.self_person_id
     )));
     setCertificates(nextCertificates);
+    setLinkedCertificates(nextLinkedCertificates);
+    setEndorsementPeople(nextEndorsementPeople);
     setAccountLinks(nextAccountLinks);
     setAccountLinkRequests(nextLinkRequests);
   }
@@ -798,6 +832,8 @@ export default function SavedPeopleManager() {
         issueDate: form.issue_date ? convertDisplayDateToIsoDate(form.issue_date) : null,
         lastEventDate: form.last_event_date ? convertDisplayDateToIsoDate(form.last_event_date) : null,
         eventType: form.certificate_type === "pilot" ? form.level : null,
+        certificateLevel: form.certificate_type === "pilot" && form.level ? form.level as "Student" | "Private" | "Commercial" | "ATP" : null,
+        additionalPrivileges: form.certificate_type === "pilot" ? form.additional_privileges : [],
         isDefaultForEndorsements: form.is_default_for_endorsements,
         notes: form.notes,
       });
@@ -831,13 +867,30 @@ export default function SavedPeopleManager() {
     setSaving(true);
 
     try {
-      await updatePersonCertificate(session.user.id, certificate.id, {
+      if (certificate.source === "linked_account" && certificate.linked_user_id) {
+        const linkedPerson = endorsementPeople.find((person) => person.linked_user_id === certificate.linked_user_id);
+        if (!linkedPerson?.formal_name) throw new Error("The linked student needs a formal name.");
+        await saveManagedStudentProfile({
+          studentUserId: certificate.linked_user_id,
+          organizationId: null,
+          formalName: linkedPerson.formal_name,
+          certificateId: certificate.id,
+          certificateNumber: draft.certificate_number,
+          certificateLevel: draft.level ? draft.level as "Student" | "Private" | "Commercial" | "ATP" : null,
+          ratings: draft.ratings,
+          additionalPrivileges: draft.additional_privileges,
+          issueDate: draft.issue_date ? convertDisplayDateToIsoDate(draft.issue_date) : null,
+          notes: draft.notes,
+        });
+      } else await updatePersonCertificate(session.user.id, certificate.id, {
         certificateType: draft.certificate_type,
         certificateNumber: draft.certificate_number,
         ratings: draft.ratings,
         issueDate: draft.issue_date ? convertDisplayDateToIsoDate(draft.issue_date) : null,
         lastEventDate: draft.last_event_date ? convertDisplayDateToIsoDate(draft.last_event_date) : null,
         eventType: draft.certificate_type === "pilot" ? draft.level : null,
+        certificateLevel: draft.certificate_type === "pilot" && draft.level ? draft.level as "Student" | "Private" | "Commercial" | "ATP" : null,
+        additionalPrivileges: draft.certificate_type === "pilot" ? draft.additional_privileges : [],
         isDefaultForEndorsements: draft.is_default_for_endorsements,
         notes: draft.notes,
       });
@@ -1037,6 +1090,7 @@ export default function SavedPeopleManager() {
           const personCertificates = certificatesByPerson.get(person.id) ?? [];
           const form = certificateForms[person.id] ?? emptyCertificateForm;
           const accountLink = accountLinksByPerson.get(person.id) ?? null;
+          const endorsementPerson = endorsementPeopleByPerson.get(person.id) ?? null;
           const outgoingRequest = outgoingRequestsByPerson.get(person.id) ?? null;
 
           return (
@@ -1105,12 +1159,27 @@ export default function SavedPeopleManager() {
                       <div className="people-cert-title">
                         <p className="saas-card-title">{person.display_name}</p>
                         {accountLink ? <Badge tone="success">Platform linked</Badge> : null}
+                        {endorsementPerson?.certificate_source === "canonical_profile" || endorsementPerson?.certificate_source === "student_account" ? (
+                          <Badge tone="success">Student certificate used</Badge>
+                        ) : null}
+                        {endorsementPerson?.certificate_conflict ? (
+                          <Badge tone="warning">Certificate conflict</Badge>
+                        ) : null}
                         {outgoingRequest ? <Badge tone="warning">Awaiting student</Badge> : null}
                         {(accountLink?.shared_organization_names ?? []).map((organizationName) => (
                           <Badge key={organizationName} tone="neutral">{organizationName}</Badge>
                         ))}
                       </div>
-                      <p className="saas-meta-text">{person.cert_number || "No primary certificate number"}</p>
+                      <p className="saas-meta-text">
+                        {endorsementPerson?.effective_certificate_number || "No primary certificate number"}
+                        {endorsementPerson?.certificate_source === "canonical_profile" || endorsementPerson?.certificate_source === "student_account" ? " · shared student profile" : ""}
+                      </p>
+                      {endorsementPerson?.account_nickname ? (
+                        <p className="saas-meta-text">Linked account nickname: {endorsementPerson.account_nickname}</p>
+                      ) : null}
+                      {endorsementPerson?.certificate_conflict ? (
+                        <p className="saas-meta-text">The student must correct conflicting pilot certificate numbers before endorsement.</p>
+                      ) : null}
                     </div>
                     <div className="people-cert-summary">
                       {personCertificates.length > 0 ? (
@@ -1258,17 +1327,21 @@ export default function SavedPeopleManager() {
                                     {certificate.is_default_for_endorsements ? (
                                       <Badge tone="neutral">Default instructor</Badge>
                                     ) : null}
+                                    {certificate.source === "linked_account" ? (
+                                      <Badge tone="success">From student profile</Badge>
+                                    ) : null}
                                   </div>
                                   <p className="saas-meta-text">
                                     {certificate.certificate_number || "No certificate number"} |{" "}
                                     {getCertificateCurrencyLabel(certificate)}
                                   </p>
-                                  {certificate.certificate_type === "pilot" && certificate.event_type ? (
-                                    <p className="saas-meta-text">Level: {certificate.event_type}</p>
+                                  {certificate.certificate_type === "pilot" && certificate.certificate_level ? (
+                                    <p className="saas-meta-text">Level: {certificate.certificate_level}</p>
                                   ) : null}
                                   {certificate.ratings.length > 0 ? (
                                     <p className="saas-meta-text">Ratings: {certificate.ratings.join(", ")}</p>
                                   ) : null}
+                                  {certificate.additional_privileges.length > 0 ? <p className="saas-meta-text">Additional privileges: {certificate.additional_privileges.join(", ")}</p> : null}
                                   {certificate.notes ? (
                                     <p className="saas-meta-text">Notes: {certificate.notes}</p>
                                   ) : null}
@@ -1284,7 +1357,7 @@ export default function SavedPeopleManager() {
                                   >
                                     <ActionIcon kind="edit" />
                                   </button>
-                                  <button
+                                  {certificate.source !== "linked_account" ? <button
                                     type="button"
                                     className="danger-button icon-button"
                                     aria-label="Delete certificate"
@@ -1293,7 +1366,7 @@ export default function SavedPeopleManager() {
                                     onClick={() => void handleDeleteCertificate(certificate.id)}
                                   >
                                     <ActionIcon kind="delete" />
-                                  </button>
+                                  </button> : null}
                                 </div>
                               </>
                             )}

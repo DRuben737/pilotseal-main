@@ -7,7 +7,22 @@ export type Organization = {
   id: string;
   name: string;
   member_role: OrganizationRole;
+  teaching_role: OrganizationTeachingRole | null;
   created_at: string;
+};
+
+export type ManagedStudentProfile = {
+  student_user_id: string;
+  formal_name: string;
+  account_nickname: string;
+  certificate_id: string | null;
+  certificate_number: string | null;
+  certificate_level: "Student" | "Private" | "Commercial" | "ATP" | null;
+  ratings: string[];
+  additional_privileges: string[];
+  issue_date: string | null;
+  notes: string | null;
+  updated_at: string | null;
 };
 
 export type OrganizationMember = {
@@ -22,8 +37,13 @@ export type OrganizationMember = {
 export type OrganizationStudent = {
   student_user_id: string;
   person_id: string | null;
-  display_name: string;
-  certificate_number: string | null;
+  saved_person_id: string | null;
+  formal_name: string | null;
+  account_nickname: string;
+  effective_certificate_number: string | null;
+  certificate_source: "canonical_profile" | "student_account" | "saved_people" | "missing" | "conflict";
+  endorsement_ready: boolean;
+  certificate_conflict: boolean;
 };
 
 export type OrganizationPersonStatus = "pending" | "linked" | "left";
@@ -121,6 +141,65 @@ export async function fetchOrganizationPeople(organizationId: string): Promise<O
   return ((data ?? []) as unknown[]).map(normalizeOrganizationPerson);
 }
 
+export async function fetchManagedStudentProfile(
+  studentUserId: string,
+  organizationId: string | null,
+): Promise<ManagedStudentProfile> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_managed_student_profile", {
+    p_student_user_id: studentUserId,
+    p_organization_id: organizationId,
+  });
+  if (error) throw error;
+  const record = (((data ?? []) as unknown[])[0] ?? {}) as Record<string, unknown>;
+  return {
+    student_user_id: String(record.student_user_id ?? studentUserId),
+    formal_name: String(record.formal_name ?? ""),
+    account_nickname: String(record.account_nickname ?? "Linked account"),
+    certificate_id: typeof record.certificate_id === "string" ? record.certificate_id : null,
+    certificate_number: typeof record.certificate_number === "string" ? record.certificate_number : null,
+    certificate_level: typeof record.certificate_level === "string"
+      ? record.certificate_level as ManagedStudentProfile["certificate_level"]
+      : null,
+    ratings: Array.isArray(record.ratings) ? record.ratings.map(String) : [],
+    additional_privileges: Array.isArray(record.additional_privileges)
+      ? record.additional_privileges.map(String)
+      : [],
+    issue_date: typeof record.issue_date === "string" ? record.issue_date : null,
+    notes: typeof record.notes === "string" ? record.notes : null,
+    updated_at: typeof record.updated_at === "string" ? record.updated_at : null,
+  };
+}
+
+export async function saveManagedStudentProfile(input: {
+  studentUserId: string;
+  organizationId: string | null;
+  formalName: string;
+  certificateId?: string | null;
+  certificateNumber?: string | null;
+  certificateLevel?: ManagedStudentProfile["certificate_level"];
+  ratings?: string[];
+  additionalPrivileges?: string[];
+  issueDate?: string | null;
+  notes?: string | null;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("save_managed_student_profile", {
+    p_student_user_id: input.studentUserId,
+    p_organization_id: input.organizationId,
+    p_formal_name: input.formalName.trim(),
+    p_certificate_id: input.certificateId ?? null,
+    p_certificate_number: input.certificateNumber?.trim() || null,
+    p_certificate_level: input.certificateLevel ?? null,
+    p_ratings: input.ratings ?? [],
+    p_additional_privileges: input.additionalPrivileges ?? [],
+    p_issue_date: input.issueDate || null,
+    p_notes: input.notes?.trim() || null,
+  });
+  if (error) throw error;
+  return data as string | null;
+}
+
 export async function addOrganizationPerson(input: {
   organizationId: string;
   email: string;
@@ -184,6 +263,26 @@ export async function acceptOrganizationMemberInvitation(token: string) {
   const { data, error } = await supabase.rpc("accept_organization_member_invitation", { p_token: token });
   if (error) throw error;
   return data as string;
+}
+
+export async function registerFromOrganizationInvitation(input: {
+  inviteToken: string;
+  password: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.functions.invoke("organization-invitation-register", {
+    body: input,
+  });
+  if (error) {
+    const response = (error as { context?: unknown }).context;
+    if (response instanceof Response) {
+      const payload = await response.clone().json().catch(() => null) as { error?: string } | null;
+      if (payload?.error) throw new Error(payload.error);
+    }
+    throw error;
+  }
+  if (!data?.created) throw new Error(data?.error || "Unable to create the invited account.");
+  return data as { created: true; email: string; userId: string };
 }
 
 export async function revokeOrganizationMemberInvitation(invitationId: string) {
@@ -288,8 +387,14 @@ export async function fetchOrganizationStudents(organizationId: string): Promise
   return ((data ?? []) as Array<Record<string, unknown>>).map((record) => ({
     student_user_id: String(record.student_user_id ?? ""),
     person_id: typeof record.person_id === "string" ? record.person_id : null,
-    display_name: String(record.display_name ?? "Student"),
-    certificate_number: typeof record.certificate_number === "string" ? record.certificate_number : null,
+    saved_person_id: typeof record.saved_person_id === "string" ? record.saved_person_id : null,
+    formal_name: typeof record.formal_name === "string" ? record.formal_name : null,
+    account_nickname: String(record.account_nickname ?? "Member"),
+    effective_certificate_number:
+      typeof record.effective_certificate_number === "string" ? record.effective_certificate_number : null,
+    certificate_source: String(record.certificate_source ?? "missing") as OrganizationStudent["certificate_source"],
+    endorsement_ready: Boolean(record.endorsement_ready),
+    certificate_conflict: Boolean(record.certificate_conflict),
   }));
 }
 
@@ -340,6 +445,10 @@ function normalizeOrganization(value: unknown): Organization {
     id: String(record.id ?? ""),
     name: String(record.name ?? ""),
     member_role: String(record.member_role ?? "member") as OrganizationRole,
+    teaching_role:
+      record.teaching_role === "instructor" || record.teaching_role === "student"
+        ? record.teaching_role
+        : null,
     created_at: String(record.created_at ?? ""),
   };
 }

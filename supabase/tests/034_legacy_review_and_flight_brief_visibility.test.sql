@@ -107,7 +107,7 @@ select is((select count(*) from public.flight_brief_organization_shares where so
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
-select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000034'), 1::bigint, 'current organization instructor can read member drafts');
+select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000034'), 0::bigint, 'organization instructor cannot read incomplete member drafts');
 select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000035'), 0::bigint, 'organization instructor cannot read the member Personal original');
 select is((select count(*) from public.flight_briefs where organization_id = '10000000-0000-4000-8000-000000000001' and aircraft_tail_number = 'NPRIVATE' and status = 'finalized'), 1::bigint, 'organization instructor can read the explicitly shared copy');
 reset role;

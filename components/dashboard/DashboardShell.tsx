@@ -299,7 +299,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       href: "/dashboard/organization/overview",
       label: "Organization",
       icon: "Organization",
-      visible: Boolean(activeOrganization && canManageOrganization(activeOrganization.member_role)),
+      visible: Boolean(
+        activeOrganization && (
+          canManageOrganization(activeOrganization.member_role)
+          || activeOrganization.teaching_role === "instructor"
+        )
+      ),
     },
     {
       href: "/dashboard/admin/overview",

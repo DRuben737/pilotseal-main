@@ -25,6 +25,7 @@ import {
   createAsrOption,
   createAsrRevision,
   createEmptyAsrReportData,
+  deleteAsrDraft,
   fetchAsrOptions,
   fetchAsrReviewerAssignments,
   fetchOrganizationAsrReports,
@@ -538,6 +539,31 @@ export default function AsrReportsManager() {
     }
   }
 
+  async function handleCancelReport(reportId = draftContextRef.current.reportId) {
+    if (!window.confirm("Cancel this ASR and permanently delete its unsubmitted draft?")) return;
+    setClosingDraft(true);
+    setError("");
+    const context = draftContextRef.current;
+    setShowForm(false);
+    context.organizationId = "";
+    context.clientRequestId = "";
+    try {
+      await saveQueueRef.current.catch(() => undefined);
+      const savedReportId = reportId || context.reportId;
+      if (savedReportId) await deleteAsrDraft(savedReportId);
+      setEditingReportId("");
+      setDraftRequestId("");
+      setDraftState("idle");
+      await loadData(activeReportId === savedReportId ? "" : activeReportId);
+      setMessage("ASR draft cancelled and deleted.");
+    } catch (value) {
+      setShowForm(Boolean(reportId));
+      setError(getErrorMessage(value, "Unable to delete this ASR draft."));
+    } finally {
+      setClosingDraft(false);
+    }
+  }
+
   async function handleSubmit() {
     if (!activeOrganization?.id) return;
     const nextFormErrors = validateAsrDraft(draftDataRef.current);
@@ -703,6 +729,14 @@ export default function AsrReportsManager() {
               >
                 {closingDraft ? "Saving & closing…" : "Save & close"}
               </button>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => void handleCancelReport()}
+                disabled={busy || closingDraft}
+              >
+                Cancel report
+              </button>
             </div>
           </div>
 
@@ -806,7 +840,7 @@ export default function AsrReportsManager() {
                 </button>
                 <div className="flex gap-2">
                   {report.risk_score ? <RiskBadge score={report.risk_score} /> : null}
-                  {report.status === "draft" && report.submitted_by === session?.user?.id ? <button className="ghost-button" type="button" disabled={showForm || busy} onClick={() => editDraft(report)}>Edit draft</button> : null}
+                  {report.status === "draft" && report.submitted_by === session?.user?.id ? <><button className="ghost-button" type="button" disabled={showForm || busy} onClick={() => editDraft(report)}>Edit draft</button><button className="danger-button" type="button" disabled={showForm || busy} onClick={() => void handleCancelReport(report.id)}>Delete draft</button></> : null}
                 </div>
               </div>
             </article>

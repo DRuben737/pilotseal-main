@@ -154,6 +154,22 @@ export async function finalizeFlightBrief(id: string, input: FinalizeFlightBrief
   return normalizeFlightBrief(data);
 }
 
+export async function createAndFinalizeFlightBrief(
+  draft: FlightBriefDraftInput,
+  input: FinalizeFlightBriefInput
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("create_and_finalize_flight_brief", {
+    p_input: normalizeDraftInput(draft),
+    p_meter_type: input.meterType ?? null,
+    p_meter_value: input.meterValue ?? null,
+    p_observed_at: input.observedAt ?? null,
+    p_planned_meter_increase: input.plannedMeterIncrease ?? null,
+  });
+  if (error) throw error;
+  return normalizeFlightBrief(data);
+}
+
 export async function createFlightBriefRevision(id: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("create_flight_brief_revision", {

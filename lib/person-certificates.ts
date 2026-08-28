@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "@/lib/supabase";
 
 export type PersonCertificateType = "pilot" | "flight_instructor" | "ground_instructor";
+export type PilotCertificateLevel = "Student" | "Private" | "Commercial" | "ATP";
 
 export type PersonCertificate = {
   id: string;
@@ -12,10 +13,15 @@ export type PersonCertificate = {
   issue_date: string | null;
   last_event_date: string | null;
   event_type: string | null;
+  certificate_level: PilotCertificateLevel | null;
+  additional_privileges: string[];
   is_default_for_endorsements: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
+  source?: "owner" | "linked_account";
+  linked_user_id?: string | null;
+  linked_display_name?: string | null;
 };
 
 export type CertificateCurrencyStatus = "current" | "due-soon" | "expired" | "unknown";
@@ -27,7 +33,7 @@ export const CERTIFICATE_TYPE_LABELS: Record<PersonCertificateType, string> = {
 };
 
 const CERTIFICATE_SELECT =
-  "id, user_id, person_id, certificate_type, certificate_number, ratings, issue_date, last_event_date, event_type, is_default_for_endorsements, notes, created_at, updated_at";
+  "id, user_id, person_id, certificate_type, certificate_number, ratings, issue_date, last_event_date, event_type, certificate_level, additional_privileges, is_default_for_endorsements, notes, created_at, updated_at";
 
 function normalizeText(value?: string | null) {
   const nextValue = value?.trim();
@@ -68,10 +74,23 @@ function normalizeCertificate(record: Record<string, unknown>): PersonCertificat
     issue_date: typeof record.issue_date === "string" ? record.issue_date : null,
     last_event_date: typeof record.last_event_date === "string" ? record.last_event_date : null,
     event_type: typeof record.event_type === "string" ? record.event_type : null,
+    certificate_level:
+      typeof record.certificate_level === "string"
+        ? record.certificate_level as PilotCertificateLevel
+        : typeof record.event_type === "string"
+          ? record.event_type as PilotCertificateLevel
+          : null,
+    additional_privileges: Array.isArray(record.additional_privileges)
+      ? record.additional_privileges.map((value) => String(value))
+      : [],
     is_default_for_endorsements: Boolean(record.is_default_for_endorsements),
     notes: typeof record.notes === "string" ? record.notes : null,
     created_at: String(record.created_at ?? ""),
     updated_at: typeof record.updated_at === "string" ? record.updated_at : null,
+    source: record.source === "linked_account" ? "linked_account" : "owner",
+    linked_user_id: typeof record.linked_user_id === "string" ? record.linked_user_id : null,
+    linked_display_name:
+      typeof record.linked_display_name === "string" ? record.linked_display_name : null,
   };
 }
 
@@ -196,6 +215,17 @@ export async function fetchPersonCertificates(userId: string) {
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeCertificate);
 }
 
+export async function fetchLinkedPersonCertificates() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_my_linked_person_certificates");
+
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map((record) =>
+    normalizeCertificate({ ...record, source: "linked_account" })
+  );
+}
+
 export async function createPersonCertificate(input: {
   userId: string;
   personId: string;
@@ -205,6 +235,8 @@ export async function createPersonCertificate(input: {
   issueDate?: string | null;
   lastEventDate?: string | null;
   eventType?: string | null;
+  certificateLevel?: PilotCertificateLevel | null;
+  additionalPrivileges?: string[] | null;
   isDefaultForEndorsements?: boolean;
   notes?: string | null;
 }) {
@@ -228,6 +260,8 @@ export async function createPersonCertificate(input: {
       issue_date: normalizeDate(input.issueDate),
       last_event_date: normalizeDate(input.lastEventDate),
       event_type: normalizeText(input.eventType),
+      certificate_level: input.certificateType === "pilot" ? input.certificateLevel ?? null : null,
+      additional_privileges: input.certificateType === "pilot" ? input.additionalPrivileges ?? [] : [],
       is_default_for_endorsements: nextIsDefault,
       notes: normalizeText(input.notes),
     })
@@ -251,6 +285,8 @@ export async function updatePersonCertificate(
     issueDate?: string | null;
     lastEventDate?: string | null;
     eventType?: string | null;
+    certificateLevel?: PilotCertificateLevel | null;
+    additionalPrivileges?: string[] | null;
     isDefaultForEndorsements?: boolean;
     notes?: string | null;
   }
@@ -273,6 +309,8 @@ export async function updatePersonCertificate(
       issue_date: normalizeDate(updates.issueDate),
       last_event_date: normalizeDate(updates.lastEventDate),
       event_type: normalizeText(updates.eventType),
+      certificate_level: updates.certificateType === "pilot" ? updates.certificateLevel ?? null : null,
+      additional_privileges: updates.certificateType === "pilot" ? updates.additionalPrivileges ?? [] : [],
       is_default_for_endorsements: nextIsDefault,
       notes: normalizeText(updates.notes),
       updated_at: new Date().toISOString(),

@@ -268,16 +268,16 @@ export default function EndorsementRecordsManager() {
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <h2 className="saas-section-title">Endorsement Records</h2>
-            <p className="saas-meta-text">Personal records, endorsements issued to you, and immutable organization history stay separate.</p>
+            <p className="saas-meta-text">Your issued records remain personal history. Records created during an organization membership also appear in that organization’s activity, so the views intentionally overlap.</p>
           </div>
           <span className="saas-pill">{filteredRecords.length}</span>
         </div>
 
         <nav className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Endorsement record views">
           {([
-            ["personal", "Personal"],
-            ["received", "My Endorsements"],
-            ["organization", "Organization"],
+            ["personal", "My issued records"],
+            ["received", "Issued to me"],
+            ["organization", "Organization activity"],
           ] as const).map(([key, label]) => (
             <button
               key={key}

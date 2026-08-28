@@ -13,6 +13,7 @@ import {
 } from "@/components/auth/auth-errors";
 import AuthShell from "@/components/auth/AuthShell";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { registerFromOrganizationInvitation } from "@/lib/organizations";
 import { getSupabaseClient } from "@/lib/supabase";
 import { fetchOrganizationInvitation, type OrganizationInvitationPreview } from "@/lib/organizations";
 
@@ -86,6 +87,18 @@ export default function RegisterForm({
       if (passwordError) {
         throw new Error(passwordError);
       }
+      if (inviteToken) {
+        await registerFromOrganizationInvitation({ inviteToken, password });
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+        if (signInError) throw signInError;
+        setPassword("");
+        setStatus("Account verified from your invitation. Joining the organization...");
+        return;
+      }
+
       const emailRedirectTo =
         typeof window !== "undefined"
           ? `${window.location.origin}/login?next=${encodeURIComponent(redirectTo)}`
@@ -125,9 +138,14 @@ export default function RegisterForm({
         return;
       }
 
-      setStatus(accountType === "company" && !inviteToken ? "Account created. Your company request is pending platform approval." : "Account created. Please sign in to finish joining the organization.");
+      setStatus(accountType === "company" ? "Account created. Your company request is pending platform approval." : "Account created. Check your email to verify your account.");
       router.replace(`/login?next=${encodeURIComponent(redirectTo)}`);
     } catch (submitError) {
+      if (inviteToken && isExistingAccountError(submitError)) {
+        setExistingAccountEmail(email.trim());
+        setStatus("");
+        return;
+      }
       setError(getAuthErrorMessage(submitError, "Registration failed. Please try again.", "password"));
       setStatus("");
     } finally {
@@ -170,7 +188,7 @@ export default function RegisterForm({
       <h1 className="text-3xl font-semibold text-slate-950">Register</h1>
 
       <form className="grid gap-6" onSubmit={handleSubmit}>
-        {invitation ? <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">Invitation to join <strong>{invitation.organization_name}</strong>. Register with {invitation.invited_email}; membership is added after email verification.</p> : null}
+        {invitation ? <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">Invitation to join <strong>{invitation.organization_name}</strong>. This one-time link verifies {invitation.invited_email}; registration will sign you in and accept the invitation.</p> : null}
 
         {!inviteToken ? <fieldset className="grid gap-3">
           <legend className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">

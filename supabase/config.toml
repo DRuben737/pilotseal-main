@@ -385,6 +385,9 @@ deno_version = 2
 [functions.organization-invitation-email]
 verify_jwt = true
 
+[functions.organization-invitation-register]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

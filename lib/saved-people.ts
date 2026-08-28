@@ -33,6 +33,18 @@ export type SavedPersonAccountLinkRequest = {
   requested_at: string;
 };
 
+export type EndorsementPerson = {
+  saved_person_id: string;
+  linked_user_id: string | null;
+  formal_name: string;
+  account_nickname: string | null;
+  saved_certificate_number: string | null;
+  effective_certificate_number: string | null;
+  certificate_source: "canonical_profile" | "student_account" | "saved_people" | "missing" | "conflict";
+  endorsement_ready: boolean;
+  certificate_conflict: boolean;
+};
+
 export type CfiExpirationStatus = "valid" | "expiring-soon" | "expired" | "unknown";
 
 const SAVED_PERSON_SELECTS = [
@@ -261,6 +273,29 @@ export async function fetchSavedPersonAccountLinks(userId: string) {
         ? link.shared_organization_names
         : [],
     }));
+}
+
+export async function fetchEndorsementPeople(): Promise<EndorsementPerson[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_my_endorsement_people");
+  if (error) throw error;
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((record) => ({
+    saved_person_id: String(record.saved_person_id ?? ""),
+    linked_user_id: typeof record.linked_user_id === "string" ? record.linked_user_id : null,
+    formal_name: String(record.formal_name ?? ""),
+    account_nickname:
+      typeof record.account_nickname === "string" ? record.account_nickname : null,
+    saved_certificate_number:
+      typeof record.saved_certificate_number === "string" ? record.saved_certificate_number : null,
+    effective_certificate_number:
+      typeof record.effective_certificate_number === "string"
+        ? record.effective_certificate_number
+        : null,
+    certificate_source: String(record.certificate_source ?? "missing") as EndorsementPerson["certificate_source"],
+    endorsement_ready: Boolean(record.endorsement_ready),
+    certificate_conflict: Boolean(record.certificate_conflict),
+  }));
 }
 
 export async function requestSavedPersonAccountLink(personId: string, email: string) {

@@ -310,6 +310,12 @@ export async function saveAsrDraft(input: {
   return String(data ?? "");
 }
 
+export async function deleteAsrDraft(reportId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("delete_asr_draft", { p_report_id: reportId });
+  if (error) throw error;
+}
+
 export async function submitAsrReport(input: {
   reportId: string;
   createDiscrepancy: boolean;
