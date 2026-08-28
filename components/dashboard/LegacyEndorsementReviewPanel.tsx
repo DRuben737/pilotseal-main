@@ -12,6 +12,15 @@ import {
 import { formatUsDateTime } from "@/lib/date-format";
 import { DetailDrawer } from "@/components/admin/AdminConsole";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
+
 export default function LegacyEndorsementReviewPanel() {
   const [records, setRecords] = useState<EndorsementRecord[]>([]);
   const [selected, setSelected] = useState<EndorsementRecord | null>(null);
@@ -27,7 +36,7 @@ export default function LegacyEndorsementReviewPanel() {
     try {
       setRecords(await fetchPendingLegacyEndorsementRecords());
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to load legacy records.");
+      setStatus(getErrorMessage(error, "Unable to load legacy records."));
     }
   }
 
@@ -44,7 +53,7 @@ export default function LegacyEndorsementReviewPanel() {
     try {
       setReviewContext(await fetchLegacyEndorsementReviewContext(record.id));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to load review evidence.");
+      setStatus(getErrorMessage(error, "Unable to load review evidence."));
     } finally {
       setContextLoading(false);
     }
@@ -92,7 +101,7 @@ export default function LegacyEndorsementReviewPanel() {
     } catch (error) {
       setReviewStatus({
         tone: "error",
-        message: error instanceof Error ? error.message : "Unable to save this review decision.",
+        message: getErrorMessage(error, "Unable to save this review decision."),
       });
     } finally {
       setBusy(false);
