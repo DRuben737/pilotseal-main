@@ -411,7 +411,10 @@ export default function SavedPeopleManager() {
             console.error("Unable to load linked account certificates:", error);
             return [];
           }),
-          fetchEndorsementPeople(),
+          fetchEndorsementPeople().catch((error) => {
+            console.error("Unable to load endorsement student profiles:", error);
+            return [];
+          }),
           fetchCurrentProfile(session.user.id).catch(() => null),
           fetchSavedPersonAccountLinks(session.user.id),
           fetchSavedPersonAccountLinkRequests(),
@@ -521,7 +524,10 @@ export default function SavedPeopleManager() {
           })
         : Promise.resolve([]),
       fetchLinkedPersonCertificates().catch(() => []),
-      fetchEndorsementPeople(),
+      fetchEndorsementPeople().catch((error) => {
+        console.error("Unable to refresh endorsement student profiles:", error);
+        return [];
+      }),
       fetchCurrentProfile(session.user.id).catch(() => null),
       fetchSavedPersonAccountLinks(session.user.id),
       fetchSavedPersonAccountLinkRequests(),

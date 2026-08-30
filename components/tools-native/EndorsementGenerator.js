@@ -900,31 +900,31 @@ function EndorsementGenerator() {
           })
           .filter(Boolean)
           .sort((left, right) => Number(right.is_default) - Number(left.is_default));
-        const savedStudentOptions = endorsementPeople
-          .map((endorsementPerson) => {
-            const person = peopleById.get(endorsementPerson.saved_person_id);
-            if (!person) {
-              return null;
-            }
+        const endorsementPeopleById = new Map(
+          endorsementPeople.map((person) => [person.saved_person_id, person])
+        );
+        const savedStudentOptions = allPeople
+          .filter((person) => person.role === 'student')
+          .map((person) => {
+            const endorsementPerson = endorsementPeopleById.get(person.id);
 
             return {
               ...person,
-              id: `saved:${endorsementPerson.saved_person_id}`,
+              id: `saved:${person.id}`,
               person_id: person.id,
               endorsement_record_person_id: person.id,
-              student_user_id: endorsementPerson.linked_user_id || '',
-              display_name: endorsementPerson.formal_name,
-              account_nickname: endorsementPerson.account_nickname,
-              cert_number: endorsementPerson.effective_certificate_number,
-              certificate_source: endorsementPerson.certificate_source,
-              certificate_conflict: endorsementPerson.certificate_conflict,
-              endorsement_ready: endorsementPerson.endorsement_ready,
-              suggestion_label: endorsementPerson.account_nickname
+              student_user_id: endorsementPerson?.linked_user_id || '',
+              display_name: endorsementPerson?.formal_name || person.display_name,
+              account_nickname: endorsementPerson?.account_nickname || null,
+              cert_number: endorsementPerson?.effective_certificate_number || person.cert_number || '',
+              certificate_source: endorsementPerson?.certificate_source || 'saved_people',
+              certificate_conflict: endorsementPerson?.certificate_conflict || false,
+              endorsement_ready: endorsementPerson?.endorsement_ready ?? Boolean(person.display_name?.trim()),
+              suggestion_label: endorsementPerson?.account_nickname
                 ? `${endorsementPerson.formal_name} — linked account: ${endorsementPerson.account_nickname}`
-                : endorsementPerson.formal_name,
+                : endorsementPerson?.formal_name || person.display_name,
             };
-          })
-          .filter(Boolean);
+          });
 
         setSavedCfis(certificateCfis);
         const organizationStudentOptions = organizationStudentGroups.flatMap(({ organization, students }) => students.map((student) => ({

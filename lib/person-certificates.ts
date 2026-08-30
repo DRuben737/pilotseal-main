@@ -34,6 +34,19 @@ export const CERTIFICATE_TYPE_LABELS: Record<PersonCertificateType, string> = {
 
 const CERTIFICATE_SELECT =
   "id, user_id, person_id, certificate_type, certificate_number, ratings, issue_date, last_event_date, event_type, certificate_level, additional_privileges, is_default_for_endorsements, notes, created_at, updated_at";
+const LEGACY_CERTIFICATE_SELECT =
+  "id, user_id, person_id, certificate_type, certificate_number, ratings, issue_date, last_event_date, event_type, is_default_for_endorsements, notes, created_at, updated_at";
+
+function isMissingCertificateProfileColumn(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = "message" in error
+    ? String((error as { message?: unknown }).message ?? "").toLowerCase()
+    : "";
+  return code === "42703" || code === "PGRST204"
+    || message.includes("certificate_level")
+    || message.includes("additional_privileges");
+}
 
 function normalizeText(value?: string | null) {
   const nextValue = value?.trim();
@@ -208,11 +221,19 @@ export async function fetchPersonCertificates(userId: string) {
     .order("is_default_for_endorsements", { ascending: false })
     .order("created_at", { ascending: false });
 
-  if (error) {
-    throw error;
+  if (!error) {
+    return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeCertificate);
   }
+  if (!isMissingCertificateProfileColumn(error)) throw error;
 
-  return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeCertificate);
+  const { data: legacyData, error: legacyError } = await supabase
+    .from("saved_person_certificates")
+    .select(LEGACY_CERTIFICATE_SELECT)
+    .eq("user_id", userId)
+    .order("is_default_for_endorsements", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (legacyError) throw legacyError;
+  return ((legacyData ?? []) as unknown as Record<string, unknown>[]).map(normalizeCertificate);
 }
 
 export async function fetchLinkedPersonCertificates() {
