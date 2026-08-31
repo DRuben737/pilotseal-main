@@ -1,7 +1,7 @@
 ---
 title: "Site Log"
 summary: "Ongoing development notes and history of PilotSeal."
-updated: "2026-07-08"
+updated: "2026-08-31"
 ---
 
 
@@ -262,6 +262,37 @@ Changes included:
 - Automatic available / not available / check MX time status based on today's date and current aircraft time
 
 Added Google Analytics tracking so future usage patterns can be reviewed, including page traffic and tool usage trends.
+
+</details>
+
+<details>
+<summary>August 2026 — Dashboard, Organizations, and Student Records</summary>
+
+Improved the dashboard navigation and day-to-day account workflow.
+
+The sidebar received a major interaction and layout update, including better alignment, focus behavior, overflow handling, and simplified controls. Dashboard notifications and quick actions were also reorganized so users can manage alerts and reach common tasks more efficiently.
+
+Additional interface updates included:
+
+- Customizable dashboard quick actions
+- Better notification inbox controls
+- A refined night time calculator timeline
+- Faster loading when opening the endorsement generator from the main site
+
+Expanded the organization and student record system.
+
+Saved people can now be linked to verified PilotSeal accounts. Student profiles, organization memberships, endorsements, Flight Brief records, and ASR workflows were updated to use a more consistent identity model while preserving appropriate personal and organization visibility.
+
+Organization updates included:
+
+- Approval requirements for new organizations
+- Secure member invitation and account-joining workflows
+- Organization invitation emails
+- Membership-aware access to endorsements and Flight Brief records
+- Improved handling of historical endorsement records when a student links an account
+- Review tools for confirming legacy endorsement ownership and evidence
+- More consistent student profile management across personal and organization workflows
+- Restored personal saved-people access and endorsement autofill behavior
 
 </details>
 
