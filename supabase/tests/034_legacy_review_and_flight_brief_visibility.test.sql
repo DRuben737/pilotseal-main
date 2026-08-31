@@ -11,11 +11,21 @@ select ok(
 );
 
 insert into public.saved_people (id, user_id, role, display_name, cert_number)
-values (
+values
+(
   '40000000-0000-4000-8000-000000000034',
   (select id from public.profiles where email = 'instructor.one@example.test'),
   'student', 'Avery Legacy', 'LEGACY-34'
+),
+(
+  '40000000-0000-4000-8000-000000000035',
+  (select id from public.profiles where email = 'pilot.one@example.test'),
+  'self', 'Avery Testpilot', 'LEGACY-34'
 );
+
+update public.profiles
+set self_person_id = '40000000-0000-4000-8000-000000000035'
+where email = 'pilot.one@example.test';
 
 insert into public.saved_person_account_links (saved_person_id, owner_user_id, linked_user_id)
 values (
@@ -73,19 +83,22 @@ select is((select note from public.legacy_endorsement_review_audit where record_
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
 insert into public.flight_briefs (
-  id, created_by, organization_id, aircraft_tail_number, student_name, instructor_name,
-  status, brief_data
+  id, created_by, organization_id, student_saved_person_id, student_user_id,
+  aircraft_tail_number, student_name, instructor_name, status, brief_data
 ) values (
   '70000000-0000-4000-8000-000000000034', current_setting('request.jwt.claim.sub')::uuid,
-  '10000000-0000-4000-8000-000000000001', 'N000PS', 'Avery Testpilot', 'Morgan Testflight',
+  '10000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000035', current_setting('request.jwt.claim.sub')::uuid,
+  'N000PS', 'Avery Testpilot', 'Morgan Testflight',
   'draft', '{}'::jsonb
 );
 insert into public.flight_briefs (
-  id, created_by, organization_id, aircraft_tail_number, student_name, instructor_name,
-  status, brief_data
+  id, created_by, organization_id, student_saved_person_id, student_user_id,
+  aircraft_tail_number, student_name, instructor_name, status, brief_data
 ) values (
   '70000000-0000-4000-8000-000000000035', current_setting('request.jwt.claim.sub')::uuid,
-  null, 'NPRIVATE', 'Avery Testpilot', 'Morgan Testflight', 'draft', '{}'::jsonb
+  null, '40000000-0000-4000-8000-000000000035', current_setting('request.jwt.claim.sub')::uuid,
+  'NPRIVATE', 'Avery Testpilot', 'Morgan Testflight', 'draft', '{}'::jsonb
 );
 reset role;
 

@@ -138,7 +138,7 @@ reset role;
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
-select is((select count(*) from public.list_organization_students('10000000-0000-4000-8000-000000000001')), 2::bigint, 'endorsement member picker returns all current organization members');
+select is((select count(*) from public.list_organization_students('10000000-0000-4000-8000-000000000001')), 1::bigint, 'endorsement student picker excludes instructors and administrators');
 reset role;
 
 select * from finish();

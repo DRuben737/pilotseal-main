@@ -14,6 +14,10 @@ export type FlightBriefRecord = {
   created_by: string;
   organization_id: string | null;
   membership_period_id: string | null;
+  student_saved_person_id: string | null;
+  student_user_id: string | null;
+  instructor_membership_period_id: string | null;
+  student_membership_period_id: string | null;
   aircraft_id: string | null;
   aircraft_tail_number: string;
   student_name: string;
@@ -39,6 +43,8 @@ export type FlightBriefRecord = {
 
 export type FlightBriefDraftInput = {
   organization_id?: string | null;
+  student_saved_person_id?: string | null;
+  student_user_id?: string | null;
   aircraft_id?: string | null;
   aircraft_tail_number: string;
   student_name: string;
@@ -107,7 +113,7 @@ export type AircraftInspectionAssignment = {
 };
 
 const FLIGHT_BRIEF_SELECT =
-  "id, created_by, organization_id, membership_period_id, aircraft_id, aircraft_tail_number, student_name, instructor_name, flight_date, etd, eta, ete, flight_rules, route, status, revision_number, supersedes_id, brief_data, mx_snapshot, weather_snapshot, notam_snapshot, wb_snapshot, finalized_at, created_at, updated_at";
+  "id, created_by, organization_id, membership_period_id, student_saved_person_id, student_user_id, instructor_membership_period_id, student_membership_period_id, aircraft_id, aircraft_tail_number, student_name, instructor_name, flight_date, etd, eta, ete, flight_rules, route, status, revision_number, supersedes_id, brief_data, mx_snapshot, weather_snapshot, notam_snapshot, wb_snapshot, finalized_at, created_at, updated_at";
 
 export async function createFlightBriefDraft(input: FlightBriefDraftInput) {
   const supabase = getSupabaseClient();
@@ -376,6 +382,8 @@ export async function deleteAircraftInspectionAssignment(id: string) {
 function normalizeDraftInput(input: FlightBriefDraftInput) {
   return {
     organization_id: input.organization_id || null,
+    student_saved_person_id: input.student_saved_person_id || null,
+    student_user_id: input.student_user_id || null,
     aircraft_id: input.aircraft_id || null,
     aircraft_tail_number: input.aircraft_tail_number.trim(),
     student_name: input.student_name.trim(),
@@ -400,6 +408,16 @@ function normalizeFlightBrief(value: unknown): FlightBriefRecord {
     created_by: String(record.created_by ?? ""),
     organization_id: typeof record.organization_id === "string" ? record.organization_id : null,
     membership_period_id: typeof record.membership_period_id === "string" ? record.membership_period_id : null,
+    student_saved_person_id: typeof record.student_saved_person_id === "string" ? record.student_saved_person_id : null,
+    student_user_id: typeof record.student_user_id === "string" ? record.student_user_id : null,
+    instructor_membership_period_id:
+      typeof record.instructor_membership_period_id === "string"
+        ? record.instructor_membership_period_id
+        : null,
+    student_membership_period_id:
+      typeof record.student_membership_period_id === "string"
+        ? record.student_membership_period_id
+        : null,
     aircraft_id: typeof record.aircraft_id === "string" ? record.aircraft_id : null,
     aircraft_tail_number: String(record.aircraft_tail_number ?? ""),
     student_name: String(record.student_name ?? ""),

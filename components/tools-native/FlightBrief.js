@@ -8,6 +8,7 @@ import { useOrganization } from "@/components/organizations/OrganizationProvider
 import { fetchSavedPeople } from "@/lib/saved-people";
 import { fetchPersonCertificates } from "@/lib/person-certificates";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { fetchMyStudentCandidates } from "@/lib/student-candidates";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import {
@@ -1090,7 +1091,8 @@ export default function FlightBrief() {
   const currentStep = brief.currentStep ?? 0;
   const setCurrentStep = useCallback((value) => setBriefField("currentStep", value), [setBriefField]);
   const topRef = useRef(null);
-  const [savedPeopleOptions, setSavedPeopleOptions] = React.useState([]);
+  const [savedPilotOptions, setSavedPilotOptions] = React.useState([]);
+  const [savedInstructorOptions, setSavedInstructorOptions] = React.useState([]);
   const [aircraftOptions, setAircraftOptions] = React.useState([]);
   const [mobileEditingField, setMobileEditingField] = React.useState(null);
 
@@ -1143,51 +1145,26 @@ export default function FlightBrief() {
         if (!session?.user?.id) {
           const sharedAircraft = await fetchSharedAircraft().catch(() => []);
           if (!cancelled) {
-            setSavedPeopleOptions([]);
+            setSavedPilotOptions([]);
+            setSavedInstructorOptions([]);
             setAircraftOptions(mergeAircraftOptions(sharedAircraft, []));
           }
           return;
         }
 
-        const [people, profile, certificates, sharedAircraft, organizationAircraft, myAircraft] = await Promise.all([
+        const [people, profile, certificates, studentCandidates, sharedAircraft, organizationAircraft, myAircraft] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchCurrentProfile(session.user.id),
           fetchPersonCertificates(session.user.id).catch(() => []),
+          fetchMyStudentCandidates().catch(() => []),
           fetchSharedAircraft().catch(() => []),
           fetchActiveOrganizationAircraft().catch(() => []),
           fetchMyAircraft(session.user.id).catch(() => []),
         ]);
         const peopleById = new Map(people.map((person) => [person.id, person]));
         const selfPersonId = profile?.self_person_id || "";
-        const applySelfNickname = (person) => {
-          if (!person || person.id !== selfPersonId) {
-            return person;
-          }
-
-          return {
-            ...person,
-            display_name: profile?.display_name || person.display_name,
-          };
-        };
-        const savedStudentPeople = people
-          .filter((person) => person.role === "student")
-          .map(applySelfNickname);
         const savedInstructorPeople = people
-          .filter((person) => person.role === "cfi")
-          .map(applySelfNickname);
-        const certificatePilots = certificates
-          .filter((certificate) => certificate.certificate_type === "pilot")
-          .map((certificate) => {
-            const person = peopleById.get(certificate.person_id);
-            return person
-              ? {
-                  ...applySelfNickname(person),
-                  person_id: person.id,
-                  cert_number: certificate.certificate_number || person.cert_number,
-                }
-              : null;
-          })
-          .filter(Boolean);
+          .filter((person) => person.role === "cfi" || person.id === selfPersonId);
         const certificateInstructors = certificates
           .filter((certificate) => (
             certificate.certificate_type === "flight_instructor" ||
@@ -1197,7 +1174,7 @@ export default function FlightBrief() {
             const person = peopleById.get(certificate.person_id);
             return person
               ? {
-                  ...applySelfNickname(person),
+                  ...person,
                   person_id: person.id,
                   cert_number: certificate.certificate_number || person.cert_number,
                   cert_exp_date: certificate.last_event_date || person.cert_exp_date,
@@ -1207,25 +1184,35 @@ export default function FlightBrief() {
           .filter(Boolean);
 
         if (!cancelled) {
-          const studentOptions = getUniqueSavedPeopleByName([
-            ...savedStudentPeople,
-            ...certificatePilots,
-          ]);
+          const studentOptions = studentCandidates
+            .filter((candidate) => candidate.endorsement_ready && candidate.formal_name)
+            .map((candidate) => ({
+              id: candidate.identity_key,
+              identity_key: candidate.identity_key,
+              person_id: candidate.record_person_id,
+              saved_person_id: candidate.saved_person_id,
+              student_user_id: candidate.student_user_id,
+              canonical_person_id: candidate.canonical_person_id,
+              display_name: candidate.formal_name,
+              cert_number: candidate.effective_certificate_number || "",
+              organizations: candidate.organizations,
+              identity_status: candidate.identity_status,
+              source: "student_candidate",
+            }));
           const instructorOptions = getUniqueSavedPeopleByName([
             ...savedInstructorPeople,
             ...certificateInstructors,
           ]);
 
-          setSavedPeopleOptions(getUniqueSavedPeopleByName([
-            ...studentOptions,
-            ...instructorOptions,
-          ]));
+          setSavedPilotOptions(studentOptions);
+          setSavedInstructorOptions(instructorOptions);
           setAircraftOptions(mergeAircraftOptions([...sharedAircraft, ...organizationAircraft], myAircraft));
         }
       } catch {
         const sharedAircraft = await fetchSharedAircraft().catch(() => []);
         if (!cancelled) {
-          setSavedPeopleOptions([]);
+          setSavedPilotOptions([]);
+          setSavedInstructorOptions([]);
           setAircraftOptions(mergeAircraftOptions(sharedAircraft, []));
         }
       }
@@ -1243,48 +1230,52 @@ export default function FlightBrief() {
       return;
     }
 
-    const selectedStudent = savedPeopleOptions.find((person) => person.id === selectedStudentId);
+    const selectedStudent = savedPilotOptions.find((person) => person.id === selectedStudentId);
     if (selectedStudent?.display_name) {
       setStudentName(selectedStudent.display_name);
     }
-  }, [savedPeopleOptions, selectedStudentId, setStudentName]);
+  }, [savedPilotOptions, selectedStudentId, setStudentName]);
 
   useEffect(() => {
     if (!selectedInstructorId) {
       return;
     }
 
-    const selectedInstructor = savedPeopleOptions.find((person) => person.id === selectedInstructorId);
+    const selectedInstructor = savedInstructorOptions.find((person) => person.id === selectedInstructorId);
     if (selectedInstructor?.display_name) {
       setInstructorName(selectedInstructor.display_name);
     }
-  }, [savedPeopleOptions, selectedInstructorId, setInstructorName]);
+  }, [savedInstructorOptions, selectedInstructorId, setInstructorName]);
 
   const handleStudentNameChange = useCallback((value) => {
-    const selected = matchSavedPersonByName(savedPeopleOptions, value);
+    const selected = matchSavedPersonByName(savedPilotOptions, value);
     setStudentName(value);
     setSelectedStudentId(selected?.id ?? "");
-  }, [savedPeopleOptions, setSelectedStudentId, setStudentName]);
+  }, [savedPilotOptions, setSelectedStudentId, setStudentName]);
 
   const handleInstructorNameChange = useCallback((value) => {
-    const selected = matchSavedPersonByName(savedPeopleOptions, value);
+    const selected = matchSavedPersonByName(savedInstructorOptions, value);
     setInstructorName(value);
     setSelectedInstructorId(selected?.id ?? "");
-  }, [savedPeopleOptions, setInstructorName, setSelectedInstructorId]);
+  }, [savedInstructorOptions, setInstructorName, setSelectedInstructorId]);
 
-  const savedPersonNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedPeopleOptions), [savedPeopleOptions]);
+  const savedPilotNameOptions = useMemo(() => getUniqueSavedPeopleByName(savedPilotOptions), [savedPilotOptions]);
+  const savedInstructorNameOptions = useMemo(
+    () => getUniqueSavedPeopleByName(savedInstructorOptions),
+    [savedInstructorOptions]
+  );
   const aircraftTailOptions = useMemo(() => getUniqueAircraftByTail(aircraftOptions), [aircraftOptions]);
   const selectedSavedAircraft = useMemo(
     () => matchAircraftByTail(aircraftOptions, aircraftId),
     [aircraftId, aircraftOptions]
   );
   const selectedSavedStudent = useMemo(
-    () => savedPeopleOptions.find((person) => person.id === selectedStudentId) ?? null,
-    [savedPeopleOptions, selectedStudentId]
+    () => savedPilotOptions.find((person) => person.id === selectedStudentId) ?? null,
+    [savedPilotOptions, selectedStudentId]
   );
   const selectedSavedInstructor = useMemo(
-    () => savedPeopleOptions.find((person) => person.id === selectedInstructorId) ?? null,
-    [savedPeopleOptions, selectedInstructorId]
+    () => savedInstructorOptions.find((person) => person.id === selectedInstructorId) ?? null,
+    [savedInstructorOptions, selectedInstructorId]
   );
   const selectedAircraftDueMeta = useMemo(
     () => getAircraftDueMeta(selectedSavedAircraft, mxNow, flightDate),
@@ -1985,6 +1976,19 @@ ${riskComments}
         setRecordStatus("The organization aircraft is missing its organization assignment.");
         return;
       }
+      if (
+        !selectedSavedStudent?.student_user_id ||
+        !selectedSavedStudent.organizations?.some(
+          (organization) => organization.id === selectedSavedAircraft.organization_id
+        )
+      ) {
+        setRecordStatus(
+          "Select a registered pilot who is currently a student in this aircraft's organization."
+        );
+        setCurrentStep(0);
+        scrollToTop();
+        return;
+      }
       if (selectedAircraftDueMeta.dispatchBlocked) {
         setRecordStatus(
           `This aircraft cannot be dispatched: ${selectedAircraftDueMeta.blockingReason}. Choose another aircraft or ask an organization admin to return it to service.`
@@ -2017,6 +2021,8 @@ ${riskComments}
         .join(" → ");
       const recordInput = {
         organization_id: selectedRecordOrganizationId || null,
+        student_saved_person_id: selectedSavedStudent?.saved_person_id || null,
+        student_user_id: selectedSavedStudent?.student_user_id || null,
         aircraft_id: selectedSavedAircraft?.id || null,
         aircraft_tail_number: aircraftId,
         student_name: studentName,
@@ -2175,12 +2181,12 @@ ${riskComments}
           {session?.user?.id ? (
             <>
               <datalist id="flightBriefSavedPilots">
-                {savedPersonNameOptions.map((person) => (
+                {savedPilotNameOptions.map((person) => (
                   <option key={person.id} value={person.display_name} />
                 ))}
               </datalist>
               <datalist id="flightBriefSavedInstructors">
-                {savedPersonNameOptions.map((person) => (
+                {savedInstructorNameOptions.map((person) => (
                   <option key={person.id} value={person.display_name} />
                 ))}
               </datalist>

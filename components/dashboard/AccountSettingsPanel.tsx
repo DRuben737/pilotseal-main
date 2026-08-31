@@ -180,9 +180,17 @@ function buildMedicalForm(profile: UserProfile | null): MedicalForm {
   };
 }
 
-function buildSelfPersonForm(person: SavedPerson | null, profile: UserProfile | null, fallbackEmail?: string | null): SelfPersonForm {
+function isPlaceholderFormalName(value: string | null | undefined, email?: string | null) {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === email?.trim().toLowerCase() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+}
+
+function buildSelfPersonForm(person: SavedPerson | null, _profile: UserProfile | null, fallbackEmail?: string | null): SelfPersonForm {
   return {
-    display_name: person?.display_name || profile?.display_name || fallbackEmail || "",
+    display_name: isPlaceholderFormalName(person?.display_name, fallbackEmail)
+      ? ""
+      : person?.display_name || "",
     weight_lbs: typeof person?.weight_lbs === "number" ? String(person.weight_lbs) : "",
   };
 }
@@ -662,15 +670,29 @@ export default function AccountSettingsPanel() {
     if (profile?.self_person_id) {
       const existing = selfPerson ?? await fetchSavedPersonById(session.user.id, profile.self_person_id);
       if (existing) {
+        const requestedName = selfPersonForm.display_name.trim();
+        if (isPlaceholderFormalName(existing.display_name, session.user.email)) {
+          if (!requestedName || isPlaceholderFormalName(requestedName, session.user.email)) {
+            throw new Error("Enter your formal name before managing certificates.");
+          }
+          const repaired = await updateSavedPerson(session.user.id, existing.id, {
+            display_name: requestedName,
+            cert_number: existing.cert_number ?? "",
+            weight_lbs: selfPersonForm.weight_lbs.trim()
+              ? Number.parseFloat(selfPersonForm.weight_lbs)
+              : existing.weight_lbs ?? null,
+          });
+          setSelfPerson(repaired);
+          return { person: repaired, nextProfile: profile };
+        }
         return { person: existing, nextProfile: profile };
       }
     }
 
-    const displayName =
-      selfPersonForm.display_name.trim() ||
-      displayNameFromProfile() ||
-      session.user.email ||
-      "My profile";
+    const displayName = selfPersonForm.display_name.trim();
+    if (!displayName || isPlaceholderFormalName(displayName, session.user.email)) {
+      throw new Error("Enter your formal name before managing certificates.");
+    }
 
     const createdPerson = await createSavedPerson({
       userId: session.user.id,
@@ -688,10 +710,6 @@ export default function AccountSettingsPanel() {
     setSelfPersonForm(buildSelfPersonForm(createdPerson, nextProfile, session.user.email));
 
     return { person: createdPerson, nextProfile };
-  }
-
-  function displayNameFromProfile() {
-    return displayName.trim() || profile?.display_name || "";
   }
 
   function updateSelfCertificateForm(field: keyof CertificateForm, value: string | string[] | boolean) {
@@ -752,10 +770,7 @@ export default function AccountSettingsPanel() {
       await updateSavedPerson(session.user.id, person.id, {
         display_name:
           selfPersonForm.display_name.trim() ||
-          person.display_name ||
-          displayNameFromProfile() ||
-          session.user.email ||
-          "My profile",
+          person.display_name,
         cert_number: person.cert_number ?? "",
         weight_lbs: selfPersonForm.weight_lbs.trim() ? Number.parseFloat(selfPersonForm.weight_lbs) : null,
       });

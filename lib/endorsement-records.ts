@@ -41,6 +41,7 @@ export type LegacyEndorsementReviewContext = {
 export type CreateEndorsementRecordInput = {
   id: string;
   userId: string;
+  organizationId?: string | null;
   studentId?: string | null;
   studentName: string;
   studentCertNumber?: string | null;
@@ -98,9 +99,7 @@ export async function createEndorsementRecord(input: CreateEndorsementRecordInpu
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("create_endorsement_record", {
     p_id: input.id,
-    // Kept in the database signature for older clients. The database derives
-    // organization visibility from the linked student and membership periods.
-    p_organization_id: null,
+    p_organization_id: input.organizationId || null,
     p_student_id: input.studentId || null,
     p_student_name: input.studentName.trim(),
     p_student_cert_number: normalizeText(input.studentCertNumber),

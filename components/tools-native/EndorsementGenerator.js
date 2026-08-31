@@ -16,7 +16,7 @@ import {
   fetchPersonCertificates,
   getCertificateCurrencyDueDate,
 } from '@/lib/person-certificates';
-import { fetchEndorsementPeople, fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people';
+import { fetchSavedPeople, formatStoredDateForDisplay } from '@/lib/saved-people';
 import { fetchCurrentProfile } from '@/lib/profile';
 import { getSupabaseClient } from '@/lib/supabase';
 import { createUuid } from '@/lib/uuid';
@@ -29,10 +29,7 @@ import {
   ENDORSEMENT_TEMPLATE_CATEGORY_ORDER,
   getEndorsementTemplateCategory,
 } from '@/lib/endorsement-template-categories';
-import {
-  fetchOrganizationStudents,
-  fetchUserOrganizations,
-} from '@/lib/organizations';
+import { fetchMyStudentCandidates } from '@/lib/student-candidates';
 
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
@@ -263,11 +260,8 @@ function getUniqueSavedPeopleByName(options) {
   const seen = new Set();
 
   return options.filter((person) => {
-    const normalizedName = person.display_name?.trim().toLowerCase();
-    const identityKey = person.organization_id
-      ? `${normalizedName}:organization:${person.organization_id}`
-      : normalizedName;
-    if (!normalizedName || seen.has(identityKey)) {
+    const identityKey = person.identity_key || person.id;
+    if (!person.display_name?.trim() || !identityKey || seen.has(identityKey)) {
       return false;
     }
 
@@ -633,6 +627,7 @@ function EndorsementGenerator() {
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [recordOrganizationId, setRecordOrganizationId] = useState('');
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signaturePreviewDataUrl, setSignaturePreviewDataUrl] = useState('');
@@ -652,6 +647,24 @@ function EndorsementGenerator() {
   const defaultCfiAppliedRef = useRef(false);
 
   const templateEntries = useMemo(() => Object.entries(templateCatalog), [templateCatalog]);
+  const selectedStudent = useMemo(
+    () => savedStudents.find(
+      (person) => getStudentRecordPersonId(person) === selectedStudentId
+    ) ?? null,
+    [savedStudents, selectedStudentId]
+  );
+
+  useEffect(() => {
+    if (!recordOrganizationId) {
+      return;
+    }
+    const organizationStillEligible = selectedStudent?.organizations?.some(
+      (organization) => organization.id === recordOrganizationId
+    );
+    if (!organizationStillEligible) {
+      setRecordOrganizationId('');
+    }
+  }, [recordOrganizationId, selectedStudent]);
 
   const resetGeneratedPdf = useCallback(() => {
     if (printablePdfIsTemporaryRef.current && printablePdfUrlRef.current) {
@@ -850,29 +863,18 @@ function EndorsementGenerator() {
           return;
         }
 
-        const [allPeople, profile, organizations] = await Promise.all([
+        const [allPeople, profile, studentCandidates] = await Promise.all([
           fetchSavedPeople(session.user.id),
           fetchCurrentProfile(session.user.id),
-          fetchUserOrganizations().catch(() => []),
-        ]);
-
-        const organizationStudentGroups = await Promise.all(
-          organizations.map(async (organization) => ({
-            organization,
-            students: await fetchOrganizationStudents(organization.id).catch(() => []),
-          }))
-        );
-
-        const [certificates, endorsementPeople] = await Promise.all([
-          fetchPersonCertificates(session.user.id).catch((error) => {
-            console.error('Unable to load person certificates:', error);
-            return [];
-          }),
-          fetchEndorsementPeople().catch((error) => {
-            console.error('Unable to load endorsement student profiles:', error);
+          fetchMyStudentCandidates().catch((error) => {
+            console.error('Unable to load canonical student candidates:', error);
             return [];
           }),
         ]);
+        const certificates = await fetchPersonCertificates(session.user.id).catch((error) => {
+          console.error('Unable to load person certificates:', error);
+          return [];
+        });
         const peopleById = new Map(allPeople.map((person) => [person.id, person]));
         const selfPersonId = profile?.self_person_id || '';
         const certificateCfis = certificates
@@ -900,54 +902,32 @@ function EndorsementGenerator() {
           })
           .filter(Boolean)
           .sort((left, right) => Number(right.is_default) - Number(left.is_default));
-        const endorsementPeopleById = new Map(
-          endorsementPeople.map((person) => [person.saved_person_id, person])
-        );
-        const savedStudentOptions = allPeople
-          .filter((person) => person.role === 'student')
-          .map((person) => {
-            const endorsementPerson = endorsementPeopleById.get(person.id);
-
-            return {
-              ...person,
-              id: `saved:${person.id}`,
-              person_id: person.id,
-              endorsement_record_person_id: person.id,
-              student_user_id: endorsementPerson?.linked_user_id || '',
-              display_name: endorsementPerson?.formal_name || person.display_name,
-              account_nickname: endorsementPerson?.account_nickname || null,
-              cert_number: endorsementPerson?.effective_certificate_number || person.cert_number || '',
-              certificate_source: endorsementPerson?.certificate_source || 'saved_people',
-              certificate_conflict: endorsementPerson?.certificate_conflict || false,
-              endorsement_ready: endorsementPerson?.endorsement_ready ?? Boolean(person.display_name?.trim()),
-              suggestion_label: endorsementPerson?.account_nickname
-                ? `${endorsementPerson.formal_name} — linked account: ${endorsementPerson.account_nickname}`
-                : endorsementPerson?.formal_name || person.display_name,
-            };
-          });
+        const savedStudentOptions = studentCandidates
+          .filter((candidate) => candidate.identity_status !== 'self')
+          .map((candidate) => ({
+            id: candidate.identity_key,
+            identity_key: candidate.identity_key,
+            person_id: candidate.record_person_id,
+            endorsement_record_person_id: candidate.record_person_id,
+            saved_person_id: candidate.saved_person_id,
+            canonical_person_id: candidate.canonical_person_id,
+            student_user_id: candidate.student_user_id || '',
+            identity_status: candidate.identity_status,
+            role: 'student',
+            display_name: candidate.formal_name,
+            account_nickname: candidate.account_nickname,
+            organizations: candidate.organizations,
+            suggestion_label: candidate.formal_name || 'Incomplete formal student profile',
+            cert_number: candidate.effective_certificate_number || '',
+            certificate_source: candidate.certificate_source,
+            certificate_conflict: candidate.certificate_conflict,
+            endorsement_ready: candidate.endorsement_ready,
+            cert_exp_date: null,
+            is_default: false,
+          }));
 
         setSavedCfis(certificateCfis);
-        const organizationStudentOptions = organizationStudentGroups.flatMap(({ organization, students }) => students.map((student) => ({
-          id: `organization:${organization.id}:${student.student_user_id}`,
-          person_id: student.person_id,
-          endorsement_record_person_id: student.saved_person_id || student.person_id || student.student_user_id,
-          organization_id: organization.id,
-          student_user_id: student.student_user_id,
-          identity_status: 'organization_member',
-          role: 'student',
-          display_name: student.formal_name || '',
-          account_nickname: student.account_nickname,
-          suggestion_label: student.endorsement_ready
-            ? `${student.formal_name} (${organization.name}; account: ${student.account_nickname})`
-            : `${student.account_nickname} (${organization.name}) — Complete Saved People profile`,
-          cert_number: student.effective_certificate_number,
-          certificate_source: student.certificate_source,
-          certificate_conflict: student.certificate_conflict,
-          endorsement_ready: student.endorsement_ready,
-          cert_exp_date: null,
-          is_default: false,
-        })));
-        setSavedStudents([...organizationStudentOptions, ...savedStudentOptions]);
+        setSavedStudents(savedStudentOptions);
         setSessionIdentity(profile?.display_name || session.user.email || '');
 
         const defaultCertificateCfi = certificateCfis.find((person) => person.is_default);
@@ -1703,6 +1683,7 @@ function EndorsementGenerator() {
       await createEndorsementRecord({
         id: recordId,
         userId: session.user.id,
+        organizationId: recordOrganizationId || null,
         studentId: selectedStudentId || null,
         studentName: formData.studentName.trim(),
         studentCertNumber: formData.studentCertNumber.trim() || null,
@@ -2205,12 +2186,31 @@ function EndorsementGenerator() {
 
             <div className={styles.card}>
               {generatorMode === 'customized' && session?.user?.id ? (
-                <div className={styles.sectionHeader}>
-                  <div>
-                    <h2>Record visibility</h2>
-                    <p className={styles.sectionCopy}>The record always remains in your Personal history. Selecting a current organization member also makes it visible in that organization automatically.</p>
+                <>
+                  <div className={styles.sectionHeader}>
+                    <div>
+                      <h2>Record visibility</h2>
+                      <p className={styles.sectionCopy}>Choose Personal or one organization explicitly. Organization sharing is available only for a current registered student.</p>
+                    </div>
                   </div>
-                </div>
+                  <label className={styles.field}>
+                    <span>Save record to</span>
+                    <select
+                      value={recordOrganizationId}
+                      onChange={(event) => setRecordOrganizationId(event.target.value)}
+                    >
+                      <option value="">Personal</option>
+                      {(selectedStudent?.organizations ?? []).map((organization) => (
+                        <option key={organization.id} value={organization.id}>
+                          {organization.name}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedStudent && selectedStudent.organizations?.length === 0 ? (
+                      <p className={styles.sectionCopy}>This student is available for Personal records only.</p>
+                    ) : null}
+                  </label>
+                </>
               ) : null}
               <p className={styles.mobileStepLabel}>4 Signature</p>
               <div className={styles.sectionHeader}>
@@ -2273,7 +2273,9 @@ function EndorsementGenerator() {
               <p className={styles.printHint}>
                 You can choose a print format after clicking Print: standard Letter paper or Avery 5163 labels.
                 {generatorMode === 'customized' && session?.user?.id
-                  ? ' Printing saves the PDF to Personal history and automatically exposes it to the selected member’s organization when applicable.'
+                  ? recordOrganizationId
+                    ? ' Printing saves an immutable organization record and keeps it in your own history.'
+                    : ' Printing saves the PDF to Personal history only.'
                   : ''}
               </p>
               {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}

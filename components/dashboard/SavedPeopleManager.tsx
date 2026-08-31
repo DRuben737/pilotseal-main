@@ -826,23 +826,44 @@ export default function SavedPeopleManager() {
     }
 
     const form = certificateForms[personId] ?? emptyCertificateForm;
+    const linkedPerson = endorsementPeopleByPerson.get(personId) ?? null;
     setSaving(true);
 
     try {
-      await createPersonCertificate({
-        userId: session.user.id,
-        personId,
-        certificateType: form.certificate_type,
-        certificateNumber: form.certificate_number,
-        ratings: form.ratings,
-        issueDate: form.issue_date ? convertDisplayDateToIsoDate(form.issue_date) : null,
-        lastEventDate: form.last_event_date ? convertDisplayDateToIsoDate(form.last_event_date) : null,
-        eventType: form.certificate_type === "pilot" ? form.level : null,
-        certificateLevel: form.certificate_type === "pilot" && form.level ? form.level as "Student" | "Private" | "Commercial" | "ATP" : null,
-        additionalPrivileges: form.certificate_type === "pilot" ? form.additional_privileges : [],
-        isDefaultForEndorsements: form.is_default_for_endorsements,
-        notes: form.notes,
-      });
+      if (linkedPerson?.linked_user_id) {
+        if (form.certificate_type !== "pilot") {
+          throw new Error("Only the linked student's pilot certificate can be managed here.");
+        }
+        if (!linkedPerson.formal_name) {
+          throw new Error("The linked student needs a formal name before adding a certificate.");
+        }
+        await saveManagedStudentProfile({
+          studentUserId: linkedPerson.linked_user_id,
+          organizationId: null,
+          formalName: linkedPerson.formal_name,
+          certificateNumber: form.certificate_number,
+          certificateLevel: form.level ? form.level as "Student" | "Private" | "Commercial" | "ATP" : null,
+          ratings: form.ratings,
+          additionalPrivileges: form.additional_privileges,
+          issueDate: form.issue_date ? convertDisplayDateToIsoDate(form.issue_date) : null,
+          notes: form.notes,
+        });
+      } else {
+        await createPersonCertificate({
+          userId: session.user.id,
+          personId,
+          certificateType: form.certificate_type,
+          certificateNumber: form.certificate_number,
+          ratings: form.ratings,
+          issueDate: form.issue_date ? convertDisplayDateToIsoDate(form.issue_date) : null,
+          lastEventDate: form.last_event_date ? convertDisplayDateToIsoDate(form.last_event_date) : null,
+          eventType: form.certificate_type === "pilot" ? form.level : null,
+          certificateLevel: form.certificate_type === "pilot" && form.level ? form.level as "Student" | "Private" | "Commercial" | "ATP" : null,
+          additionalPrivileges: form.certificate_type === "pilot" ? form.additional_privileges : [],
+          isDefaultForEndorsements: form.is_default_for_endorsements,
+          notes: form.notes,
+        });
+      }
       setCertificateForms((current) => ({ ...current, [personId]: emptyCertificateForm }));
       setCertificateFormPersonIds((current) => {
         const next = new Set(current);

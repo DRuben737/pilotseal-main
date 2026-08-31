@@ -43,14 +43,16 @@ select ok((select left_at is not null from public.organization_membership_period
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
-select lives_ok(
+select throws_ok(
   $$select public.create_endorsement_record(
     '60000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001',
     '40000000-0000-4000-8000-000000000003', 'Avery Testpilot', 'STUDENT-1',
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['Post-exit organization attempt'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000002.pdf', 1000, null
   )$$,
-  'endorsement remains the instructor record after the student exits; organization scope is ignored and derived automatically'
+  '42501',
+  'The selected student is not a current student in this organization.',
+  'explicit organization scope is rejected after the student exits'
 );
 select lives_ok(
   $$select public.create_endorsement_record(
@@ -66,7 +68,7 @@ select is((select organization_id from public.endorsement_records where id = '60
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
-select is((select count(*) from public.endorsement_records where id in ('60000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000003')), 3::bigint, 'linked student can read all instructor-issued endorsements regardless of organization visibility');
+select is((select count(*) from public.endorsement_records where id in ('60000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000003')), 2::bigint, 'linked student can read every successfully issued endorsement regardless of organization visibility');
 reset role;
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
