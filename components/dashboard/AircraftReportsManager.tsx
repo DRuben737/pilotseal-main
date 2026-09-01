@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { ConfirmDialog } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { UsDateInput } from "@/components/forms/UsDateInput";
@@ -80,6 +81,7 @@ export default function AircraftReportsManager() {
   const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("open");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState<boolean | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -229,7 +231,7 @@ export default function AircraftReportsManager() {
     });
   }
 
-  async function handleSubmit(groundAircraft: boolean) {
+  function requestSubmit(groundAircraft: boolean) {
     if (!activeOrganization?.id) return;
     const nextFormErrors = validateReportForm(form);
     if (Object.keys(nextFormErrors).length > 0) {
@@ -244,14 +246,14 @@ export default function AircraftReportsManager() {
       });
       return;
     }
-    if (
-      groundAircraft &&
-      !window.confirm(
-        "Ground this aircraft immediately? It will remain grounded until an organization owner or administrator changes its fleet status."
-      )
-    ) {
-      return;
-    }
+
+    setPendingSubmission(groundAircraft);
+  }
+
+  async function handleSubmit() {
+    if (!activeOrganization?.id || pendingSubmission === null) return;
+    const groundAircraft = pendingSubmission;
+    setPendingSubmission(null);
 
     setBusy(true);
     setError("");
@@ -590,32 +592,11 @@ export default function AircraftReportsManager() {
             </p>
           ) : null}
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-sm font-semibold text-slate-950">
-                Submit report
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Records the discrepancy without changing the aircraft&apos;s
-                aircraft availability or maintenance status.
-              </p>
-            </div>
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-              <p className="text-sm font-semibold text-rose-900">
-                Submit and ground immediately
-              </p>
-              <p className="mt-1 text-sm text-rose-800">
-                Sets the aircraft to Grounded and blocks dispatch until an owner
-                or administrator returns it to service.
-              </p>
-            </div>
-          </div>
-
           <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button className="secondary-button" type="button" disabled={busy} onClick={() => void handleSubmit(false)}>
+            <button className="secondary-button" type="button" disabled={busy} onClick={() => requestSubmit(false)}>
               {busy ? "Submitting…" : "Submit report"}
             </button>
-            <button className="min-h-11 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60" type="button" disabled={busy} onClick={() => void handleSubmit(true)}>
+            <button className="min-h-11 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60" type="button" disabled={busy} onClick={() => requestSubmit(true)}>
               {busy ? "Submitting…" : "Submit and ground immediately"}
             </button>
           </div>
@@ -841,6 +822,20 @@ export default function AircraftReportsManager() {
           </div>
         </section>
       ) : null}
+
+      <ConfirmDialog
+        open={pendingSubmission !== null}
+        title={pendingSubmission ? "Submit and ground immediately?" : "Submit report?"}
+        description={
+          pendingSubmission
+            ? "This sets the aircraft to Grounded and blocks dispatch until an organization owner or administrator returns it to service."
+            : "This records the discrepancy without changing the aircraft's availability or maintenance status."
+        }
+        confirmLabel={pendingSubmission ? "Submit and ground immediately" : "Submit report"}
+        destructive={pendingSubmission === true}
+        onCancel={() => setPendingSubmission(null)}
+        onConfirm={() => void handleSubmit()}
+      />
     </section>
   );
 }
