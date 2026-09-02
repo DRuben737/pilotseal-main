@@ -2720,34 +2720,70 @@ summary:focus-visible {
   font-size: 0.78rem;
 }
 
-.pilot-privilege-grid {
+.pilot-privilege-picker {
   display: grid;
   gap: 0.65rem;
+}
+
+.pilot-privilege-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pilot-privilege-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  border: 1px solid rgba(32, 98, 224, 0.25);
+  border-radius: 999px;
+  background: rgba(224, 239, 255, 0.72);
+  padding: 0.25rem 0.35rem 0.25rem 0.7rem;
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.pilot-privilege-item button {
+  display: inline-grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.pilot-privilege-item button:hover,
+.pilot-privilege-item button:focus-visible {
+  background: rgba(32, 98, 224, 0.12);
+}
+
+.pilot-privilege-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
   padding: 0.65rem;
 }
 
-.pilot-privilege-row {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
-  align-items: start;
-  gap: 0.55rem;
+.pilot-privilege-actions {
+  display: flex;
+  gap: 0.4rem;
+  padding-bottom: 0.05rem;
 }
 
-.pilot-privilege-row .rating-picker {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
-}
-
-.pilot-privilege-level {
-  padding-top: 0.42rem;
-  color: var(--text);
-  font-size: 0.78rem;
-  font-weight: 750;
+.pilot-privilege-actions button,
+.pilot-privilege-add {
+  min-height: 2.4rem;
+  padding: 0.5rem 0.8rem;
 }
 
 .pilot-privilege-help {
@@ -4081,13 +4117,8 @@ summary:focus-visible {
     padding: 0.75rem;
   }
 
-  .pilot-privilege-row {
+  .pilot-privilege-editor {
     grid-template-columns: 1fr;
-    gap: 0.3rem;
-  }
-
-  .pilot-privilege-level {
-    padding-top: 0;
   }
 
   .records-student-row {

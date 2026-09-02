@@ -340,7 +340,7 @@ function AccountCertificateForm({
               </option>
             ))}
           </select>
-        </label><div className="saas-field people-ratings-field"><span>Additional lower-level privileges</span><PilotPrivilegePicker level={form.level} value={form.additional_privileges} onChange={(privileges) => onChange("additional_privileges", privileges)} /></div></>
+        </label><div className="saas-field people-ratings-field"><span>Additional privileges</span><PilotPrivilegePicker level={form.level} value={form.additional_privileges} onChange={(privileges) => onChange("additional_privileges", privileges)} /></div></>
       ) : null}
       <label className="saas-field people-ratings-field">
         <span>Ratings</span>
