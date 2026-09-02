@@ -265,7 +265,9 @@ export function DetailDrawer({
   useEffect(() => {
     if (!open) {
       const rememberFocus = (event: FocusEvent) => {
-        if (event.target instanceof HTMLElement) restoreFocusRef.current = event.target;
+        // React can autofocus the mounted drawer before this closed-state
+        // listener is cleaned up. Keep the opener, not the drawer's Close button.
+        if (event.target instanceof HTMLElement && event.target.closest('[role="dialog"]')?.getAttribute("aria-labelledby") !== titleId) restoreFocusRef.current = event.target;
       };
       const rememberPointerTarget = (event: PointerEvent) => {
         if (!(event.target instanceof Element)) return;
@@ -311,7 +313,7 @@ export function DetailDrawer({
       document.removeEventListener("keydown", onKeyDown);
       restoreFocusRef.current?.focus();
     };
-  }, [open]);
+  }, [open, titleId]);
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(

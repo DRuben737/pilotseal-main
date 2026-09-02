@@ -38,7 +38,7 @@ const emptyForm = {
   status: "draft" as NotificationStatus,
   title: "",
 };
-type InboxFilter = "all" | "unread" | "reminder" | "organization" | "system";
+type InboxFilter = "all" | "unread" | "reminder" | "organization" | "schedule" | "system";
 
 export default function NotificationManager({ platformPublishingOnly = false }: { platformPublishingOnly?: boolean }) {
   const { session } = useAuthSession();
@@ -153,6 +153,7 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
         personal_reminders_enabled: preferences.personal_reminders_enabled,
         organization_messages_enabled: preferences.organization_messages_enabled,
         platform_notices_enabled: preferences.platform_notices_enabled,
+        schedule_notifications_enabled: preferences.schedule_notifications_enabled,
       });
       setPreferences(nextPreferences);
       await refreshInbox();
@@ -327,6 +328,7 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
               ["unread", `Unread (${unreadCount})`],
               ["reminder", "Reminders"],
               ["organization", "Organization"],
+              ["schedule", "Schedule"],
               ["system", "Platform"],
             ] as Array<[InboxFilter, string]>).map(([value, label]) => (
               <button
@@ -386,12 +388,13 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
             {savingPreferences ? "Saving..." : "Save settings"}
           </button>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {([
             ["personal_reminders_enabled", "Personal reminders", "Profile completion, certificates, medical dates, and personal aircraft due dates."],
             ["organization_messages_enabled", "Organization messages", "Messages, role changes, aircraft updates, and organization workflow events."],
+            ["schedule_notifications_enabled", "Schedule notifications", "Lessons added, changed, or cancelled by an instructor."],
             ["platform_notices_enabled", "Platform notices", "General PilotSeal announcements and non-critical platform information."],
-          ] as Array<[keyof Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled">, string, string]>).map(([key, label, description]) => (
+          ] as Array<[keyof Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled" | "schedule_notifications_enabled">, string, string]>).map(([key, label, description]) => (
             <label key={key} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/70 p-4">
               <input
                 type="checkbox"
@@ -452,6 +455,7 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
 function formatKind(kind: NotificationRecord["kind"]) {
   if (kind === "organization") return "Organization";
   if (kind === "reminder") return "Reminder";
+  if (kind === "schedule") return "Schedule";
   return "Platform";
 }
 

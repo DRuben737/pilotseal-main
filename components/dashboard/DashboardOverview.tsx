@@ -8,9 +8,13 @@ import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
 import {
   DEFAULT_QUICK_ACTION_IDS,
+  fetchEnabledFeatureIds,
   fetchDashboardQuickActionIds,
+  OPTIONAL_FEATURES,
   QUICK_ACTIONS,
+  type OptionalFeatureId,
   type QuickActionId,
+  updateEnabledFeatureIds,
   updateDashboardQuickActionIds,
 } from "@/lib/dashboard-preferences";
 import { formatTimeUntilDate } from "@/lib/identity";
@@ -58,6 +62,11 @@ export default function DashboardOverview() {
   const [customizingQuickActions, setCustomizingQuickActions] = useState(false);
   const [savingQuickActions, setSavingQuickActions] = useState(false);
   const [quickActionError, setQuickActionError] = useState("");
+  const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
+  const [featureDraft, setFeatureDraft] = useState<OptionalFeatureId[]>([]);
+  const [customizingFeatures, setCustomizingFeatures] = useState(false);
+  const [savingFeatures, setSavingFeatures] = useState(false);
+  const [featureError, setFeatureError] = useState("");
   const [companyRequest, setCompanyRequest] = useState<PlatformOrganizationRequest | null>(null);
 
   useEffect(() => {
@@ -68,6 +77,7 @@ export default function DashboardOverview() {
         if (!cancelled) {
           setOverview(emptyState);
           setQuickActionIds(DEFAULT_QUICK_ACTION_IDS);
+          setEnabledFeatureIds([]);
         }
         return;
       }
@@ -75,11 +85,12 @@ export default function DashboardOverview() {
       try {
         setStatusNote("");
 
-        const [profile, defaultCfi, notifications, selectedQuickActionIds, companyRequests] = await Promise.all([
+        const [profile, defaultCfi, notifications, selectedQuickActionIds, selectedFeatureIds, companyRequests] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchDefaultCfi(session.user.id),
           fetchInboxNotifications(session.user.id),
           fetchDashboardQuickActionIds(session.user.id),
+          fetchEnabledFeatureIds(session.user.id),
           fetchMyOrganizationRegistrationRequests(),
         ]);
 
@@ -91,6 +102,7 @@ export default function DashboardOverview() {
             medicalExpiry: profile?.medical_exp_date ?? "",
           });
           setQuickActionIds(selectedQuickActionIds);
+          setEnabledFeatureIds(selectedFeatureIds);
           setCompanyRequest(companyRequests[0] ?? null);
         }
       } catch {
@@ -143,6 +155,33 @@ export default function DashboardOverview() {
       setQuickActionError("Unable to save quick actions. Try again.");
     } finally {
       setSavingQuickActions(false);
+    }
+  }
+
+  function setFeatureCustomizerOpen(open: boolean) {
+    setCustomizingFeatures(open);
+    setFeatureError("");
+    if (open) setFeatureDraft(enabledFeatureIds);
+  }
+
+  function toggleFeature(id: OptionalFeatureId) {
+    setFeatureDraft((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  }
+
+  async function saveFeatures() {
+    if (!session?.user?.id) return;
+    setSavingFeatures(true);
+    setFeatureError("");
+    try {
+      const saved = await updateEnabledFeatureIds(session.user.id, featureDraft);
+      setEnabledFeatureIds(saved);
+      setCustomizingFeatures(false);
+    } catch {
+      setFeatureError("Unable to update your features. Try again.");
+    } finally {
+      setSavingFeatures(false);
     }
   }
 
@@ -219,6 +258,57 @@ export default function DashboardOverview() {
         <p className="font-semibold">{companyRequest.requested_name}: {companyRequest.status === "pending" ? "awaiting platform approval" : companyRequest.status}</p>
         <p className="mt-1 text-xs">{companyRequest.status === "pending" ? "The organization has not been created yet. You will be notified after a platform administrator reviews it." : companyRequest.review_reason || "Review completed."}</p>
       </section> : null}
+
+      <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Personal features</h2>
+            <p className="mt-1 text-sm text-slate-500">Add only the workspace features you want to use.</p>
+          </div>
+          <QuickEditPopover
+            open={customizingFeatures}
+            onOpenChange={setFeatureCustomizerOpen}
+            label="Add personal features"
+            trigger={<button type="button" className="secondary-button">Add features</button>}
+          >
+            <div className="grid gap-2">
+              {OPTIONAL_FEATURES.map((feature) => (
+                <label key={feature.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={featureDraft.includes(feature.id)}
+                    onChange={() => toggleFeature(feature.id)}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">{feature.label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">{feature.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {featureError ? <p role="alert" className="mt-2 text-xs text-rose-600">{featureError}</p> : null}
+            <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
+              <button type="button" className="ghost-button" onClick={() => setFeatureCustomizerOpen(false)}>Cancel</button>
+              <button type="button" className="primary-button" disabled={savingFeatures} onClick={() => void saveFeatures()}>
+                {savingFeatures ? "Saving…" : "Apply"}
+              </button>
+            </div>
+          </QuickEditPopover>
+        </div>
+        {enabledFeatureIds.length ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {OPTIONAL_FEATURES.filter((feature) => enabledFeatureIds.includes(feature.id)).map((feature) => (
+              <Link key={feature.id} href={feature.href} className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 transition hover:bg-sky-50">
+                <span className="block text-sm font-semibold text-slate-950">{feature.label}</span>
+                <span className="mt-1 block text-sm text-slate-600">{feature.description}</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">No optional features added.</p>
+        )}
+      </section>
 
       <section className="grid items-start gap-4 lg:grid-cols-2">
           <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">

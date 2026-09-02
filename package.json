@@ -19,7 +19,9 @@
     "smoke:local": "node scripts/smoke-local-supabase.mjs",
     "pretest:db:local": "node scripts/assert-local-targets.mjs",
     "test:db:local": "supabase test db --local --network-id pilotseal-local supabase/tests",
-    "test:local": "npm run db:local:start && npm run env:local:sync && npm run db:local:reset && npm run seed:local && npm run test:db:local && npm run smoke:local && npm run lint && npm run build",
+    "test:schedule:local": "node scripts/test-cfi-schedule-drafts.mjs",
+    "test:schedule-ui:local": "node scripts/smoke-cfi-schedule-ui.mjs",
+    "test:local": "npm run db:local:start && npm run env:local:sync && npm run db:local:reset && npm run seed:local && npm run test:db:local && npm run test:schedule:local && npm run smoke:local && npm run lint && npm run build",
     "check:production-deploy": "node scripts/assert-production-deploy.mjs",
     "audit:endorsements": "node scripts/audit-endorsements.mjs",
     "seed:endorsements:sql": "node scripts/export-endorsement-template-seed.mjs"

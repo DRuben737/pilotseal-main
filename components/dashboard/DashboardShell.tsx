@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { resolveDisplayIdentity } from "@/lib/identity";
+import { fetchEnabledFeatureIds, type OptionalFeatureId } from "@/lib/dashboard-preferences";
 import { canManageOrganization } from "@/lib/organizations";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchDefaultCfi } from "@/lib/saved-people";
@@ -19,6 +20,7 @@ import {
 
 const dashboardLinks = [
   { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/schedule", label: "Schedule", featureId: "cfi_schedule" as OptionalFeatureId },
   { href: "/dashboard/my-aircraft", label: "My Aircraft" },
   { href: "/dashboard/reports", label: "Safety Reports" },
   { href: "/dashboard/saved-people", label: "People" },
@@ -75,6 +77,13 @@ function DashboardIcon({ kind }: { kind: string }) {
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M3.8 7.5h6l1.6 2H20v9.2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.7V5.3A1.5 1.5 0 0 1 5.5 3.8h4.2l1.6 2h7.2" />
+        </svg>
+      );
+    case "Schedule":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <rect x="4" y="5.5" width="16" height="14" rx="2" />
+          <path d="M8 3.5v4M16 3.5v4M4 10h16M8 14h3M13 14h3M8 17h3" />
         </svg>
       );
     case "Safety Reports":
@@ -194,6 +203,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [defaultCfiName, setDefaultCfiName] = useState("");
   const [profileRole, setProfileRole] = useState("");
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const sidebarExpanded = sidebarHovered;
 
@@ -249,6 +259,35 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   useEffect(() => {
     const userId = session?.user?.id ?? "";
     if (!userId) {
+      setEnabledFeatureIds([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const refreshFeatures = async () => {
+      try {
+        const features = await fetchEnabledFeatureIds(userId);
+        if (!cancelled) setEnabledFeatureIds(features);
+      } catch {
+        if (!cancelled) setEnabledFeatureIds([]);
+      }
+    };
+    const handleFeaturesChanged = (event: Event) => {
+      const changedUserId = (event as CustomEvent<{ userId?: string }>).detail?.userId;
+      if (changedUserId === userId) void refreshFeatures();
+    };
+
+    void refreshFeatures();
+    window.addEventListener("pilotseal:features-changed", handleFeaturesChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pilotseal:features-changed", handleFeaturesChanged);
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    const userId = session?.user?.id ?? "";
+    if (!userId) {
       setUnreadNotificationCount(0);
       return undefined;
     }
@@ -287,7 +326,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     ? platformLinks
     : workspace === "organization"
       ? organizationLinks
-      : dashboardLinks;
+      : dashboardLinks.filter((link) => !("featureId" in link) || !link.featureId || enabledFeatureIds.includes(link.featureId));
   const workspaceLabel = workspace === "platform"
     ? "Platform administration"
     : workspace === "organization"

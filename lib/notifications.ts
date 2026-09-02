@@ -2,13 +2,14 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 export type NotificationPriority = "low" | "normal" | "high" | "critical";
 export type NotificationStatus = "draft" | "scheduled" | "sent";
-export type NotificationKind = "system" | "reminder" | "organization";
+export type NotificationKind = "system" | "reminder" | "organization" | "schedule";
 
 export type NotificationPreferences = {
   user_id: string;
   personal_reminders_enabled: boolean;
   organization_messages_enabled: boolean;
   platform_notices_enabled: boolean;
+  schedule_notifications_enabled: boolean;
   updated_at: string | null;
 };
 
@@ -18,6 +19,7 @@ export function defaultNotificationPreferences(userId: string): NotificationPref
     personal_reminders_enabled: true,
     organization_messages_enabled: true,
     platform_notices_enabled: true,
+    schedule_notifications_enabled: true,
     updated_at: null,
   };
 }
@@ -81,7 +83,11 @@ function normalizeNotification(
     created_at: String(value.created_at ?? ""),
     created_by: String(value.created_by ?? ""),
     id,
-    kind: (value.kind === "reminder" || value.kind === "organization" ? value.kind : "system") as NotificationKind,
+    kind: (
+      value.kind === "reminder" || value.kind === "organization" || value.kind === "schedule"
+        ? value.kind
+        : "system"
+    ) as NotificationKind,
     message: String(value.message ?? value.content ?? ""),
     organization_id: typeof value.organization_id === "string" ? value.organization_id : null,
     priority: String(value.priority ?? "normal") as NotificationPriority,
@@ -179,6 +185,7 @@ export async function fetchInboxNotifications(userId: string) {
 function isNotificationKindEnabled(kind: NotificationKind, preferences: NotificationPreferences) {
   if (kind === "reminder") return preferences.personal_reminders_enabled;
   if (kind === "organization") return preferences.organization_messages_enabled;
+  if (kind === "schedule") return preferences.schedule_notifications_enabled;
   return preferences.platform_notices_enabled;
 }
 
@@ -186,7 +193,7 @@ export async function fetchNotificationPreferences(userId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("notification_preferences")
-    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, updated_at")
+    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, schedule_notifications_enabled, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -196,7 +203,7 @@ export async function fetchNotificationPreferences(userId: string) {
 
 export async function updateNotificationPreferences(
   userId: string,
-  preferences: Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled">
+  preferences: Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled" | "schedule_notifications_enabled">
 ) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -206,7 +213,7 @@ export async function updateNotificationPreferences(
       ...preferences,
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" })
-    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, updated_at")
+    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, schedule_notifications_enabled, updated_at")
     .single();
 
   if (error) throw error;
