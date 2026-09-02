@@ -4,6 +4,9 @@ export type LessonKind = "flight" | "ground";
 export type AvailabilityScope = "weekly" | "date";
 
 export type ScheduleAccess = {
+  /** For person storage, student_user_id is the People ID, NOT an auth ID. */
+  storage_kind?: "account" | "person";
+  account_user_id?: string | null;
   cfi_user_id: string;
   cfi_name: string;
   student_user_id: string;
@@ -78,6 +81,8 @@ export type ScheduleDraft = {
 };
 
 export type LinkedScheduleCandidate = {
+  storage_kind: "account" | "person";
+  account_user_id: string | null;
   saved_person_id: string;
   student_user_id: string;
   student_name: string;
@@ -163,7 +168,7 @@ export function zonedLocalToUtc(dateKey: string, minuteOfDay: number, timezone: 
 
 export async function fetchScheduleAccess() {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("list_my_cfi_schedule_access");
+  const { data, error } = await supabase.rpc("list_my_cfi_schedule_access_v2");
   if (error) throw error;
   return (data ?? []) as ScheduleAccess[];
 }
@@ -189,9 +194,10 @@ export type ScheduleEditorSnapshot = {
   access: ScheduleAccess[];
 };
 
-export async function fetchScheduleEditorSnapshot(rangeStart: Date, rangeEnd: Date) {
-  const { data, error } = await getSupabaseClient().rpc("get_cfi_schedule_editor_snapshot", {
+export async function fetchScheduleEditorSnapshot(rangeStart: Date, rangeEnd: Date, cfiUserId?: string) {
+  const { data, error } = await getSupabaseClient().rpc("get_cfi_schedule_snapshot_v2", {
     p_range_start: rangeStart.toISOString(), p_range_end: rangeEnd.toISOString(),
+    ...(cfiUserId ? { p_cfi_id: cfiUserId } : {}),
   });
   if (error) throw error;
   return data as ScheduleEditorSnapshot;
@@ -212,11 +218,13 @@ export async function publishScheduleDraft(revision: string, batchId: string, ch
 }
 
 export async function saveScheduleAvailability(input: {
+  personId?: string;
   cfiUserId: string; timezone: string; scope: AvailabilityScope; weekday: number;
   date: string; slots: Array<{ startMinute: number; endMinute: number }>; autofill: boolean;
 }) {
   validateSlots(input.slots);
-  const { data, error } = await getSupabaseClient().rpc("save_cfi_schedule_availability", {
+  const { data, error } = await getSupabaseClient().rpc(input.personId ? "save_cfi_person_availability" : "save_cfi_schedule_availability", {
+    ...(input.personId ? { p_person_id: input.personId } : {}),
     p_cfi_id: input.cfiUserId, p_timezone: input.timezone, p_scope: input.scope,
     p_weekday: input.weekday, p_date: input.date,
     p_slots: input.slots.map((slot) => ({ start_minute: slot.startMinute, end_minute: slot.endMinute })),
@@ -267,6 +275,7 @@ export async function fetchUnavailableBlocks(cfiUserId: string, rangeStart: Date
 }
 
 export async function grantScheduleAccess(input: {
+  storageKind?: "account" | "person";
   cfiUserId: string;
   savedPersonId: string;
   studentUserId: string;
@@ -274,6 +283,7 @@ export async function grantScheduleAccess(input: {
   defaultDurationMin?: number;
   color?: string;
 }) {
+  if (input.storageKind === "person") return setPersonScheduleAccess(input.savedPersonId, true);
   const supabase = getSupabaseClient();
   const { error } = await supabase.from("cfi_schedule_student_grants").upsert(
     {
@@ -287,6 +297,24 @@ export async function grantScheduleAccess(input: {
     },
     { onConflict: "cfi_user_id,student_user_id" }
   );
+  if (error) throw error;
+}
+
+export async function setPersonScheduleAccess(personId: string, enabled: boolean) {
+  const { error } = await getSupabaseClient().rpc("set_cfi_person_access", { p_person: personId, p_enabled: enabled });
+  if (error) throw error;
+}
+
+export async function savePersonScheduleSettings(cfiUserId: string, personId: string, settings: {
+  weeklySessions: number; durationMin: number; color: string; useWeekOverride: boolean;
+  weekStart: string; weekSessions: number; weekDurationMin: number;
+}) {
+  const { error } = await getSupabaseClient().rpc("update_cfi_person_settings", { p_cfi_id: cfiUserId, p_person_id: personId, p_settings: settings });
+  if (error) throw error;
+}
+
+export async function clearPersonAvailabilityDate(cfiUserId: string, personId: string, date: string) {
+  const { error } = await getSupabaseClient().rpc("clear_cfi_person_date", { p_cfi_id: cfiUserId, p_person_id: personId, p_date: date });
   if (error) throw error;
 }
 
@@ -443,6 +471,12 @@ export async function removeDateAvailabilityOverride(cfiUserId: string, studentU
 export async function createUnavailableBlock(input: Omit<UnavailableBlock, "id">) {
   const supabase = getSupabaseClient();
   const { error } = await supabase.from("cfi_schedule_unavailable_blocks").insert(input);
+  if (error) throw error;
+}
+
+export async function updateUnavailableBlock(id: string, input: Omit<UnavailableBlock, "id">) {
+  const { error } = await getSupabaseClient().from("cfi_schedule_unavailable_blocks")
+    .update(input).eq("id", id).eq("cfi_user_id", input.cfi_user_id).select("id").single();
   if (error) throw error;
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import CollapsibleMobileNav from "@/components/ui/CollapsibleMobileNav";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -516,6 +517,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <span>New</span>
                 </Link>
               </section>
+              <CollapsibleMobileNav label="Functions">
               {workspaceSwitches.length > 1 ? (
                 <nav className="dashboard-mobile-workspaces mb-3 gap-2 overflow-x-auto" aria-label="Switch workspace">
                   {workspaceSwitches.map((item) => {
@@ -524,25 +526,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   })}
                 </nav>
               ) : null}
-              {!organizationsLoading && organizations.length > 1 && (profileRole !== "admin" || workspace === "organization") ? (
-                <div className="mb-3 flex justify-end">
-                  <select
-                    aria-label="Current organization"
-                    className="h-9 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
-                    value={activeOrganizationId}
-                    onChange={(event) => setActiveOrganizationId(event.target.value)}
-                  >
-                    {organizations.map((organization) => (
-                      <option key={organization.id} value={organization.id}>
-                        {organization.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-              {children}
-            </div>
-
             <nav className="dashboard-bottom-nav" aria-label="Dashboard navigation">
               {mobileDashboardLinks.map((item) => {
                 const active =
@@ -569,6 +552,26 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 );
               })}
             </nav>
+              </CollapsibleMobileNav>
+              {!organizationsLoading && organizations.length > 1 && (profileRole !== "admin" || workspace === "organization") ? (
+                <div className="mb-3 flex justify-end">
+                  <select
+                    aria-label="Current organization"
+                    className="h-9 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
+                    value={activeOrganizationId}
+                    onChange={(event) => setActiveOrganizationId(event.target.value)}
+                  >
+                    {organizations.map((organization) => (
+                      <option key={organization.id} value={organization.id}>
+                        {organization.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {children}
+            </div>
+
           </section>
         )}
       </div>

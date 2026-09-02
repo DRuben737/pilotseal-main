@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import CollapsibleMobileNav from "./CollapsibleMobileNav";
 
 const navItems = [
   {
@@ -58,7 +59,7 @@ export default function MobileAppNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="mobile-app-nav" aria-label="Primary mobile navigation">
+    <CollapsibleMobileNav label="Navigation" floating><nav className="mobile-app-nav" aria-label="Primary mobile navigation">
       {navItems.map((item) => {
         const active = isActive(pathname, item.href);
 
@@ -84,6 +85,6 @@ export default function MobileAppNav() {
           </Link>
         );
       })}
-    </nav>
+    </nav></CollapsibleMobileNav>
   );
 }

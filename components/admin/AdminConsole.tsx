@@ -287,6 +287,7 @@ export function DetailDrawer({
       };
     }
     function onKeyDown(event: KeyboardEvent) {
+      if (document.querySelector('[role="alertdialog"]')) return;
       if (event.key === "Escape") {
         onCloseRef.current();
         return;
@@ -454,10 +455,28 @@ export function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const cancelRef = useRef(onCancel);
+  useEffect(() => { cancelRef.current = onCancel; }, [onCancel]);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) { event.preventDefault(); cancelRef.current(); }
+      if (event.key !== "Tab") return;
+      const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+      if (!buttons.length) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons.at(-1)?.focus(); }
+      else if (!event.shiftKey && document.activeElement === buttons.at(-1)) { event.preventDefault(); buttons[0].focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); if (previous?.isConnected) previous.focus(); };
+  }, [open, busy]);
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/45 p-4">
-      <section role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
         <h2 id="confirm-title" className="text-lg font-semibold text-slate-950">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
         <div className="mt-5 flex justify-end gap-2">
@@ -465,6 +484,6 @@ export function ConfirmDialog({
           <button type="button" disabled={busy} onClick={onConfirm} className={`min-h-11 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60 ${destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-600 hover:bg-blue-700"}`}>{busy ? "Saving…" : confirmLabel}</button>
         </div>
       </section>
-    </div>
+    </div>, document.body
   );
 }
