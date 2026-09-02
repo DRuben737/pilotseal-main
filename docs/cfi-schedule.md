@@ -64,8 +64,21 @@ marked manual. Availability changes never move or cancel published lessons;
 conflicts are shown to the student and CFI, with no notification to the CFI.
 
 Availability periods are at least two hours and support 00:00–24:00. The browser's
-time zone is used. Automatic scheduling generates Flight only. Mobile/tablet use a
-day selector; desktop shows the week. Editing and publication use existing drawers.
+time zone is used. Automatic scheduling generates Flight only.
+
+The student schedule opens to today and the next four calendar dates, including
+weekends and dates across week/month/year boundaries. A direct date picker jumps
+to any date; “Show 5 more days” extends the list without hiding earlier dates.
+My lessons and My availability share this continuous agenda. Date-specific edits
+remain limited to the next 28 dates; the usual weekly pattern opens separately.
+
+The CFI view keeps the week on desktop and stacks every day on phones/tablets.
+Selecting a weekend date also reveals the weekend. The main + menu groups lessons,
+aircraft unavailability, and auto scheduling; each day also has a contextual +.
+The options menu contains student management, access, weekend visibility, refresh,
+and draft actions. Student management and lesson details use drawers, keeping the
+main page focused on dates and lessons. Menu keyboard navigation and focus return
+are supported. Conflicts appear as compact indicators, with details in editors.
 
 ## Local verification
 

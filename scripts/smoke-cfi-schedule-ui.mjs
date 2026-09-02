@@ -47,6 +47,10 @@ async function contextFor(session) {
   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
   return {context,page};
 }
+async function menuAction(page, name, menu = "Schedule options") {
+  await page.getByRole('button',{name:menu,exact:true}).click();
+  await page.getByRole('menuitem',{name,exact:true}).click();
+}
 try {
   unwrap(await admin.from('cfi_schedule_events').delete().in('id',eventIds));
   unwrap(await admin.from('cfi_schedule_unavailable_blocks').delete().eq('id',blockId));
@@ -66,7 +70,14 @@ try {
   const functionsHandle=page.getByRole('button',{name:/^Functions: pull down/});
   assert.equal(await navigationHandle.getAttribute('aria-expanded'),'false','site navigation starts collapsed');
   assert.equal(await functionsHandle.getAttribute('aria-expanded'),'false','workspace functions start collapsed');
-  assert.equal(await page.getByRole('button',{name:/^Schedule actions: pull down/}).getAttribute('aria-expanded'),'false','CFI action buttons also start collapsed on phones');
+  assert.equal(await page.getByRole('button',{name:'Add to schedule',exact:true}).getAttribute('aria-expanded'),'false','add actions are collapsed');
+  assert.equal(await page.getByRole('button',{name:'Schedule options',exact:true}).getAttribute('aria-expanded'),'false','management actions are collapsed');
+  assert.equal(await page.getByRole('button',{name:'Manage access',exact:true}).count(),0,'management no longer fills the main page');
+  await page.getByRole('button',{name:'Schedule options',exact:true}).focus();
+  await page.keyboard.press('ArrowDown');
+  assert(await page.getByRole('menuitem',{name:'Students',exact:true}).evaluate(el=>el===document.activeElement));
+  await page.keyboard.press('Escape');
+  assert(await page.getByRole('button',{name:'Schedule options',exact:true}).evaluate(el=>el===document.activeElement));
   assert((await navigationHandle.boundingBox()).height<=34,'collapsed mobile navigation is only a small handle');
   const handleBox=await navigationHandle.boundingBox();
   await page.mouse.move(handleBox.x+handleBox.width/2,handleBox.y+5);
@@ -84,6 +95,14 @@ try {
   await page.getByRole('navigation',{name:'Dashboard navigation',exact:true}).getByRole('link',{name:'Schedule',exact:true}).click();
   assert.equal(await functionsHandle.getAttribute('aria-expanded'),'false','choosing a function collapses its switcher');
   await page.setViewportSize({width:1440,height:1100});
+  await page.getByLabel('Jump to date').fill('2026-12-26');
+  await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  assert.equal(await page.locator('[data-schedule-date]').count(),7,'jumping to Saturday reveals the full week');
+  const weekColumns=await page.locator('[data-schedule-date]').evaluateAll(nodes=>nodes.map(node=>Math.round(node.getBoundingClientRect().top)));
+  assert.equal(new Set(weekColumns).size,1,'all seven days share a desktop row');
+  await page.getByLabel('Jump to date').fill(today);
+  await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  await menuAction(page,'Hide weekend');
   await page.getByRole('button').filter({hasText:'UI Schedule Student'}).nth(1).click();
   let dialog=page.getByRole('dialog');
   await dialog.getByLabel('Start',{exact:true}).fill('10:00');
@@ -95,8 +114,7 @@ try {
   // Direct day actions remain usable with an unpublished lesson draft, including
   // on mobile. Resource writes never publish/move those lessons or notify anyone.
   await page.setViewportSize({width:390,height:900});
-  await page.getByLabel('Day view',{exact:true}).selectOption('2');
-  await page.getByRole('button',{name:`Mark aircraft unavailable on ${today}`,exact:true}).click();
+  await menuAction(page,'Aircraft unavailable',`Add on ${today}`);
   dialog=page.getByRole('dialog');
   assert.equal(await navigationHandle.isVisible(),false,'mobile navigation cannot cover the block editor');
   assert.equal(await dialog.getByLabel('Date',{exact:true}).inputValue(),today);
@@ -120,7 +138,7 @@ try {
   const directBlock=unwrap(await cfi.from('cfi_schedule_unavailable_blocks').select('id').eq('note','UI direct aircraft block').single());
   directBlockIds.push(directBlock.id);
   await page.getByText('Unpublished draft · 2 changed lesson(s)').waitFor();
-  const blockCard=page.getByRole('button').filter({hasText:'UI direct aircraft block'});
+  const blockCard=page.locator(`[data-schedule-date="${today}"]`).getByRole('button').filter({hasText:'Aircraft unavailable'});
   await blockCard.waitFor();
   assert.equal(await countNotifications(),originalNotifications,'aircraft block sends no notifications');
   assert.equal(Date.parse(unwrap(await cfi.from('cfi_schedule_events').select('start_at').eq('id',eventIds[1]).single()).start_at),Date.parse(at(9)),'block does not publish or move lessons');
@@ -141,7 +159,8 @@ try {
   for (const width of [390,768,1024,1440]) {
     await page.setViewportSize({width,height:1100});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal page overflow');
-    assert.equal(await page.getByLabel('Day view',{exact:true}).isVisible(),width<1024,'day selector is mobile/tablet only');
+    assert.equal(await page.getByLabel('Day view',{exact:true}).count(),0,'no two-step day selector');
+    assert.equal(await page.locator('[data-schedule-date]:visible').count(),5,'all five CFI days visible without switching');
     await page.screenshot({path:path.join(screenshots,`schedule-${width}.png`),fullPage:true});
   }
   await page.getByRole('button',{name:'Review & publish',exact:true}).click();
@@ -167,13 +186,27 @@ try {
   await page.getByRole('dialog').getByLabel('I reviewed the availability, resource and time-limit warnings and want to publish anyway.').check();
   await page.screenshot({path:path.join(screenshots,'publish-preview.png'),fullPage:true});
   await page.getByRole('dialog').getByRole('button',{name:'Confirm & notify students'}).click();
-  await page.getByRole('button',{name:'Add lesson',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Add to schedule',exact:true}).waitFor();
   await page.getByRole('dialog').waitFor({state:'hidden'});
 
   const {page:studentPage}=await contextFor(studentAuth.session);
   await studentPage.goto(`${appUrl}/dashboard/schedule`);
-  await studentPage.getByLabel('Schedule view').selectOption(cfiId);
+  await studentPage.getByRole('heading',{name:'My schedule',exact:true}).waitFor();
+  await studentPage.getByRole('button',{name:'Show 5 more days',exact:true}).waitFor();
+  assert.equal(await studentPage.locator('[data-schedule-date]:visible').count(),5,'student sees five consecutive days immediately');
+  const defaultDates=await studentPage.locator('[data-schedule-date]').evaluateAll(nodes=>nodes.map(n=>n.dataset.scheduleDate));
+  const dateKey=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+  assert.equal(defaultDates[0],dateKey(new Date()),'student starts today, not Monday');
+  await studentPage.getByLabel('Jump to date').fill('2026-12-30');
+  await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
+  assert.deepEqual(await studentPage.locator('[data-schedule-date]').evaluateAll(nodes=>nodes.map(n=>n.dataset.scheduleDate)),['2026-12-30','2026-12-31','2027-01-01','2027-01-02','2027-01-03'],'date jump crosses year and includes weekend');
+  await studentPage.getByRole('button',{name:'Show 5 more days',exact:true}).click();
+  await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
+  assert.equal(await studentPage.locator('[data-schedule-date]').count(),10,'more appends dates without replacing the first five');
+  await studentPage.getByLabel('Jump to date').fill(today);
+  await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
   await studentPage.getByRole('button',{name:'My availability',exact:true}).click();
+  await studentPage.getByRole('button',{name:'Edit usual week',exact:true}).click();
   await studentPage.getByRole('button',{name:/^Monday/}).click();
   dialog=studentPage.getByRole('dialog');
   await dialog.getByRole('combobox').first().selectOption(String(base.getDay()||7));
@@ -183,19 +216,23 @@ try {
   await dialog.getByRole('button',{name:'Apply',exact:true}).click();
   await studentPage.getByText('Availability saved.',{exact:false}).waitFor();
   await studentPage.getByRole('button',{name:'My lessons',exact:true}).click();
-  await studentPage.getByText('outside the student’s stated availability.',{exact:false}).first().waitFor();
+  await studentPage.getByRole('button').filter({hasText:'UI Schedule Student'}).first().click();
+  await studentPage.getByRole('dialog').getByText('outside the student’s stated availability.',{exact:false}).first().waitFor();
+  await studentPage.keyboard.press('Escape');
   assert.equal(Date.parse(unwrap(await cfi.from('cfi_schedule_events').select('start_at').eq('id',eventIds[1]).single()).start_at),Date.parse(`${today}T10:30:00`),'student availability edits do not move a published lesson');
   await studentPage.setViewportSize({width:390,height:900});
   await studentPage.screenshot({path:path.join(screenshots,'student-390.png'),fullPage:true});
   const beforeAutoNotifications=await countNotifications();
-  await page.getByRole('button',{name:'Next',exact:true}).click();
-  await page.getByRole('button',{name:'Auto schedule',exact:true}).click();
+  const followingWeek=new Date(base);followingWeek.setDate(followingWeek.getDate()+7);
+  await page.getByLabel('Jump to date').fill(dateKey(followingWeek));
+  await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  await menuAction(page,'Auto schedule','Add to schedule');
   await page.getByRole('dialog').getByRole('button',{name:'Generate preview',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:/Add \d+ Flight lessons to draft/}).click();
   const generatedCards=await page.getByRole('button').filter({hasText:'UI Schedule Student'}).allTextContents();
   assert(generatedCards.length>0 && generatedCards.every(text=>/Flight/i.test(text)),'automatic scheduling stages Flight only');
   assert.equal(await countNotifications(),beforeAutoNotifications,'generated drafts do not notify students');
-  await page.getByRole('button',{name:'Discard draft',exact:true}).click();
+  await menuAction(page,'Discard draft');
   await page.getByRole('alertdialog').getByRole('button',{name:'Discard draft',exact:true}).click();
   await page.getByText('Draft discarded.',{exact:false}).waitFor();
   const snapshot=unwrap(await cfi.rpc('get_cfi_schedule_editor_snapshot',{p_range_start:at(0),p_range_end:at(23)}));
@@ -205,22 +242,23 @@ try {
   })));
   assert.equal(concurrent.filter(result=>!result.error).length,1,'only one simultaneous publisher succeeds');
   assert.equal(concurrent.filter(result=>result.error?.code==='PT409').length,1,`the second simultaneous publisher is rejected as stale: ${JSON.stringify(concurrent.map(result=>result.error))}`);
-  await page.getByRole('button',{name:'Add lesson',exact:true}).click();
+  await menuAction(page,'Add lesson','Add to schedule');
   await page.getByRole('dialog').getByLabel('Start',{exact:true}).focus();
   await page.keyboard.press('Tab');
   assert(await page.evaluate(()=>Boolean(document.activeElement.closest('[role="dialog"]'))),'keyboard focus stays inside drawer');
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({state:'hidden'});
-  await page.waitForFunction(()=>document.activeElement?.textContent==='Add lesson',null,{timeout:2000});
-  assert(await page.getByRole('button',{name:'Add lesson',exact:true}).evaluate(el=>el===document.activeElement),'Escape restores focus to the opener');
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Add to schedule',null,{timeout:2000});
+  assert(await page.getByRole('button',{name:'Add to schedule',exact:true}).evaluate(el=>el===document.activeElement),'Escape restores focus to the persistent menu opener');
   // The roster reuses a People record: no student creation or fake auth account.
   unwrap(await admin.from('saved_people').upsert({id:guestPersonId,user_id:cfiId,role:'student',display_name:'Existing People Guest',cert_number:'UI-GUEST-2'}));
   await page.reload();
-  await page.getByRole('button',{name:'Manage access',exact:true}).click();
+  await menuAction(page,'Manage access');
   dialog=page.getByRole('dialog');
   await dialog.getByLabel(/Existing People Guest/).check();
   await dialog.getByRole('button',{name:'Apply changes',exact:true}).click();
   await page.getByText('Schedule access updated.',{exact:true}).waitFor();
+  await menuAction(page,'Students');
   const guestRow=page.getByRole('row').filter({hasText:'Existing People Guest'});
   await guestRow.getByRole('button',{name:'Availability',exact:true}).click();
   dialog=page.getByRole('dialog');
@@ -228,7 +266,7 @@ try {
   await dialog.getByRole('button',{name:'Apply',exact:true}).click();
   await page.getByText('Availability saved.',{exact:false}).waitFor();
   assert(unwrap(await cfi.rpc('get_cfi_schedule_snapshot_v2',{p_range_start:at(0),p_range_end:at(23)})).slots.some(row=>row.student_user_id===guestPersonId),'proxy availability is attached to existing People record');
-  await page.getByRole('button',{name:'Add lesson',exact:true}).click();
+  await menuAction(page,'Add lesson','Add to schedule');
   dialog=page.getByRole('dialog');
   await dialog.getByLabel('Student').selectOption(guestPersonId);
   await dialog.getByLabel('Date',{exact:true}).fill(today);
@@ -255,10 +293,10 @@ try {
   unwrap(await admin.from('saved_person_account_links').upsert({saved_person_id:guestPersonId,owner_user_id:cfiId,linked_user_id:studentId}));
   await studentPage.reload();
   await studentPage.getByRole('heading',{name:'My schedule',exact:true}).waitFor();
-  await studentPage.getByLabel('Day view',{exact:true}).selectOption('2');
+  await studentPage.getByLabel('Jump to date').fill(today);
   await studentPage.getByRole('button').filter({hasText:'Existing People Guest'}).waitFor();
   await studentPage.getByRole('button',{name:'My availability',exact:true}).click();
-  await studentPage.getByRole('button',{name:/^Wednesday/}).click();
+  await studentPage.getByRole('button',{name:`Edit availability on ${today}`,exact:true}).click();
   dialog=studentPage.getByRole('dialog');
   await dialog.getByRole('button',{name:'Specific date',exact:true}).click();
   await dialog.getByLabel('Date',{exact:true}).fill(today);

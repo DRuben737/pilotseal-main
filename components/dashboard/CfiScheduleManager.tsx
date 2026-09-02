@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ConfirmDialog, DetailDrawer, EmptyState, StatusBadge } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import CollapsibleMobileNav from "@/components/ui/CollapsibleMobileNav";
+import ScheduleMenu from "./ScheduleMenu";
+import styles from "./CfiScheduleManager.module.css";
 import {
   addCalendarDays,
   availabilityForDate,
@@ -46,7 +47,7 @@ import { applyScheduleOperations, scheduleChanges, scheduleHasOverlap, type Sche
 import { fetchEnabledFeatureIds, updateEnabledFeatureIds } from "@/lib/dashboard-preferences";
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
 
-type DrawerMode = "access" | "availability" | "lesson" | "block" | "auto" | "settings" | "publish" | null;
+type DrawerMode = "students" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "settings" | "publish" | null;
 type AvailabilityRow = { start: string; end: string };
 
 const weekdayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -106,7 +107,10 @@ export default function CfiScheduleManager() {
   const [publishAcknowledged, setPublishAcknowledged] = useState(false);
   const batchId = useRef("");
   const loadGeneration = useRef(0);
-  const [mobileDayIndex, setMobileDayIndex] = useState(() => Math.min(4, (new Date().getDay() + 6) % 7));
+  const [selectedDate, setSelectedDate] = useState(() => localDateKey(new Date()));
+  const [agendaStart, setAgendaStart] = useState(() => localDateKey(new Date()));
+  const [agendaDays, setAgendaDays] = useState(5);
+  const [detailEntry, setDetailEntry] = useState<ScheduleEntry | null>(null);
   const entries = useMemo(() => applyScheduleOperations(publishedEntries, operations), [publishedEntries, operations]);
   const changes = useMemo(() => scheduleChanges(publishedEntries, entries), [publishedEntries, entries]);
   const hasDraft = operations.length > 0;
@@ -140,7 +144,8 @@ export default function CfiScheduleManager() {
   const studentViews = useMemo(() => access.filter((item) => item.caller_role === "student" && item.access_enabled), [access]);
   const isCfiView = viewKey === "cfi";
   const activeCfiId = isCfiView ? userId : viewKey;
-  const weekReady = loadedContext === `${activeCfiId}:${localDateKey(weekStart)}`;
+  const rangeContext = isCfiView ? `${activeCfiId}:${localDateKey(weekStart)}` : `${activeCfiId}:agenda:${agendaStart}:${agendaDays}`;
+  const weekReady = loadedContext === rangeContext;
   const activeCfiName = isCfiView ? "My CFI schedule" : studentViews.find((item) => item.cfi_user_id === viewKey)?.cfi_name ?? "Instructor";
   const cfiAccess = useMemo(
     () => access.filter((item) => item.caller_role === "cfi" && item.cfi_user_id === userId),
@@ -192,16 +197,16 @@ export default function CfiScheduleManager() {
     setStale(false);
   }
 
-  function weekRange() {
-    const start = new Date(weekStart);
+  function weekRange(cfiId = activeCfiId) {
+    const start = cfiId === userId ? new Date(weekStart) : new Date(`${agendaStart}T12:00:00`);
     start.setHours(0, 0, 0, 0);
-    return { start, end: addCalendarDays(start, 7) };
+    return { start, end: addCalendarDays(start, cfiId === userId ? 7 : agendaDays) };
   }
 
   async function loadWeekData(cfiId = activeCfiId) {
     if (!cfiId) return;
     const generation = ++loadGeneration.current;
-    const { start, end } = weekRange();
+    const { start, end } = weekRange(cfiId);
     if (cfiId === userId) {
       const snapshot = await fetchScheduleEditorSnapshot(start, end);
       if (generation !== loadGeneration.current) return;
@@ -219,7 +224,7 @@ export default function CfiScheduleManager() {
     }
     const snapshot = await fetchScheduleEditorSnapshot(start, end, cfiId);
     if (generation !== loadGeneration.current) return;
-    setLoadedContext(`${cfiId}:${localDateKey(weekStart)}`);
+    setLoadedContext(`${cfiId}:agenda:${agendaStart}:${agendaDays}`);
     setEntries(snapshot.entries);
     setSlots(snapshot.slots);
     setOverrideDates(snapshot.overrideDates);
@@ -252,7 +257,7 @@ export default function CfiScheduleManager() {
     if (!userId || featureEnabled !== true || !activeCfiId) return;
     void loadWeekData(activeCfiId).catch((loadError) => setError(getErrorMessage(loadError, "Unable to load this week.")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCfiId, featureEnabled, localDateKey(weekStart), isCfiView]);
+  }, [activeCfiId, featureEnabled, localDateKey(weekStart), isCfiView, agendaStart, agendaDays]);
 
   useEffect(() => {
     if (!hasDraft) return;
@@ -274,7 +279,18 @@ export default function CfiScheduleManager() {
     return () => window.removeEventListener("focus", onFocus);
     // Use the latest draft, view and week when returning from another tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawer, saving, operations, activeCfiId, revision, localDateKey(weekStart)]);
+  }, [drawer, saving, operations, activeCfiId, revision, localDateKey(weekStart), agendaStart, agendaDays]);
+
+  function jumpToDate(date: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || hasDraft || saving) return;
+    const value = new Date(`${date}T12:00:00`);
+    if (Number.isNaN(value.getTime())) return;
+    setSelectedDate(date);
+    setWeekStart(getWeekStart(value));
+    setAgendaStart(date);
+    setAgendaDays(5);
+    if (isCfiView && (value.getDay() === 0 || value.getDay() === 6)) setIncludeWeekends(true);
+  }
 
   function stageOperations(next: ScheduleOperation[]) {
     ++loadGeneration.current;
@@ -732,7 +748,13 @@ export default function CfiScheduleManager() {
     );
   }
 
-  const displayDays = Array.from({ length: includeWeekends ? 7 : 5 }, (_, index) => addCalendarDays(weekStart, index));
+  const displayDays = Array.from({ length: isCfiView ? (includeWeekends ? 7 : 5) : agendaDays }, (_, index) => addCalendarDays(isCfiView ? weekStart : new Date(`${agendaStart}T12:00:00`), index));
+  const activeStudent = studentViews.find((item) => item.cfi_user_id === activeCfiId);
+  const calendarEntries: ScheduleEntry[] = isCfiView ? [
+    ...entries.filter((entry) => entry.entry_type === "lesson"),
+    ...blocks.map((block): ScheduleEntry => ({ ...block, entry_type: "unavailable", student_user_id: null,
+      student_name: null, lesson_kind: null, auto_generated: false, status: "scheduled", is_own: false })),
+  ] : entries;
   const publishWarnings = changes.flatMap((change) => entryWarnings(change.after));
   const previewChanges = drawer === "lesson" ? lessonPreviewChanges() : [];
   const lessonPreviewEntries = drawer === "lesson" && lesson.date && lesson.start && lesson.studentUserId ? applyScheduleOperations(entries, [lessonOperation()]) : entries;
@@ -740,104 +762,89 @@ export default function CfiScheduleManager() {
   const preservedDates = fillCandidates.filter((date) => overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === localDateKey(date) && item.source !== "auto"));
 
   return (
-    <div className="space-y-4">
-      <section className="saas-panel">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="saas-kicker">Personal workspace</p>
-            <h1 className="tools-child-title">{isCfiView ? "CFI Schedule" : "My schedule"}</h1>
-            <p className="saas-meta-text mt-2">Times are shown in {browserTimeZone()} using this browser.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {studentViews.length ? (
-              <select className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm" value={viewKey} disabled={hasDraft || saving} onChange={(event) => setViewKey(event.target.value)} aria-label="Schedule view">
-                <option value="cfi">My CFI schedule</option>
-                {studentViews.map((item) => <option key={item.cfi_user_id} value={item.cfi_user_id}>Student view · {item.cfi_name}</option>)}
-              </select>
-            ) : null}
-            {isCfiView ? <CollapsibleMobileNav label="Schedule actions" desktopVisible><div className="flex flex-wrap gap-2">
-            <button className="secondary-button" type="button" disabled={hasDraft || saving} onClick={openAccessDrawer}>Manage access</button>
-            {isCfiView ? <button className="secondary-button" type="button" disabled={!activeStudents.length || !weekReady || saving} onClick={() => openNewLesson()}>Add lesson</button> : null}
-            {isCfiView ? <button className="secondary-button" type="button" disabled={!weekReady || saving} onClick={() => openBlockDrawer(localDateKey(addCalendarDays(weekStart, mobileDayIndex)))}>Aircraft unavailable</button> : null}
-            {isCfiView ? <button className="primary-button" type="button" disabled={!activeStudents.length || !weekReady || saving} onClick={openAutoDrawer}>Auto schedule</button> : null}
-            </div></CollapsibleMobileNav> : null}
-            {!isCfiView ? <div className="flex gap-1" aria-label="Student schedule sections"><button type="button" className={studentTab === "lessons" ? "primary-button" : "ghost-button"} onClick={() => setStudentTab("lessons")}>My lessons</button><button type="button" className={studentTab === "availability" ? "primary-button" : "ghost-button"} onClick={() => setStudentTab("availability")}>My availability</button></div> : null}
-          </div>
+    <div className={styles.root}>
+      <header className={styles.header}>
+        <div><h1>{isCfiView ? "CFI Schedule" : "My schedule"}</h1><p className={styles.subtitle}>{isCfiView ? "Your week, at a glance." : activeCfiName}</p></div>
+        <div className={styles.actions}>
+          {isCfiView ? <ScheduleMenu label="Add to schedule" icon="＋" disabled={saving || !weekReady} actions={[
+            { label: "Add lesson", disabled: !activeStudents.length, onSelect: () => openNewLesson(selectedDate) },
+            { label: "Aircraft unavailable", onSelect: () => openBlockDrawer(selectedDate) },
+            { label: "Auto schedule", disabled: !activeStudents.length, onSelect: openAutoDrawer },
+          ]} /> : null}
+          <ScheduleMenu label="Schedule options" icon="⋯" disabled={saving} actions={[
+            ...(isCfiView ? [
+              { label: "Students", onSelect: () => setDrawer("students" as DrawerMode) },
+              { label: "Manage access", disabled: hasDraft, onSelect: openAccessDrawer },
+              { label: includeWeekends ? "Hide weekend" : "Show weekend", onSelect: () => setIncludeWeekends(!includeWeekends) },
+            ] : [
+              { label: "Usual weekly availability", disabled: !weekReady, onSelect: () => setDrawer("weekly" as DrawerMode) },
+              ...(activeStudent?.storage_kind === "person" ? [{ label: "Weekly goal", disabled: !weekReady, onSelect: () => openStudentSettings(activeStudent) }] : []),
+            ]),
+            { label: "Refresh", onSelect: () => { void loadWeekData().catch((failure) => setError(getErrorMessage(failure, "Unable to refresh."))); } },
+            ...(hasDraft ? [
+              { label: "Undo last edit", onSelect: () => stageOperations(operations.slice(0, -1)) },
+              { label: "Discard draft", danger: true, onSelect: () => setDiscardOpen(true) },
+            ] : []),
+            ...(studentViews.length ? [
+              { label: "My CFI schedule", disabled: hasDraft || isCfiView, onSelect: () => setViewKey("cfi") },
+              ...studentViews.map((item) => ({ label: `Student view · ${item.cfi_name}`, disabled: hasDraft || viewKey === item.cfi_user_id, onSelect: () => setViewKey(item.cfi_user_id) })),
+            ] : []),
+          ]} />
         </div>
-        {message ? <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{message}</p> : null}
-        {error ? <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p> : null}
-        {hasDraft ? <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3"><p className="text-sm font-semibold text-blue-900">Unpublished draft · {changes.length} changed lesson(s)</p><p className="mt-1 text-xs text-blue-800">Only you can see these changes. Publish or discard before switching weeks or editing access. Aircraft unavailable times can be changed at any time.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" className="primary-button" disabled={saving || !changes.length} onClick={() => void openPublishDrawer()}>Review &amp; publish</button><button type="button" className="secondary-button" disabled={saving} onClick={() => stageOperations(operations.slice(0, -1))}>Undo last edit</button><button type="button" className="ghost-button" disabled={saving} onClick={() => setDiscardOpen(true)}>Discard draft</button></div>{stale ? <p role="alert" className="mt-2 text-sm text-amber-900">The schedule or availability changed elsewhere. <button type="button" className="underline" disabled={saving} onClick={() => void reviewLatestDraft()}>Review latest and reapply draft</button></p> : null}</div> : null}
-      </section>
+      </header>
 
-      <section className="saas-panel">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-950">{activeCfiName}</p>
-            <p className="text-xs text-slate-500">{formatDate(weekStart)} – {formatDate(addCalendarDays(weekStart, includeWeekends ? 6 : 4))}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button className="ghost-button" type="button" disabled={saving} onClick={() => void loadWeekData().catch((failure) => setError(getErrorMessage(failure, "Unable to refresh.")))}>Refresh</button>
-            <button className="ghost-button" type="button" disabled={hasDraft || saving} onClick={() => setWeekStart(addCalendarDays(weekStart, -7))}>Previous</button>
-            <button className="ghost-button" type="button" disabled={hasDraft || saving} onClick={() => setWeekStart(getWeekStart())}>Current week</button>
-            <button className="ghost-button" type="button" disabled={hasDraft || saving} onClick={() => setWeekStart(addCalendarDays(weekStart, 7))}>Next</button>
-            <label className="ml-2 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={includeWeekends} onChange={(event) => setIncludeWeekends(event.target.checked)} /> Show weekend</label>
-          </div>
+      <div className={styles.toolbar}>
+        <div className={styles.dateGroup}>
+          <input className={styles.dateInput} type="date" aria-label="Jump to date" value={isCfiView ? selectedDate : agendaStart} disabled={hasDraft || saving} onChange={(event) => jumpToDate(event.target.value)} />
+          <button className={styles.textButton} type="button" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(new Date()))}>Today</button>
         </div>
+        {!isCfiView ? <div className={styles.segments} aria-label="Student schedule sections">
+          <button type="button" aria-pressed={studentTab === "lessons"} onClick={() => setStudentTab("lessons")}>My lessons</button>
+          <button type="button" aria-pressed={studentTab === "availability"} onClick={() => setStudentTab("availability")}>My availability</button>
+        </div> : null}
+      </div>
+      <p className={styles.range}>{formatDate(displayDays[0])} – {formatDate(displayDays[displayDays.length - 1])} · {browserTimeZone()}</p>
+      {error ? <p role="alert" className={`${styles.feedback} ${styles.error}`}>{error}</p> : null}
+      {message ? <p role="status" className={styles.feedback}>{message}</p> : null}
+      {hasDraft ? <div className={styles.draftBar}><strong>Unpublished draft · {changes.length} changed lesson(s)</strong><button className={styles.textButton} type="button" disabled={saving || !changes.length} onClick={() => void openPublishDrawer()}>Review &amp; publish</button></div> : null}
+      {stale ? <p role="alert" className={styles.feedback}>The schedule changed. <button type="button" className={styles.textButton} onClick={() => void reviewLatestDraft()}>Review latest and reapply draft</button></p> : null}
+      {!isCfiView && studentTab === "availability" ? <button type="button" className={styles.textButton} disabled={!weekReady} onClick={() => setDrawer("weekly")}>Edit usual week</button> : null}
+      {!weekReady ? <p role="status" className={styles.feedback}>Loading dates…</p> : null}
+      <div className={`${styles.calendar} ${!isCfiView ? styles.agenda : includeWeekends ? styles.fullWeek : ""}`} aria-busy={!weekReady} aria-label={isCfiView ? "Week schedule" : "Upcoming days"}>
+        {displayDays.map((day) => {
+          const date = localDateKey(day);
+          const dayEntries = calendarEntries.filter((entry) => entry.status === "scheduled" && Date.parse(entry.start_at) < new Date(`${localDateKey(addCalendarDays(day, 1))}T00:00:00`).getTime() && Date.parse(entry.end_at) > new Date(`${date}T00:00:00`).getTime()).sort((a,b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+          return <section key={date} data-schedule-date={date} aria-label={formatDate(day)} className={`${styles.day} ${date === localDateKey(new Date()) ? styles.today : ""}`}>
+            <div className={styles.dayHeader}>
+              <div className={styles.dayHeading}><span>{date === localDateKey(new Date()) ? "Today" : new Intl.DateTimeFormat(undefined,{weekday:"short"}).format(day)}</span><strong>{day.getDate()}</strong></div>
+              {isCfiView ? <ScheduleMenu label={`Add on ${date}`} icon="＋" disabled={!weekReady || saving} actions={[
+                { label: "Add lesson", disabled: !activeStudents.length, onSelect: () => openNewLesson(date) },
+                { label: "Aircraft unavailable", onSelect: () => openBlockDrawer(date) },
+              ]} /> : null}
+            </div>
+            <div className={styles.dayEntries}>
+              {!weekReady ? null : !isCfiView && studentTab === "availability" ? <button type="button" className={styles.availability} aria-label={`Edit availability on ${date}`} disabled={date < localDateKey(new Date()) || date > maxAvailabilityDate} onClick={() => openAvailabilityDrawer("date", 1, date)}>
+                {availabilityForDate({date:day,studentUserId:activeStudent?.student_user_id ?? userId,slots,overrideDates}).map((period) => `${formatTime(period.start.toISOString())}–${formatTime(period.end.toISOString())}`).join(", ") || "Not available"}
+                <span className={styles.entryMeta}>{date >= localDateKey(new Date()) && date <= maxAvailabilityDate ? "Tap to edit" : "Outside the four-week window"}</span>
+              </button> : !dayEntries.length ? <p className={styles.empty}>{isCfiView ? "Open" : "No lessons"}</p> : dayEntries.map((entry) => {
+                const warnings = entryWarnings(entry);
+                const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${entry.lesson_kind === "flight" ? "Flight" : "Ground"}` : isCfiView ? "Aircraft unavailable" : "Unavailable"}</span>{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ Conflict · {warnings.length}</span> : null}</>;
+                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? styles.busy : ""}`;
+                return isCfiView || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving} onClick={() => {
+                  if (!isCfiView) { setDetailEntry(entry); setDrawer("details"); }
+                  else if (entry.entry_type === "lesson") openEditLesson(entry);
+                  else { const block = blocks.find((item) => item.id === entry.id); if (block) openBlockDrawer(date, block); }
+                }}>{content}</button> : <div key={entry.id} className={className}>{content}</div>;
+              })}
+            </div>
+          </section>;
+        })}
+      </div>
+      {!isCfiView ? <button type="button" className={`${styles.textButton} ${styles.moreDates}`} disabled={!weekReady || saving} onClick={() => setAgendaDays((current) => current + 5)}>Show 5 more days</button> : !activeStudents.length ? <button type="button" className={styles.textButton} onClick={openAccessDrawer}>Choose students from People</button> : null}
 
-        <div className="lg:hidden"><label className="saas-field mt-4"><span>Day view</span><select aria-label="Day view" value={Math.min(mobileDayIndex, displayDays.length - 1)} onChange={(event) => setMobileDayIndex(Number(event.target.value))}>{displayDays.map((day, index) => <option key={index} value={index}>{weekdayLabels[index]} · {formatDate(day)}</option>)}</select></label></div>
-        {!weekReady ? <p role="status" className="mt-3 text-sm text-slate-500">Loading week…</p> : null}
-        <div className="mt-4 grid gap-3 lg:grid-cols-5">
-          {displayDays.map((day, dayIndex) => {
-            const calendarEntries: ScheduleEntry[] = isCfiView ? [
-              ...entries.filter((entry) => entry.entry_type === "lesson"),
-              ...blocks.map((block): ScheduleEntry => ({ ...block, entry_type: "unavailable", student_user_id: null,
-                student_name: null, lesson_kind: null, auto_generated: false, status: "scheduled", is_own: false })),
-            ] : entries;
-            const dayEntries = (isCfiView || studentTab === "lessons" ? calendarEntries : []).filter((entry) => Date.parse(entry.start_at) < new Date(`${localDateKey(addCalendarDays(day, 1))}T00:00:00`).getTime()
-              && Date.parse(entry.end_at) > new Date(`${localDateKey(day)}T00:00:00`).getTime())
-              .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
-            return (
-              <section key={localDateKey(day)} className={`min-w-0 rounded-2xl border border-slate-200 bg-slate-50/50 p-3 ${dayIndex === Math.min(mobileDayIndex, displayDays.length - 1) ? "" : "hidden lg:block"}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(day)}</p><p className="text-sm font-semibold text-slate-900">{formatDate(day)}</p></div>
-                  {isCfiView ? <button className="min-h-10 min-w-10 text-xs font-semibold text-blue-700" aria-label={`Add lesson on ${localDateKey(day)}`} type="button" disabled={!weekReady || saving} onClick={() => openNewLesson(localDateKey(day))}>＋</button> : studentTab === "availability" ? <button className="text-xs font-semibold text-blue-700" type="button" disabled={!weekReady} onClick={() => openAvailabilityDrawer("date", 1, localDateKey(day))}>Availability</button> : null}
-                </div>
-                {isCfiView ? <button type="button" className="mt-2 min-h-10 w-full rounded-lg border border-dashed border-slate-300 px-2 text-xs font-medium text-slate-700 hover:bg-slate-100" aria-label={`Mark aircraft unavailable on ${localDateKey(day)}`} disabled={!weekReady || saving} onClick={() => openBlockDrawer(localDateKey(day))}>＋ Aircraft unavailable</button> : null}
-                <div className="mt-3 grid gap-2">
-                  {!isCfiView && studentTab === "availability" ? <p className="rounded-lg bg-blue-50 p-2 text-xs text-blue-900">{availabilityForDate({ date: day, studentUserId: studentViews.find((item) => item.cfi_user_id === activeCfiId)?.student_user_id ?? userId, slots, overrideDates }).map((period) => `${formatTime(period.start.toISOString())}–${formatTime(period.end.toISOString())}`).join(", ") || "Not available"}</p> : null}
-                  {!dayEntries.length ? (isCfiView || studentTab === "lessons" ? <p className="rounded-xl border border-dashed border-slate-200 px-2 py-4 text-center text-xs text-slate-400">{isCfiView ? "Open" : "No lessons"}</p> : null) : dayEntries.map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      disabled={!isCfiView || !weekReady || saving}
-                      onClick={() => {
-                        if (entry.entry_type === "lesson") openEditLesson(entry);
-                        else {
-                          const block = blocks.find((item) => item.id === entry.id);
-                          if (block) openBlockDrawer(localDateKey(day), block);
-                        }
-                      }}
-                      className={`rounded-xl border p-2 text-left text-xs ${entry.entry_type === "lesson" ? "border-sky-200 bg-white" : "border-slate-300 bg-slate-100 text-slate-500"}`}
-                      style={entry.entry_type === "lesson" && entry.student_user_id ? { borderLeftColor: cfiAccess.find((item) => item.student_user_id === entry.student_user_id)?.color, borderLeftWidth: 4 } : undefined}
-                    >
-                      <span className="block font-semibold">{entry.entry_type === "lesson" ? entry.student_name : isCfiView ? "Aircraft unavailable" : "Unavailable"}</span>
-                      <span className="mt-1 block">{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</span>
-                      {entry.lesson_kind ? <span className="mt-1 block capitalize text-slate-500">{entry.lesson_kind}</span> : null}
-                      {isCfiView && entry.entry_type === "unavailable" && entry.note ? <span className="mt-1 block break-words">{entry.note}</span> : null}
-                      {changes.some((change) => change.after.id === entry.id) ? <span className="mt-1 block font-semibold text-blue-700">Unpublished draft</span> : null}
-                      {entryWarnings(entry).map((warning) => <span key={warning} className="mt-1 block text-amber-800">⚠ {warning}</span>)}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </section>
+      <DetailDrawer open={drawer === "students"} onClose={() => setDrawer(null)} title="Students" description="Availability and weekly goals." width="wide">
 
-      {isCfiView ? (
-        <section className="saas-panel">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="saas-subsection-title">Students</h2><p className="saas-meta-text mt-1">General targets can be overridden for the selected week.</p></div><span className="text-xs text-slate-500">{activeStudents.length} active</span></div>
+          <p className="saas-meta-text">{activeStudents.length} active · Week of {formatDate(weekStart)}. General targets can be overridden for this week.</p>
           {!activeStudents.length ? <EmptyState title="No students have schedule access" description="Choose students already saved in People using Manage access. An account is not required." /> : (
             <div className="mt-4 max-w-full overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead><tr className="border-b border-slate-200 text-slate-500"><th className="py-2">Student</th><th>Weekly target</th><th>Duration</th><th>Availability this week</th><th className="text-right">Action</th></tr></thead><tbody>{activeStudents.map((student) => {
               const override = weekOverrides.find((item) => item.student_user_id === student.student_user_id);
@@ -845,18 +852,16 @@ export default function CfiScheduleManager() {
               return <tr key={student.student_user_id} className="border-b border-slate-100"><td className="py-2 font-semibold text-slate-900"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: student.color }} />{student.student_name}</td><td>{override?.target_sessions ?? student.default_weekly_sessions}{override ? " · override" : ""}</td><td>{override?.duration_min ?? student.default_duration_min} min</td><td>{availabilityCount} day{availabilityCount === 1 ? "" : "s"}</td><td className="text-right">{student.storage_kind === "person" ? <button className="ghost-button" type="button" disabled={!weekReady || saving} onClick={() => openAvailabilityDrawer("weekly", 1, localDateKey(new Date()), student.student_user_id)}>Availability</button> : null}<button className="ghost-button" type="button" disabled={hasDraft || saving} onClick={() => openStudentSettings(student)}>Settings</button></td></tr>;
             })}</tbody></table></div>
           )}
-        </section>
-      ) : (
-        <section className={`saas-panel ${studentTab === "availability" ? "" : "hidden"}`}>
-          <div className="flex items-center justify-between gap-2"><h2 className="saas-subsection-title">Your general availability</h2>{studentViews.find((item) => item.cfi_user_id === activeCfiId)?.storage_kind === "person" ? <button className="ghost-button" type="button" onClick={() => openStudentSettings(studentViews.find((item) => item.cfi_user_id === activeCfiId)!)}>Weekly goal</button> : null}</div>
-          <p className="saas-meta-text mt-1">Editing availability never moves or cancels an existing lesson. Conflicts are marked for your instructor to review. Each period must be at least two hours.</p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{weekdayLabels.map((label, index) => {
-            const weekday = index + 1;
-            const weeklySlots = slots.filter((slot) => slot.student_user_id === (studentViews.find((item) => item.cfi_user_id === activeCfiId)?.student_user_id ?? userId) && slot.scope === "weekly" && slot.weekday === weekday);
-            return <button key={label} type="button" className="rounded-xl border border-slate-200 p-3 text-left" onClick={() => openAvailabilityDrawer("weekly", weekday)}><span className="block text-xs font-semibold text-slate-900">{label}</span><span className="mt-1 block text-xs text-slate-500">{weeklySlots.length ? weeklySlots.map((slot) => `${minutesToTime(slot.start_minute)}–${minutesToTime(slot.end_minute)}`).join(", ") : "Unavailable"}</span></button>;
-          })}</div>
-        </section>
-      )}
+      </DetailDrawer>
+      <DetailDrawer open={drawer === "weekly"} onClose={() => setDrawer(null)} title="Usual weekly availability" description="Your weekly pattern. Individual dates can be different.">
+        <div className={styles.weeklyList}>{weekdayLabels.map((label,index) => {
+          const periods = slots.filter((slot) => slot.student_user_id === activeStudent?.student_user_id && slot.scope === "weekly" && slot.weekday === index + 1);
+          return <button key={label} type="button" onClick={() => openAvailabilityDrawer("weekly", index + 1)}><span>{label}</span><span>{periods.length ? periods.map((slot) => `${minutesToTime(slot.start_minute)}–${minutesToTime(slot.end_minute)}`).join(", ") : "Not available"} ›</span></button>;
+        })}</div>
+      </DetailDrawer>
+      <DetailDrawer open={drawer === "details"} onClose={() => setDrawer(null)} title="Lesson details">
+        {detailEntry ? <div className="space-y-3"><p className="font-semibold">{formatDate(new Date(detailEntry.start_at))} · {formatTime(detailEntry.start_at)}–{formatTime(detailEntry.end_at)}</p><p className="capitalize">{detailEntry.lesson_kind}</p>{detailEntry.note ? <p className="whitespace-pre-wrap">{detailEntry.note}</p> : null}{entryWarnings(detailEntry).map((warning) => <p key={warning} className="text-sm text-amber-800">⚠ {warning}</p>)}</div> : null}
+      </DetailDrawer>
 
       <DetailDrawer open={drawer === "access"} onClose={() => setDrawer(null)} title="Manage schedule access" description="Choose existing students from People. Unlinked students can be scheduled now; account access starts only after linking.">
         <div className="grid gap-2">

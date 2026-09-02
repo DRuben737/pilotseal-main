@@ -1,0 +1,82 @@
+.root {
+  --schedule-ink: #1d1d1f;
+  --schedule-muted: #6e6e73;
+  --schedule-blue: #0066cc;
+  --schedule-line: #e5e5ea;
+  --schedule-surface: #f5f5f7;
+  color: var(--schedule-ink);
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  min-width: 0;
+}
+.header, .toolbar, .dayHeader, .draftBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.header h1 { margin: 0; font-size: 25px; font-weight: 600; letter-spacing: -.025em; line-height: 1.2; }
+.subtitle, .muted { color: var(--schedule-muted); font-size: 12px; line-height: 1.5; }
+.subtitle { margin: 5px 0 0; }
+.actions { display: flex; align-items: center; gap: 2px; }
+.iconButton { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--schedule-blue); font-size: 24px; line-height: 1; cursor: pointer; }
+.root button:disabled { cursor: default; opacity: .4; }
+.root button:focus-visible, .root input:focus-visible, .menuPanel button:focus-visible { outline: 2px solid #0071e3; outline-offset: 2px; }
+.iconButton:active, .textButton:active { background: var(--schedule-surface); }
+.menu { position: relative; flex: 0 0 auto; }
+.menuPanel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 75; min-width: 215px; max-width: calc(100vw - 48px); max-height: 65dvh; overflow: auto; padding: 5px; background: #fff; border: 1px solid #d2d2d7; border-radius: 12px; }
+.menuPanel button { display: block; width: 100%; padding: 11px 12px; min-height: 44px; border: 0; border-radius: 7px; background: transparent; color: #1d1d1f; text-align: left; font: inherit; font-size: 14px; }
+.menuPanel button:focus, .menuPanel button:active { background: #f5f5f7; }
+.menuPanel .danger { color: #b42318; }
+.toolbar { margin: 22px 0 12px; flex-wrap: wrap; }
+.dateGroup { display: flex; align-items: center; gap: 8px; }
+.dateInput { max-width: 160px; min-height: 40px; padding: 6px 0; border: 0; background: transparent; color: var(--schedule-ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.textButton { min-height: 40px; padding: 6px 8px; border: 0; border-radius: 8px; color: var(--schedule-blue); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.segments { display: flex; gap: 2px; padding: 3px; background: var(--schedule-surface); border-radius: 9px; }
+.segments button { padding: 6px 12px; min-height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--schedule-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.segments button[aria-pressed="true"] { background: #fff; color: var(--schedule-ink); font-weight: 600; }
+.range { margin: 0 0 14px; color: var(--schedule-muted); font-size: 12px; }
+.feedback { margin: 12px 0; font-size: 13px; line-height: 1.5; }
+.error, .warning { color: #9a5200; }
+.draftBar { border-top: 1px solid var(--schedule-line); border-bottom: 1px solid var(--schedule-line); padding: 8px 0; font-size: 13px; }
+.draftBar strong { font-weight: 600; }
+.calendar { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; border-top: 1px solid var(--schedule-line); }
+.fullWeek { grid-template-columns: repeat(7, minmax(0,1fr)); }
+.day { min-width: 0; padding: 12px 10px; border-right: 1px solid var(--schedule-line); }
+.day:last-child { border-right: 0; }
+.dayHeader { margin-bottom: 8px; }
+.dayHeading { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--schedule-muted); }
+.dayHeading strong { font-size: 20px; font-weight: 600; color: var(--schedule-ink); }
+.today .dayHeading strong { color: var(--schedule-blue); }
+.dayEntries { display: grid; gap: 6px; }
+.entry { display: block; width: 100%; border: 0; border-left: 2px solid var(--schedule-blue); border-radius: 0; background: #f5f9ff; padding: 9px 10px; text-align: left; color: var(--schedule-ink); font: inherit; font-size: 13px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
+.entry strong { font-weight: 600; }
+.entryMeta { display: block; font-size: 12px; color: var(--schedule-muted); }
+.busy { border-left-color: #c7c7cc; background: var(--schedule-surface); color: var(--schedule-muted); }
+.conflict { display: inline-block; margin-top: 3px; font-size: 11px; color: #9a5200; }
+.empty { margin: 8px 0; color: var(--schedule-muted); font-size: 13px; }
+.agenda { display: block; }
+.agenda .day { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 16px; padding: 17px 0; border-right: 0; border-bottom: 1px solid var(--schedule-line); }
+.agenda .dayHeader { align-items: flex-start; margin: 0; }
+.agenda .dayHeading { flex-direction: column; gap: 1px; }
+.agenda .entry { border-left: 0; background: transparent; padding: 3px 0 7px; }
+.agenda .busy { color: var(--schedule-muted); }
+.agenda .entry + .entry { border-top: 1px solid #f0f0f0; padding-top: 9px; }
+.availability { display: block; text-align: left; width: 100%; padding: 4px 0; border: 0; background: transparent; color: var(--schedule-blue); font: inherit; font-size: 14px; line-height: 1.6; cursor: pointer; }
+.moreDates { display: block; margin: 12px auto 0; }
+.weeklyList { display: grid; }
+.weeklyList button { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; border: 0; border-bottom: 1px solid #e5e5ea; background: transparent; padding: 12px 0; text-align: left; font-size: 14px; }
+.weeklyList button span:last-child { color: #6e6e73; font-size: 13px; }
+@media (max-width: 1023px) {
+  .calendar { display: block; }
+  .day { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 12px; padding: 14px 0; border-right: 0; border-bottom: 1px solid var(--schedule-line); }
+  .dayHeader { display: block; }
+  .dayHeading { display: block; }
+  .dayHeading strong { display: block; }
+  .day .menuPanel { right: auto; left: 0; }
+}
+@media (max-width: 600px) {
+  .root { padding: 18px 14px; border-radius: 14px; }
+  .header h1 { font-size: 22px; }
+  .toolbar { margin-top: 16px; gap: 6px; }
+  .agenda .day { grid-template-columns: 76px minmax(0,1fr); gap: 12px; padding: 15px 0; }
+  .segments button { padding: 6px 10px; }
+  .dateInput { max-width: 145px; font-size: 14px; }
+}
