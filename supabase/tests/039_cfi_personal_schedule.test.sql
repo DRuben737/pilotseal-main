@@ -31,12 +31,12 @@ values
 select set_config('request.jwt.claim.sub', current_setting('pilotseal_test.cfi_id'), true);
 set local role authenticated;
 
-select lives_ok(
+select throws_ok(
   $$insert into public.dashboard_preferences (user_id, quick_action_ids, enabled_feature_ids)
     values (auth.uid(), array['records'], array['cfi_schedule'])$$,
-  'a user can enable the optional schedule feature'
+  '42501', null, 'an incomplete instructor cannot enable Schedule'
 );
-select is((select enabled_feature_ids from public.dashboard_preferences where user_id = auth.uid()), array['cfi_schedule']::text[], 'enabled feature is persisted');
+select is((select count(*) from public.dashboard_preferences where user_id = auth.uid()), 0::bigint, 'rejected activation is not persisted');
 
 select lives_ok(
   $$insert into public.cfi_schedule_student_grants

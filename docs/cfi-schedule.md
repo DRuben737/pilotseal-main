@@ -66,11 +66,31 @@ conflicts are shown to the student and CFI, with no notification to the CFI.
 Availability periods are at least two hours and support 00:00–24:00. The browser's
 time zone is used. Automatic scheduling generates Flight only.
 
-The student schedule opens to today and the next four calendar dates, including
-weekends and dates across week/month/year boundaries. A direct date picker jumps
-to any date; “Show 5 more days” extends the list without hiding earlier dates.
-My lessons and My availability share this continuous agenda. Date-specific edits
-remain limited to the next 28 dates; the usual weekly pattern opens separately.
+The feature is named Schedule. There is no repeated page title inside the workspace.
+Adding it requires the account owner's canonical People self record with a name
+and a Flight Instructor or Ground Instructor certificate containing a number,
+ratings, and activity/issuance date. A database trigger enforces activation, including
+direct API calls. Accepted, authorized students are exempt from instructor details.
+Existing preferences and schedule records are retained; an incomplete owner must
+finish their instructor information before opening the teaching interface.
+
+Students default to a two-week List view of their own upcoming lessons. Calendar
+shows the whole instructor week with other students anonymized as unavailable.
+Both roles can switch List/Calendar, select a complete date directly, or use small
+previous/next-week arrows. Drafts block date/view navigation until reviewed or
+discarded. “Show 2 more weeks” extends the list; My availability initially shows
+four weeks. Date-specific edits remain limited to the next 28 dates.
+
+First-time student use opens a date-by-date availability guide, explaining that at
+least seven days must be reviewed and empty days mean unavailable. An explicit
+acknowledgment confirms the next two weeks, persisted per student/instructor in
+private storage. A changed availability signature or fewer than seven confirmed
+days remaining produces an inline review reminder. No instructor notification is
+sent and published lessons never move. Reopening the guide is always available.
+
+The weekly-pattern drawer includes an atomic “Auto-fill next 4 weeks” action for
+all seven weekdays, including unavailable ones. Both account and People-backed
+availability use the existing four-week rules and preserve manually edited dates.
 
 The CFI view keeps the week on desktop and stacks every day on phones/tablets.
 Selecting a weekend date also reveals the weekend. The main + menu groups lessons,

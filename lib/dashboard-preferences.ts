@@ -21,12 +21,19 @@ export const OPTIONAL_FEATURES = [
   {
     id: "cfi_schedule",
     href: "/dashboard/schedule",
-    label: "CFI Schedule",
-    description: "Coordinate student availability, lessons, and flight-resource blocks.",
+    label: "Schedule",
+    description: "Plan lessons and availability. Requires complete instructor information or a student invitation.",
   },
 ] as const;
 
 export type OptionalFeatureId = (typeof OPTIONAL_FEATURES)[number]["id"];
+
+export type ScheduleEligibility = { can_instruct: boolean; invited_student: boolean };
+export async function fetchScheduleEligibility(): Promise<ScheduleEligibility> {
+  const { data, error } = await getSupabaseClient().rpc("get_schedule_eligibility");
+  if (error) throw error;
+  return data as ScheduleEligibility;
+}
 
 export const DEFAULT_QUICK_ACTION_IDS: QuickActionId[] = [
   "new_endorsement",

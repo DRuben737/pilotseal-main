@@ -29,6 +29,9 @@ const priorPreferences=unwrap(await admin.from('dashboard_preferences').select('
 const priorNotificationIds=new Set(unwrap(await admin.from('notifications').select('id').eq('recipient_user_id',studentId).eq('kind','schedule')).map(row=>row.id));
 const personId='51000000-0000-4000-8000-000000000001';
 const guestPersonId='51000000-0000-4000-8000-000000000002';
+const selfPersonId='51000000-0000-4000-8000-000000000003';
+const selfCertificateId='51000000-0000-4000-8000-000000000004';
+const priorSelfProfile=unwrap(await admin.from('profiles').select('self_person_id').eq('id',cfiId).single());
 const eventIds=[11,12,13].map(n=>`51000000-0000-4000-8000-${String(n).padStart(12,'0')}`);
 const blockId='51000000-0000-4000-8000-000000000030';
 const directBlockIds=[];
@@ -52,6 +55,11 @@ async function menuAction(page, name, menu = "Schedule options") {
   await page.getByRole('menuitem',{name,exact:true}).click();
 }
 try {
+  if (!priorSelfProfile.self_person_id) {
+    unwrap(await admin.from('saved_people').insert({id:selfPersonId,user_id:cfiId,role:'self',display_name:'UI Qualified Instructor'}));
+    unwrap(await admin.from('profiles').update({self_person_id:selfPersonId}).eq('id',cfiId));
+  }
+  unwrap(await admin.from('saved_person_certificates').insert({id:selfCertificateId,user_id:cfiId,person_id:priorSelfProfile.self_person_id ?? selfPersonId,certificate_type:'flight_instructor',certificate_number:'UI-CFI-ONLY',ratings:['ASEL'],last_event_date:today}));
   unwrap(await admin.from('cfi_schedule_events').delete().in('id',eventIds));
   unwrap(await admin.from('cfi_schedule_unavailable_blocks').delete().eq('id',blockId));
   unwrap(await admin.from('saved_people').upsert({id:personId,user_id:cfiId,role:'student',display_name:'UI Schedule Student',cert_number:'UI-SCH-1'}));
@@ -64,7 +72,8 @@ try {
   const originalNotifications=await countNotifications();
   const {page}=await contextFor(cfiAuth.session);
   await page.goto(`${appUrl}/dashboard/schedule`);
-  await page.getByRole('heading',{name:'CFI Schedule',exact:true}).waitFor();
+  await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
+  assert.equal(await page.getByLabel('Schedule workspace',{exact:true}).getByRole('heading').count(),0,'no duplicate feature title');
   await page.setViewportSize({width:390,height:900});
   const navigationHandle=page.getByRole('button',{name:/^Navigation: pull down/});
   const functionsHandle=page.getByRole('button',{name:/^Functions: pull down/});
@@ -102,13 +111,28 @@ try {
   assert.equal(new Set(weekColumns).size,1,'all seven days share a desktop row');
   await page.getByLabel('Jump to date').fill(today);
   await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  await page.getByRole('button',{name:'Next week',exact:true}).click();
+  await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  assert.notEqual(await page.getByLabel('Jump to date').inputValue(),today,'right arrow advances a week');
+  await page.getByRole('button',{name:'Previous week',exact:true}).click();
+  await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  assert.equal(await page.getByLabel('Jump to date').inputValue(),today,'left arrow restores the week');
   await menuAction(page,'Hide weekend');
+  const listRequest=page.waitForRequest(request=>request.url().includes('/rpc/get_cfi_schedule_snapshot_v2') && request.method()==='POST');
+  await page.getByRole('button',{name:'List',exact:true}).click();
+  const listRange=(await listRequest).postDataJSON();
+  assert.equal(new Date(listRange.p_range_start).getDay(),1,'instructor list loads the whole first week for safe automatic scheduling');
+  await page.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
+  await page.getByRole('button',{name:'Calendar',exact:true}).click();
+  await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
   await page.getByRole('button').filter({hasText:'UI Schedule Student'}).nth(1).click();
   let dialog=page.getByRole('dialog');
   await dialog.getByLabel('Start',{exact:true}).fill('10:00');
   assert.equal(await dialog.locator('tbody tr').count(),2,'moving a middle lesson previews itself and the later lesson');
   await dialog.getByRole('button',{name:'Add changes to draft',exact:true}).click();
   await page.getByText('Unpublished draft · 2 changed lesson(s)').waitFor();
+  assert(await page.getByRole('button',{name:'Next week',exact:true}).isDisabled(),'week navigation protects unpublished drafts');
+  assert(await page.getByRole('button',{name:'List',exact:true}).isDisabled(),'view changes protect unpublished drafts');
   assert.equal(unwrap(await cfi.from('cfi_schedule_events').select('start_at').eq('id',eventIds[1]).single()).start_at,new Date(at(9)).toISOString().replace('.000Z','+00:00'));
   assert.equal(await countNotifications(),originalNotifications,'staging sends no notifications');
   // Direct day actions remain usable with an unpublished lesson draft, including
@@ -191,31 +215,45 @@ try {
 
   const {page:studentPage}=await contextFor(studentAuth.session);
   await studentPage.goto(`${appUrl}/dashboard/schedule`);
-  await studentPage.getByRole('heading',{name:'My schedule',exact:true}).waitFor();
-  await studentPage.getByRole('button',{name:'Show 5 more days',exact:true}).waitFor();
-  assert.equal(await studentPage.locator('[data-schedule-date]:visible').count(),5,'student sees five consecutive days immediately');
-  const defaultDates=await studentPage.locator('[data-schedule-date]').evaluateAll(nodes=>nodes.map(n=>n.dataset.scheduleDate));
+  await studentPage.getByRole('dialog',{name:'Set your availability',exact:true}).waitFor();
+  assert.equal(await studentPage.getByRole('dialog').getByRole('button',{name:/Review availability on/}).count(),14,'first use reviews two full weeks');
+  assert(await studentPage.getByRole('button',{name:'Confirm next 2 weeks',exact:true}).isDisabled(),'review requires explicit acknowledgment');
+  await studentPage.getByRole('dialog').getByRole('checkbox').check();
+  await studentPage.getByRole('button',{name:'Confirm next 2 weeks',exact:true}).click();
+  await studentPage.getByRole('dialog').waitFor({state:'hidden'});
+  await studentPage.getByRole('button',{name:'Show 2 more weeks',exact:true}).waitFor();
+  assert.equal(await studentPage.locator('[data-schedule-range-days]').getAttribute('data-schedule-range-days'),'14','student list covers two weeks immediately');
+  assert.equal(await studentPage.getByText('No lessons',{exact:true}).count(),0,'list omits empty dates');
   const dateKey=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
-  assert.equal(defaultDates[0],dateKey(new Date()),'student starts today, not Monday');
+  assert.equal(await studentPage.locator('[data-schedule-range-start]').getAttribute('data-schedule-range-start'),dateKey(new Date()),'student starts today, not Monday');
+  await studentPage.getByRole('button',{name:'My availability',exact:true}).click();
   await studentPage.getByLabel('Jump to date').fill('2026-12-30');
   await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
-  assert.deepEqual(await studentPage.locator('[data-schedule-date]').evaluateAll(nodes=>nodes.map(n=>n.dataset.scheduleDate)),['2026-12-30','2026-12-31','2027-01-01','2027-01-02','2027-01-03'],'date jump crosses year and includes weekend');
-  await studentPage.getByRole('button',{name:'Show 5 more days',exact:true}).click();
+  assert.deepEqual((await studentPage.locator('[data-schedule-date]').evaluateAll(nodes=>nodes.map(n=>n.dataset.scheduleDate))).slice(0,5),['2026-12-30','2026-12-31','2027-01-01','2027-01-02','2027-01-03'],'date jump crosses year and includes weekend');
+  await studentPage.getByRole('button',{name:'Show 2 more weeks',exact:true}).click();
   await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
-  assert.equal(await studentPage.locator('[data-schedule-date]').count(),10,'more appends dates without replacing the first five');
+  assert.equal(await studentPage.locator('[data-schedule-date]').count(),28,'more appends two weeks');
   await studentPage.getByLabel('Jump to date').fill(today);
   await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
-  await studentPage.getByRole('button',{name:'My availability',exact:true}).click();
   await studentPage.getByRole('button',{name:'Edit usual week',exact:true}).click();
   await studentPage.getByRole('button',{name:/^Monday/}).click();
   dialog=studentPage.getByRole('dialog');
   await dialog.getByRole('combobox').first().selectOption(String(base.getDay()||7));
-  assert(await dialog.getByLabel('Auto-fill other dates').isChecked());
+  assert(await dialog.getByLabel('Auto-fill this weekday for 4 weeks').isChecked());
   await dialog.getByLabel('Start',{exact:true}).fill('14:00');
   await dialog.getByLabel('End',{exact:true}).fill('18:00');
   await dialog.getByRole('button',{name:'Apply',exact:true}).click();
-  await studentPage.getByText('Availability saved.',{exact:false}).waitFor();
-  await studentPage.getByRole('button',{name:'My lessons',exact:true}).click();
+  await studentPage.getByRole('dialog',{name:'Usual weekly availability',exact:true}).waitFor();
+  await studentPage.getByRole('button',{name:'Auto-fill next 4 weeks',exact:true}).click();
+  await studentPage.getByRole('dialog',{name:'Set your availability',exact:true}).waitFor();
+  await studentPage.keyboard.press('Escape');
+  assert.equal(unwrap(await student.rpc('get_schedule_availability_review',{p_cfi_id:cfiId,p_timezone:'America/New_York'})).needs_review,true,'editing reopens review reminder');
+  await studentPage.getByRole('button',{name:'Calendar',exact:true}).click();
+  await studentPage.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  assert.equal(await studentPage.locator('[data-schedule-date]').count(),7,'calendar shows entire week');
+  await studentPage.getByRole('button',{name:'List',exact:true}).click();
+  await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
+  await studentPage.getByRole('button',{name:'My availability',exact:true}).click();
   await studentPage.getByRole('button').filter({hasText:'UI Schedule Student'}).first().click();
   await studentPage.getByRole('dialog').getByText('outside the student’s stated availability.',{exact:false}).first().waitFor();
   await studentPage.keyboard.press('Escape');
@@ -262,7 +300,7 @@ try {
   const guestRow=page.getByRole('row').filter({hasText:'Existing People Guest'});
   await guestRow.getByRole('button',{name:'Availability',exact:true}).click();
   dialog=page.getByRole('dialog');
-  await dialog.getByLabel('Weekday').selectOption(String(base.getDay()||7));
+  await dialog.getByRole('combobox').selectOption(String(base.getDay()||7));
   await dialog.getByRole('button',{name:'Apply',exact:true}).click();
   await page.getByText('Availability saved.',{exact:false}).waitFor();
   assert(unwrap(await cfi.rpc('get_cfi_schedule_snapshot_v2',{p_range_start:at(0),p_range_end:at(23)})).slots.some(row=>row.student_user_id===guestPersonId),'proxy availability is attached to existing People record');
@@ -292,7 +330,7 @@ try {
   unwrap(await admin.from('saved_person_account_links').delete().eq('saved_person_id',personId));
   unwrap(await admin.from('saved_person_account_links').upsert({saved_person_id:guestPersonId,owner_user_id:cfiId,linked_user_id:studentId}));
   await studentPage.reload();
-  await studentPage.getByRole('heading',{name:'My schedule',exact:true}).waitFor();
+  await studentPage.getByLabel('Schedule workspace',{exact:true}).waitFor();
   await studentPage.getByLabel('Jump to date').fill(today);
   await studentPage.getByRole('button').filter({hasText:'Existing People Guest'}).waitFor();
   await studentPage.getByRole('button',{name:'My availability',exact:true}).click();
@@ -317,6 +355,7 @@ try {
   // Private test records are removed only from the verified local container.
   execFileSync('docker',['exec','-i','supabase_db_pilotseal','psql','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{
     input:`begin;
+      delete from private.schedule_availability_reviews where user_id='${studentId}' and cfi_user_id='${cfiId}';
       delete from private.cfi_person_events where student_user_id='${guestPersonId}';
       delete from private.cfi_person_availability_slots where student_user_id='${guestPersonId}';
       delete from private.cfi_person_availability_override_dates where student_user_id='${guestPersonId}';
@@ -336,6 +375,11 @@ try {
     const previous=priorPreferences.find(row=>row.user_id===userId);
     if (previous) unwrap(await admin.from('dashboard_preferences').upsert(previous));
     else unwrap(await admin.from('dashboard_preferences').delete().eq('user_id',userId));
+  }
+  unwrap(await admin.from('saved_person_certificates').delete().eq('id',selfCertificateId));
+  if (!priorSelfProfile.self_person_id) {
+    unwrap(await admin.from('profiles').update({self_person_id:null}).eq('id',cfiId));
+    unwrap(await admin.from('saved_people').delete().eq('id',selfPersonId));
   }
   const createdNotificationIds=unwrap(await admin.from('notifications').select('id').eq('recipient_user_id',studentId).eq('kind','schedule')).map(row=>row.id).filter(id=>!priorNotificationIds.has(id));
   if (createdNotificationIds.length) unwrap(await admin.from('notifications').delete().in('id',createdNotificationIds));

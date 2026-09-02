@@ -9,6 +9,8 @@ import OrganizationAccessManager from "@/components/dashboard/OrganizationAccess
 import {
   DEFAULT_QUICK_ACTION_IDS,
   fetchEnabledFeatureIds,
+  fetchScheduleEligibility,
+  type ScheduleEligibility,
   fetchDashboardQuickActionIds,
   OPTIONAL_FEATURES,
   QUICK_ACTIONS,
@@ -67,6 +69,7 @@ export default function DashboardOverview() {
   const [customizingFeatures, setCustomizingFeatures] = useState(false);
   const [savingFeatures, setSavingFeatures] = useState(false);
   const [featureError, setFeatureError] = useState("");
+  const [scheduleEligibility, setScheduleEligibility] = useState<ScheduleEligibility | null>(null);
   const [companyRequest, setCompanyRequest] = useState<PlatformOrganizationRequest | null>(null);
 
   useEffect(() => {
@@ -85,13 +88,14 @@ export default function DashboardOverview() {
       try {
         setStatusNote("");
 
-        const [profile, defaultCfi, notifications, selectedQuickActionIds, selectedFeatureIds, companyRequests] = await Promise.all([
+        const [profile, defaultCfi, notifications, selectedQuickActionIds, selectedFeatureIds, companyRequests, eligibility] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchDefaultCfi(session.user.id),
           fetchInboxNotifications(session.user.id),
           fetchDashboardQuickActionIds(session.user.id),
           fetchEnabledFeatureIds(session.user.id),
           fetchMyOrganizationRegistrationRequests(),
+          fetchScheduleEligibility(),
         ]);
 
         if (!cancelled) {
@@ -104,6 +108,7 @@ export default function DashboardOverview() {
           setQuickActionIds(selectedQuickActionIds);
           setEnabledFeatureIds(selectedFeatureIds);
           setCompanyRequest(companyRequests[0] ?? null);
+          setScheduleEligibility(eligibility);
         }
       } catch {
         if (!cancelled) {
@@ -278,6 +283,7 @@ export default function DashboardOverview() {
                     type="checkbox"
                     className="mt-1"
                     checked={featureDraft.includes(feature.id)}
+                    disabled={!enabledFeatureIds.includes(feature.id) && !scheduleEligibility?.can_instruct && !scheduleEligibility?.invited_student}
                     onChange={() => toggleFeature(feature.id)}
                   />
                   <span>
@@ -287,6 +293,7 @@ export default function DashboardOverview() {
                 </label>
               ))}
             </div>
+            {!scheduleEligibility?.can_instruct && !scheduleEligibility?.invited_student ? <p className="mt-2 text-xs text-slate-600">Complete your own Flight Instructor or Ground Instructor certificate in <Link className="text-blue-700 underline" href="/dashboard/saved-people">People → My information</Link>: name, certificate number, ratings, and last activity/issuance date. Students need an instructor invitation.</p> : null}
             {featureError ? <p role="alert" className="mt-2 text-xs text-rose-600">{featureError}</p> : null}
             <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
               <button type="button" className="ghost-button" onClick={() => setFeatureCustomizerOpen(false)}>Cancel</button>

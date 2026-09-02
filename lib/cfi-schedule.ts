@@ -234,6 +234,22 @@ export async function saveScheduleAvailability(input: {
   return Number(data);
 }
 
+export type AvailabilityReview = { confirmed_through: string | null; needs_review: boolean };
+export async function fetchAvailabilityReview(cfiUserId: string): Promise<AvailabilityReview> {
+  const { data, error } = await getSupabaseClient().rpc("get_schedule_availability_review", { p_cfi_id: cfiUserId, p_timezone: browserTimeZone() });
+  if (error) throw error;
+  return data as AvailabilityReview;
+}
+export async function confirmAvailabilityReview(cfiUserId: string) {
+  const { error } = await getSupabaseClient().rpc("confirm_schedule_availability", { p_cfi_id: cfiUserId, p_timezone: browserTimeZone(), p_days: 14 });
+  if (error) throw error;
+}
+export async function fillAvailabilityWeeks(cfiUserId: string, personId?: string) {
+  const { data, error } = await getSupabaseClient().rpc("fill_schedule_availability_weeks", { p_cfi_id: cfiUserId, p_timezone: browserTimeZone(), p_person_id: personId ?? null });
+  if (error) throw error;
+  return Number(data);
+}
+
 export async function fetchAvailability(cfiUserId: string) {
   const supabase = getSupabaseClient();
   const [slotsResult, datesResult] = await Promise.all([
