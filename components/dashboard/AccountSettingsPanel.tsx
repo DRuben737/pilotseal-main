@@ -11,6 +11,7 @@ import {
   PASSWORD_MIN_LENGTH,
 } from "@/components/auth/auth-errors";
 import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
+import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
 import { getDeterministicGreeting } from "@/lib/greetings";
 import {
   CERTIFICATE_TYPE_LABELS,
@@ -99,14 +100,6 @@ const RATING_OPTIONS: Record<PersonCertificateType, string[]> = {
 };
 
 const PILOT_LEVEL_OPTIONS = ["Student", "Private", "Commercial", "ATP"];
-
-function lowerPrivilegeOptions(level: string) {
-  const levelIndex = PILOT_LEVEL_OPTIONS.indexOf(level);
-  if (levelIndex <= 0) return [];
-  return PILOT_LEVEL_OPTIONS.slice(0, levelIndex).flatMap((lowerLevel) =>
-    PILOT_RATING_OPTIONS.map((rating) => `${lowerLevel} — ${rating}`)
-  );
-}
 
 function formatMonthYearInput(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 6);
@@ -347,7 +340,7 @@ function AccountCertificateForm({
               </option>
             ))}
           </select>
-        </label><label className="saas-field people-ratings-field"><span>Additional lower-level privileges</span><select multiple value={form.additional_privileges} onChange={(event) => onChange("additional_privileges", Array.from(event.target.selectedOptions, (option) => option.value))}>{lowerPrivilegeOptions(form.level).map((privilege) => <option key={privilege} value={privilege}>{privilege}</option>)}</select><small>Use Command/Ctrl to select multiple privileges.</small></label></>
+        </label><div className="saas-field people-ratings-field"><span>Additional lower-level privileges</span><PilotPrivilegePicker level={form.level} value={form.additional_privileges} onChange={(privileges) => onChange("additional_privileges", privileges)} /></div></>
       ) : null}
       <label className="saas-field people-ratings-field">
         <span>Ratings</span>
@@ -721,12 +714,18 @@ export default function AccountSettingsPanel() {
           : field === "certificate_type"
             ? normalizeRatingsForType(current.ratings, nextType)
             : current.ratings;
+      const nextLevel = nextType === "pilot"
+        ? field === "level" ? String(value) : current.level
+        : "";
 
       return {
         ...current,
         [field]: field === "last_event_date" ? formatMonthDayYearInput(String(value)) : value,
         certificate_type: nextType,
-        level: nextType === "pilot" ? current.level : "",
+        level: nextLevel,
+        additional_privileges: field === "additional_privileges"
+          ? normalizeLowerPrivileges(value as string[], nextLevel)
+          : normalizeLowerPrivileges(current.additional_privileges, nextLevel),
         ratings: nextRatings,
       };
     });
@@ -742,6 +741,9 @@ export default function AccountSettingsPanel() {
           : field === "certificate_type"
             ? normalizeRatingsForType(currentForm.ratings, nextType)
             : currentForm.ratings;
+      const nextLevel = nextType === "pilot"
+        ? field === "level" ? String(value) : currentForm.level
+        : "";
 
       return {
         ...current,
@@ -749,7 +751,10 @@ export default function AccountSettingsPanel() {
           ...currentForm,
           [field]: field === "last_event_date" ? formatMonthDayYearInput(String(value)) : value,
           certificate_type: nextType,
-          level: nextType === "pilot" ? currentForm.level : "",
+          level: nextLevel,
+          additional_privileges: field === "additional_privileges"
+            ? normalizeLowerPrivileges(value as string[], nextLevel)
+            : normalizeLowerPrivileges(currentForm.additional_privileges, nextLevel),
           ratings: nextRatings,
         },
       };
@@ -796,6 +801,11 @@ export default function AccountSettingsPanel() {
       return;
     }
 
+    if (certificateForm.certificate_type === "pilot" && !certificateForm.level) {
+      setCertificateStatus("Select the pilot certificate level before saving.");
+      return;
+    }
+
     setSavingCertificate(true);
     setCertificateStatus("Saving certificate...");
 
@@ -836,6 +846,11 @@ export default function AccountSettingsPanel() {
     const draft = certificateDrafts[certificate.id];
     if (!draft) {
       setCertificateStatus("Certificate changes are missing.");
+      return;
+    }
+
+    if (draft.certificate_type === "pilot" && !draft.level) {
+      setCertificateStatus("Select the pilot certificate level before saving.");
       return;
     }
 

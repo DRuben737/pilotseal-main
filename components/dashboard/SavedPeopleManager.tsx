@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
 import Badge from "@/components/ui/Badge";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { saveManagedStudentProfile } from "@/lib/organizations";
@@ -75,14 +76,6 @@ const PILOT_RATING_OPTIONS = [
 ];
 
 const PILOT_LEVEL_OPTIONS = ["Student", "Private", "Commercial", "ATP"];
-
-function lowerPrivilegeOptions(level: string) {
-  const levelIndex = PILOT_LEVEL_OPTIONS.indexOf(level);
-  if (levelIndex <= 0) return [];
-  return PILOT_LEVEL_OPTIONS.slice(0, levelIndex).flatMap((lowerLevel) =>
-    PILOT_RATING_OPTIONS.map((rating) => `${lowerLevel} — ${rating}`)
-  );
-}
 
 const RATING_OPTIONS: Record<PersonCertificateType, string[]> = {
   pilot: PILOT_RATING_OPTIONS,
@@ -295,7 +288,7 @@ function CertificateFormFields({
               </option>
             ))}
           </select>
-        </label><label className="saas-field people-ratings-field"><span>Additional lower-level privileges</span><select multiple value={form.additional_privileges} onChange={(event) => onChange("additional_privileges", Array.from(event.target.selectedOptions, (option) => option.value))}>{lowerPrivilegeOptions(form.level).map((privilege) => <option key={privilege} value={privilege}>{privilege}</option>)}</select><small>Use Command/Ctrl to select multiple privileges.</small></label></>
+        </label><div className="saas-field people-ratings-field"><span>Additional lower-level privileges</span><PilotPrivilegePicker level={form.level} value={form.additional_privileges} onChange={(privileges) => onChange("additional_privileges", privileges)} /></div></>
       ) : null}
       <label className="saas-field people-ratings-field">
         <span>Ratings</span>
@@ -694,6 +687,9 @@ export default function SavedPeopleManager() {
           : field === "certificate_type"
             ? normalizeRatingsForType(currentForm.ratings, nextType)
             : currentForm.ratings;
+      const nextLevel = nextType === "pilot"
+        ? field === "level" ? String(value) : currentForm.level
+        : "";
 
       return {
         ...current,
@@ -704,7 +700,10 @@ export default function SavedPeopleManager() {
               ? formatUsDateInput(String(value))
               : value,
           certificate_type: nextType,
-          level: nextType === "pilot" ? currentForm.level : "",
+          level: nextLevel,
+          additional_privileges: field === "additional_privileges"
+            ? normalizeLowerPrivileges(value as string[], nextLevel)
+            : normalizeLowerPrivileges(currentForm.additional_privileges, nextLevel),
           ratings: nextRatings,
         },
       };
@@ -726,6 +725,9 @@ export default function SavedPeopleManager() {
           : field === "certificate_type"
             ? normalizeRatingsForType(currentForm.ratings, nextType)
             : currentForm.ratings;
+      const nextLevel = nextType === "pilot"
+        ? field === "level" ? String(value) : currentForm.level
+        : "";
 
       return {
         ...current,
@@ -736,7 +738,10 @@ export default function SavedPeopleManager() {
               ? formatUsDateInput(String(value))
               : value,
           certificate_type: nextType,
-          level: nextType === "pilot" ? currentForm.level : "",
+          level: nextLevel,
+          additional_privileges: field === "additional_privileges"
+            ? normalizeLowerPrivileges(value as string[], nextLevel)
+            : normalizeLowerPrivileges(currentForm.additional_privileges, nextLevel),
           ratings: nextRatings,
         },
       };
@@ -826,6 +831,11 @@ export default function SavedPeopleManager() {
     }
 
     const form = certificateForms[personId] ?? emptyCertificateForm;
+    if (form.certificate_type === "pilot" && !form.level) {
+      setStatus("Select the pilot certificate level before saving.");
+      return;
+    }
+
     const linkedPerson = endorsementPeopleByPerson.get(personId) ?? null;
     setSaving(true);
 
@@ -888,6 +898,11 @@ export default function SavedPeopleManager() {
     const draft = certificateDrafts[certificate.id];
     if (!draft) {
       setStatus("Certificate changes are missing.");
+      return;
+    }
+
+    if (draft.certificate_type === "pilot" && !draft.level) {
+      setStatus("Select the pilot certificate level before saving.");
       return;
     }
 

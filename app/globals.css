@@ -2720,6 +2720,42 @@ summary:focus-visible {
   font-size: 0.78rem;
 }
 
+.pilot-privilege-grid {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.65rem;
+}
+
+.pilot-privilege-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.55rem;
+}
+
+.pilot-privilege-row .rating-picker {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.pilot-privilege-level {
+  padding-top: 0.42rem;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.pilot-privilege-help {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 .people-list-panel {
   display: grid;
   gap: 0.8rem;
@@ -4043,6 +4079,15 @@ summary:focus-visible {
   .people-certificate-form {
     grid-template-columns: 1fr;
     padding: 0.75rem;
+  }
+
+  .pilot-privilege-row {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+
+  .pilot-privilege-level {
+    padding-top: 0;
   }
 
   .records-student-row {
