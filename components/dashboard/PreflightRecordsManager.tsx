@@ -4,15 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import { ConfirmDialog } from "@/components/admin/AdminConsole";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { formatUsDateTime } from "@/lib/date-format";
 import {
-  copyFlightBriefToPersonal,
   createFlightBriefRevision,
   fetchMyFlightBriefs,
   fetchOrganizationStudentBriefs,
-  sharePersonalFlightBriefWithOrganization,
   type FlightBriefRecord,
 } from "@/lib/preflight";
 
@@ -32,7 +29,6 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [shareCandidate, setShareCandidate] = useState<FlightBriefRecord | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +44,7 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
       setStatus("");
       try {
         const [own, organization] = await Promise.all([
-          organizationOnly ? Promise.resolve([]) : fetchMyFlightBriefs(session.user.id),
+          organizationOnly ? Promise.resolve([]) : fetchMyFlightBriefs(),
           activeOrganization?.id
             ? fetchOrganizationStudentBriefs(activeOrganization.id)
             : Promise.resolve([]),
@@ -111,50 +107,13 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
     setStatus("");
     try {
       const revisionId = await createFlightBriefRevision(record.id);
-      const refreshed = session?.user?.id ? await fetchMyFlightBriefs(session.user.id) : [];
+      const refreshed = session?.user?.id ? await fetchMyFlightBriefs() : [];
       setRecords((current) =>
         Array.from(new Map([...refreshed, ...current].map((item) => [item.id, item])).values())
       );
       setStatus(`Revision draft created (${revisionId.slice(0, 8)}). Open Flight Brief to prepare the corrected version.`);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to create a revision."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleCopyToPersonal(record: FlightBriefRecord) {
-    setBusy(true);
-    setStatus("");
-    try {
-      const copyId = await copyFlightBriefToPersonal(record.id);
-      const refreshed = session?.user?.id ? await fetchMyFlightBriefs(session.user.id) : [];
-      setRecords((current) =>
-        Array.from(new Map([...refreshed, ...current].map((item) => [item.id, item])).values())
-      );
-      setStatus(`Personal draft created (${copyId.slice(0, 8)}). It has no organization or maintenance side effects.`);
-    } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to copy this brief to Personal."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleShareToOrganization() {
-    if (!shareCandidate || !activeOrganization?.id) return;
-    setBusy(true);
-    setStatus("");
-    try {
-      const sharedId = await sharePersonalFlightBriefWithOrganization(shareCandidate.id, activeOrganization.id);
-      const [own, organization] = await Promise.all([
-        session?.user?.id ? fetchMyFlightBriefs(session.user.id) : Promise.resolve([]),
-        fetchOrganizationStudentBriefs(activeOrganization.id),
-      ]);
-      setRecords(Array.from(new Map([...own, ...organization].map((item) => [item.id, item])).values()));
-      setShareCandidate(null);
-      setStatus(`Organization copy created (${sharedId.slice(0, 8)}). The Personal original was preserved and no maintenance side effects were replayed.`);
-    } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to share this Flight Brief."));
     } finally {
       setBusy(false);
     }
@@ -245,12 +204,6 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
                   {isOwn && record.status !== "draft" ? (
                     <button className="ghost-button" type="button" disabled={busy} onClick={() => void handleCreateRevision(record)}>Create revision</button>
                   ) : null}
-                  {isOwn && record.organization_id ? (
-                    <button className="ghost-button" type="button" disabled={busy} onClick={() => void handleCopyToPersonal(record)}>Copy to Personal</button>
-                  ) : null}
-                  {!organizationOnly && isOwn && !record.organization_id && record.status !== "draft" && activeOrganization ? (
-                    <button className="ghost-button" type="button" disabled={busy} onClick={() => setShareCandidate(record)}>Share organization copy</button>
-                  ) : null}
                 </div>
               </div>
             </article>
@@ -283,15 +236,6 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
           </p>
         </div>
       ) : null}
-      <ConfirmDialog
-        open={Boolean(shareCandidate && activeOrganization)}
-        title="Share a copy with the organization?"
-        description={`This creates an organization-visible copy for ${activeOrganization?.name ?? "the selected organization"}. Your Personal original remains private, and maintenance or meter updates will not be replayed.`}
-        confirmLabel="Share organization copy"
-        busy={busy}
-        onCancel={() => { if (!busy) setShareCandidate(null); }}
-        onConfirm={() => void handleShareToOrganization()}
-      />
     </section>
   );
 }

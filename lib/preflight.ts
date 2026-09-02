@@ -185,44 +185,18 @@ export async function createFlightBriefRevision(id: string) {
   return String(data ?? "");
 }
 
-export async function copyFlightBriefToPersonal(id: string) {
+export async function fetchMyFlightBriefs() {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("copy_flight_brief_to_personal", {
-    p_brief_id: id,
-  });
-  if (error) throw error;
-  return String(data ?? "");
-}
-
-export async function sharePersonalFlightBriefWithOrganization(id: string, organizationId: string) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("share_personal_flight_brief_with_organization", {
-    p_brief_id: id,
-    p_organization_id: organizationId,
-  });
-  if (error) throw error;
-  return String(data ?? "");
-}
-
-export async function fetchMyFlightBriefs(userId: string) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("flight_briefs")
-    .select(FLIGHT_BRIEF_SELECT)
-    .eq("created_by", userId)
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("list_my_flight_briefs");
   if (error) throw error;
   return (data ?? []).map(normalizeFlightBrief);
 }
 
 export async function fetchOrganizationStudentBriefs(organizationId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("flight_briefs")
-    .select(FLIGHT_BRIEF_SELECT)
-    .eq("organization_id", organizationId)
-    .order("flight_date", { ascending: false })
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("list_organization_flight_briefs", {
+    p_organization_id: organizationId,
+  });
   if (error) throw error;
   return (data ?? []).map(normalizeFlightBrief);
 }

@@ -40,8 +40,6 @@ export type LegacyEndorsementReviewContext = {
 
 export type CreateEndorsementRecordInput = {
   id: string;
-  userId: string;
-  organizationId?: string | null;
   studentId?: string | null;
   studentName: string;
   studentCertNumber?: string | null;
@@ -99,7 +97,7 @@ export async function createEndorsementRecord(input: CreateEndorsementRecordInpu
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("create_endorsement_record", {
     p_id: input.id,
-    p_organization_id: input.organizationId || null,
+    p_organization_id: null,
     p_student_id: input.studentId || null,
     p_student_name: input.studentName.trim(),
     p_student_cert_number: normalizeText(input.studentCertNumber),
@@ -155,7 +153,6 @@ export async function fetchIssuedOrganizationEndorsementRecords(userId: string) 
     .select(ENDORSEMENT_RECORD_SELECTS[0])
     .eq("user_id", userId)
     .eq("scope_status", "confirmed")
-    .not("organization_id", "is", null)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeRecord);
@@ -237,14 +234,6 @@ export async function createEndorsementRecordSignedUrl(storagePath: string) {
 export async function deleteEndorsementRecord(record: EndorsementRecord) {
   const supabase = getSupabaseClient();
 
-  const { error: storageError } = await supabase.storage
-    .from(ENDORSEMENT_RECORDS_BUCKET)
-    .remove([record.storage_path]);
-
-  if (storageError) {
-    throw storageError;
-  }
-
   const { error } = await supabase
     .from("endorsement_records")
     .delete()
@@ -253,5 +242,15 @@ export async function deleteEndorsementRecord(record: EndorsementRecord) {
 
   if (error) {
     throw error;
+  }
+
+  // Delete the database row first. Organization-shared records are rejected by
+  // RLS before their immutable PDF can be removed.
+  const { error: storageError } = await supabase.storage
+    .from(ENDORSEMENT_RECORDS_BUCKET)
+    .remove([record.storage_path]);
+
+  if (storageError) {
+    console.error("The endorsement record was deleted, but PDF cleanup failed:", storageError);
   }
 }

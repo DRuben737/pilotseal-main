@@ -239,7 +239,7 @@ export default function EndorsementRecordsManager() {
 
   async function handleEditSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editingRecord || editingRecord.user_id !== session?.user?.id || editingRecord.scope_status !== "personal" || editingRecord.organization_id) return;
+    if (!editingRecord || editingRecord.user_id !== session?.user?.id || editingRecord.scope_status !== "personal") return;
     setBusy(true);
     setStatus("");
     try {
@@ -371,12 +371,12 @@ export default function EndorsementRecordsManager() {
                           >
                             <ActionIcon kind="open" />
                           </button>
-                          {record.user_id === session?.user?.id && record.scope_status === "personal" && !record.organization_id ? (
+                          {record.user_id === session?.user?.id && record.scope_status === "personal" ? (
                             <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingRecord(record)}>
                               Edit
                             </button>
                           ) : null}
-                          {record.user_id === session?.user?.id && record.scope_status === "personal" && !record.organization_id ? <button
+                          {record.user_id === session?.user?.id && record.scope_status === "personal" ? <button
                             type="button"
                             className="danger-button icon-button"
                             aria-label="Delete endorsement record"
@@ -417,7 +417,7 @@ export default function EndorsementRecordsManager() {
                           <ActionIcon kind="external" />
                         </a>
                       ) : null}
-                      {activeRecord.user_id === session?.user?.id && activeRecord.scope_status === "personal" && !activeRecord.organization_id ? <button
+                      {activeRecord.user_id === session?.user?.id && activeRecord.scope_status === "personal" ? <button
                         type="button"
                         className="danger-button icon-button"
                         aria-label="Delete endorsement record"

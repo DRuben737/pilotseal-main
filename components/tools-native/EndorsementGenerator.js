@@ -627,7 +627,6 @@ function EndorsementGenerator() {
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [recordOrganizationId, setRecordOrganizationId] = useState('');
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signaturePreviewDataUrl, setSignaturePreviewDataUrl] = useState('');
@@ -647,24 +646,6 @@ function EndorsementGenerator() {
   const defaultCfiAppliedRef = useRef(false);
 
   const templateEntries = useMemo(() => Object.entries(templateCatalog), [templateCatalog]);
-  const selectedStudent = useMemo(
-    () => savedStudents.find(
-      (person) => getStudentRecordPersonId(person) === selectedStudentId
-    ) ?? null,
-    [savedStudents, selectedStudentId]
-  );
-
-  useEffect(() => {
-    if (!recordOrganizationId) {
-      return;
-    }
-    const organizationStillEligible = selectedStudent?.organizations?.some(
-      (organization) => organization.id === recordOrganizationId
-    );
-    if (!organizationStillEligible) {
-      setRecordOrganizationId('');
-    }
-  }, [recordOrganizationId, selectedStudent]);
 
   const resetGeneratedPdf = useCallback(() => {
     if (printablePdfIsTemporaryRef.current && printablePdfUrlRef.current) {
@@ -1682,8 +1663,6 @@ function EndorsementGenerator() {
 
       await createEndorsementRecord({
         id: recordId,
-        userId: session.user.id,
-        organizationId: recordOrganizationId || null,
         studentId: selectedStudentId || null,
         studentName: formData.studentName.trim(),
         studentCertNumber: formData.studentCertNumber.trim() || null,
@@ -2185,33 +2164,6 @@ function EndorsementGenerator() {
             ) : null}
 
             <div className={styles.card}>
-              {generatorMode === 'customized' && session?.user?.id ? (
-                <>
-                  <div className={styles.sectionHeader}>
-                    <div>
-                      <h2>Record visibility</h2>
-                      <p className={styles.sectionCopy}>Choose Personal or one organization explicitly. Organization sharing is available only for a current registered student.</p>
-                    </div>
-                  </div>
-                  <label className={styles.field}>
-                    <span>Save record to</span>
-                    <select
-                      value={recordOrganizationId}
-                      onChange={(event) => setRecordOrganizationId(event.target.value)}
-                    >
-                      <option value="">Personal</option>
-                      {(selectedStudent?.organizations ?? []).map((organization) => (
-                        <option key={organization.id} value={organization.id}>
-                          {organization.name}
-                        </option>
-                      ))}
-                    </select>
-                    {selectedStudent && selectedStudent.organizations?.length === 0 ? (
-                      <p className={styles.sectionCopy}>This student is available for Personal records only.</p>
-                    ) : null}
-                  </label>
-                </>
-              ) : null}
               <p className={styles.mobileStepLabel}>4 Signature</p>
               <div className={styles.sectionHeader}>
                 <div>
@@ -2273,9 +2225,7 @@ function EndorsementGenerator() {
               <p className={styles.printHint}>
                 You can choose a print format after clicking Print: standard Letter paper or Avery 5163 labels.
                 {generatorMode === 'customized' && session?.user?.id
-                  ? recordOrganizationId
-                    ? ' Printing saves an immutable organization record and keeps it in your own history.'
-                    : ' Printing saves the PDF to Personal history only.'
+                  ? ' Printing saves one record. Organization visibility is added automatically when current membership rules apply.'
                   : ''}
               </p>
               {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}

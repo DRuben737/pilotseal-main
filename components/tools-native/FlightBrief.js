@@ -1965,7 +1965,7 @@ ${riskComments}
     }
 
     const organizationAircraft = selectedSavedAircraft?.source === "organization";
-    const selectedRecordOrganizationId = organizationAircraft
+    const aircraftOrganizationId = organizationAircraft
       ? selectedSavedAircraft?.organization_id || activeOrganization?.id || ""
       : "";
     const meterValue = parseFloat(String(mxNow));
@@ -2020,7 +2020,9 @@ ${riskComments}
         .filter(Boolean)
         .join(" → ");
       const recordInput = {
-        organization_id: selectedRecordOrganizationId || null,
+        // Organization ID identifies the selected organization aircraft/MX
+        // context only. Record visibility is derived by the server.
+        organization_id: aircraftOrganizationId || null,
         student_saved_person_id: selectedSavedStudent?.saved_person_id || null,
         student_user_id: selectedSavedStudent?.student_user_id || null,
         aircraft_id: selectedSavedAircraft?.id || null,
@@ -2131,7 +2133,7 @@ ${riskComments}
       </div>
       {session?.user?.id ? (
         <p className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
-          Only completed Flight Briefs are retained. Your record remains in Personal history and is also visible in the active organization context while your membership applies.
+          Only completed Flight Briefs are retained. One record stays in your history and becomes visible automatically to every organization whose membership rules apply when it is completed.
         </p>
       ) : null}
       {recordStatus ? (

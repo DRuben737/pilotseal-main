@@ -110,19 +110,19 @@ where id = '70000000-0000-4000-8000-000000000035';
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
-select lives_ok(
-  $$select public.share_personal_flight_brief_with_organization('70000000-0000-4000-8000-000000000035', '10000000-0000-4000-8000-000000000001')$$,
-  'member can explicitly share a finalized Personal Flight Brief copy'
+select ok(
+  not has_function_privilege('authenticated', 'public.share_personal_flight_brief_with_organization(uuid,uuid)', 'execute'),
+  'manual Flight Brief organization sharing is unavailable'
 );
 reset role;
-select is((select organization_id from public.flight_briefs where id = '70000000-0000-4000-8000-000000000035'), null::uuid, 'sharing preserves the Personal original');
-select is((select count(*) from public.flight_brief_organization_shares where source_brief_id = '70000000-0000-4000-8000-000000000035'), 1::bigint, 'organization copy is audited');
+select is((select organization_id from public.flight_briefs where id = '70000000-0000-4000-8000-000000000035'), null::uuid, 'automatic visibility does not turn an organization into a save destination');
+select is((select count(*) from public.flight_brief_organization_shares where source_brief_id = '70000000-0000-4000-8000-000000000035'), 0::bigint, 'automatic visibility creates no duplicate Flight Brief');
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
-select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000034'), 0::bigint, 'organization instructor cannot read incomplete member drafts');
-select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000035'), 0::bigint, 'organization instructor cannot read the member Personal original');
-select is((select count(*) from public.flight_briefs where organization_id = '10000000-0000-4000-8000-000000000001' and aircraft_tail_number = 'NPRIVATE' and status = 'finalized'), 1::bigint, 'organization instructor can read the explicitly shared copy');
+select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000034'), 1::bigint, 'organization instructor can read an automatically associated member draft');
+select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000035'), 1::bigint, 'organization instructor reads the same finalized record rather than a copy');
+select is((select count(*) from public.list_organization_flight_briefs('10000000-0000-4000-8000-000000000001') where id = '70000000-0000-4000-8000-000000000035'), 1::bigint, 'organization listing returns the original automatically visible Flight Brief');
 reset role;
 
 select * from finish();

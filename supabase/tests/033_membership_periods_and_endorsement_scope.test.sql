@@ -30,7 +30,7 @@ select lives_ok(
 );
 reset role;
 select is((select scope_status from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'), 'confirmed', 'organization endorsement is confirmed');
-select ok((select instructor_membership_period_id is not null and student_membership_period_id is not null from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'), 'organization endorsement stores both membership periods');
+select ok((select count(*) = 1 and bool_and(instructor_membership_period_id is not null and student_membership_period_id is not null) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000001'), 'automatic organization access stores both membership periods');
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
@@ -43,16 +43,14 @@ select ok((select left_at is not null from public.organization_membership_period
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 set local role authenticated;
-select throws_ok(
+select lives_ok(
   $$select public.create_endorsement_record(
     '60000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001',
     '40000000-0000-4000-8000-000000000003', 'Avery Testpilot', 'STUDENT-1',
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['Post-exit organization attempt'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000002.pdf', 1000, null
   )$$,
-  '42501',
-  'The selected student is not a current student in this organization.',
-  'explicit organization scope is rejected after the student exits'
+  'legacy organization input is ignored and the server derives Personal scope after exit'
 );
 select lives_ok(
   $$select public.create_endorsement_record(
@@ -64,11 +62,11 @@ select lives_ok(
   'post-exit endorsement can be created as Personal'
 );
 reset role;
-select is((select organization_id from public.endorsement_records where id = '60000000-0000-4000-8000-000000000002'), null::uuid, 'post-exit endorsement is not visible to the organization');
+select is((select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000002'), 0::bigint, 'post-exit endorsement is not visible to the organization');
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
-select is((select count(*) from public.endorsement_records where id in ('60000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000003')), 2::bigint, 'linked student can read every successfully issued endorsement regardless of organization visibility');
+select is((select count(*) from public.endorsement_records where id in ('60000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000003')), 3::bigint, 'linked student can read every successfully issued endorsement regardless of organization visibility');
 reset role;
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
@@ -103,8 +101,8 @@ select lives_ok(
   'organization endorsement works again after rejoin'
 );
 reset role;
-select is((select count(*) from public.endorsement_records where organization_id = '10000000-0000-4000-8000-000000000001' and scope_status = 'confirmed'), 2::bigint, 'only pre-exit and post-rejoin records are organization records');
-select is((select count(*) from public.endorsement_records where organization_id is null and id = '60000000-0000-4000-8000-000000000003'), 1::bigint, 'the exit-gap record remains Personal after rejoin');
+select is((select count(*) from private.endorsement_record_organization_access where organization_id = '10000000-0000-4000-8000-000000000001'), 2::bigint, 'only pre-exit and post-rejoin records are organization-visible');
+select is((select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000003'), 0::bigint, 'the exit-gap record remains Personal after rejoin');
 
 select * from finish();
 rollback;
