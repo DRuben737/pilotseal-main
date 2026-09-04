@@ -20,7 +20,6 @@ import {
 } from "@/lib/notifications";
 
 const dashboardLinks = [
-  { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/schedule", label: "Schedule", featureId: "cfi_schedule" as OptionalFeatureId },
   { href: "/dashboard/my-aircraft", label: "My Aircraft" },
   { href: "/dashboard/reports", label: "Safety Reports" },

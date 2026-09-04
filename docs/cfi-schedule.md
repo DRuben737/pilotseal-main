@@ -74,12 +74,19 @@ direct API calls. Accepted, authorized students are exempt from instructor detai
 Existing preferences and schedule records are retained; an incomplete owner must
 finish their instructor information before opening the teaching interface.
 
-Students default to a two-week List view of their own upcoming lessons. Week
-always shows Monday through Sunday, with other students anonymized as unavailable.
-Both roles can switch List/Week, select a complete date directly, or use small
+The personal dashboard opens Schedule directly instead of a separate personal
+overview. Both roles default to Week, which always shows Monday through Sunday,
+with other students anonymized as unavailable. They can switch List/Week, select a complete date directly, or use small
 previous/next-week arrows. Drafts block date/view navigation until reviewed or
 discarded. “Show 2 more weeks” extends the list; My availability initially shows
 four weeks. Date-specific edits remain limited to the next 28 dates.
+
+Before activation, Schedule presents two clear paths: a student waits for their
+instructor to link and grant access, while an instructor completes their canonical
+People self record and instructor certificate. Eligible users receive a focused
+activation message. A compact help button remains available both before and after
+activation, with role-specific instructions for access, availability, privacy,
+lessons, aircraft blocks, automatic scheduling, drafts, publishing, and notifications.
 
 First-time student use opens a date-by-date availability guide, explaining that at
 least seven days must be reviewed and empty days mean unavailable. An explicit

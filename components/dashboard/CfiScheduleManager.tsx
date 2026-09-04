@@ -52,7 +52,7 @@ import { applyScheduleOperations, scheduleChanges, scheduleHasOverlap, type Sche
 import { fetchEnabledFeatureIds, fetchScheduleEligibility, updateEnabledFeatureIds, type ScheduleEligibility } from "@/lib/dashboard-preferences";
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
 
-type DrawerMode = "review" | "students" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "settings" | "publish" | null;
+type DrawerMode = "help" | "review" | "students" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "settings" | "publish" | null;
 type AvailabilityRow = { start: string; end: string };
 
 const weekdayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -115,7 +115,7 @@ export default function CfiScheduleManager() {
   const [selectedDate, setSelectedDate] = useState(() => localDateKey(new Date()));
   const [agendaStart, setAgendaStart] = useState(() => localDateKey(new Date()));
   const [agendaDays, setAgendaDays] = useState(14);
-  const [layout, setLayout] = useState<"auto" | "list" | "calendar">("auto");
+  const [layout, setLayout] = useState<"list" | "calendar">("calendar");
   const [eligibility, setEligibility] = useState<ScheduleEligibility | null>(null);
   const [availabilityReview, setAvailabilityReview] = useState<AvailabilityReview | null>(null);
   const [reviewChecked, setReviewChecked] = useState(false);
@@ -155,7 +155,7 @@ export default function CfiScheduleManager() {
   const studentViews = useMemo(() => access.filter((item) => item.caller_role === "student" && item.access_enabled), [access]);
   const isCfiView = viewKey === "cfi";
   const activeCfiId = isCfiView ? userId : viewKey;
-  const calendarView = layout === "calendar" || (layout === "auto" && isCfiView);
+  const calendarView = layout === "calendar";
   const rangeStartKey = calendarView ? localDateKey(weekStart) : agendaStart;
   const rangeDays = calendarView ? 7 : agendaDays;
   const rangeContext = `${activeCfiId}:${rangeStartKey}:${rangeDays}`;
@@ -795,12 +795,30 @@ export default function CfiScheduleManager() {
   if (!featureEnabled || (isCfiView && !eligibility?.can_instruct)) {
     const canEnable = eligibility?.can_instruct || eligibility?.invited_student;
     return (
-      <section className="saas-panel">
-        <p className="saas-meta-text">{canEnable ? "Add Schedule to your workspace to plan lessons and availability." : "Complete your own instructor information before adding Schedule. Students can join after an instructor grants access."}</p>
-        {!eligibility?.can_instruct && !eligibility?.invited_student ? <p className="mt-3 text-sm"><Link className="text-blue-700 underline" href="/dashboard/saved-people">People → My information</Link>: add your name and Flight Instructor or Ground Instructor certificate, including number, ratings, and last activity/issuance date.</p> : null}
-        {error ? <p role="alert">{error}</p> : null}
-        {!featureEnabled && canEnable ? <button type="button" className="primary-button mt-5" disabled={saving} onClick={() => void enableFeature()}>{saving ? "Adding…" : "Add Schedule"}</button> : null}
-      </section>
+      <div className={styles.root} aria-label="Schedule setup">
+        <header className={styles.onboardingHeader}>
+          <div><p className={styles.eyebrow}>Personal schedule</p><h1>{canEnable ? "Schedule is ready" : "Get started"}</h1></div>
+          <HelpButton onClick={() => setDrawer("help")} />
+        </header>
+        {canEnable ? <section className={styles.onboardingCard}>
+          <h2>{eligibility?.can_instruct ? "Your instructor information is complete" : "Your instructor has added you"}</h2>
+          <p>{eligibility?.can_instruct ? "Add Schedule, choose students from People, and start planning lessons." : "Add Schedule to see lessons and set the times you are available."}</p>
+          {error ? <p role="alert" className={styles.error}>{error}</p> : null}
+          {!featureEnabled ? <button type="button" className="primary-button mt-5" disabled={saving} onClick={() => void enableFeature()}>{saving ? "Adding…" : "Add Schedule"}</button> : null}
+        </section> : <div className={styles.onboardingChoices}>
+          <section className={styles.onboardingCard}>
+            <p className={styles.eyebrow}>Student</p><h2>Already have an instructor?</h2>
+            <p>Your instructor must add you from their People list, link your PilotSeal account, and grant Schedule access. Once they do, come back here—the calendar and availability guide will open automatically.</p>
+            <p className={styles.onboardingNote}>Until access is granted, there is nothing you need to configure here.</p>
+          </section>
+          <section className={styles.onboardingCard}>
+            <p className={styles.eyebrow}>Instructor</p><h2>Set up your instructor information</h2>
+            <p>Add your name and a Flight Instructor or Ground Instructor certificate. Include the certificate number, ratings, and last activity or issuance date.</p>
+            <Link className="primary-button mt-5 inline-flex" href="/dashboard/saved-people">Complete my information</Link>
+          </section>
+        </div>}
+        <ScheduleHelpDrawer open={drawer === "help"} onClose={() => setDrawer(null)} />
+      </div>
     );
   }
 
@@ -836,6 +854,7 @@ export default function CfiScheduleManager() {
           <button className={styles.weekArrow} type="button" aria-label="Next week" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(addCalendarDays(new Date(`${selectedDate}T12:00:00`), 7)))}>›</button>
         </div>
         <div className={styles.actions}>
+          <HelpButton onClick={() => setDrawer("help")} />
           {isCfiView ? <ScheduleMenu label="Add to schedule" icon="＋" disabled={saving || !weekReady} actions={[
             { label: "Add lesson", disabled: !activeStudents.length, onSelect: () => openNewLesson(selectedDate) },
             { label: "Aircraft unavailable", onSelect: () => openBlockDrawer(selectedDate) },
@@ -911,6 +930,8 @@ export default function CfiScheduleManager() {
       </div>
       {!calendarView ? <button type="button" className={`${styles.textButton} ${styles.moreDates}`} disabled={!weekReady || saving} onClick={() => setAgendaDays((current) => current + 14)}>Show 2 more weeks</button> : null}
       {isCfiView && !activeStudents.length ? <button type="button" className={styles.textButton} onClick={openAccessDrawer}>Choose students from People</button> : null}
+
+      <ScheduleHelpDrawer open={drawer === "help"} onClose={() => setDrawer(null)} />
 
       <DetailDrawer open={drawer === "students"} onClose={() => setDrawer(null)} title="Students" description="Availability and weekly goals." width="wide">
 
@@ -1009,6 +1030,20 @@ export default function CfiScheduleManager() {
       <ConfirmDialog open={Boolean(deleteBlockId)} title="Remove unavailable block?" description="Automatic scheduling will be able to use this time again." confirmLabel="Remove block" busy={saving} destructive onCancel={() => setDeleteBlockId("")} onConfirm={() => void confirmDeleteBlock()} />
     </div>
   );
+}
+
+function HelpButton({ onClick }: { onClick: () => void }) {
+  return <button type="button" className={styles.helpButton} onClick={onClick} aria-label="Schedule help" title="How Schedule works"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1c0 1.8-2.4 2.1-2.4 3.8" /><path d="M12 17.5h.01" /></svg></button>;
+}
+
+function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return <DetailDrawer open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
+    <div className={styles.helpContent}>
+      <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
+      <section><p className={styles.eyebrow}>Instructors</p><h3>Build and publish the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Manage access lets linked students see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use + to add a Flight or Ground lesson, mark aircraft unavailable, or automatically schedule Flight lessons.</li><li>Automatic scheduling uses student availability, aircraft blocks, and 07:00–16:00 starts. It limits the teaching span to 8 hours from the first lesson.</li><li>Edits stay in a private draft. Review conflicts, then publish once; only affected linked students are notified according to their preferences.</li></ol></section>
+      <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson pushes every later lesson that day by the same amount. Manual conflicts are warnings, so you stay in control.</p></section>
+    </div>
+  </DetailDrawer>;
 }
 
 function BlockForm({ value, onChange }: { value: { date: string; start: string; end: string; note: string }; onChange: (value: { date: string; start: string; end: string; note: string }) => void }) {

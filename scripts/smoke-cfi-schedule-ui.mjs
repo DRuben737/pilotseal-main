@@ -43,6 +43,7 @@ const today=[base.getFullYear(),String(base.getMonth()+1).padStart(2,'0'),String
 const screenshots = await mkdtemp(path.join(tmpdir(),'pilotseal-schedule-ui-'));
 const browser = await chromium.launch({headless:true,channel:'chrome'});
 const errors=[];
+let onboardingUserId='';
 async function contextFor(session) {
   const context=await browser.newContext({viewport:{width:1440,height:1100},timezoneId:'America/New_York'});
   // No non-local services are used by this smoke test.
@@ -57,6 +58,24 @@ async function menuAction(page, name, menu = "Schedule options") {
   await page.getByRole('menuitem',{name,exact:true}).click();
 }
 try {
+  const onboardingEmail=`schedule-onboarding-${Date.now()}@example.test`;
+  const onboardingPassword='LocalOnboarding!2026';
+  const onboardingUser=unwrap(await admin.auth.admin.createUser({email:onboardingEmail,password:onboardingPassword,email_confirm:true}));
+  onboardingUserId=onboardingUser.user.id;
+  const onboardingClient=createClient(status.API_URL,status.ANON_KEY ?? status.PUBLISHABLE_KEY,options);
+  const onboardingAuth=unwrap(await onboardingClient.auth.signInWithPassword({email:onboardingEmail,password:onboardingPassword}));
+  const {page:onboardingPage}=await contextFor(onboardingAuth.session);
+  await onboardingPage.goto(`${appUrl}/dashboard`);
+  await onboardingPage.waitForURL('**/dashboard/schedule');
+  await onboardingPage.getByLabel('Schedule setup',{exact:true}).waitFor();
+  await onboardingPage.getByText('Already have an instructor?',{exact:true}).waitFor();
+  await onboardingPage.getByText('Set up your instructor information',{exact:true}).waitFor();
+  await onboardingPage.setViewportSize({width:390,height:900});
+  await onboardingPage.screenshot({path:path.join(screenshots,'onboarding-390.png'),fullPage:true});
+  await onboardingPage.getByRole('button',{name:'Schedule help',exact:true}).click();
+  await onboardingPage.getByRole('dialog',{name:'How Schedule works',exact:true}).getByText('Build and publish the week',{exact:true}).waitFor();
+  await onboardingPage.screenshot({path:path.join(screenshots,'help-390.png'),fullPage:true});
+  await onboardingPage.getByRole('dialog',{name:'How Schedule works',exact:true}).getByRole('button',{name:'Close',exact:true}).click();
   if (!priorSelfProfile.self_person_id) {
     unwrap(await admin.from('saved_people').insert({id:selfPersonId,user_id:cfiId,role:'self',display_name:'UI Qualified Instructor'}));
     unwrap(await admin.from('profiles').update({self_person_id:selfPersonId}).eq('id',cfiId));
@@ -73,9 +92,15 @@ try {
   const countNotifications=async()=>unwrap(await admin.from('notifications').select('id').eq('recipient_user_id',studentId).eq('kind','schedule')).length;
   const originalNotifications=await countNotifications();
   const {page}=await contextFor(cfiAuth.session);
-  await page.goto(`${appUrl}/dashboard/schedule`);
+  await page.goto(`${appUrl}/dashboard`);
+  await page.waitForURL('**/dashboard/schedule');
+  assert.equal(page.url(),`${appUrl}/dashboard/schedule`,'personal dashboard opens Schedule directly');
   await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
   assert.equal(await page.getByLabel('Schedule workspace',{exact:true}).getByRole('heading').count(),0,'no duplicate feature title');
+  assert.equal(await page.getByRole('link',{name:'Overview',exact:true}).count(),0,'personal navigation has no redundant Overview');
+  await page.getByRole('button',{name:'Schedule help',exact:true}).click();
+  await page.getByRole('dialog',{name:'How Schedule works',exact:true}).getByText('Share when you can fly',{exact:true}).waitFor();
+  await page.getByRole('dialog',{name:'How Schedule works',exact:true}).getByRole('button',{name:'Close',exact:true}).click();
   await page.setViewportSize({width:390,height:900});
   const navigationHandle=page.getByRole('button',{name:/^Navigation: pull down/});
   const functionsHandle=page.getByRole('button',{name:/^Functions: pull down/});
@@ -222,6 +247,10 @@ try {
   await studentPage.getByRole('dialog').getByRole('checkbox').check();
   await studentPage.getByRole('button',{name:'Confirm next 2 weeks',exact:true}).click();
   await studentPage.getByRole('dialog').waitFor({state:'hidden'});
+  assert.equal(await studentPage.getByRole('button',{name:'Week',exact:true}).getAttribute('aria-pressed'),'true','student opens in week view by default');
+  assert.equal(await studentPage.locator('[aria-label="Week schedule"] [data-schedule-date]').count(),7,'student default week shows Monday through Sunday');
+  await studentPage.getByRole('button',{name:'List',exact:true}).click();
+  await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
   await studentPage.getByRole('button',{name:'Show 2 more weeks',exact:true}).waitFor();
   assert.equal(await studentPage.locator('[data-schedule-range-days]').getAttribute('data-schedule-range-days'),'14','student list covers two weeks immediately');
   assert.equal(await studentPage.getByText('No lessons',{exact:true}).count(),0,'list omits empty dates');
@@ -384,4 +413,5 @@ try {
   }
   const createdNotificationIds=unwrap(await admin.from('notifications').select('id').eq('recipient_user_id',studentId).eq('kind','schedule')).map(row=>row.id).filter(id=>!priorNotificationIds.has(id));
   if (createdNotificationIds.length) unwrap(await admin.from('notifications').delete().in('id',createdNotificationIds));
+  if (onboardingUserId) unwrap(await admin.auth.admin.deleteUser(onboardingUserId));
 }
