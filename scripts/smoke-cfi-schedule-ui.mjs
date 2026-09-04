@@ -35,7 +35,9 @@ const priorSelfProfile=unwrap(await admin.from('profiles').select('self_person_i
 const eventIds=[11,12,13].map(n=>`51000000-0000-4000-8000-${String(n).padStart(12,'0')}`);
 const blockId='51000000-0000-4000-8000-000000000030';
 const directBlockIds=[];
-const base = new Date(); base.setDate(base.getDate()-((base.getDay()+6)%7)+2); base.setHours(7,0,0,0);
+const actualDay = new Date(); actualDay.setHours(0,0,0,0);
+const base = new Date(actualDay); base.setDate(base.getDate()-((base.getDay()+6)%7)+2); base.setHours(7,0,0,0);
+if (base < actualDay) base.setTime(actualDay.getTime() + 7 * 60 * 60 * 1000);
 const at = (hour) => { const d=new Date(base);d.setHours(hour,0,0,0);return d.toISOString(); };
 const today=[base.getFullYear(),String(base.getMonth()+1).padStart(2,'0'),String(base.getDate()).padStart(2,'0')].join('-');
 const screenshots = await mkdtemp(path.join(tmpdir(),'pilotseal-schedule-ui-'));
@@ -117,13 +119,12 @@ try {
   await page.getByRole('button',{name:'Previous week',exact:true}).click();
   await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
   assert.equal(await page.getByLabel('Jump to date').inputValue(),today,'left arrow restores the week');
-  await menuAction(page,'Hide weekend');
   const listRequest=page.waitForRequest(request=>request.url().includes('/rpc/get_cfi_schedule_snapshot_v2') && request.method()==='POST');
   await page.getByRole('button',{name:'List',exact:true}).click();
   const listRange=(await listRequest).postDataJSON();
   assert.equal(new Date(listRange.p_range_start).getDay(),1,'instructor list loads the whole first week for safe automatic scheduling');
   await page.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
-  await page.getByRole('button',{name:'Calendar',exact:true}).click();
+  await page.getByRole('button',{name:'Week',exact:true}).click();
   await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
   await page.getByRole('button').filter({hasText:'UI Schedule Student'}).nth(1).click();
   let dialog=page.getByRole('dialog');
@@ -184,7 +185,7 @@ try {
     await page.setViewportSize({width,height:1100});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal page overflow');
     assert.equal(await page.getByLabel('Day view',{exact:true}).count(),0,'no two-step day selector');
-    assert.equal(await page.locator('[data-schedule-date]:visible').count(),5,'all five CFI days visible without switching');
+    assert.equal(await page.locator('[data-schedule-date]:visible').count(),7,'the complete Monday-to-Sunday week is always visible');
     await page.screenshot({path:path.join(screenshots,`schedule-${width}.png`),fullPage:true});
   }
   await page.getByRole('button',{name:'Review & publish',exact:true}).click();
@@ -248,7 +249,7 @@ try {
   await studentPage.getByRole('dialog',{name:'Set your availability',exact:true}).waitFor();
   await studentPage.keyboard.press('Escape');
   assert.equal(unwrap(await student.rpc('get_schedule_availability_review',{p_cfi_id:cfiId,p_timezone:'America/New_York'})).needs_review,true,'editing reopens review reminder');
-  await studentPage.getByRole('button',{name:'Calendar',exact:true}).click();
+  await studentPage.getByRole('button',{name:'Week',exact:true}).click();
   await studentPage.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
   assert.equal(await studentPage.locator('[data-schedule-date]').count(),7,'calendar shows entire week');
   await studentPage.getByRole('button',{name:'List',exact:true}).click();

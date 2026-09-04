@@ -74,9 +74,9 @@ direct API calls. Accepted, authorized students are exempt from instructor detai
 Existing preferences and schedule records are retained; an incomplete owner must
 finish their instructor information before opening the teaching interface.
 
-Students default to a two-week List view of their own upcoming lessons. Calendar
-shows the whole instructor week with other students anonymized as unavailable.
-Both roles can switch List/Calendar, select a complete date directly, or use small
+Students default to a two-week List view of their own upcoming lessons. Week
+always shows Monday through Sunday, with other students anonymized as unavailable.
+Both roles can switch List/Week, select a complete date directly, or use small
 previous/next-week arrows. Drafts block date/view navigation until reviewed or
 discarded. “Show 2 more weeks” extends the list; My availability initially shows
 four weeks. Date-specific edits remain limited to the next 28 dates.

@@ -318,7 +318,6 @@ export default function CfiScheduleManager() {
     setWeekStart(getWeekStart(value));
     setAgendaStart(date);
     setAgendaDays(14);
-    if (isCfiView && (value.getDay() === 0 || value.getDay() === 6)) setIncludeWeekends(true);
   }
 
   function stageOperations(next: ScheduleOperation[]) {
@@ -805,7 +804,7 @@ export default function CfiScheduleManager() {
     );
   }
 
-  const displayDays = Array.from({ length: calendarView ? (isCfiView && !includeWeekends ? 5 : 7) : agendaDays }, (_, index) => addCalendarDays(new Date(`${rangeStartKey}T12:00:00`), index));
+  const displayDays = Array.from({ length: calendarView ? 7 : agendaDays }, (_, index) => addCalendarDays(new Date(`${rangeStartKey}T12:00:00`), index));
   const activeStudent = studentViews.find((item) => item.cfi_user_id === activeCfiId);
   const calendarEntries: ScheduleEntry[] = isCfiView ? [
     ...entries.filter((entry) => entry.entry_type === "lesson"),
@@ -846,7 +845,6 @@ export default function CfiScheduleManager() {
             ...(isCfiView ? [
               { label: "Students", onSelect: () => setDrawer("students" as DrawerMode) },
               { label: "Manage access", disabled: hasDraft, onSelect: openAccessDrawer },
-              { label: includeWeekends ? "Hide weekend" : "Show weekend", onSelect: () => setIncludeWeekends(!includeWeekends) },
             ] : [
               { label: "Usual weekly availability", disabled: !weekReady, onSelect: () => setDrawer("weekly" as DrawerMode) },
               ...(activeStudent?.storage_kind === "person" ? [{ label: "Weekly goal", disabled: !weekReady, onSelect: () => openStudentSettings(activeStudent) }] : []),
@@ -867,7 +865,7 @@ export default function CfiScheduleManager() {
       <div className={styles.toolbar}>
         <div className={styles.segments} aria-label="Schedule view">
           <button type="button" aria-pressed={!calendarView} disabled={hasDraft || saving} onClick={() => setLayout("list")}>List</button>
-          <button type="button" aria-pressed={calendarView} disabled={hasDraft || saving} onClick={() => setLayout("calendar")}>Calendar</button>
+          <button type="button" aria-pressed={calendarView} disabled={hasDraft || saving} onClick={() => setLayout("calendar")}>Week</button>
         </div>
         {!isCfiView ? <button type="button" className={styles.textButton} aria-pressed={studentTab === "availability"} onClick={() => { setStudentTab(studentTab === "availability" ? "lessons" : "availability"); setAgendaDays(studentTab === "availability" ? 14 : 28); }}>My availability</button> : null}
         <button className={styles.textButton} type="button" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(new Date()))}>Today</button>
