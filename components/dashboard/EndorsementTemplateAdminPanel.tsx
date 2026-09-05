@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { endorsementTemplateDataVersion } from "@/components/tools-native/templates";
 import {
@@ -476,16 +477,12 @@ export default function EndorsementTemplateAdminPanel() {
   }
 
   return (
-    <section className="panel-card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="eyebrow">Manage</p>
-          <h1 className="text-2xl font-semibold text-slate-950">Endorsement Wording</h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="secondary-button" onClick={() => setGuideOpen(true)}>
-            Help
-          </button>
+    <ManagementDisclosure
+      id="endorsement-templates"
+      eyebrow="Manage"
+      title="Endorsement Wording"
+      summary={`${filteredTemplates.length}`}
+      actions={<div className="flex flex-wrap gap-2">
           <button
             type="button"
             className="secondary-button"
@@ -508,8 +505,10 @@ export default function EndorsementTemplateAdminPanel() {
           >
             Add endorsement
           </button>
-        </div>
-      </div>
+        </div>}
+      openOnAction
+      helpContent={<><p>Add or edit the official endorsement wording, fill-in questions, visibility and list order. Use placeholders such as {"{studentName}"} for blanks and provide a matching fill-in question.</p><p>Hide a template while it is being prepared; archive it when it should no longer appear in the generator. Organization proposals require platform approval before they affect live wording.</p></>}
+    >
 
       <input
         type="search"
@@ -520,21 +519,16 @@ export default function EndorsementTemplateAdminPanel() {
       />
       {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div><h2 className="text-sm font-semibold text-slate-950">Endorsement template change requests</h2><p className="mt-1 text-xs text-slate-500">Approval applies the requested wording atomically to the live templates.</p></div>
-          <span className="saas-pill">{changeRequests.filter((request) => request.status === "pending").length} pending</span>
-        </div>
+      <ManagementDisclosure id="endorsement-template-requests" title="Template change requests" summary={`${changeRequests.filter((request) => request.status === "pending").length} pending`} helpContent={<p>Approval applies the proposed wording atomically to the live templates. Rejection requires a reason.</p>}>
         <div className="mt-3 grid gap-3">
           {changeRequests.filter((request) => request.status === "pending").length === 0 ? <p className="text-sm text-slate-500">No pending organization proposals.</p> : changeRequests.filter((request) => request.status === "pending").map((request) => (
             <div key={request.id} className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-950">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</p><p className="mt-1 text-xs text-slate-500">{request.action === "create" ? "Create" : "Update"} · Organization {request.organization_id}</p></div><span className="saas-pill">Pending</span></div>
-              <p className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">{request.proposed_data.body}</p>
               <div className="mt-3 flex gap-2"><button type="button" className="primary-button" disabled={saving} onClick={() => void handleReview(request, true)}>Approve & publish</button><button type="button" className="danger-button-compact" disabled={saving} onClick={() => void handleReview(request, false)}>Reject</button></div>
             </div>
           ))}
         </div>
-      </section>
+      </ManagementDisclosure>
 
       <div className="mt-4 grid gap-3">
         {groupedTemplates.map(([category, categoryTemplates]) => {
@@ -575,7 +569,6 @@ export default function EndorsementTemplateAdminPanel() {
                         </div>
                         <span className="saas-pill">{getVisibilityLabel(template.status)}</span>
                       </div>
-                      <p className="mt-2 line-clamp-3 text-xs text-slate-500">{template.body}</p>
                     </button>
                   ))}
                 </div>
@@ -877,6 +870,6 @@ export default function EndorsementTemplateAdminPanel() {
         </div>
           )
         : null}
-    </section>
+    </ManagementDisclosure>
   );
 }

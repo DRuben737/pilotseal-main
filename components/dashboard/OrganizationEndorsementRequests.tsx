@@ -8,6 +8,7 @@ import {
   CompactToolbar,
   DetailDrawer,
   EmptyState,
+  ManagementDisclosure,
   StatusBadge,
   WorksheetCell,
   WorksheetGrid,
@@ -124,6 +125,7 @@ export default function OrganizationEndorsementRequests({ organizationId, embedd
   return (
     <section className={embedded ? "" : "grid gap-3"}>
       {message ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{message}</p> : null}
+      <ManagementDisclosure id="organization-endorsement-requests" title="Endorsement change requests" summary={`${requests.length}`} actions={<CompactButton type="button" tone="primary" onClick={() => { setForm(emptyForm); setOpen(true); }}>Request change</CompactButton>} helpContent={<p>Propose a new endorsement or a change to existing wording. Platform review is required before a proposal affects live templates.</p>}>
       <AdminDataTable label="Endorsement template change requests">
         <thead>
           <tr>
@@ -155,6 +157,7 @@ export default function OrganizationEndorsementRequests({ organizationId, embedd
           ))}
         </tbody>
       </AdminDataTable>
+      </ManagementDisclosure>
 
       <DetailDrawer open={open} width="wide" onClose={() => setOpen(false)} title="Request endorsement change" description="Choose an existing endorsement to copy, or leave it blank to propose a new one.">
         <form onSubmit={submit}>

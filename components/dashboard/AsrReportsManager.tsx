@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { UsDateInput } from "@/components/forms/UsDateInput";
@@ -627,19 +628,18 @@ export default function AsrReportsManager() {
 
   return (
     <section className="space-y-5">
-      <div className="saas-panel">
-        <div className="people-toolbar">
-          <div>
-            <p className="saas-kicker">{activeOrganization.name}</p>
-            <h1 className="saas-subsection-title">Air Safety Event Reports</h1>
-            <p className="saas-meta-text mt-2">
-              Internal safety event reporting with Training, Maintenance, and Safety review.
-            </p>
-          </div>
+      {message ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
+      {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
+      <ManagementDisclosure
+        id="asr-summary"
+        eyebrow={activeOrganization.name}
+        title="Air Safety Event Reports"
+        summary={loading ? "Loading…" : `${reports.length}`}
+        actions={
           <div className="flex flex-wrap gap-2">
             {canManage ? (
-              <button className="secondary-button" type="button" onClick={() => setShowSettings((current) => !current)}>
-                Reviewer & option settings
+              <button className="secondary-button" type="button" onClick={() => setShowSettings(true)}>
+                Settings
               </button>
             ) : null}
             <button
@@ -649,27 +649,34 @@ export default function AsrReportsManager() {
               disabled={showForm || busy}
               title={showForm ? "Save and close the open draft first." : undefined}
             >
-              New ASR report
+              New ASR
             </button>
           </div>
-        </div>
-        {message ? <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
-        {error ? <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
-      </div>
+        }
+        helpContent={
+          <>
+            <p>ASRs document internal safety events and coordinate Training, Maintenance, and Safety review.</p>
+            <p>Drafts save automatically and remain editable by their owner. Submitted reports move through the assigned review workflow and may create a linked aircraft discrepancy.</p>
+            <p>Reviewer permissions and organization-specific options are managed from Settings.</p>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-500">Expand the activity section to search or review reports.</p>
+      </ManagementDisclosure>
 
-      {showSettings && canManage ? (
-        <AsrSettings
+      <DetailDrawer open={showSettings && canManage} title="ASR reviewer and option settings" width="wide" onClose={() => setShowSettings(false)}>
+        {canManage ? <AsrSettings
           organizationId={activeOrganization.id}
           members={members}
           assignments={assignments}
           options={options}
           onChanged={() => loadData(activeReportId)}
           onError={(value) => setError(getErrorMessage(value, "Unable to update ASR settings."))}
-        />
-      ) : null}
+        /> : null}
+      </DetailDrawer>
 
-      {showForm ? (
-        <section id="asr-report-form" className="saas-panel">
+      <DetailDrawer open={showForm} title={editingReportId ? "Edit ASR draft" : "New ASR"} width="wide" onClose={() => void handleCloseDraft()}>
+        <div id="asr-report-form">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="saas-kicker">{editingReportId ? "ASR draft" : "New ASR"}</p>
@@ -819,10 +826,15 @@ export default function AsrReportsManager() {
           <div className="mt-5 flex justify-end">
             <button className="primary-button" type="button" disabled={busy || draftState === "saving"} onClick={() => void handleSubmit()}>{busy ? "Submitting…" : "Sign & Submit ASR"}</button>
           </div>
-        </section>
-      ) : null}
+        </div>
+      </DetailDrawer>
 
-      <section className="saas-panel">
+      <ManagementDisclosure
+        id="asr-activity"
+        title="ASR activity"
+        summary={loading ? "Loading…" : `${filteredReports.length}`}
+        helpContent={<p>Expand to search ASR history. Rows show only the reference, aircraft, occurrence date, status and assigned reviewer context; open one for the full occurrence and review record.</p>}
+      >
         <div className="flex flex-col gap-2 sm:flex-row">
           <input className="min-w-0 flex-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reference, aircraft, occurrence, description, or reporter" />
           {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
@@ -836,7 +848,7 @@ export default function AsrReportsManager() {
                 <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setActiveReportId(report.id)}>
                   <p className="font-semibold text-slate-950">{report.reference_number ?? "ASR Draft"} · {report.aircraft_tail_number ?? "No aircraft"}</p>
                   <p className="saas-meta-text mt-1">{report.occurrence_date ?? "No date"} · {report.type_of_occurrence ?? "Occurrence not selected"} · {formatStatus(report.status)}</p>
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-700">{report.description ?? "Draft has no description yet."}</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-600">Reporter: {report.submitted_by_name}</p>
                 </button>
                 <div className="flex gap-2">
                   {report.risk_score ? <RiskBadge score={report.risk_score} /> : null}
@@ -846,8 +858,15 @@ export default function AsrReportsManager() {
             </article>
           ))}
         </div>
-      </section>
+      </ManagementDisclosure>
 
+      <DetailDrawer
+        open={Boolean(activeReport)}
+        title={activeReport?.reference_number ?? "ASR draft"}
+        description={activeReport ? `${activeReport.aircraft_tail_number ?? "No aircraft"} · ${formatStatus(activeReport.status)}` : undefined}
+        width="wide"
+        onClose={() => setActiveReportId("")}
+      >
       {activeReport ? (
         <AsrReportDetail
           key={`${activeReport.id}:${activeReport.updated_at}`}
@@ -866,6 +885,7 @@ export default function AsrReportsManager() {
           onEditDraft={() => editDraft(activeReport)}
         />
       ) : null}
+      </DetailDrawer>
     </section>
   );
 }

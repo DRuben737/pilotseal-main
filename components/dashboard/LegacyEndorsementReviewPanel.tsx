@@ -10,7 +10,7 @@ import {
   type LegacyEndorsementReviewContext,
 } from "@/lib/endorsement-records";
 import { formatUsDateTime } from "@/lib/date-format";
-import { DetailDrawer } from "@/components/admin/AdminConsole";
+import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -109,15 +109,9 @@ export default function LegacyEndorsementReviewPanel() {
   }
 
   return (
-    <section className="saas-panel mb-4">
-      <div className="saas-section-toggle">
-        <div className="saas-section-toggle-main">
-          <h2 className="saas-section-title">Legacy organization record review</h2>
-          <p className="saas-meta-text">Quarantined records are hidden from organizations until identity and historical membership evidence are confirmed.</p>
-        </div>
-        <span className="saas-pill">{records.length}</span>
-      </div>
-      {status ? <p role="status" className="saas-meta-text mt-3">{status}</p> : null}
+    <>
+    {status ? <p role="status" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{status}</p> : null}
+    <ManagementDisclosure id="legacy-endorsement-review" className="mb-4" title="Legacy organization record review" summary={`${records.length}`} helpContent={<p>Quarantined legacy records stay hidden from organizations until identity and historical membership evidence are confirmed. Review decisions are recorded in the audit log.</p>}>
       <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[720px] text-left text-xs">
           <thead className="bg-slate-100 text-slate-700"><tr><th className="px-3 py-2">Student</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Created</th><th className="px-3 py-2">Action</th></tr></thead>
@@ -227,6 +221,7 @@ export default function LegacyEndorsementReviewPanel() {
           </div>
         ) : null}
       </DetailDrawer>
-    </section>
+    </ManagementDisclosure>
+    </>
   );
 }

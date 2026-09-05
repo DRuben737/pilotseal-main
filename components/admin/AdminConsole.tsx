@@ -77,6 +77,94 @@ export function AdminCollapsibleSection({
   );
 }
 
+export function HelpDrawer({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <DetailDrawer open={open} title={title} onClose={onClose}>
+      <div className="space-y-4 text-sm leading-6 text-slate-700">{children}</div>
+    </DetailDrawer>
+  );
+}
+
+export function ManagementDisclosure({
+  id,
+  eyebrow,
+  title,
+  summary,
+  actions,
+  helpTitle,
+  helpContent,
+  children,
+  defaultOpen = false,
+  openOnAction = false,
+  className = "",
+}: {
+  id?: string;
+  eyebrow?: string;
+  title: string;
+  summary?: ReactNode;
+  actions?: ReactNode;
+  helpTitle?: string;
+  helpContent?: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  openOnAction?: boolean;
+  className?: string;
+}) {
+  const generatedId = useId();
+  const contentId = id ? `${id}-content` : `${generatedId}-content`;
+  const [open, setOpen] = useState(defaultOpen);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  return (
+    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] ${className}`}>
+      <div className="flex min-h-16 flex-wrap items-center gap-2 px-3 py-3 sm:flex-nowrap sm:px-4">
+        <button
+          type="button"
+          className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${actions ? "basis-full sm:basis-auto" : ""}`}
+          aria-expanded={open}
+          aria-controls={contentId}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition group-hover:border-slate-300 group-hover:text-blue-700" aria-hidden="true">
+            <svg viewBox="0 0 20 20" fill="none" className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}>
+              <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            {eyebrow ? <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-600">{eyebrow}</span> : null}
+            <span className="block text-sm font-semibold leading-5 text-slate-950 sm:text-base">{title}</span>
+          </span>
+          {summary ? <span className="shrink-0 text-right text-xs font-semibold text-slate-500">{summary}</span> : null}
+        </button>
+        <div className={`flex shrink-0 items-center gap-2 ${actions ? "ml-11 sm:ml-0" : ""}`}>
+          {helpContent ? (
+            <CompactButton type="button" aria-label={`Help for ${title}`} onClick={() => setHelpOpen(true)}>
+              Help
+            </CompactButton>
+          ) : null}
+          {actions ? <div onClick={() => { if (openOnAction) setOpen(true); }}>{actions}</div> : null}
+        </div>
+      </div>
+      {open ? <div id={contentId} className="border-t border-slate-200 bg-slate-50/35 p-3 sm:p-4">{children}</div> : null}
+      {helpContent ? (
+        <HelpDrawer open={helpOpen} title={helpTitle ?? `${title} help`} onClose={() => setHelpOpen(false)}>
+          {helpContent}
+        </HelpDrawer>
+      ) : null}
+    </section>
+  );
+}
+
 export function AdminSectionControls({
   expanded,
   onToggleAll,

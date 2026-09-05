@@ -10,6 +10,7 @@ import {
   DetailDrawer,
   EmptyState,
   FilterToolbar,
+  ManagementDisclosure,
   StatusBadge,
 } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
@@ -171,10 +172,11 @@ export default function AircraftAssignmentsManager() {
 
   return (
     <section className="space-y-5 pb-24">
-      <AdminPageHeader eyebrow="Platform administration" title="Aircraft Assignments" description="Grant one or more organizations access to private aircraft owned by your Platform Super Admin account. Ownership and visibility never change." />
+      <AdminPageHeader eyebrow="Platform administration" title="Aircraft Assignments" />
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {notice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p> : null}
 
+      <ManagementDisclosure id="aircraft-assignments" title="Aircraft organization assignments" summary={loading ? "Loading…" : `${aircraft.length}`} helpContent={<><p>Grant one or more organizations access to eligible private aircraft owned by your Platform Super Admin account.</p><p>Assignments never change aircraft ownership or private visibility. Removing access leaves unrelated organization access unchanged.</p></>}>
       <div className="hidden md:block"><AdminDataTable label="Aircraft organization assignments">
         <caption className="sr-only">Private aircraft owned by the signed-in Platform Super Admin</caption>
         <thead>
@@ -221,6 +223,7 @@ export default function AircraftAssignmentsManager() {
         })}
         <div className="flex items-center justify-between text-sm text-slate-600"><button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => value - 1)} className="min-h-10 rounded-xl border border-slate-200 px-3 disabled:opacity-40">Previous</button><span>{currentPage} / {pageCount}</span><button type="button" disabled={currentPage >= pageCount} onClick={() => setPage((value) => value + 1)} className="min-h-10 rounded-xl border border-slate-200 px-3 disabled:opacity-40">Next</button></div>
       </div>
+      </ManagementDisclosure>
 
       <BulkActionBar count={selectedCount} onClear={() => setSelectedIds(new Set())}>
         <button type="button" onClick={() => openBulk("add")} className="min-h-10 rounded-xl bg-blue-500 px-4 text-sm font-semibold hover:bg-blue-400">Add access</button>

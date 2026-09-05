@@ -10,6 +10,7 @@ import {
   CompactToolbar,
   DetailDrawer,
   EmptyState,
+  ManagementDisclosure,
   StatusBadge,
   WorksheetCell,
   WorksheetGrid,
@@ -1827,7 +1828,8 @@ export default function AircraftAdminPanel() {
   return (
     <>
       <div className="grid gap-3">
-        <AdminPageHeader eyebrow="Platform administration" title="Aircraft Library" description="Platform aircraft models, fleet records, organization access, and submitted weight-and-balance changes." />
+        <AdminPageHeader eyebrow="Platform administration" title="Aircraft Library" />
+        <ManagementDisclosure id="platform-aircraft-models" title="Aircraft models" summary={`${models.length}`} actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} helpContent={<p>Platform models define reusable loading locations, fuel data and approved weight-and-balance envelopes.</p>}>
         <AdminDataTable label="Platform aircraft models">
           <thead>
             <tr><th colSpan={5} className="p-0 font-normal"><CompactToolbar resultLabel={`${models.length} models`} actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} /></th></tr>
@@ -1838,7 +1840,9 @@ export default function AircraftAdminPanel() {
             {models.map((model) => <tr key={model.id} className="hover:bg-blue-50/40"><td className="px-3 py-2 font-semibold text-slate-950">{model.name}</td><td className="px-3 py-2 text-xs text-slate-600">{model.category === "helicopter" ? "Helicopter" : "Airplane"}</td><td className="px-3 py-2 text-xs text-slate-600">{model.chart_type ?? "1d1p"}</td><td className="px-3 py-2 text-xs text-slate-600">{typeof model.avg_fuel_burn_rate === "number" ? `${model.avg_fuel_burn_rate} gph` : "—"}</td><td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" onClick={() => openModelEditor(normalizeModelForm(model))}>Edit</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleDeleteModel(model.id)}>Delete</CompactButton></div></td></tr>)}
           </tbody>
         </AdminDataTable>
+        </ManagementDisclosure>
 
+        <ManagementDisclosure id="platform-fleet-aircraft" title="Fleet aircraft" summary={`${aircraft.length}`} actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} helpContent={<p>Manage platform aircraft identity, visibility, weight-and-balance data and organization access.</p>}>
         <AdminDataTable label="Platform fleet aircraft">
           <thead>
             <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${aircraft.length} aircraft`} actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} /></th></tr>
@@ -1852,7 +1856,9 @@ export default function AircraftAdminPanel() {
             })}
           </tbody>
         </AdminDataTable>
+        </ManagementDisclosure>
 
+        <ManagementDisclosure id="pending-weight-balance-changes" title="Weight & balance change requests" summary={`${updateRequests.filter((request) => request.status === "pending").length} pending`} helpContent={<p>Review submitted changes before they replace the current aircraft weight-and-balance values.</p>}>
         <AdminDataTable label="Pending weight and balance changes">
           <thead>
             <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${updateRequests.filter((request) => request.status === "pending").length} pending`} /></th></tr>
@@ -1863,6 +1869,7 @@ export default function AircraftAdminPanel() {
             {updateRequests.filter((request) => request.status === "pending").map((request) => <tr key={request.id} className="hover:bg-blue-50/40"><td className="px-3 py-2 font-semibold text-slate-950">{request.aircraft_tail_number}</td><td className="px-3 py-2 text-xs text-slate-600">{request.submitted_by_label}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_weight ?? "—"} → {request.proposed_empty_weight ?? "—"}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_arm ?? "—"} → {request.proposed_empty_arm ?? "—"}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_lat_arm ?? "—"} → {request.proposed_empty_lat_arm ?? "—"}</td><td className="max-w-48 truncate px-3 py-2 text-xs text-slate-600">{request.note || "—"}</td><td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" tone="primary" disabled={saving} onClick={() => void handleApproveRequest(request)}>Approve</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRejectRequest(request)}>Reject</CompactButton></div></td></tr>)}
           </tbody>
         </AdminDataTable>
+        </ManagementDisclosure>
       </div>
 
       {status ? <p className="saas-meta-text">{status}</p> : null}

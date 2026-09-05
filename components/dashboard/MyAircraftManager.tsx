@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CompactButton,
   DetailDrawer,
+  ManagementDisclosure,
   WorksheetCell,
   WorksheetGrid,
   WorksheetHeader,
@@ -668,7 +669,8 @@ export default function MyAircraftManager() {
 
   return (
     <>
-      <section className="saas-panel people-list-panel">
+      {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
+      <ManagementDisclosure id="my-aircraft" title="My Aircraft" summary={`${myAircraft.length}`} actions={<CompactButton type="button" tone="primary" onClick={openAddForm}>Add aircraft</CompactButton>} helpContent={<><p>Manage aircraft attached to your account, including weight and balance data and personal maintenance reminders.</p><p>Eligible private aircraft can be shared with selected organizations without changing ownership.</p></>}>
         <div className="people-toolbar">
           <div>
             <h3 className="saas-subsection-title">My Aircraft</h3>
@@ -680,12 +682,7 @@ export default function MyAircraftManager() {
             </p>
             <p className="mt-1 text-sm font-medium text-slate-700">{sharedAircraft.length} aircraft</p>
           </div>
-          <CompactButton type="button" tone="primary" onClick={openAddForm}>
-            Add aircraft
-          </CompactButton>
         </div>
-
-        {status ? <p className="saas-meta-text mt-3">{status}</p> : null}
 
         <div className="my-aircraft-table mt-4">
           <div className="my-aircraft-table-head">
@@ -773,10 +770,10 @@ export default function MyAircraftManager() {
             ))
           )}
         </div>
-      </section>
+      </ManagementDisclosure>
 
       {activeOrganization ? (
-        <section className="saas-panel people-list-panel">
+        <ManagementDisclosure id="organization-fleet-personal" eyebrow="Organization fleet" title={activeOrganization.name} summary={`${organizationAircraft.length}`} helpContent={<p>These aircraft are shared with the selected organization. Access and editing depend on your organization role.</p>}>
           <div className="people-toolbar">
             <div>
               <p className="saas-kicker">Organization fleet</p>
@@ -822,7 +819,7 @@ export default function MyAircraftManager() {
               ))
             )}
           </div>
-        </section>
+        </ManagementDisclosure>
       ) : null}
 
       <DetailDrawer

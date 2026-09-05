@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { UsDateTimeInput } from "@/components/forms/UsDateInput";
 import {
@@ -50,6 +51,7 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
   const [inbox, setInbox] = useState<NotificationRecord[]>([]);
   const [adminHistory, setAdminHistory] = useState<NotificationRecord[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [showComposer, setShowComposer] = useState(false);
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");
   const [inboxQuery, setInboxQuery] = useState("");
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => defaultNotificationPreferences(userId));
@@ -176,6 +178,7 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
       status: notification.status,
       title: notification.title,
     });
+    setShowComposer(true);
   }
 
   async function handleRead(notification: NotificationRecord) {
@@ -249,6 +252,7 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
         setStatus("Platform notification created.");
       }
       resetForm();
+      setShowComposer(false);
       setAdminHistory(await fetchNotificationHistory());
     } catch (error) {
       setStatus(getErrorMessage(error, "Failed to save notification."));
@@ -296,17 +300,9 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
       {status ? <p className="saas-panel text-sm text-slate-600">{status}</p> : null}
 
       {!platformPublishingOnly ? <>
-      <section className="saas-panel">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="saas-kicker">Unified inbox</p>
-            <h1 className="tools-child-title">Notifications</h1>
-            <p className="saas-meta-text mt-2">Personal reminders, organization messages, and platform notices appear here.</p>
-          </div>
-          <button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
+      <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} actions={<button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
             Mark all read ({unreadCount})
-          </button>
-        </div>
+          </button>} helpContent={<p>Personal reminders, organization messages, schedule updates and platform notices appear in this unified inbox. Expand it to search or filter.</p>}>
 
         <div className="mt-5 grid gap-3">
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -355,7 +351,6 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
                   <span className={`saas-pill saas-pill-${notification.priority}`}>{notification.priority}</span>
                 </div>
                 {notification.source_label ? <p className="saas-list-meta">{notification.source_label}</p> : null}
-                <p className="saas-meta-text">{notification.message}</p>
                 <p className="saas-list-meta">{formatUsDateTime(notification.created_at)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -375,7 +370,7 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
             </article>
           ))}
         </div>
-      </section>
+      </ManagementDisclosure>
 
       <section className="saas-panel" aria-labelledby="notification-preferences-title">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -414,13 +409,10 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
 
       {platformPublishingOnly && isAdmin ? (
         <>
-        <section className="saas-panel">
-          <p className="saas-kicker">Platform administration</p>
-          <h1 className="tools-child-title">Platform notices</h1>
-          <p className="saas-meta-text mt-2">Create, schedule, and manage notices sent across PilotSeal.</p>
-        </section>
-        <section className="saas-form-grid">
-          <article className="saas-panel">
+        <ManagementDisclosure id="platform-notices" eyebrow="Platform administration" title="Platform notice history" summary={`${adminHistory.length}`} actions={<button className="primary-button" type="button" onClick={() => { resetForm(); setShowComposer(true); }}>New notice</button>} openOnAction helpContent={<p>Create, schedule and manage notices sent across PilotSeal. Notice message bodies are shown only while editing or reviewing an individual notice.</p>}>
+          <div className="grid gap-3">
+            <DetailDrawer open={showComposer} title={form.id ? "Edit platform notice" : "Create platform notice"} onClose={() => setShowComposer(false)}>
+          <article>
             <h2 className="saas-subsection-title">{form.id ? "Edit platform notice" : "Create platform notice"}</h2>
             <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
               <label className="saas-field"><span>Title</span><input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required /></label>
@@ -433,19 +425,20 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
               <div className="flex gap-2"><button className="primary-button" type="submit" disabled={saving || !form.title.trim() || !form.message.trim()}>{saving ? "Saving..." : form.id ? "Update" : "Create"}</button><button className="ghost-button" type="button" onClick={resetForm}>Clear</button></div>
             </form>
           </article>
+            </DetailDrawer>
 
-          <article className="saas-panel">
-            <div className="flex items-center justify-between gap-3"><h2 className="saas-subsection-title">Platform notice history</h2><span className="saas-pill">{adminHistory.length}</span></div>
+          <article>
             <div className="mt-5 grid gap-3">
               {adminHistory.map((notification) => (
                 <article key={notification.id} className="saas-list-item saas-list-item-stack">
-                  <div><h3 className="saas-card-title">{notification.title}</h3><p className="saas-meta-text mt-2">{notification.message}</p><p className="saas-list-meta mt-2">{notification.status} · {formatUsDateTime(notification.created_at)}</p></div>
+                  <div><h3 className="saas-card-title">{notification.title}</h3><p className="saas-list-meta mt-2">{notification.status} · {formatUsDateTime(notification.created_at)}</p></div>
                   <div className="flex flex-wrap gap-2"><button className="ghost-button" type="button" onClick={() => handleEdit(notification)}>Edit</button><button className="secondary-button" type="button" disabled={saving || notification.status === "sent"} onClick={() => void handleSendNow(notification.id)}>Send now</button><button className="danger-button" type="button" disabled={saving} onClick={() => void handleDelete(notification.id)}>Delete</button></div>
                 </article>
               ))}
             </div>
           </article>
-        </section>
+          </div>
+        </ManagementDisclosure>
         </>
       ) : null}
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
@@ -56,16 +57,10 @@ export default function OrganizationAccessManager() {
   if (available.length === 0 && !status) return null;
 
   return (
-    <section className="saas-panel dashboard-setting-row">
-      <div>
-        <p className="saas-kicker">Organization access</p>
-        <h2 className="saas-subsection-title mt-1">Available organizations</h2>
-        <p className="saas-meta-text mt-2">
-          Only organizations that already listed your verified email appear here. Joining links your account without changing your personal profile.
-        </p>
-      </div>
+    <>
+    {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
+    <ManagementDisclosure id="available-organizations" eyebrow="Organization access" title="Available organizations" summary={loading ? "Checking…" : `${available.length}`} helpContent={<p>Only organizations that already listed your verified email appear here. Joining links your account without changing your personal profile.</p>}>
 
-      {status ? <p className="mt-3 text-sm text-slate-600" role="status">{status}</p> : null}
       {loading ? <p className="saas-meta-text mt-4">Checking organization access...</p> : null}
       {!loading && available.length === 0 ? (
         <p className="saas-meta-text mt-4">No organization is waiting to be linked to this account.</p>
@@ -97,7 +92,8 @@ export default function OrganizationAccessManager() {
           </article>
         ))}
       </div>
-    </section>
+    </ManagementDisclosure>
+    </>
   );
 }
 

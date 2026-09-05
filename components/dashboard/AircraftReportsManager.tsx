@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { ConfirmDialog } from "@/components/admin/AdminConsole";
+import { ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { UsDateInput } from "@/components/forms/UsDateInput";
@@ -365,30 +365,22 @@ export default function AircraftReportsManager() {
 
   return (
     <section className="space-y-5">
-      <div className="saas-panel">
-        <div className="people-toolbar">
-          <div>
-            <p className="saas-kicker">{activeOrganization.name}</p>
-            <h1 className="saas-subsection-title">Aircraft discrepancy reports</h1>
-            <p className="saas-meta-text mt-2">
-              Report a discrepancy immediately. Grounded aircraft can only be returned to service by an organization owner or administrator.
-            </p>
-          </div>
-          <button className="primary-button" type="button" onClick={startReport}>
-            New discrepancy report
-          </button>
-        </div>
-
-        {message ? (
-          <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            {message}
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-            {error}
-          </p>
-        ) : null}
+      {message ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
+      {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
+      <ManagementDisclosure
+        id="aircraft-report-summary"
+        eyebrow={activeOrganization.name}
+        title="Aircraft discrepancy reports"
+        summary={loading ? "Loading…" : `${reportStats.open} open`}
+        actions={<button className="primary-button" type="button" onClick={startReport}>New report</button>}
+        helpContent={
+          <>
+            <p>Submit an aircraft discrepancy as soon as it is found. You can submit the report alone or ground the aircraft immediately.</p>
+            <p>Organization owners and administrators review reports, record signatures and disposition, and are the only roles that can return a grounded aircraft to service.</p>
+            <p>The fleet status is authoritative. A report can state that an aircraft is down without changing a later fleet status.</p>
+          </>
+        }
+      >
 
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <ReportStat label="Open reports" value={reportStats.open} />
@@ -400,10 +392,10 @@ export default function AircraftReportsManager() {
             tone={reportStats.groundedAircraft > 0 ? "danger" : "neutral"}
           />
         </dl>
-      </div>
+      </ManagementDisclosure>
 
-      {showForm ? (
-        <section id="aircraft-report-new-form" className="saas-panel">
+      <DetailDrawer open={showForm} title="New aircraft discrepancy report" width="wide" onClose={() => { setShowForm(false); setFormErrors({}); }}>
+        <div id="aircraft-report-new-form">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="saas-kicker">New report</p>
@@ -600,10 +592,15 @@ export default function AircraftReportsManager() {
               {busy ? "Submitting…" : "Submit and ground immediately"}
             </button>
           </div>
-        </section>
-      ) : null}
+        </div>
+      </DetailDrawer>
 
-      <section className="saas-panel">
+      <ManagementDisclosure
+        id="aircraft-report-activity"
+        title="Report activity"
+        summary={loading ? "Loading…" : `${filteredReports.length}`}
+        helpContent={<p>Expand to search and filter report history. Select a row to review the full description, workflow and activity in a side drawer.</p>}
+      >
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aircraft, person, type, or description" />
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
@@ -663,10 +660,7 @@ export default function AircraftReportsManager() {
                     <p className="saas-meta-text mt-1">
                       {report.report_date} · Submitted by {report.submitted_by_name}
                     </p>
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-700">{report.description}</p>
-                    <p className="mt-3 text-xs font-semibold text-slate-600">
-                      Next: {getReportListNextStep(report, canManage)}
-                    </p>
+                    <p className="mt-2 text-xs font-semibold text-slate-600">Owner: {report.instructor_name ?? report.submitted_by_name}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {fleetGrounded ? <Badge tone="danger">Grounded in fleet</Badge> : null}
@@ -683,15 +677,20 @@ export default function AircraftReportsManager() {
             );
           })}
         </div>
-      </section>
+      </ManagementDisclosure>
 
-      {activeReport ? (
-        <section className="saas-panel">
+      <DetailDrawer
+        open={Boolean(activeReport)}
+        title={activeReport ? `${activeReport.aircraft_tail_number} · ${activeReport.discrepancy_type}` : "Aircraft report"}
+        description={activeReport ? `Submitted ${formatDateTime(activeReport.created_at)} by ${activeReport.submitted_by_name}` : undefined}
+        width="wide"
+        onClose={() => setActiveReportId("")}
+      >
+        {activeReport ? (
+        <div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="saas-kicker">Report detail</p>
-              <h2 className="saas-subsection-title">{activeReport.aircraft_tail_number} · {activeReport.discrepancy_type}</h2>
-              <p className="saas-meta-text mt-2">Submitted {formatDateTime(activeReport.created_at)} by {activeReport.submitted_by_name}</p>
             </div>
             <button className="ghost-button" type="button" onClick={() => setActiveReportId("")}>Close detail</button>
           </div>
@@ -820,8 +819,9 @@ export default function AircraftReportsManager() {
               ))}
             </ol>
           </div>
-        </section>
-      ) : null}
+        </div>
+        ) : null}
+      </DetailDrawer>
 
       <ConfirmDialog
         open={pendingSubmission !== null}
@@ -942,29 +942,6 @@ function ReportStat({
 function Badge({ tone, children }: { tone: "danger" | "warning" | "neutral" | "info"; children: React.ReactNode }) {
   const className = tone === "danger" ? "bg-rose-100 text-rose-800" : tone === "warning" ? "bg-amber-100 text-amber-800" : tone === "info" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700";
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{children}</span>;
-}
-
-function getReportListNextStep(
-  report: AircraftDiscrepancyReport,
-  canManage: boolean
-) {
-  if (report.status === "closed") return "No report action remains";
-  if (!report.instructor_person_id) {
-    return canManage
-      ? "Assign an instructor"
-      : "Waiting for an instructor assignment";
-  }
-  if (!report.instructor_signed_at) {
-    return `Waiting for ${report.instructor_name ?? "the instructor"} to sign`;
-  }
-  if (report.status === "submitted") {
-    return canManage
-      ? "Review the report and record the disposition"
-      : "Waiting for organization review";
-  }
-  return canManage
-    ? "Finish the disposition and close the report"
-    : "Organization review is in progress";
 }
 
 function getReportNextSteps(

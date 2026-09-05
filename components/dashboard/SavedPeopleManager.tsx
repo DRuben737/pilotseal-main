@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
 import Badge from "@/components/ui/Badge";
@@ -978,7 +979,17 @@ export default function SavedPeopleManager() {
   }
 
   return (
-    <section className="saas-panel people-list-panel">
+    <>
+    {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
+    {!certificatesAvailable ? <p className="saas-feedback saas-feedback-warning">Certificate management is temporarily unavailable.</p> : null}
+    <ManagementDisclosure
+      id="saved-people"
+      title="Saved People"
+      summary={loading ? "Loading…" : `${people.length}`}
+      actions={<button type="button" className="secondary-button icon-button" aria-label="Add person" title="Add person" onClick={() => setShowPersonForm(true)}><ActionIcon kind="add" /></button>}
+      openOnAction
+      helpContent={<><p>Saved People stores private student, instructor and passenger records used by your tools.</p><p>Expand a person to manage certificates or link the record to a verified PilotSeal account. Linking does not expose your private notes or certificates.</p></>}
+    >
       <div className="people-toolbar">
         <div>
           <h3 className="saas-subsection-title">People</h3>
@@ -992,25 +1003,9 @@ export default function SavedPeopleManager() {
             placeholder="Search people"
           />
         </label>
-        <button
-          type="button"
-          className="secondary-button icon-button"
-          aria-label={showPersonForm ? "Hide add person form" : "Add person"}
-          title={showPersonForm ? "Hide add person form" : "Add person"}
-          onClick={() => setShowPersonForm((current) => !current)}
-        >
-          <ActionIcon kind="add" />
-        </button>
       </div>
 
       {loading ? <p className="saas-meta-text mt-3">Loading people...</p> : null}
-      {!loading && status ? <p className="saas-meta-text mt-3">{status}</p> : null}
-      {!certificatesAvailable ? (
-        <p className="saas-feedback saas-feedback-warning mt-3">
-          Certificate management needs the saved_person_certificates table. Run
-          supabase/person_certificates.sql in Supabase to enable it.
-        </p>
-      ) : null}
 
       {incomingIdentityRequests.length > 0 ? (
         <section className="saas-subpanel mt-3" aria-label="Student identity requests">
@@ -1447,6 +1442,7 @@ export default function SavedPeopleManager() {
           );
         })}
       </div>
-    </section>
+    </ManagementDisclosure>
+    </>
   );
 }

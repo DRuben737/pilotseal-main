@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { ConfirmDialog } from "@/components/admin/AdminConsole";
+import { ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { formatUsDateTime } from "@/lib/date-format";
@@ -140,19 +140,23 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
   }
 
   return (
-    <section className="saas-panel">
-      <div className="people-toolbar">
-        <div>
-          <p className="saas-kicker">Preflight records</p>
-          <h2 className="saas-subsection-title">Flight Brief history</h2>
-          <p className="saas-meta-text mt-2">
-            {organizationOnly
-              ? "All organization-scoped member briefs from the last 7 days, including drafts and finalized history."
-              : "Your records plus organization records available through the current organization. Flight Brief records are retained for up to 7 days."}
-          </p>
-        </div>
-        <Link className="secondary-button" href="/tools/flight-brief">New Flight Brief</Link>
-      </div>
+    <>
+    {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
+    <ManagementDisclosure
+      id={organizationOnly ? "organization-flight-briefs" : "flight-brief-history"}
+      eyebrow="Preflight records"
+      title={organizationOnly ? "Organization Flight Briefs" : "Flight Brief history"}
+      summary={loading ? "Loading…" : `${records.length}`}
+      actions={<Link className="secondary-button" href="/tools/flight-brief">New Flight Brief</Link>}
+      helpContent={
+        <>
+          <p>{organizationOnly ? "This view contains organization-scoped member briefs." : "This view combines your own briefs with organization records you are permitted to see."}</p>
+          <p>Flight Brief records, including drafts and finalized history, are retained for up to 7 days and then expire automatically.</p>
+          <p>Unfinished drafts you own can be continued or deleted. Finalized records cannot be edited; create a revision when a correction is needed.</p>
+          <p>A Flight Brief is a planning record, not a maintenance release, aircraft logbook entry, or legal weather briefing certificate.</p>
+        </>
+      }
+    >
 
       <div className="mt-5 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto]">
         <input
@@ -178,8 +182,6 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
           </button>
         ) : null}
       </div>
-      {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
-
       {loading ? <p className="saas-empty-state mt-5">Loading preflight records...</p> : null}
       {!loading && filteredRecords.length === 0 ? (
         <p className="saas-empty-state mt-5">No matching preflight records.</p>
@@ -238,15 +240,14 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
         })}
       </div>
 
-      {activeRecord ? (
-        <div className="mt-5 rounded-2xl border border-slate-300 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Preflight record detail</h3>
-              <p className="saas-meta-text">Finalized {formatDateTime(activeRecord.finalized_at)} · Saved record cannot be changed</p>
-            </div>
-            <button className="ghost-button" type="button" onClick={() => setActiveRecord(null)}>Close</button>
-          </div>
+      <DetailDrawer
+        open={Boolean(activeRecord)}
+        title="Preflight record detail"
+        description={activeRecord ? `Finalized ${formatDateTime(activeRecord.finalized_at)} · Saved record cannot be changed` : undefined}
+        width="wide"
+        onClose={() => setActiveRecord(null)}
+      >
+        {activeRecord ? (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Snapshot title="Flight brief" value={activeRecord.brief_data} />
             <Snapshot title="Maintenance & flight status" value={activeRecord.mx_snapshot} />
@@ -254,11 +255,8 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
             <Snapshot title="Weather" value={activeRecord.weather_snapshot} />
             <div className="lg:col-span-2"><Snapshot title="NOTAMs" value={activeRecord.notam_snapshot} /></div>
           </div>
-          <p className="saas-meta-text mt-4">
-            This is a preflight planning record, not a maintenance release, aircraft logbook entry, or legal weather briefing certificate.
-          </p>
-        </div>
-      ) : null}
+        ) : null}
+      </DetailDrawer>
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="Delete unfinished Flight Brief?"
@@ -269,7 +267,8 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => void handleDeleteDraft()}
       />
-    </section>
+    </ManagementDisclosure>
+    </>
   );
 }
 

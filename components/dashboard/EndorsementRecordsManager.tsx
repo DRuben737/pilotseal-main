@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 
+import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
@@ -121,14 +121,9 @@ export default function EndorsementRecordsManager() {
   const [query, setQuery] = useState("");
   const [activeRecord, setActiveRecord] = useState<EndorsementRecord | null>(null);
   const [activePdfUrl, setActivePdfUrl] = useState("");
-  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [expandedStudent, setExpandedStudent] = useState("");
   const [editingRecord, setEditingRecord] = useState<EndorsementRecord | null>(null);
   const [view, setView] = useState<"personal" | "received" | "organization">("personal");
-
-  useEffect(() => {
-    setPortalRoot(document.body);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,14 +259,19 @@ export default function EndorsementRecordsManager() {
 
   return (
     <>
-      <section className="saas-panel">
-        <div className="saas-section-toggle">
-          <div className="saas-section-toggle-main">
-            <h2 className="saas-section-title">Endorsement Records</h2>
-            <p className="saas-meta-text">Your issued records remain personal history. Records created during an organization membership also appear in that organization’s activity, so the views intentionally overlap.</p>
-          </div>
-          <span className="saas-pill">{filteredRecords.length}</span>
-        </div>
+      {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
+      <ManagementDisclosure
+        id="endorsement-records"
+        title="Endorsement Records"
+        summary={loading ? "Loading…" : `${records.length}`}
+        helpContent={
+          <>
+            <p>Your issued records remain in your personal history.</p>
+            <p>Records created while you belong to an organization also appear in that organization’s activity. This overlap is intentional and does not create duplicate records.</p>
+            <p>Use the three views to switch between records you issued, records issued to you, and organization activity. Personal records you own can be edited or deleted; confirmed organization records are immutable.</p>
+          </>
+        }
+      >
 
         <nav className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Endorsement record views">
           {([
@@ -305,8 +305,6 @@ export default function EndorsementRecordsManager() {
         </div>
 
         {loading ? <p className="saas-meta-text mt-5">Loading records...</p> : null}
-        {!loading && status ? <p className="saas-meta-text mt-5">{status}</p> : null}
-
         {!loading && groupedRecords.length === 0 ? (
           <p className="saas-empty-state mt-5">
             {query.trim() ? "No records match your search." : "No endorsement records saved yet."}
@@ -395,15 +393,11 @@ export default function EndorsementRecordsManager() {
             );
           })}
         </div>
-      </section>
+      </ManagementDisclosure>
 
-      {activeRecord && portalRoot
-        ? createPortal(
-            <div className="Overlay" onClick={closeRecord}>
-              <div className="Modal" onClick={(event) => event.stopPropagation()}>
-                <div className="tools-child-shell flex h-full min-h-0 flex-col">
-                  <div className="tools-child-header records-pdf-header">
-                    <div />
+      <DetailDrawer open={Boolean(activeRecord)} title={activeRecord ? `Endorsement record · ${activeRecord.student_name}` : "Endorsement record"} width="wide" onClose={closeRecord}>
+        {activeRecord ? <div className="flex min-h-[70vh] flex-col">
+                  <div className="records-pdf-header flex justify-end">
                     <div className="tools-child-actions">
                       {activePdfUrl ? (
                         <a
@@ -427,15 +421,6 @@ export default function EndorsementRecordsManager() {
                       >
                         <ActionIcon kind="delete" />
                       </button> : null}
-                      <button
-                        type="button"
-                        className="ghost-button icon-button"
-                        aria-label="Close PDF preview"
-                        title="Close"
-                        onClick={closeRecord}
-                      >
-                        <ActionIcon kind="close" />
-                      </button>
                     </div>
                   </div>
 
@@ -450,18 +435,11 @@ export default function EndorsementRecordsManager() {
                       <p className="saas-meta-text p-5">Loading PDF...</p>
                     )}
                   </div>
-                </div>
-              </div>
-            </div>,
-            portalRoot
-          )
-        : null}
-      {editingRecord && portalRoot
-        ? createPortal(
-            <div className="Overlay" onClick={() => setEditingRecord(null)}>
-              <form className="Modal max-w-2xl" onSubmit={handleEditSave} onClick={(event) => event.stopPropagation()}>
+                </div> : null}
+      </DetailDrawer>
+      <DetailDrawer open={Boolean(editingRecord)} title="Edit endorsement record" onClose={() => setEditingRecord(null)}>
+        {editingRecord ? <form onSubmit={handleEditSave}>
                 <div className="grid gap-4 p-5 md:grid-cols-2">
-                  <h2 className="text-xl font-semibold text-slate-950 md:col-span-2">Edit endorsement record</h2>
                   <RecordField label="Student name" name="student_name" defaultValue={editingRecord.student_name} required />
                   <RecordField label="Student certificate" name="student_cert_number" defaultValue={editingRecord.student_cert_number ?? ""} />
                   <RecordField label="Instructor name" name="instructor_name" defaultValue={editingRecord.instructor_name} required />
@@ -473,11 +451,8 @@ export default function EndorsementRecordsManager() {
                     <button type="button" className="ghost-button" onClick={() => setEditingRecord(null)}>Cancel</button>
                   </div>
                 </div>
-              </form>
-            </div>,
-            portalRoot
-          )
-        : null}
+              </form> : null}
+      </DetailDrawer>
     </>
   );
 }

@@ -61,6 +61,7 @@ import {
   ConfirmDialog,
   DetailDrawer,
   EmptyState,
+  ManagementDisclosure,
   QuickEditPopover,
   StatusBadge,
   WorksheetCell,
@@ -1414,6 +1415,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
       {view === "messages" ? (
         <>
+          <ManagementDisclosure id="organization-messages" title="Organization messages" summary={`${members.length} recipients`} actions={<CompactButton type="button" tone="primary" onClick={() => setShowMessageDrawer(true)}>New message</CompactButton>} helpContent={<p>Send an operational announcement or urgent notice to all current organization members through PilotSeal notifications.</p>}>
           <AdminDataTable label="Organization messages">
             <thead>
               <tr>
@@ -1432,6 +1434,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             </thead>
             <tbody><tr><td className="px-3 py-2 font-semibold text-slate-950">All current members</td><td className="px-3 py-2 text-xs text-slate-600">PilotSeal notifications</td><td className="px-3 py-2 text-xs text-slate-600">Operational announcements and urgent notices</td></tr></tbody>
           </AdminDataTable>
+          </ManagementDisclosure>
           <DetailDrawer open={showMessageDrawer} onClose={() => setShowMessageDrawer(false)} title="New organization message" description={`Send one notification to ${members.length} current member${members.length === 1 ? "" : "s"}.`}>
             <form onSubmit={handleSendOrganizationMessage}>
               <WorksheetGrid label="Organization message details">
@@ -1824,6 +1827,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
       {view === "people" ? (
         <>
+          <ManagementDisclosure id="organization-people" title="People" summary={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManage ? <CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setInviteRecipient(""); setInviteEmailSent(false); setShowAddPersonDrawer(true); }}>Invite</CompactButton> : undefined} helpContent={<><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Email invitations become memberships only after the invited address is verified. Role changes, removal and ownership transfer require confirmation.</p></>}>
           <AdminDataTable label="Linked organization members">
             <thead>
               <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManage ? <CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setInviteRecipient(""); setInviteEmailSent(false); setShowAddPersonDrawer(true); }}>Invite by email</CompactButton> : undefined} /></th></tr>
@@ -1857,7 +1861,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               })}
             </tbody>
           </AdminDataTable>
+          </ManagementDisclosure>
 
+          <ManagementDisclosure id="organization-pending-invitations" title="Pending invitations" summary={`${pendingPeople.length}`} helpContent={<p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}>
           <AdminDataTable label="Pending organization invitations">
             <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Email</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
@@ -1871,6 +1877,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               ))}
             </tbody>
           </AdminDataTable>
+          </ManagementDisclosure>
 
           <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="PilotSeal emails a one-time registration link. Membership is created only after the invited email is verified.">
             {inviteLink ? (
@@ -2169,16 +2176,9 @@ function FleetWorkspacePanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 sm:px-4">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
-          <p className="mt-0.5 text-xs leading-4 text-slate-500">{description}</p>
-        </div>
-        <p className="text-xs font-semibold text-slate-500">{summary}</p>
-      </header>
-      <div className="bg-slate-50/35 p-2.5 sm:p-3">{children}</div>
-    </section>
+    <ManagementDisclosure title={title} summary={summary} helpContent={<p>{description}</p>}>
+      {children}
+    </ManagementDisclosure>
   );
 }
 
