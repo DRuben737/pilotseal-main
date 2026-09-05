@@ -516,7 +516,7 @@ function WeatherSection({
   count,
   accent,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
 }) {
   return (
     <details className="flightbrief-weatherCard" open={defaultOpen}>

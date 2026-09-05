@@ -147,6 +147,18 @@ export async function updateFlightBriefDraft(id: string, input: FlightBriefDraft
   return normalizeFlightBrief(data);
 }
 
+export async function deleteFlightBriefDraft(id: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("flight_briefs")
+    .delete()
+    .eq("id", id)
+    .eq("status", "draft")
+    .select("id");
+  if (error) throw error;
+  if (!data?.length) throw new Error("Draft not found or you do not have permission to delete it.");
+}
+
 export async function finalizeFlightBrief(id: string, input: FinalizeFlightBriefInput) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("finalize_flight_brief", {

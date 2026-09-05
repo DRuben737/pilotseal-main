@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { ConfirmDialog } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { formatUsDateTime } from "@/lib/date-format";
 import {
   createFlightBriefRevision,
+  deleteFlightBriefDraft,
   fetchMyFlightBriefs,
   fetchOrganizationStudentBriefs,
   type FlightBriefRecord,
@@ -21,10 +23,11 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
   const { activeOrganization } = useOrganization();
   const [records, setRecords] = useState<FlightBriefRecord[]>([]);
   const [activeRecord, setActiveRecord] = useState<FlightBriefRecord | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<FlightBriefRecord | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<PreflightStatusFilter>("all");
   const [collapsedStatuses, setCollapsedStatuses] = useState<Set<FlightBriefRecord["status"]>>(
-    () => new Set(["superseded"])
+    () => new Set(preflightStatusOrder)
   );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -119,6 +122,23 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
     }
   }
 
+  async function handleDeleteDraft() {
+    if (!pendingDelete) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      await deleteFlightBriefDraft(pendingDelete.id);
+      setRecords((current) => current.filter((item) => item.id !== pendingDelete.id));
+      if (activeRecord?.id === pendingDelete.id) setActiveRecord(null);
+      setPendingDelete(null);
+      setStatus("Unfinished Flight Brief deleted.");
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to delete the unfinished Flight Brief."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="saas-panel">
       <div className="people-toolbar">
@@ -127,8 +147,8 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
           <h2 className="saas-subsection-title">Flight Brief history</h2>
           <p className="saas-meta-text mt-2">
             {organizationOnly
-              ? "All organization-scoped member briefs, including drafts and finalized history."
-              : "Your records plus organization records available through the current organization."}
+              ? "All organization-scoped member briefs from the last 7 days, including drafts and finalized history."
+              : "Your records plus organization records available through the current organization. Flight Brief records are retained for up to 7 days."}
           </p>
         </div>
         <Link className="secondary-button" href="/tools/flight-brief">New Flight Brief</Link>
@@ -201,6 +221,9 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
                   {isOwn && record.status === "draft" ? (
                     <Link className="ghost-button" href={`/tools/flight-brief?briefId=${record.id}`}>Continue draft</Link>
                   ) : null}
+                  {isOwn && record.status === "draft" ? (
+                    <button className="danger-button" type="button" disabled={busy} onClick={() => setPendingDelete(record)}>Delete draft</button>
+                  ) : null}
                   {isOwn && record.status !== "draft" ? (
                     <button className="ghost-button" type="button" disabled={busy} onClick={() => void handleCreateRevision(record)}>Create revision</button>
                   ) : null}
@@ -236,13 +259,23 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
           </p>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Delete unfinished Flight Brief?"
+        description="This permanently removes the draft. Completed Flight Briefs cannot be deleted manually and expire automatically after 7 days."
+        confirmLabel="Delete draft"
+        destructive
+        busy={busy}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => void handleDeleteDraft()}
+      />
     </section>
   );
 }
 
 function Snapshot({ title, value }: { title: string; value: Record<string, unknown> }) {
   return (
-    <details className="rounded-xl border border-slate-200 bg-white p-3" open={title === "Flight brief" || title === "Maintenance & flight status"}>
+    <details className="rounded-xl border border-slate-200 bg-white p-3">
       <summary className="cursor-pointer text-sm font-semibold text-slate-900">{title}</summary>
       <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-700">
         {JSON.stringify(value, null, 2)}
