@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import CollapsibleMobileNav from "@/components/ui/CollapsibleMobileNav";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -516,7 +515,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <span>New</span>
                 </Link>
               </section>
-              <CollapsibleMobileNav label="Functions">
               {workspaceSwitches.length > 1 ? (
                 <nav className="dashboard-mobile-workspaces mb-3 gap-2 overflow-x-auto" aria-label="Switch workspace">
                   {workspaceSwitches.map((item) => {
@@ -551,7 +549,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 );
               })}
             </nav>
-              </CollapsibleMobileNav>
               {!organizationsLoading && organizations.length > 1 && (profileRole !== "admin" || workspace === "organization") ? (
                 <div className="mb-3 flex justify-end">
                   <select
