@@ -58,6 +58,10 @@ function isActive(pathname: string, href: string) {
 export default function MobileAppNav() {
   const pathname = usePathname();
 
+  if (pathname.startsWith("/dashboard")) {
+    return null;
+  }
+
   return (
     <CollapsibleMobileNav label="Navigation" floating><nav className="mobile-app-nav" aria-label="Primary mobile navigation">
       {navItems.map((item) => {

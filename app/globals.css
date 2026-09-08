@@ -3312,6 +3312,31 @@ summary:focus-visible {
   padding-top: 0.8rem;
 }
 
+.site-nav-mobile-workspaces {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.site-nav-mobile-workspaces > p {
+  margin: 0;
+  padding: 0 0.7rem;
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.site-nav-mobile-workspaces > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.site-nav-mobile-workspaces .site-nav-link {
+  text-align: center;
+}
+
 .saas-empty-page {
   display: grid;
   gap: 1rem;

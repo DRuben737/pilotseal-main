@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import UserMenu from "@/components/ui/UserMenu";
 import { resolveDisplayIdentity } from "@/lib/identity";
+import { canManageOrganization } from "@/lib/organizations";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -20,9 +22,11 @@ const publicNavItems = [
 export default function SiteNav() {
   const pathname = usePathname();
   const { loading, session } = useAuthSession();
+  const { activeOrganization } = useOrganization();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [defaultCfiName, setDefaultCfiName] = useState("");
+  const [profileRole, setProfileRole] = useState("");
 
   const isAuthenticated = Boolean(session?.user);
   const userEmail = session?.user?.email ?? "";
@@ -31,6 +35,32 @@ export default function SiteNav() {
     defaultCfiName,
     email: userEmail,
   });
+  const inDashboard = pathname.startsWith("/dashboard");
+  const activeWorkspace = pathname.startsWith("/dashboard/admin")
+    ? "platform"
+    : pathname.startsWith("/dashboard/organization")
+      ? "organization"
+      : "personal";
+  const dashboardWorkspaces = [
+    { href: "/dashboard", label: "Personal", id: "personal", visible: true },
+    {
+      href: "/dashboard/organization/overview",
+      label: "Organization",
+      id: "organization",
+      visible: Boolean(
+        activeOrganization && (
+          canManageOrganization(activeOrganization.member_role)
+          || activeOrganization.teaching_role === "instructor"
+        )
+      ),
+    },
+    {
+      href: "/dashboard/admin/overview",
+      label: "Platform",
+      id: "platform",
+      visible: profileRole === "admin",
+    },
+  ].filter((workspace) => workspace.visible);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +70,7 @@ export default function SiteNav() {
         if (!cancelled) {
           setDisplayName("");
           setDefaultCfiName("");
+          setProfileRole("");
         }
         return;
       }
@@ -52,11 +83,13 @@ export default function SiteNav() {
         if (!cancelled) {
           setDisplayName(profile?.display_name ?? "");
           setDefaultCfiName(defaultCfi?.display_name ?? "");
+          setProfileRole(profile?.role ?? "");
         }
       } catch {
         if (!cancelled) {
           setDisplayName("");
           setDefaultCfiName("");
+          setProfileRole("");
         }
       }
     }
@@ -157,13 +190,32 @@ export default function SiteNav() {
             </Link>
           ) : (
             <div className="site-nav-mobile-account">
-              <Link
-                href="/dashboard"
-                className={`site-nav-link ${pathname.startsWith("/dashboard") ? "site-nav-link-active" : ""}`}
-                onClick={() => setMobileOpen(false)}
-              >
-                Dashboard
-              </Link>
+              {inDashboard && dashboardWorkspaces.length > 1 ? (
+                <div className="site-nav-mobile-workspaces">
+                  <p>Workspace</p>
+                  <div>
+                    {dashboardWorkspaces.map((workspace) => (
+                      <Link
+                        key={workspace.id}
+                        href={workspace.href}
+                        className={`site-nav-link ${activeWorkspace === workspace.id ? "site-nav-link-active" : ""}`}
+                        aria-current={activeWorkspace === workspace.id ? "page" : undefined}
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        {workspace.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Link
+                  href="/dashboard"
+                  className={`site-nav-link ${inDashboard ? "site-nav-link-active" : ""}`}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  Dashboard
+                </Link>
+              )}
 
               <button
                 type="button"

@@ -515,14 +515,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <span>New</span>
                 </Link>
               </section>
-              {workspaceSwitches.length > 1 ? (
-                <nav className="dashboard-mobile-workspaces mb-3 gap-2 overflow-x-auto" aria-label="Switch workspace">
-                  {workspaceSwitches.map((item) => {
-                    const active = workspace === item.label.toLowerCase();
-                    return <Link key={item.href} href={item.href} className={`min-h-10 shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}>{item.label}</Link>;
-                  })}
-                </nav>
-              ) : null}
             <nav className="dashboard-bottom-nav" aria-label="Dashboard navigation">
               {mobileDashboardLinks.map((item) => {
                 const active =
