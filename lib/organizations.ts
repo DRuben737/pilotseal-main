@@ -82,6 +82,9 @@ export type OrganizationMemberInvitation = {
   invited_at: string;
   expires_at: string;
   accepted_at: string | null;
+  assigned_instructor_user_id: string | null;
+  assigned_instructor_name: string | null;
+  assigned_saved_person_id: string | null;
 };
 
 export type OrganizationInvitationPreview = {
@@ -91,6 +94,7 @@ export type OrganizationInvitationPreview = {
   teaching_role: OrganizationTeachingRole | null;
   status: "pending" | "accepted" | "revoked" | "expired";
   expires_at: string;
+  assigned_instructor_name: string | null;
 };
 
 export type OrganizationInvitationCreation = {
@@ -99,6 +103,8 @@ export type OrganizationInvitationCreation = {
   invited_email: string;
   invite_token: string;
   expires_at: string;
+  assigned_instructor_user_id: string | null;
+  assigned_saved_person_id: string | null;
   email_sent: boolean;
   email_error_code: string | null;
 };
@@ -224,12 +230,18 @@ export async function addOrganizationPerson(input: {
 export async function createOrganizationMemberInvitation(input: {
   organizationId: string;
   email: string;
+  displayName: string;
+  teachingRole: OrganizationTeachingRole;
+  assignedInstructorUserId: string | null;
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.functions.invoke("organization-invitation-email", {
     body: {
       organizationId: input.organizationId,
       email: input.email.trim(),
+      displayName: input.displayName.trim(),
+      teachingRole: input.teachingRole,
+      assignedInstructorUserId: input.assignedInstructorUserId,
     },
   });
   if (error) throw error;
@@ -244,7 +256,7 @@ export async function createOrganizationMemberInvitation(input: {
 
 export async function fetchOrganizationMemberInvitations(organizationId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("list_organization_member_invitations", {
+  const { data, error } = await supabase.rpc("list_organization_member_invitations_v2", {
     p_organization_id: organizationId,
   });
   if (error) throw error;
@@ -253,7 +265,7 @@ export async function fetchOrganizationMemberInvitations(organizationId: string)
 
 export async function fetchOrganizationInvitation(token: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("get_organization_invitation", { p_token: token });
+  const { data, error } = await supabase.rpc("get_organization_invitation_v2", { p_token: token });
   if (error) throw error;
   return ((data ?? [])[0] ?? null) as OrganizationInvitationPreview | null;
 }

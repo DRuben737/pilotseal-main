@@ -11,6 +11,8 @@ type InvitationResult = {
   invited_email: string;
   invite_token: string;
   expires_at: string;
+  assigned_instructor_user_id: string | null;
+  assigned_saved_person_id: string | null;
 };
 
 function jsonResponse(payload: unknown, status = 200) {
@@ -53,11 +55,13 @@ function invitationEmailHtml(input: {
   inviterName: string;
   inviteUrl: string;
   expiresAt: string;
+  instructorName: string | null;
 }) {
   const organizationName = escapeHtml(input.organizationName);
   const inviterName = escapeHtml(input.inviterName);
   const inviteUrl = escapeHtml(input.inviteUrl);
   const expiresAt = escapeHtml(formatExpiration(input.expiresAt));
+  const instructorName = input.instructorName ? escapeHtml(input.instructorName) : null;
 
   return `<!DOCTYPE html>
 <html>
@@ -80,6 +84,7 @@ function invitationEmailHtml(input: {
             <td bgcolor="#ffffff" style="padding-top:32px;padding-right:28px;padding-bottom:32px;padding-left:28px;background-color:#ffffff;">
               <h1 style="margin-top:0;margin-right:0;margin-bottom:16px;margin-left:0;font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:34px;color:#0f172a;font-weight:700;">You’re invited to ${organizationName}</h1>
               <p style="margin-top:0;margin-right:0;margin-bottom:20px;margin-left:0;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;color:#475569;">${inviterName} invited you to join their organization on PilotSeal.</p>
+              ${instructorName ? `<p style="margin-top:0;margin-right:0;margin-bottom:20px;margin-left:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:23px;color:#334155;"><strong>Assigned instructor:</strong> ${instructorName}</p>` : ""}
               <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
                   <td bgcolor="#1d4ed8" style="background-color:#1d4ed8;border-radius:8px;">
@@ -124,7 +129,13 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "You must be signed in." }, 401);
   }
 
-  let body: { organizationId?: string; email?: string };
+  let body: {
+    organizationId?: string;
+    email?: string;
+    displayName?: string;
+    teachingRole?: string;
+    assignedInstructorUserId?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -133,11 +144,26 @@ Deno.serve(async (request) => {
 
   const organizationId = body.organizationId?.trim() || "";
   const email = body.email?.trim().toLowerCase() || "";
+  const displayName = body.displayName?.trim() || "";
+  const teachingRole = body.teachingRole?.trim().toLowerCase() || "";
+  const assignedInstructorUserId = body.assignedInstructorUserId?.trim() || null;
   if (!organizationId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
     return jsonResponse({ error: "A valid organization is required." }, 400);
   }
   if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
     return jsonResponse({ error: "Enter a valid email address." }, 400);
+  }
+  if (teachingRole !== "student" && teachingRole !== "instructor") {
+    return jsonResponse({ error: "Select a valid teaching role." }, 400);
+  }
+  if (teachingRole === "student" && !displayName) {
+    return jsonResponse({ error: "Enter the student's formal name." }, 400);
+  }
+  if (teachingRole === "student" && !assignedInstructorUserId?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
+    return jsonResponse({ error: "Select a current organization instructor." }, 400);
+  }
+  if (teachingRole === "instructor" && assignedInstructorUserId) {
+    return jsonResponse({ error: "Only student invitations can assign an instructor." }, 400);
   }
 
   const authenticatedClient = createClient(supabaseUrl, anonKey, {
@@ -154,12 +180,13 @@ Deno.serve(async (request) => {
   }
 
   const { data: invitationRows, error: invitationError } = await authenticatedClient.rpc(
-    "create_organization_member_invitation",
+    "create_organization_member_invitation_v2",
     {
       p_organization_id: organizationId,
       p_email: email,
-      p_display_name: null,
-      p_teaching_role: null,
+      p_display_name: displayName || null,
+      p_teaching_role: teachingRole,
+      p_assigned_instructor_user_id: assignedInstructorUserId,
       p_internal_id: null,
       p_notes: null,
     },
@@ -173,15 +200,21 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Invitation could not be created." }, 500);
   }
 
-  const [{ data: organization }, { data: inviter }] = await Promise.all([
+  const [{ data: organization }, { data: inviter }, { data: instructor }] = await Promise.all([
     serviceClient.from("organizations").select("name").eq("id", organizationId).maybeSingle(),
     serviceClient.from("profiles").select("display_name,email").eq("id", userResult.user.id).maybeSingle(),
+    assignedInstructorUserId
+      ? serviceClient.from("profiles").select("display_name,email").eq("id", assignedInstructorUserId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   const organizationName = singleLine(organization?.name || "", "an organization");
   const inviterName = singleLine(
     inviter?.display_name || inviter?.email || "",
     "An organization administrator",
   );
+  const instructorName = instructor
+    ? singleLine(instructor.display_name || instructor.email || "", "Assigned instructor")
+    : null;
   const inviteUrl = new URL("/register", siteUrl);
   inviteUrl.searchParams.set("invite", invitation.invite_token);
   inviteUrl.searchParams.set("next", "/dashboard/organization/overview");
@@ -210,8 +243,9 @@ Deno.serve(async (request) => {
             inviterName,
             inviteUrl: inviteUrl.toString(),
             expiresAt: invitation.expires_at,
+            instructorName,
           }),
-          text: `${inviterName} invited you to join ${organizationName} on PilotSeal.\n\nAccept the invitation: ${inviteUrl.toString()}\n\nThis one-time invitation expires ${formatExpiration(invitation.expires_at)}. If you were not expecting this invitation, you can ignore this email.`,
+          text: `${inviterName} invited you to join ${organizationName} on PilotSeal.${instructorName ? `\nAssigned instructor: ${instructorName}` : ""}\n\nAccept the invitation: ${inviteUrl.toString()}\n\nThis one-time invitation expires ${formatExpiration(invitation.expires_at)}. If you were not expecting this invitation, you can ignore this email.`,
           tags: [
             { name: "category", value: "organization-invitation" },
             { name: "invitation_id", value: invitation.invitation_id },

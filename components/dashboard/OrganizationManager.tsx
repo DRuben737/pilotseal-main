@@ -231,6 +231,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
+  const [memberFormalName, setMemberFormalName] = useState("");
+  const [inviteTeachingRole, setInviteTeachingRole] = useState<OrganizationTeachingRole>("student");
+  const [inviteInstructorUserId, setInviteInstructorUserId] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [inviteRecipient, setInviteRecipient] = useState("");
   const [inviteEmailSent, setInviteEmailSent] = useState(false);
@@ -288,6 +291,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     [organizationPeople],
   );
   const pendingPeople = organizationPeople.filter((person) => person.status === "pending");
+  const organizationInstructors = members.filter(
+    (member) => member.teaching_role === "instructor",
+  );
   const activeFleetWorkspace: FleetWorkspace = canManageFleet
     ? fleetWorkspace
     : "records";
@@ -331,6 +337,17 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrganization?.id, canEditStudents, canManage]);
 
+  function openInviteDrawer() {
+    setMemberEmail("");
+    setMemberFormalName("");
+    setInviteTeachingRole("student");
+    setInviteInstructorUserId(organizationInstructors[0]?.user_id || "");
+    setInviteLink("");
+    setInviteRecipient("");
+    setInviteEmailSent(false);
+    setShowAddPersonDrawer(true);
+  }
+
   async function handleAddMember(event: React.FormEvent) {
     event.preventDefault();
     if (!activeOrganization?.id || !memberEmail.trim()) return;
@@ -340,6 +357,11 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       const invitation = await createOrganizationMemberInvitation({
         organizationId: activeOrganization.id,
         email: memberEmail,
+        displayName: memberFormalName,
+        teachingRole: inviteTeachingRole,
+        assignedInstructorUserId: inviteTeachingRole === "student"
+          ? inviteInstructorUserId || null
+          : null,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
       const nextInviteLink = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
@@ -347,6 +369,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setInviteRecipient(invitation.invited_email);
       setInviteEmailSent(invitation.email_sent);
       setMemberEmail("");
+      setMemberFormalName("");
+      setInviteTeachingRole("student");
+      setInviteInstructorUserId("");
       const [nextMembers, nextPeople, nextInvitations] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
@@ -367,12 +392,30 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
   async function handleRegenerateInvitation(person: OrganizationPerson) {
     if (!activeOrganization?.id) return;
+    const previousInvitation = memberInvitations.find(
+      (item) => item.organization_person_id === person.id && item.status === "pending",
+    );
+    if (person.teaching_role !== "instructor" && !previousInvitation?.assigned_instructor_user_id) {
+      setMemberEmail(person.email);
+      setMemberFormalName(person.organization_display_name || "");
+      setInviteTeachingRole("student");
+      setInviteInstructorUserId("");
+      setInviteLink("");
+      setShowAddPersonDrawer(true);
+      setStatus("Select an instructor before resending this student invitation.");
+      return;
+    }
     setSaving(true);
     setStatus("");
     try {
       const invitation = await createOrganizationMemberInvitation({
         organizationId: activeOrganization.id,
         email: person.email,
+        displayName: person.organization_display_name || "",
+        teachingRole: person.teaching_role || "student",
+        assignedInstructorUserId: person.teaching_role === "student"
+          ? previousInvitation?.assigned_instructor_user_id || null
+          : null,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
       const link = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
@@ -1827,10 +1870,10 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
       {view === "people" ? (
         <>
-          <ManagementDisclosure id="organization-people" title="People" summary={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManage ? <CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setInviteRecipient(""); setInviteEmailSent(false); setShowAddPersonDrawer(true); }}>Invite</CompactButton> : undefined} helpContent={<><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Email invitations become memberships only after the invited address is verified. Role changes, removal and ownership transfer require confirmation.</p></>}>
+          <ManagementDisclosure id="organization-people" title="People" summary={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManage ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite</CompactButton> : undefined} helpContent={<><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Student invitations create the assigned instructor relationship as soon as the verified student accepts. Role changes, removal and ownership transfer require confirmation.</p></>}>
           <AdminDataTable label="Linked organization members">
             <thead>
-              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManage ? <CompactButton type="button" tone="primary" onClick={() => { setInviteLink(""); setInviteRecipient(""); setInviteEmailSent(false); setShowAddPersonDrawer(true); }}>Invite by email</CompactButton> : undefined} /></th></tr>
+              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManage ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite by email</CompactButton> : undefined} /></th></tr>
               <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
                 <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
               </tr>
@@ -1865,21 +1908,26 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
           <ManagementDisclosure id="organization-pending-invitations" title="Pending invitations" summary={`${pendingPeople.length}`} helpContent={<p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}>
           <AdminDataTable label="Pending organization invitations">
-            <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Email</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
+            <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {!pendingPeople.length ? <tr><td colSpan={3}><EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /></td></tr> : null}
-              {pendingPeople.map((person) => (
-                <tr key={person.id} className="hover:bg-amber-50/50">
-                  <td className="px-3 py-2 font-semibold text-slate-950">{person.email}</td>
+              {!pendingPeople.length ? <tr><td colSpan={5}><EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /></td></tr> : null}
+              {pendingPeople.map((person) => {
+                const invitation = memberInvitations.find(
+                  (item) => item.organization_person_id === person.id && item.status === "pending",
+                );
+                return <tr key={person.id} className="hover:bg-amber-50/50">
+                  <td className="px-3 py-2 font-semibold text-slate-950">{person.organization_display_name || "—"}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{person.email}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{invitation?.assigned_instructor_name || "—"}</td>
                   <td className="px-3 py-2"><StatusBadge tone="warning">Awaiting registration</StatusBadge></td>
                   <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
-                </tr>
-              ))}
+                </tr>;
+              })}
             </tbody>
           </AdminDataTable>
           </ManagementDisclosure>
 
-          <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="PilotSeal emails a one-time registration link. Membership is created only after the invited email is verified.">
+          <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="For a student, choose the instructor now. Accepting the verified invitation creates both membership and the instructor link.">
             {inviteLink ? (
               <div className="grid gap-3">
                 <div className={`rounded-md border px-3 py-2 text-sm ${inviteEmailSent ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
@@ -1891,8 +1939,14 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               </div>
             ) : <form className="grid gap-4" onSubmit={handleAddMember}>
               <label className="grid gap-1 text-xs font-semibold text-slate-700">Email<input autoFocus required type="email" aria-label="Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950" placeholder="person@example.com" /></label>
-              <p className="text-xs text-slate-600">The member can be assigned a name, teaching role, internal ID, and organization notes after joining.</p>
-              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving}>{saving ? "Sending…" : "Send invitation"}</CompactButton></div>
+              <label className="grid gap-1 text-xs font-semibold text-slate-700">Teaching role<select required aria-label="Teaching role" value={inviteTeachingRole} onChange={(event) => { const nextRole = event.target.value as OrganizationTeachingRole; setInviteTeachingRole(nextRole); if (nextRole === "instructor") setInviteInstructorUserId(""); else if (!inviteInstructorUserId) setInviteInstructorUserId(organizationInstructors[0]?.user_id || ""); }} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950"><option value="student">Student</option><option value="instructor">Instructor</option></select></label>
+              {inviteTeachingRole === "student" ? <>
+                <label className="grid gap-1 text-xs font-semibold text-slate-700">Student formal name<input required type="text" aria-label="Student formal name" value={memberFormalName} onChange={(event) => setMemberFormalName(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950" placeholder="Name used on endorsements" /></label>
+                <label className="grid gap-1 text-xs font-semibold text-slate-700">Assigned instructor<select required aria-label="Assigned instructor" value={inviteInstructorUserId} onChange={(event) => setInviteInstructorUserId(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950"><option value="">Select instructor</option>{organizationInstructors.map((instructor) => <option key={instructor.user_id} value={instructor.user_id}>{instructor.display_name || instructor.email}</option>)}</select></label>
+                {!organizationInstructors.length ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Set at least one linked organization member’s teaching role to Instructor before inviting a student.</p> : null}
+                <p className="text-xs text-slate-600">This formal name becomes the instructor’s Saved People record. The student account nickname is never used on endorsements.</p>
+              </> : <p className="text-xs text-slate-600">The invited account will join as an organization instructor after accepting the verified invitation.</p>}
+              <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving || (inviteTeachingRole === "student" && (!memberFormalName.trim() || !inviteInstructorUserId))}>{saving ? "Sending…" : "Send invitation"}</CompactButton></div>
             </form>}
           </DetailDrawer>
           <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit student profile" description="Formal identity and certificate changes update the student's single shared record.">
