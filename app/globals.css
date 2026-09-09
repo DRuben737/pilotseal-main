@@ -20,6 +20,106 @@
   --radius-xl: 20px;
 }
 
+.dashboard-mobile-directory {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .dashboard-mobile-directory {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .dashboard-directory-section {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .dashboard-directory-section > h2,
+  .dashboard-directory-heading h2 {
+    margin: 0;
+    padding-inline: 0.7rem;
+    color: #6e6e73;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  .dashboard-directory-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-right: 0.45rem;
+  }
+
+  .dashboard-directory-heading > span,
+  .dashboard-directory-heading select {
+    min-width: 0;
+    max-width: 60%;
+    overflow: hidden;
+    border: 0;
+    background: transparent;
+    color: #6e6e73;
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-directory-list {
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 18px;
+    background: #fff;
+  }
+
+  .dashboard-directory-row {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-left: 1rem;
+    padding: 0.65rem 1rem 0.65rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    color: #1d1d1f;
+  }
+
+  .dashboard-directory-row:last-child {
+    border-bottom: 0;
+  }
+
+  .dashboard-directory-row > span:first-child {
+    display: grid;
+    min-width: 0;
+    gap: 0.12rem;
+  }
+
+  .dashboard-directory-row strong {
+    font-size: 0.97rem;
+    font-weight: 500;
+    line-height: 1.25;
+  }
+
+  .dashboard-directory-row small {
+    overflow: hidden;
+    color: #6e6e73;
+    font-size: 0.78rem;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-directory-row > span:last-child {
+    flex: 0 0 auto;
+    color: #b0b0b5;
+    font-size: 1.6rem;
+    font-weight: 300;
+    line-height: 1;
+  }
+}
+
 /* 2026 mobile application shell: quiet, flat, and content-first. */
 .app-footer-desktop {
   padding-block: 2.5rem;

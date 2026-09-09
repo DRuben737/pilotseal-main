@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { QuickEditPopover } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
+import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   DEFAULT_QUICK_ACTION_IDS,
   fetchEnabledFeatureIds,
@@ -19,12 +20,18 @@ import {
   updateEnabledFeatureIds,
   updateDashboardQuickActionIds,
 } from "@/lib/dashboard-preferences";
+import {
+  dashboardOrganizationNavigation,
+  dashboardPlatformNavigation,
+  dashboardPrimaryNavigation,
+} from "@/lib/dashboard-navigation";
 import { formatTimeUntilDate } from "@/lib/identity";
 import {
   fetchInboxNotifications,
   type NotificationRecord,
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
+import { canManageOrganization } from "@/lib/organizations";
 import { fetchMyOrganizationRegistrationRequests, type PlatformOrganizationRequest } from "@/lib/platform-admin";
 import { formatUsDate } from "@/lib/date-format";
 import {
@@ -47,6 +54,21 @@ const emptyState: OverviewState = {
   medicalExpiry: "",
 };
 
+const dashboardLinkDescriptions: Record<string, string> = {
+  "/dashboard/schedule": "Training schedule and availability",
+  "/dashboard/saved-people": "Students, instructors, and certificates",
+  "/dashboard/my-aircraft": "Your aircraft and inspections",
+  "/dashboard/reports": "Submit and review safety reports",
+  "/dashboard/records": "Endorsements and completed briefs",
+  "/dashboard/notifications": "Recent activity and reminders",
+  "/dashboard/account-settings": "Profile, certificates, and memberships",
+  "/dashboard/organization/people": "Members and invitations",
+  "/dashboard/organization/fleet": "Organization aircraft",
+  "/dashboard/organization/endorsements": "Review pending endorsements",
+  "/dashboard/organization/messages": "Organization communications",
+  "/dashboard/organization/audit": "Administrative activity",
+};
+
 function formatMedicalExam(value: string | null | undefined) {
   return formatStoredDateForDisplay(value ?? null);
 }
@@ -57,6 +79,12 @@ function formatRelativeDate(value: string) {
 
 export default function DashboardOverview() {
   const { session } = useAuthSession();
+  const {
+    organizations,
+    activeOrganization,
+    activeOrganizationId,
+    setActiveOrganizationId,
+  } = useOrganization();
   const [statusNote, setStatusNote] = useState("");
   const [overview, setOverview] = useState<OverviewState>(emptyState);
   const [quickActionIds, setQuickActionIds] = useState<QuickActionId[]>(DEFAULT_QUICK_ACTION_IDS);
@@ -71,6 +99,7 @@ export default function DashboardOverview() {
   const [featureError, setFeatureError] = useState("");
   const [scheduleEligibility, setScheduleEligibility] = useState<ScheduleEligibility | null>(null);
   const [companyRequest, setCompanyRequest] = useState<PlatformOrganizationRequest | null>(null);
+  const [profileRole, setProfileRole] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +110,7 @@ export default function DashboardOverview() {
           setOverview(emptyState);
           setQuickActionIds(DEFAULT_QUICK_ACTION_IDS);
           setEnabledFeatureIds([]);
+          setProfileRole("");
         }
         return;
       }
@@ -109,11 +139,13 @@ export default function DashboardOverview() {
           setEnabledFeatureIds(selectedFeatureIds);
           setCompanyRequest(companyRequests[0] ?? null);
           setScheduleEligibility(eligibility);
+          setProfileRole(profile?.role ?? "");
         }
       } catch {
         if (!cancelled) {
           setOverview(emptyState);
           setStatusNote("Dashboard data is temporarily unavailable.");
+          setProfileRole("");
         }
       }
     }
@@ -129,6 +161,17 @@ export default function DashboardOverview() {
     () => QUICK_ACTIONS.filter((action) => quickActionIds.includes(action.id)),
     [quickActionIds]
   );
+  const canManage = canManageOrganization(activeOrganization?.member_role);
+  const canUseOrganizationTools = Boolean(
+    activeOrganization && (canManage || activeOrganization.teaching_role === "instructor")
+  );
+  const workspaceLinks = dashboardPrimaryNavigation.filter((item) => (
+    item.href !== "/dashboard" && (!item.featureId || enabledFeatureIds.includes(item.featureId))
+  ));
+  const organizationLinks = dashboardOrganizationNavigation.filter((item) => (
+    canUseOrganizationTools && (item.access !== "organization-manager" || canManage)
+  ));
+  const platformLinks = profileRole === "admin" ? dashboardPlatformNavigation : [];
 
   function setQuickActionCustomizerOpen(open: boolean) {
     setCustomizingQuickActions(open);
@@ -267,6 +310,67 @@ export default function DashboardOverview() {
         <p className="font-semibold">{companyRequest.requested_name}: {companyRequest.status === "pending" ? "awaiting platform approval" : companyRequest.status}</p>
         <p className="mt-1 text-xs">{companyRequest.status === "pending" ? "The organization has not been created yet. You will be notified after a platform administrator reviews it." : companyRequest.review_reason || "Review completed."}</p>
       </section> : null}
+
+      <nav className="dashboard-mobile-directory" aria-label="Dashboard pages">
+        <section className="dashboard-directory-section">
+          <h2>Workspace</h2>
+          <div className="dashboard-directory-list">
+            {workspaceLinks.map((item) => (
+              <Link key={item.href} href={item.href} className="dashboard-directory-row">
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{dashboardLinkDescriptions[item.href]}</small>
+                </span>
+                <span aria-hidden="true">›</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {organizationLinks.length ? (
+          <section className="dashboard-directory-section">
+            <div className="dashboard-directory-heading">
+              <h2>Organization</h2>
+              {organizations.length > 1 ? (
+                <select
+                  aria-label="Organization to manage"
+                  value={activeOrganizationId}
+                  onChange={(event) => setActiveOrganizationId(event.target.value)}
+                >
+                  {organizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>{organization.name}</option>
+                  ))}
+                </select>
+              ) : activeOrganization ? <span>{activeOrganization.name}</span> : null}
+            </div>
+            <div className="dashboard-directory-list">
+              {organizationLinks.map((item) => (
+                <Link key={item.href} href={item.href} className="dashboard-directory-row">
+                  <span>
+                    <strong>{item.label}</strong>
+                    <small>{dashboardLinkDescriptions[item.href]}</small>
+                  </span>
+                  <span aria-hidden="true">›</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {platformLinks.length ? (
+          <section className="dashboard-directory-section">
+            <h2>Platform administration</h2>
+            <div className="dashboard-directory-list">
+              {platformLinks.map((item) => (
+                <Link key={item.href} href={item.href} className="dashboard-directory-row">
+                  <span><strong>{item.label}</strong></span>
+                  <span aria-hidden="true">›</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </nav>
 
       <section className="dashboard-overview-section rounded-[20px] border border-slate-200/80 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
