@@ -91,6 +91,21 @@
 .weeklyList { display: grid; }
 .weeklyList button { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; border: 0; border-bottom: 1px solid #e5e5ea; background: transparent; padding: 12px 0; text-align: left; font-size: 14px; }
 .weeklyList button span:last-child { color: #6e6e73; font-size: 13px; }
+.autoRoster { display: grid; margin-top: 12px; border-top: 1px solid var(--schedule-line); }
+.autoStudentRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 68px; padding: 10px 0; border-bottom: 1px solid var(--schedule-line); }
+.autoStudentRow[data-selected="false"] { opacity: .68; }
+.autoStudentToggle { display: flex; align-items: flex-start; gap: 10px; min-width: 0; cursor: pointer; }
+.autoStudentToggle input { margin-top: 3px; }
+.autoStudentToggle strong { display: block; font-size: 14px; font-weight: 600; color: var(--schedule-ink); }
+.autoStudentMeta { display: block; margin-top: 2px; color: var(--schedule-muted); font-size: 11px; line-height: 1.4; }
+.autoStudentWarning { display: block; margin-top: 3px; color: #9a5200; font-size: 11px; line-height: 1.4; }
+.autoCount { display: grid; grid-template-columns: auto 54px auto; align-items: center; gap: 6px; color: var(--schedule-muted); font-size: 12px; }
+.autoCount input { width: 54px; min-height: 36px; border: 1px solid #d2d2d7; border-radius: 8px; background: #fff; color: var(--schedule-ink); text-align: center; font: inherit; font-size: 14px; }
+.autoPreviewStudent { padding: 10px 12px; border-radius: 10px; background: var(--schedule-surface); }
+.autoPreviewStudent > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.autoPreviewStudent > div span { color: var(--schedule-muted); }
+.autoPreviewStudent p { margin: 6px 0 0; color: #4b4b50; font-size: 12px; line-height: 1.45; }
+.autoPreviewStudent p.autoStudentWarning { color: #9a5200; }
 @media (max-width: 1023px) {
   .calendar { display: block; }
   .day { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 12px; padding: 14px 0; border-right: 0; border-bottom: 1px solid var(--schedule-line); }
@@ -113,5 +128,7 @@
   .helpButton { width: 32px; height: 32px; }
   .onboardingChoices { grid-template-columns: 1fr; }
   .onboardingCard { padding: 16px; }
+  .autoStudentRow { grid-template-columns: 1fr; gap: 8px; padding: 12px 0; }
+  .autoCount { padding-left: 26px; justify-content: start; }
   .toolbar { justify-content: flex-start; }
 }

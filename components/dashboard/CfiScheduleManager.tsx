@@ -39,6 +39,8 @@ import {
   upsertWeekOverride,
   type AvailabilityOverrideDate,
   type AvailabilitySlot,
+  type AutomaticScheduleRequest,
+  type AutomaticScheduleUnscheduled,
   type LessonKind,
   type LinkedScheduleCandidate,
   type ScheduleAccess,
@@ -54,6 +56,7 @@ import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-peop
 
 type DrawerMode = "help" | "review" | "students" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "settings" | "publish" | null;
 type AvailabilityRow = { start: string; end: string };
+type AutoRequestRow = AutomaticScheduleRequest & { selected: boolean };
 
 const weekdayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const emptyLesson = {
@@ -147,7 +150,9 @@ export default function CfiScheduleManager() {
   const [editingBlockId, setEditingBlockId] = useState("");
   const [deleteBlockId, setDeleteBlockId] = useState("");
   const [autoDrafts, setAutoDrafts] = useState<ScheduleDraft[]>([]);
-  const [autoUnscheduled, setAutoUnscheduled] = useState<Array<{ studentName: string; remaining: number; reason: string }>>([]);
+  const [autoUnscheduled, setAutoUnscheduled] = useState<AutomaticScheduleUnscheduled[]>([]);
+  const [autoRequests, setAutoRequests] = useState<AutoRequestRow[]>([]);
+  const [autoPreviewBuilt, setAutoPreviewBuilt] = useState(false);
   const [includeWeekends, setIncludeWeekends] = useState(false);
   const [settingsStudentId, setSettingsStudentId] = useState("");
   const [settingsForm, setSettingsForm] = useState({ weeklySessions: 3, durationMin: 120, color: "#2563eb", useWeekOverride: false, weekSessions: 3, weekDurationMin: 120 });
@@ -643,6 +648,7 @@ export default function CfiScheduleManager() {
   async function refreshAfterBlockChange() {
     setAutoDrafts([]);
     setAutoUnscheduled([]);
+    setAutoPreviewBuilt(false);
     setPublishAcknowledged(false);
     if (hasDraft) setStale(true);
     try { await loadWeekData(userId); }
@@ -696,14 +702,31 @@ export default function CfiScheduleManager() {
   function openAutoDrawer() {
     if (!weekReady) return;
     ++loadGeneration.current;
+    setError("");
     setAutoDrafts([]);
     setAutoUnscheduled([]);
+    setAutoPreviewBuilt(false);
+    setIncludeWeekends(false);
+    setAutoRequests(activeStudents.map((student) => {
+      const override = weekOverrides.find((item) => item.student_user_id === student.student_user_id);
+      const target = override?.target_sessions ?? student.default_weekly_sessions;
+      const existing = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === student.student_user_id).length;
+      const sessions = Math.max(0, target - existing);
+      return { studentUserId: student.student_user_id, sessions: sessions || 1, selected: sessions > 0 };
+    }));
     setEditingBlockId("");
     setBlockForm({ date: localDateKey(weekStart), start: "07:00", end: "09:00", note: "" });
     setDrawer("auto");
   }
 
   function buildAutomaticPreview() {
+    const requests = autoRequests.filter((item) => item.selected && item.sessions > 0).map(({ studentUserId, sessions }) => ({ studentUserId, sessions }));
+    if (!requests.length) {
+      setError("Select at least one student and choose how many lessons to add.");
+      setAutoPreviewBuilt(false);
+      return;
+    }
+    setError("");
     const result = generateAutomaticSchedule({
       cfiUserId: userId,
       weekStart,
@@ -714,9 +737,19 @@ export default function CfiScheduleManager() {
       overrideDates,
       existingEntries: entries,
       blocks,
+      requests,
     });
     setAutoDrafts(result.drafts);
     setAutoUnscheduled(result.unscheduled);
+    setAutoPreviewBuilt(true);
+  }
+
+  function updateAutoRequest(studentUserId: string, values: Partial<AutoRequestRow>) {
+    setAutoRequests((current) => current.map((item) => item.studentUserId === studentUserId ? { ...item, ...values } : item));
+    setError("");
+    setAutoDrafts([]);
+    setAutoUnscheduled([]);
+    setAutoPreviewBuilt(false);
   }
 
   async function confirmAutomaticSchedule() {
@@ -1015,8 +1048,31 @@ export default function CfiScheduleManager() {
 
       <DetailDrawer open={drawer === "auto"} onClose={() => setDrawer(null)} title="Automatic scheduling" description="Only Flight lessons are generated. Review unavailable time first, then add the preview to your unpublished draft.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}<section className="rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">1. Review unavailable time</h3><div className="mt-3"><BlockForm value={blockForm} onChange={setBlockForm} /></div><button className="secondary-button mt-3" type="button" disabled={saving} onClick={() => void saveBlock(true)}>Add block</button><BlockList blocks={blocks} onDelete={setDeleteBlockId} /><p className="mt-2 text-xs text-slate-500">Aircraft time saves immediately. Lesson drafts are kept and checked again before publication.</p></section>
-        <section className="mt-4 rounded-xl border border-slate-200 p-3"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">2. Generate preview</h3><p className="mt-1 text-xs text-slate-500">Starts are considered from 07:00 through 16:00. Existing lessons stay in place.</p></div><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeWeekends} onChange={(event) => setIncludeWeekends(event.target.checked)} /> Include weekend</label></div><button className="primary-button mt-3" type="button" onClick={buildAutomaticPreview}>Generate preview</button></section>
-        {autoDrafts.length || autoUnscheduled.length ? <section className="mt-4 rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">3. Confirm</h3><div className="mt-3 grid gap-2">{autoDrafts.map((draft) => <div key={`${draft.student_user_id}-${draft.start_at}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs"><span className="font-semibold">{draft.student_name}</span><span>{formatDate(new Date(draft.start_at))} · {formatTime(draft.start_at)}–{formatTime(draft.end_at)}</span></div>)}</div>{autoUnscheduled.map((item) => <p key={item.studentName} className="mt-2 text-xs text-amber-800">{item.studentName}: {item.remaining} unscheduled. {item.reason}</p>)}<button className="primary-button mt-4" type="button" disabled={saving || !autoDrafts.length} onClick={() => void confirmAutomaticSchedule()}>{saving ? "Saving…" : `Add ${autoDrafts.length} Flight lessons to draft`}</button></section> : null}
+        <section className="mt-4 rounded-xl border border-slate-200 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">2. Choose students and counts</h3><p className="mt-1 text-xs text-slate-500">Counts mean lessons to add in this run. Defaults fill each weekly goal after subtracting lessons already on the calendar.</p></div><div className="flex gap-1"><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: true, sessions: Math.max(1, item.sessions) }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Select all</button><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: false }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Clear</button></div></div>
+          <div className={styles.autoRoster} role="group" aria-label="Students to automatically schedule">
+            {activeStudents.map((student) => {
+              const request = autoRequests.find((item) => item.studentUserId === student.student_user_id) ?? { studentUserId: student.student_user_id, sessions: 1, selected: false };
+              const override = weekOverrides.find((item) => item.student_user_id === student.student_user_id);
+              const target = override?.target_sessions ?? student.default_weekly_sessions;
+              const duration = override?.duration_min ?? student.default_duration_min;
+              const existing = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === student.student_user_id).length;
+              const availableDays = Array.from({ length: includeWeekends ? 7 : 5 }, (_, index) => addCalendarDays(weekStart, index)).filter((date) => availabilityForDate({ date, studentUserId: student.student_user_id, slots, overrideDates }).length > 0).length;
+              return <div className={styles.autoStudentRow} key={student.student_user_id} data-selected={request.selected}>
+                <label className={styles.autoStudentToggle}><input type="checkbox" checked={request.selected} onChange={(event) => updateAutoRequest(student.student_user_id, { selected: event.target.checked, sessions: event.target.checked ? Math.max(1, request.sessions) : request.sessions })} /><span><strong>{student.student_name}</strong><span className={styles.autoStudentMeta}>{availableDays} available day{availableDays === 1 ? "" : "s"} · {existing} already scheduled · {duration} min</span>{availableDays === 0 ? <span className={styles.autoStudentWarning}>No availability in the selected days</span> : null}<span className={styles.autoStudentMeta}>Weekly goal {target}{override ? " · week override" : ""}</span></span></label>
+                <label className={styles.autoCount}><span>Add</span><input type="number" inputMode="numeric" min={0} max={14} value={request.sessions} disabled={!request.selected} aria-label={`Lessons to add for ${student.student_name}`} onChange={(event) => { const sessions = Math.max(0, Math.min(14, Number(event.target.value) || 0)); updateAutoRequest(student.student_user_id, { sessions }); }} /><span>lesson{request.sessions === 1 ? "" : "s"}</span></label>
+              </div>;
+            })}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">These choices apply only to this run and do not change anyone’s weekly goal.</p>
+        </section>
+        <section className="mt-4 rounded-xl border border-slate-200 p-3"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">3. Generate preview</h3><p className="mt-1 text-xs text-slate-500">Starts are considered from 07:00 through 16:00. The scheduler gives each student one day before adding a second lesson on the same day.</p></div><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeWeekends} onChange={(event) => { setIncludeWeekends(event.target.checked); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }} /> Include weekend</label></div><button className="primary-button mt-3" type="button" disabled={!autoRequests.some((item) => item.selected && item.sessions > 0)} onClick={buildAutomaticPreview}>Generate preview</button></section>
+        {autoPreviewBuilt ? <section className="mt-4 rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">4. Review</h3><p className="mt-1 text-xs text-slate-500">{autoDrafts.length} of {autoRequests.filter((item) => item.selected && item.sessions > 0).reduce((total, item) => total + item.sessions, 0)} requested Flight lessons fit.</p><div className="mt-3 grid gap-3">{autoRequests.filter((item) => item.selected && item.sessions > 0).map((request) => {
+          const student = activeStudents.find((item) => item.student_user_id === request.studentUserId);
+          const studentDrafts = autoDrafts.filter((draft) => draft.student_user_id === request.studentUserId);
+          const missed = autoUnscheduled.find((item) => item.studentUserId === request.studentUserId);
+          return <div key={request.studentUserId} className={styles.autoPreviewStudent}><div><strong>{student?.student_name}</strong><span>{studentDrafts.length}/{request.sessions} scheduled</span></div>{studentDrafts.map((draft) => <p key={draft.start_at}>{formatDate(new Date(draft.start_at))} · {formatTime(draft.start_at)}–{formatTime(draft.end_at)}</p>)}{missed ? <p className={styles.autoStudentWarning}>{missed.remaining} could not be scheduled. {missed.reason}</p> : null}</div>;
+        })}</div><button className="primary-button mt-4" type="button" disabled={saving || !autoDrafts.length} onClick={() => void confirmAutomaticSchedule()}>{saving ? "Saving…" : `Add ${autoDrafts.length} Flight ${autoDrafts.length === 1 ? "lesson" : "lessons"} to draft`}</button></section> : null}
       </DetailDrawer>
 
       <DetailDrawer open={drawer === "settings"} onClose={() => setDrawer(null)} title="Student schedule settings" description="Set the general target and optional override for the selected week.">
@@ -1040,7 +1096,7 @@ function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => v
   return <DetailDrawer open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
     <div className={styles.helpContent}>
       <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
-      <section><p className={styles.eyebrow}>Instructors</p><h3>Build and publish the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Manage access lets linked students see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use + to add a Flight or Ground lesson, mark aircraft unavailable, or automatically schedule Flight lessons.</li><li>Automatic scheduling uses student availability, aircraft blocks, and 07:00–16:00 starts. It limits the teaching span to 8 hours from the first lesson.</li><li>Edits stay in a private draft. Review conflicts, then publish once; only affected linked students are notified according to their preferences.</li></ol></section>
+      <section><p className={styles.eyebrow}>Instructors</p><h3>Build and publish the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Manage access lets linked students see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use + to add a Flight or Ground lesson, mark aircraft unavailable, or automatically schedule Flight lessons.</li><li>For automatic scheduling, choose exactly which students to include and how many new lessons to add for each. The suggested counts fill their weekly goals without counting cancelled lessons.</li><li>The scheduler uses student availability, aircraft blocks, and 07:00–16:00 starts. It gives each student a separate day before using the same day twice and limits the teaching span to 8 hours from the first lesson.</li><li>Edits stay in a private draft. Review conflicts, then publish once; only affected linked students are notified according to their preferences.</li></ol></section>
       <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson pushes every later lesson that day by the same amount. Manual conflicts are warnings, so you stay in control.</p></section>
     </div>
   </DetailDrawer>;

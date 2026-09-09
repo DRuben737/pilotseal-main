@@ -80,6 +80,20 @@ export type ScheduleDraft = {
   auto_generated: boolean;
 };
 
+export type AutomaticScheduleRequest = {
+  studentUserId: string;
+  sessions: number;
+};
+
+export type AutomaticScheduleUnscheduled = {
+  studentUserId: string;
+  studentName: string;
+  requested: number;
+  scheduled: number;
+  remaining: number;
+  reason: string;
+};
+
 export type LinkedScheduleCandidate = {
   storage_kind: "account" | "person";
   account_user_id: string | null;
@@ -633,31 +647,46 @@ export function generateAutomaticSchedule(input: {
   overrideDates: AvailabilityOverrideDate[];
   existingEntries: ScheduleEntry[];
   blocks: UnavailableBlock[];
+  requests?: AutomaticScheduleRequest[];
 }) {
   const dayCount = input.includeWeekends ? 7 : 5;
+  const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) => addCalendarDays(input.weekStart, dayIndex));
   const occupied = input.existingEntries
-    .filter((entry) => entry.entry_type === "lesson")
+    .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled")
     .map((entry) => ({ start: new Date(entry.start_at), end: new Date(entry.end_at), studentUserId: entry.student_user_id }));
   const drafts: ScheduleDraft[] = [];
-  const unscheduled: Array<{ studentName: string; remaining: number; reason: string }> = [];
+  const unscheduled: AutomaticScheduleUnscheduled[] = [];
   const weekKey = localDateKey(input.weekStart);
-  const settings = input.access.map((access) => {
+  const settings = input.access.flatMap((access) => {
+    const request = input.requests?.find((item) => item.studentUserId === access.student_user_id);
+    if (input.requests && !request) return [];
     const override = input.weekOverrides.find(
       (item) => item.student_user_id === access.student_user_id && item.week_start === weekKey
     );
     const existingCount = input.existingEntries.filter(
-      (entry) => entry.entry_type === "lesson" && entry.student_user_id === access.student_user_id
+      (entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id
     ).length;
-    return {
+    const requested = request
+      ? Math.max(0, Math.min(14, Math.floor(Number.isFinite(request.sessions) ? request.sessions : 0)))
+      : Math.max(0, (override?.target_sessions ?? access.default_weekly_sessions) - existingCount);
+    if (requested === 0) return [];
+    return [{
       access,
       durationMin: override?.duration_min ?? access.default_duration_min,
-      remaining: Math.max(0, (override?.target_sessions ?? access.default_weekly_sessions) - existingCount),
+      requested,
+      remaining: requested,
+      availabilityDays: consideredDates.filter((date) => availabilityForDate({
+        date,
+        studentUserId: access.student_user_id,
+        slots: input.slots,
+        overrideDates: input.overrideDates,
+      }).length > 0).length,
       usedDays: new Set(
         input.existingEntries
-          .filter((entry) => entry.entry_type === "lesson" && entry.student_user_id === access.student_user_id)
+          .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id)
           .map((entry) => localDateKey(new Date(entry.start_at)))
       ),
-    };
+    }];
   });
 
   const dailyItems = (date: Date) => [
@@ -723,9 +752,14 @@ export function generateAutomaticSchedule(input: {
   for (const setting of settings) {
     if (setting.remaining > 0) {
       unscheduled.push({
+        studentUserId: setting.access.student_user_id,
         studentName: setting.access.student_name,
+        requested: setting.requested,
+        scheduled: setting.requested - setting.remaining,
         remaining: setting.remaining,
-        reason: "No remaining slot satisfies availability, conflicts, and the eight-hour duty span.",
+        reason: setting.availabilityDays === 0
+          ? "No availability is set for the selected days."
+          : "No remaining slot satisfies availability, existing lessons, aircraft blocks, and the eight-hour teaching span.",
       });
     }
   }

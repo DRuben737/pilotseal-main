@@ -64,7 +64,15 @@ marked manual. Availability changes never move or cancel published lessons;
 conflicts are shown to the student and CFI, with no notification to the CFI.
 
 Availability periods are at least two hours and support 00:00–24:00. The browser's
-time zone is used. Automatic scheduling generates Flight only.
+time zone is used. Automatic scheduling generates Flight only. Before generation,
+the instructor chooses the participating students and an exact number of new lessons
+for each. Defaults fill the student's general or week-specific goal after subtracting
+scheduled lessons already in the week; changing the number in the automatic scheduling
+drawer affects only that run. The roster shows available days, existing lesson count,
+duration, and the underlying weekly goal. The preview reports scheduled/requested counts
+and a reason for every remainder. Scheduling distributes one lesson per student per day
+before considering a second lesson on the same day, and excludes cancelled lessons from
+occupancy and target counts.
 
 The feature is named Schedule. There is no repeated page title inside the workspace.
 Adding it requires the account owner's canonical People self record with a name
