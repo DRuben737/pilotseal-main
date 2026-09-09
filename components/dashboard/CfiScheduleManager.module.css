@@ -78,7 +78,11 @@
 .entry { display: block; width: 100%; border: 0; border-left: 2px solid var(--schedule-blue); border-radius: 0; background: #f5f9ff; padding: 9px 10px; text-align: left; color: var(--schedule-ink); font: inherit; font-size: 13px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
 .entry strong { font-weight: 600; }
 .entryMeta { display: block; font-size: 12px; color: var(--schedule-muted); }
+.flight { border-left-color: #147ce5; background: #f2f7ff; }
+.ground { border-left-color: #8b5cf6; background: #f7f3ff; }
 .busy { border-left-color: #c7c7cc; background: var(--schedule-surface); color: var(--schedule-muted); }
+.aircraftUnavailable { border-left-color: #e17800; background: #fff7ed; color: #6f3b00; }
+.aircraftStatusWarning { box-shadow: inset 0 0 0 1px #ef9f27; background-image: repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(239,159,39,.08) 7px,rgba(239,159,39,.08) 14px); }
 .conflict { display: inline-block; margin-top: 3px; font-size: 11px; color: #9a5200; }
 .empty { margin: 8px 0; color: var(--schedule-muted); font-size: 13px; }
 .agenda { display: block; }
@@ -103,6 +107,13 @@
 .autoStudentWarning { display: block; margin-top: 3px; color: #9a5200; font-size: 11px; line-height: 1.4; }
 .autoCount { display: grid; grid-template-columns: auto 54px auto; align-items: center; gap: 6px; color: var(--schedule-muted); font-size: 12px; }
 .autoCount input { width: 54px; min-height: 36px; border: 1px solid #d2d2d7; border-radius: 8px; background: #fff; color: var(--schedule-ink); text-align: center; font: inherit; font-size: 14px; }
+.autoCounts { display: flex; gap: 8px; }
+.autoCounts label { display: grid; gap: 3px; color: var(--schedule-muted); font-size: 11px; }
+.autoCounts input { width: 58px; min-height: 36px; border: 1px solid #d2d2d7; border-radius: 8px; text-align: center; font-size: 14px; }
+.aircraftChoices { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 8px; margin-top: 12px; }
+.aircraftChoices label { display: flex; align-items: flex-start; gap: 8px; min-height: 44px; padding: 9px 10px; border: 1px solid var(--schedule-line); border-radius: 10px; cursor: pointer; }
+.aircraftChoices strong { font-size: 13px; }
+.aircraftChoices small { display: block; margin-top: 2px; color: #9a5200; }
 .autoPreviewStudent { padding: 10px 12px; border-radius: 10px; background: var(--schedule-surface); }
 .autoPreviewStudent > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .autoPreviewStudent > div span { color: var(--schedule-muted); }
@@ -133,5 +144,6 @@
   .onboardingCard { padding: 16px; }
   .autoStudentRow { grid-template-columns: 1fr; gap: 8px; padding: 12px 0; }
   .autoCount { padding-left: 26px; justify-content: start; }
+  .autoCounts { padding-left: 26px; }
   .toolbar { justify-content: flex-start; }
 }

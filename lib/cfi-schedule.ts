@@ -53,6 +53,12 @@ export type ScheduleEntry = {
   student_user_id: string | null;
   student_name: string | null;
   lesson_kind: LessonKind | null;
+  aircraft_id: string | null;
+  aircraft_tail_number: string | null;
+  aircraft_status: AircraftOperationalStatus | null;
+  aircraft_status_note: string | null;
+  aircraft_conflict: boolean;
+  unavailable_kind?: "private_lesson" | "aircraft" | null;
   start_at: string;
   end_at: string;
   note: string;
@@ -67,6 +73,25 @@ export type UnavailableBlock = {
   start_at: string;
   end_at: string;
   note: string;
+  aircraft_id: string | null;
+  aircraft_tail_number?: string | null;
+};
+
+export type AircraftOperationalStatus = "available" | "away" | "in_maintenance" | "grounded";
+export type ScheduleAircraft = {
+  id: string;
+  tail_number: string;
+  model_name: string | null;
+  organization_id: string | null;
+  operational_status: AircraftOperationalStatus;
+  operational_status_note: string | null;
+  status_updated_at: string | null;
+};
+export type AircraftReservation = {
+  aircraft_id: string;
+  start_at: string;
+  end_at: string;
+  source: "lesson" | "block";
 };
 
 export type ScheduleDraft = {
@@ -78,11 +103,14 @@ export type ScheduleDraft = {
   end_at: string;
   note: string;
   auto_generated: boolean;
+  aircraft_id: string | null;
+  aircraft_tail_number?: string | null;
 };
 
 export type AutomaticScheduleRequest = {
   studentUserId: string;
-  sessions: number;
+  flightSessions: number;
+  groundSessions: number;
 };
 
 export type AutomaticScheduleUnscheduled = {
@@ -91,6 +119,7 @@ export type AutomaticScheduleUnscheduled = {
   requested: number;
   scheduled: number;
   remaining: number;
+  lessonKind: LessonKind;
   reason: string;
 };
 
@@ -214,6 +243,8 @@ export type ScheduleEditorSnapshot = {
   blocks: UnavailableBlock[];
   weekOverrides: WeekOverride[];
   access: ScheduleAccess[];
+  aircraft: ScheduleAircraft[];
+  aircraftReservations: AircraftReservation[];
 };
 
 export async function fetchScheduleEditorSnapshot(rangeStart: Date, rangeEnd: Date, cfiUserId?: string) {
@@ -231,6 +262,7 @@ export async function publishScheduleDraft(revision: string, batchId: string, ch
     p_batch_id: batchId,
     p_changes: changes.map((entry) => ({
       id: entry.id, student_user_id: entry.student_user_id, lesson_kind: entry.lesson_kind,
+      aircraft_id: entry.lesson_kind === "flight" ? entry.aircraft_id : null,
       start_at: entry.start_at, end_at: entry.end_at, note: entry.note,
       status: entry.status, auto_generated: entry.auto_generated,
     })),
@@ -304,7 +336,7 @@ export async function fetchUnavailableBlocks(cfiUserId: string, rangeStart: Date
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("cfi_schedule_unavailable_blocks")
-    .select("id, cfi_user_id, start_at, end_at, note")
+    .select("id, cfi_user_id, start_at, end_at, note, aircraft_id")
     .eq("cfi_user_id", cfiUserId)
     .lt("start_at", rangeEnd.toISOString())
     .gt("end_at", rangeStart.toISOString());
@@ -625,6 +657,9 @@ export function getManualConflictWarnings(input: {
   slots: AvailabilitySlot[];
   overrideDates: AvailabilityOverrideDate[];
   blocks: UnavailableBlock[];
+  aircraftId?: string | null;
+  aircraftStatus?: AircraftOperationalStatus | null;
+  aircraftConflict?: boolean;
 }) {
   const periods = availabilityForDate({
     date: input.start,
@@ -638,10 +673,14 @@ export function getManualConflictWarnings(input: {
   }
   if (
     input.lessonKind === "flight" &&
-    input.blocks.some((block) => overlaps(input.start, input.end, new Date(block.start_at), new Date(block.end_at)))
+    input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === input.aircraftId) && overlaps(input.start, input.end, new Date(block.start_at), new Date(block.end_at)))
   ) {
-    warnings.push("This flight overlaps an unavailable block.");
+    warnings.push("The selected aircraft is marked unavailable during this time.");
   }
+  if (input.lessonKind === "flight" && input.aircraftStatus && input.aircraftStatus !== "available") {
+    warnings.push(`The selected aircraft is currently ${input.aircraftStatus.replace("_", " ")}. Booking is still allowed.`);
+  }
+  if (input.lessonKind === "flight" && input.aircraftConflict) warnings.push("The selected aircraft is booked by another instructor during this time.");
   return warnings;
 }
 
@@ -656,6 +695,9 @@ export function generateAutomaticSchedule(input: {
   existingEntries: ScheduleEntry[];
   blocks: UnavailableBlock[];
   requests?: AutomaticScheduleRequest[];
+  aircraft: ScheduleAircraft[];
+  selectedAircraftIds: string[];
+  aircraftReservations: AircraftReservation[];
 }) {
   const dayCount = input.includeWeekends ? 7 : 5;
   const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) => addCalendarDays(input.weekStart, dayIndex));
@@ -665,6 +707,8 @@ export function generateAutomaticSchedule(input: {
   const drafts: ScheduleDraft[] = [];
   const unscheduled: AutomaticScheduleUnscheduled[] = [];
   const weekKey = localDateKey(input.weekStart);
+  const selectedAircraft = input.aircraft.filter((aircraft) => input.selectedAircraftIds.includes(aircraft.id));
+  const usedDaysByStudent = new Map<string, Set<string>>();
   const settings = input.access.flatMap((access) => {
     const request = input.requests?.find((item) => item.studentUserId === access.student_user_id);
     if (input.requests && !request) return [];
@@ -674,27 +718,31 @@ export function generateAutomaticSchedule(input: {
     const existingCount = input.existingEntries.filter(
       (entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id
     ).length;
-    const requested = request
-      ? Math.max(0, Math.min(14, Math.floor(Number.isFinite(request.sessions) ? request.sessions : 0)))
-      : Math.max(0, (override?.target_sessions ?? access.default_weekly_sessions) - existingCount);
-    if (requested === 0) return [];
-    return [{
-      access,
+    const fallback = Math.max(0, (override?.target_sessions ?? access.default_weekly_sessions) - existingCount);
+    const counts: Array<{ lessonKind: LessonKind; requested: number }> = request
+      ? [
+          { lessonKind: "flight", requested: Math.max(0, Math.min(14, Math.floor(request.flightSessions || 0))) },
+          { lessonKind: "ground", requested: Math.max(0, Math.min(14, Math.floor(request.groundSessions || 0))) },
+        ]
+      : [{ lessonKind: "flight", requested: fallback }];
+    const usedDays = usedDaysByStudent.get(access.student_user_id) ?? new Set(
+      input.existingEntries
+        .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id)
+        .map((entry) => localDateKey(new Date(entry.start_at)))
+    );
+    usedDaysByStudent.set(access.student_user_id, usedDays);
+    return counts.filter((item) => item.requested > 0).map(({ lessonKind, requested }) => ({
+      access, lessonKind,
       durationMin: override?.duration_min ?? access.default_duration_min,
-      requested,
-      remaining: requested,
+      requested, remaining: requested,
       availabilityDays: consideredDates.filter((date) => availabilityForDate({
         date,
         studentUserId: access.student_user_id,
         slots: input.slots,
         overrideDates: input.overrideDates,
       }).length > 0).length,
-      usedDays: new Set(
-        input.existingEntries
-          .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id)
-          .map((entry) => localDateKey(new Date(entry.start_at)))
-      ),
-    }];
+      usedDays,
+    }));
   });
 
   const dailyItems = (date: Date) => [
@@ -730,7 +778,17 @@ export function generateAutomaticSchedule(input: {
               if (localStartMinute < 420 || localStartMinute > 960) continue;
               const items = dailyItems(date);
               if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;
-              if (input.blocks.some((block) => overlaps(start, end, new Date(block.start_at), new Date(block.end_at)))) continue;
+              let aircraft: ScheduleAircraft | undefined;
+              if (setting.lessonKind === "flight") {
+                aircraft = selectedAircraft.find((candidate) => {
+                  const blocked = input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === candidate.id) && overlaps(start,end,new Date(block.start_at),new Date(block.end_at)));
+                  const externallyReserved = input.aircraftReservations.some((reservation) => reservation.aircraft_id === candidate.id && overlaps(start,end,new Date(reservation.start_at),new Date(reservation.end_at)));
+                  const locallyReserved = input.existingEntries.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && item.status !== "cancelled" && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)))
+                    || drafts.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)));
+                  return !blocked && !externallyReserved && !locallyReserved;
+                });
+                if (!aircraft) continue;
+              }
               const spanStart = Math.min(start.getTime(), ...items.map((item) => item.start.getTime()));
               const spanEnd = Math.max(end.getTime(), ...items.map((item) => item.end.getTime()));
               if (spanEnd - spanStart > 8 * 60 * 60_000) continue;
@@ -738,7 +796,9 @@ export function generateAutomaticSchedule(input: {
                 cfi_user_id: input.cfiUserId,
                 student_user_id: setting.access.student_user_id,
                 student_name: setting.access.student_name,
-                lesson_kind: "flight",
+                lesson_kind: setting.lessonKind,
+                aircraft_id: aircraft?.id ?? null,
+                aircraft_tail_number: aircraft?.tail_number ?? null,
                 start_at: start.toISOString(),
                 end_at: end.toISOString(),
                 note: "Auto-scheduled",
@@ -765,9 +825,12 @@ export function generateAutomaticSchedule(input: {
         requested: setting.requested,
         scheduled: setting.requested - setting.remaining,
         remaining: setting.remaining,
+        lessonKind: setting.lessonKind,
         reason: setting.availabilityDays === 0
           ? "No availability is set for the selected days."
-          : "No remaining slot satisfies availability, existing lessons, aircraft blocks, and the eight-hour teaching span.",
+          : setting.lessonKind === "flight" && selectedAircraft.length === 0
+            ? "Choose at least one aircraft for Flight lessons."
+            : "No remaining slot satisfies availability, existing lessons, aircraft availability, and the eight-hour teaching span.",
       });
     }
   }

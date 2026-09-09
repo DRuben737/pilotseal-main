@@ -43,6 +43,8 @@ import {
   type AvailabilitySlot,
   type AutomaticScheduleRequest,
   type AutomaticScheduleUnscheduled,
+  type AircraftReservation,
+  type ScheduleAircraft,
   type LessonKind,
   type LinkedScheduleCandidate,
   type ScheduleAccess,
@@ -70,6 +72,7 @@ const emptyLesson = {
   start: "08:00",
   durationMin: 120,
   note: "",
+  aircraftId: "",
 };
 
 function localDateTimeValue(input: Date) {
@@ -143,6 +146,8 @@ export default function CfiScheduleManager() {
   const [overrideDates, setOverrideDates] = useState<AvailabilityOverrideDate[]>([]);
   const [weekOverrides, setWeekOverrides] = useState<WeekOverride[]>([]);
   const [blocks, setBlocks] = useState<UnavailableBlock[]>([]);
+  const [aircraft, setAircraft] = useState<ScheduleAircraft[]>([]);
+  const [aircraftReservations, setAircraftReservations] = useState<AircraftReservation[]>([]);
   const [drawer, setDrawer] = useState<DrawerMode>(null);
 
   const [permissionDraft, setPermissionDraft] = useState<string[]>([]);
@@ -156,8 +161,7 @@ export default function CfiScheduleManager() {
   const [autofillDates, setAutofillDates] = useState(true);
   const [lesson, setLesson] = useState(emptyLesson);
   const [lessonWarnings, setLessonWarnings] = useState<string[]>([]);
-  const [cancelLessonId, setCancelLessonId] = useState("");
-  const [blockForm, setBlockForm] = useState({ date: localDateKey(new Date()), start: "07:00", end: "09:00", note: "" });
+  const [blockForm, setBlockForm] = useState({ date: localDateKey(new Date()), start: "07:00", end: "09:00", note: "", aircraftId: "" });
   const [editingBlockId, setEditingBlockId] = useState("");
   const [deleteBlockId, setDeleteBlockId] = useState("");
   const [autoDrafts, setAutoDrafts] = useState<ScheduleDraft[]>([]);
@@ -165,6 +169,7 @@ export default function CfiScheduleManager() {
   const [autoRequests, setAutoRequests] = useState<AutoRequestRow[]>([]);
   const [autoPreviewBuilt, setAutoPreviewBuilt] = useState(false);
   const [includeWeekends, setIncludeWeekends] = useState(false);
+  const [selectedAircraftIds, setSelectedAircraftIds] = useState<string[]>([]);
   const [settingsStudentId, setSettingsStudentId] = useState("");
   const [settingsForm, setSettingsForm] = useState({ weeklySessions: 3, durationMin: 120, color: "#2563eb", useWeekOverride: false, weekSessions: 3, weekDurationMin: 120 });
 
@@ -225,6 +230,8 @@ export default function CfiScheduleManager() {
     setOverrideDates(snapshot.overrideDates);
     setWeekOverrides(snapshot.weekOverrides.filter((item) => item.week_start === localDateKey(weekStart)));
     setBlocks(snapshot.blocks);
+    setAircraft(snapshot.aircraft ?? []);
+    setAircraftReservations(snapshot.aircraftReservations ?? []);
     setAccess((current) => [...current.filter((item) => item.caller_role === "student"), ...snapshot.access]);
     setStale(false);
   }
@@ -252,6 +259,8 @@ export default function CfiScheduleManager() {
         setBlocks(snapshot.blocks);
         setSlots(snapshot.slots);
         setOverrideDates(snapshot.overrideDates);
+        setAircraft(snapshot.aircraft ?? []);
+        setAircraftReservations(snapshot.aircraftReservations ?? []);
         setStale(snapshot.revision !== revision);
         return;
       }
@@ -267,6 +276,8 @@ export default function CfiScheduleManager() {
     setOverrideDates(snapshot.overrideDates);
     setWeekOverrides(snapshot.weekOverrides.filter((item) => item.week_start === localDateKey(weekStart)));
     setBlocks([]);
+    setAircraft([]);
+    setAircraftReservations([]);
   }
 
   async function reload() {
@@ -541,8 +552,9 @@ export default function CfiScheduleManager() {
       start: localDateTimeValue(start).slice(11),
       durationMin: Math.round((end.getTime() - start.getTime()) / 60_000),
       note: entry.note,
+      aircraftId: entry.aircraft_id ?? "",
     });
-    setLessonWarnings([]);
+    setLessonWarnings(entryWarnings(entry));
     setDrawer("lesson");
   }
 
@@ -554,12 +566,17 @@ export default function CfiScheduleManager() {
 
   function lessonOperation(newId = "draft-new-preview"): ScheduleOperation {
     const { start, end } = lessonTimes();
-    const values = { start_at: start.toISOString(), end_at: end.toISOString(), lesson_kind: lesson.kind, note: lesson.note };
+    const selectedAircraft = aircraft.find((item) => item.id === lesson.aircraftId);
+    const values = { start_at: start.toISOString(), end_at: end.toISOString(), lesson_kind: lesson.kind, note: lesson.note,
+      aircraft_id: lesson.kind === "flight" ? lesson.aircraftId || null : null,
+      aircraft_tail_number: lesson.kind === "flight" ? selectedAircraft?.tail_number ?? null : null,
+      aircraft_status: lesson.kind === "flight" ? selectedAircraft?.operational_status ?? null : null };
     if (lesson.id) return { type: "edit", id: lesson.id, values };
     const student = activeStudents.find((item) => item.student_user_id === lesson.studentUserId);
     return { type: "add", entry: {
       ...values, id: newId, entry_type: "lesson", student_user_id: lesson.studentUserId,
       student_name: student?.student_name ?? "Student", auto_generated: false, status: "scheduled", is_own: false,
+      aircraft_status_note: selectedAircraft?.operational_status_note ?? null, aircraft_conflict: false, unavailable_kind: null,
     } };
   }
 
@@ -572,9 +589,12 @@ export default function CfiScheduleManager() {
     if (entry.entry_type !== "lesson" || entry.status !== "scheduled") return [];
     const start = new Date(entry.start_at);
     const end = new Date(entry.end_at);
+    const aircraftStatus = aircraft.find((item) => item.id === entry.aircraft_id)?.operational_status ?? entry.aircraft_status;
+    const externalConflict = Boolean(entry.aircraft_id) && aircraftReservations.some((reservation) => reservation.aircraft_id === entry.aircraft_id && start < new Date(reservation.end_at) && end > new Date(reservation.start_at));
     const warnings = getManualConflictWarnings({
       studentUserId: entry.student_user_id ?? "", lessonKind: entry.lesson_kind ?? "flight",
-      start, end, slots, overrideDates, blocks,
+      start, end, slots, overrideDates, blocks, aircraftId: entry.aircraft_id,
+      aircraftStatus, aircraftConflict: isCfiView ? externalConflict : entry.aircraft_conflict,
     });
     const startMinute = start.getHours() * 60 + start.getMinutes();
     if (startMinute < 420 || startMinute > 960) warnings.push("Starts outside the 07:00–16:00 automatic scheduling window.");
@@ -592,7 +612,7 @@ export default function CfiScheduleManager() {
     return scheduleChanges(entries, next).flatMap((change) => entryWarnings(change.after, next).map((warning) => `${change.after.student_name}: ${warning}`));
   }
 
-  function saveLesson(force = false) {
+  async function saveLesson(force = false) {
     if (!lesson.studentUserId || !lesson.date || !lesson.start) return;
     try {
       const operation = lessonOperation(crypto.randomUUID());
@@ -603,19 +623,39 @@ export default function CfiScheduleManager() {
       }
       const warnings = calculateLessonWarnings();
       if (warnings.length && !force) { setLessonWarnings(warnings); return; }
-      stageOperations([...operations, operation]);
-      setDrawer(null);
-      setLessonWarnings([]);
-      setError("");
-      setMessage("Changes added to the draft. Students will see them only after you confirm and publish.");
+      if (hasDraft) {
+        stageOperations([...operations, operation]);
+        setDrawer(null); setLessonWarnings([]); setError("");
+        setMessage("Changes added to the current automatic-schedule draft.");
+        return;
+      }
+      setSaving(true);
+      const directChanges = scheduleChanges(entries, next).map((change) => change.after);
+      await publishScheduleDraft(revision, crypto.randomUUID(), directChanges);
+      setDrawer(null); setLessonWarnings([]); setError("");
+      setMessage(directChanges.length > 1 ? `${directChanges.length} lessons saved. Later lessons that day moved with your edit; affected students were notified.` : "Lesson saved and the student was notified.");
+      const { start, end } = weekRange();
+      adoptSnapshot(await fetchScheduleEditorSnapshot(start, end));
     } catch (failure) { setError(getErrorMessage(failure, "Unable to update the draft.")); }
+    finally { setSaving(false); }
   }
 
-  function confirmCancelLesson() {
-    stageOperations([...operations, { type: "cancel", id: cancelLessonId }]);
-    setCancelLessonId("");
-    setDrawer(null);
-    setMessage("Cancellation added to the draft. No notification has been sent.");
+  async function confirmCancelLesson(id: string) {
+    if (!id) return;
+    if (hasDraft) {
+      stageOperations([...operations, { type: "cancel", id }]);
+      setDrawer(null); setMessage("Cancellation added to the current draft.");
+      return;
+    }
+    const target = entries.find((entry) => entry.id === id);
+    if (!target) return;
+    setSaving(true); setError("");
+    try {
+      await publishScheduleDraft(revision, crypto.randomUUID(), [{ ...target, status: "cancelled" }]);
+      setDrawer(null); setMessage("Lesson cancelled and the student was notified.");
+      const { start, end } = weekRange(); adoptSnapshot(await fetchScheduleEditorSnapshot(start, end));
+    } catch (failure) { setError(getErrorMessage(failure,"Unable to cancel the lesson.")); }
+    finally { setSaving(false); }
   }
 
   async function openPublishDrawer() {
@@ -652,7 +692,8 @@ export default function CfiScheduleManager() {
       start: localDateTimeValue(new Date(block.start_at)).slice(11),
       end: localDateTimeValue(new Date(block.end_at)).slice(11),
       note: block.note,
-    } : { date, start: "07:00", end: "09:00", note: "" });
+      aircraftId: block.aircraft_id ?? "",
+    } : { date, start: "07:00", end: "09:00", note: "", aircraftId: "" });
     setDrawer("block");
   }
 
@@ -679,6 +720,7 @@ export default function CfiScheduleManager() {
         start_at: localDateTimeToIso(blockForm.date, blockForm.start),
         end_at: localDateTimeToIso(blockForm.date, blockForm.end),
         note: blockForm.note,
+        aircraft_id: blockForm.aircraftId || null,
       };
       if (editingBlockId && !keepAutoOpen) await updateUnavailableBlock(editingBlockId, values);
       else await createUnavailableBlock(values);
@@ -723,15 +765,16 @@ export default function CfiScheduleManager() {
       const target = override?.target_sessions ?? student.default_weekly_sessions;
       const existing = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === student.student_user_id).length;
       const sessions = Math.max(0, target - existing);
-      return { studentUserId: student.student_user_id, sessions: sessions || 1, selected: sessions > 0 };
+      return { studentUserId: student.student_user_id, flightSessions: sessions || 1, groundSessions: 0, selected: sessions > 0 };
     }));
+    setSelectedAircraftIds(aircraft.map((item) => item.id));
     setEditingBlockId("");
-    setBlockForm({ date: localDateKey(weekStart), start: "07:00", end: "09:00", note: "" });
+    setBlockForm({ date: localDateKey(weekStart), start: "07:00", end: "09:00", note: "", aircraftId: "" });
     setDrawer("auto");
   }
 
   function buildAutomaticPreview() {
-    const requests = autoRequests.filter((item) => item.selected && item.sessions > 0).map(({ studentUserId, sessions }) => ({ studentUserId, sessions }));
+    const requests = autoRequests.filter((item) => item.selected && (item.flightSessions > 0 || item.groundSessions > 0)).map(({ studentUserId, flightSessions, groundSessions }) => ({ studentUserId, flightSessions, groundSessions }));
     if (!requests.length) {
       setError("Select at least one student and choose how many lessons to add.");
       setAutoPreviewBuilt(false);
@@ -749,6 +792,9 @@ export default function CfiScheduleManager() {
       existingEntries: entries,
       blocks,
       requests,
+      aircraft,
+      selectedAircraftIds,
+      aircraftReservations,
     });
     setAutoDrafts(result.drafts);
     setAutoUnscheduled(result.unscheduled);
@@ -768,12 +814,14 @@ export default function CfiScheduleManager() {
     try {
       const additions: ScheduleOperation[] = autoDrafts.map((draft) => ({ type: "add", entry: {
         id: crypto.randomUUID(), entry_type: "lesson", student_user_id: draft.student_user_id,
-        student_name: draft.student_name, lesson_kind: "flight", start_at: draft.start_at,
+        student_name: draft.student_name, lesson_kind: draft.lesson_kind, aircraft_id: draft.aircraft_id,
+        aircraft_tail_number: draft.aircraft_tail_number ?? null, aircraft_status: aircraft.find((item) => item.id === draft.aircraft_id)?.operational_status ?? null,
+        aircraft_status_note: null, aircraft_conflict: false, unavailable_kind: null, start_at: draft.start_at,
         end_at: draft.end_at, note: draft.note, auto_generated: true, status: "scheduled", is_own: false,
       } }));
       stageOperations([...operations, ...additions]);
       setDrawer(null);
-      setMessage(`${autoDrafts.length} Flight lessons added to the draft. Review and publish when ready.`);
+      setMessage(`${autoDrafts.length} lessons added to the draft. Review and publish when ready.`);
     } catch (autoError) {
       setError(getErrorMessage(autoError, "Unable to save the generated schedule."));
     }
@@ -832,7 +880,7 @@ export default function CfiScheduleManager() {
   }
 
   function renderChangePreview(items: ScheduleChange[], schedule = entries) {
-    return <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[380px] text-left text-xs"><thead className="bg-slate-50"><tr><th className="p-2">Student</th><th className="p-2">Before</th><th className="p-2">After</th></tr></thead><tbody>{items.map(({ before, after }) => <tr key={after.id} className="border-t border-slate-100 align-top"><td className="p-2 font-semibold">{after.student_name}</td><td className="p-2">{before ? <>{formatDate(new Date(before.start_at))}<br />{formatTime(before.start_at)}–{formatTime(before.end_at)}<br />{before.lesson_kind}</> : "New lesson"}</td><td className="p-2">{after.status === "cancelled" ? <span className="text-rose-700">Cancelled</span> : <>{formatDate(new Date(after.start_at))}<br />{formatTime(after.start_at)}–{formatTime(after.end_at)}<br />{after.lesson_kind}{before?.note !== after.note ? <p className="mt-1 break-words">Note: {after.note || "Removed"}</p> : null}{entryWarnings(after, schedule).map((warning) => <p key={warning} className="mt-1 text-amber-800">⚠ {warning}</p>)}</>}</td></tr>)}</tbody></table></div>;
+    return <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[380px] text-left text-xs"><thead className="bg-slate-50"><tr><th className="p-2">Student</th><th className="p-2">Before</th><th className="p-2">After</th></tr></thead><tbody>{items.map(({ before, after }) => <tr key={after.id} className="border-t border-slate-100 align-top"><td className="p-2 font-semibold">{after.student_name}</td><td className="p-2">{before ? <>{formatDate(new Date(before.start_at))}<br />{formatTime(before.start_at)}–{formatTime(before.end_at)}<br />{before.lesson_kind}{before.aircraft_tail_number ? ` · ${before.aircraft_tail_number}` : ""}</> : "New lesson"}</td><td className="p-2">{after.status === "cancelled" ? <span className="text-rose-700">Cancelled</span> : <>{formatDate(new Date(after.start_at))}<br />{formatTime(after.start_at)}–{formatTime(after.end_at)}<br />{after.lesson_kind}{after.aircraft_tail_number ? ` · ${after.aircraft_tail_number}` : ""}{before && before.note !== after.note ? <p className="mt-1 break-words">Note: {after.note || "Removed"}</p> : null}{entryWarnings(after, schedule).map((warning) => <p key={warning} className="mt-1 text-amber-800">⚠ {warning}</p>)}</>}</td></tr>)}</tbody></table></div>;
   }
 
   if (featureEnabled === null || loading) return <div className="saas-panel">Loading schedule…</div>;
@@ -871,7 +919,9 @@ export default function CfiScheduleManager() {
   const calendarEntries: ScheduleEntry[] = isCfiView ? [
     ...entries.filter((entry) => entry.entry_type === "lesson"),
     ...blocks.map((block): ScheduleEntry => ({ ...block, entry_type: "unavailable", student_user_id: null,
-      student_name: null, lesson_kind: null, auto_generated: false, status: "scheduled", is_own: false })),
+      student_name: null, lesson_kind: null, auto_generated: false, status: "scheduled", is_own: false,
+      aircraft_tail_number: block.aircraft_tail_number ?? null, aircraft_status: aircraft.find((item) => item.id === block.aircraft_id)?.operational_status ?? null,
+      aircraft_status_note: null, aircraft_conflict: false, unavailable_kind: "aircraft" })),
   ] : entries;
   const visibleEntriesForDate = (day: Date) => calendarEntries.filter(entry =>
     (isCfiView || calendarView || entry.is_own) && entry.status === "scheduled"
@@ -960,8 +1010,9 @@ export default function CfiScheduleManager() {
                 <span className={styles.entryMeta}>{date >= localDateKey(new Date()) && date <= maxAvailabilityDate ? "Tap to edit" : "Outside the four-week window"}</span>
               </button> : !dayEntries.length ? <p className={styles.empty}>{isCfiView ? "Open" : "No lessons"}</p> : dayEntries.map((entry) => {
                 const warnings = entryWarnings(entry);
-                const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${entry.lesson_kind === "flight" ? "Flight" : "Ground"}` : isCfiView ? "Aircraft unavailable" : "Unavailable"}</span>{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ Conflict · {warnings.length}</span> : null}</>;
-                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? styles.busy : ""}`;
+                const aircraftLabel = entry.aircraft_tail_number || (entry.aircraft_id ? "Aircraft" : "All aircraft");
+                const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${entry.lesson_kind === "flight" ? "Flight" : "Ground"}` : entry.unavailable_kind === "aircraft" ? `${aircraftLabel} unavailable` : "Busy"}</span>{entry.entry_type === "lesson" && entry.lesson_kind === "flight" && entry.aircraft_tail_number ? <span className={styles.entryMeta}>{entry.aircraft_tail_number}{entry.aircraft_status && entry.aircraft_status !== "available" ? ` · ${entry.aircraft_status.replace("_", " ")}` : ""}</span> : null}{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ {warnings.length} schedule issue{warnings.length === 1 ? "" : "s"} · tap for details</span> : null}</>;
+                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""}`;
                 return isCfiView || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving} onClick={() => {
                   if (!isCfiView) { setDetailEntry(entry); setDrawer("details"); }
                   else if (entry.entry_type === "lesson") openEditLesson(entry);
@@ -1010,7 +1061,7 @@ export default function CfiScheduleManager() {
         <div className="mt-4 flex flex-wrap gap-2"><button type="button" className="primary-button" disabled={!weekReady || saving} onClick={()=>void autoFillUsualWeek()}>{saving ? "Filling…" : "Auto-fill next 4 weeks"}</button>{!isCfiView ? <button type="button" className="ghost-button" onClick={()=>{setReviewChecked(false);setDrawer("review");}}>Review dates</button> : null}</div>
       </DetailDrawer>
       <DetailDrawer open={drawer === "details"} onClose={() => setDrawer(null)} title="Lesson details">
-        {detailEntry ? <div className="space-y-3"><p className="font-semibold">{formatDate(new Date(detailEntry.start_at))} · {formatTime(detailEntry.start_at)}–{formatTime(detailEntry.end_at)}</p><p className="capitalize">{detailEntry.lesson_kind}</p>{detailEntry.note ? <p className="whitespace-pre-wrap">{detailEntry.note}</p> : null}{entryWarnings(detailEntry).map((warning) => <p key={warning} className="text-sm text-amber-800">⚠ {warning}</p>)}</div> : null}
+        {detailEntry ? <div className="space-y-3"><p className="font-semibold">{formatDate(new Date(detailEntry.start_at))} · {formatTime(detailEntry.start_at)}–{formatTime(detailEntry.end_at)}</p><p className="capitalize">{detailEntry.lesson_kind}</p>{detailEntry.aircraft_tail_number ? <p>{detailEntry.aircraft_tail_number}{detailEntry.aircraft_status && detailEntry.aircraft_status !== "available" ? ` · ${detailEntry.aircraft_status.replace("_", " ")}` : " · Available"}</p> : null}{detailEntry.note ? <p className="whitespace-pre-wrap">{detailEntry.note}</p> : null}{entryWarnings(detailEntry).map((warning) => <p key={warning} className="text-sm text-amber-800">⚠ {warning}</p>)}</div> : null}
       </DetailDrawer>
 
       <DetailDrawer open={drawer === "access"} onClose={() => setDrawer(null)} title="Manage schedule access" description="Choose existing students from People. Unlinked students can be scheduled now; account access starts only after linking.">
@@ -1037,10 +1088,10 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex flex-wrap justify-end gap-2">{availabilityScope === "date" && overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === availabilityDate) ? <button className="ghost-button" type="button" disabled={saving} onClick={() => void clearDateOverride()}>Use general rule</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAvailability()}>{saving ? "Saving…" : "Apply"}</button></div>
       </DetailDrawer>
 
-      <DetailDrawer open={drawer === "lesson"} onClose={() => setDrawer(null)} title={lesson.id ? "Edit lesson draft" : "Add lesson draft"} description="Moving any lesson within its day moves all later lessons by the same amount. Review the times below. Nothing is published until you confirm the full draft.">
+      <DetailDrawer open={drawer === "lesson"} onClose={() => setDrawer(null)} title={lesson.id ? "Edit lesson" : "Add lesson"} description={hasDraft ? "This change joins the current automatic-schedule draft." : "Saving is immediate. Moving a lesson within its day pushes every later lesson by the same amount and notifies affected linked students."}>
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
-        <div className="grid gap-4"><label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={lesson.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" step={900} value={lesson.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind })); }}><option value="flight">Flight</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div><label className="saas-field"><span>Note</span><textarea rows={3} maxLength={500} value={lesson.note} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, note: event.target.value })); }} /></label>{previewChanges.length ? <div><p className="mb-2 text-sm font-semibold">Changes in this edit · {previewChanges.length} lesson(s)</p>{renderChangePreview(previewChanges, lessonPreviewEntries)}</div> : null}{lessonWarnings.length ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Conflict warning</p><ul className="mt-1 list-disc pl-5">{lessonWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}</div>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">{lesson.id ? <button className="danger-button mr-auto" type="button" onClick={() => setCancelLessonId(lesson.id)}>Cancel lesson</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Close</button><button className="primary-button" type="button" disabled={saving || !lesson.studentUserId} onClick={() => void saveLesson(lessonWarnings.length > 0)}>{lessonWarnings.length ? "Add to draft anyway" : "Add changes to draft"}</button></div>
+        <div className="grid gap-4"><label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={lesson.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" step={900} value={lesson.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind, aircraftId: event.target.value === "ground" ? "" : current.aircraftId })); }}><option value="flight">Flight</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div>{lesson.kind === "flight" ? <label className="saas-field"><span>Aircraft</span><select value={lesson.aircraftId} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, aircraftId: event.target.value })); }}><option value="">Not assigned</option>{aircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? ` · ${item.operational_status.replace("_", " ")}` : ""}</option>)}</select></label> : null}<label className="saas-field"><span>Note</span><textarea rows={3} maxLength={500} value={lesson.note} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, note: event.target.value })); }} /></label>{previewChanges.length ? <div><p className="mb-2 text-sm font-semibold">Changes in this edit · {previewChanges.length} lesson(s)</p>{renderChangePreview(previewChanges, lessonPreviewEntries)}</div> : null}{lessonWarnings.length ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Schedule issues</p><ul className="mt-1 list-disc pl-5">{lessonWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><p className="mt-2 text-xs">These are warnings only. You can still save.</p></div> : null}</div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">{lesson.id ? <button className="danger-button mr-auto" type="button" disabled={saving} onClick={() => void confirmCancelLesson(lesson.id)}>Cancel lesson</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Close</button><button className="primary-button" type="button" disabled={saving || !lesson.studentUserId} onClick={() => void saveLesson(lessonWarnings.length > 0)}>{saving ? "Saving…" : lessonWarnings.length ? "Save anyway" : "Save lesson"}</button></div>
       </DetailDrawer>
 
       <DetailDrawer open={drawer === "publish"} onClose={() => { if (!saving) setDrawer(null); }} title="Review & publish schedule" description="Review the final changes, not intermediate edits. Each affected student receives at most one notification, according to their preferences.">
@@ -1054,37 +1105,37 @@ export default function CfiScheduleManager() {
 
       <DetailDrawer open={drawer === "block"} onClose={() => { if (!saving) setDrawer(null); }} title={editingBlockId ? "Edit aircraft unavailable time" : "Mark aircraft unavailable"} description="Choose the time. Flight lessons will avoid it; Ground is unaffected. Saves immediately without publishing your lesson draft.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
-        <BlockForm value={blockForm} onChange={setBlockForm} />
+        <BlockForm value={blockForm} aircraft={aircraft} onChange={setBlockForm} />
         <div className="mt-5 flex flex-wrap justify-end gap-2">{editingBlockId ? <button className="ghost-button mr-auto text-rose-700" type="button" disabled={saving} onClick={() => setDeleteBlockId(editingBlockId)}>Remove block</button> : null}<button className="ghost-button" type="button" disabled={saving} onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveBlock()}>{saving ? "Saving…" : editingBlockId ? "Save changes" : "Add block"}</button></div>
       </DetailDrawer>
 
-      <DetailDrawer open={drawer === "auto"} onClose={() => setDrawer(null)} title="Automatic scheduling" description="Only Flight lessons are generated. Review unavailable time first, then add the preview to your unpublished draft.">
-        {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}<section className="rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">1. Review unavailable time</h3><div className="mt-3"><BlockForm value={blockForm} onChange={setBlockForm} /></div><button className="secondary-button mt-3" type="button" disabled={saving} onClick={() => void saveBlock(true)}>Add block</button><BlockList blocks={blocks} onDelete={setDeleteBlockId} /><p className="mt-2 text-xs text-slate-500">Aircraft time saves immediately. Lesson drafts are kept and checked again before publication.</p></section>
+      <DetailDrawer open={drawer === "auto"} onClose={() => setDrawer(null)} title="Automatic scheduling" description="Choose aircraft and separate Flight / Ground counts for this run. Review the preview before publishing.">
+        {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}<section className="rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">1. Review unavailable time</h3><div className="mt-3"><BlockForm value={blockForm} aircraft={aircraft} onChange={setBlockForm} /></div><button className="secondary-button mt-3" type="button" disabled={saving} onClick={() => void saveBlock(true)}>Add block</button><BlockList blocks={blocks} onDelete={setDeleteBlockId} /><p className="mt-2 text-xs text-slate-500">Choose one aircraft, or all aircraft for a fleet-wide block. Existing lessons stay in place and show a warning.</p></section>
+        <section className="mt-4 rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">2. Aircraft for Flight lessons</h3><p className="mt-1 text-xs text-slate-500">The scheduler assigns one available selected aircraft to each Flight lesson. A current Grounded, Maintenance, or Away status is shown as a warning but does not prevent booking.</p><div className={styles.aircraftChoices}>{aircraft.map((item) => <label key={item.id}><input type="checkbox" checked={selectedAircraftIds.includes(item.id)} onChange={(event) => { setSelectedAircraftIds((current) => event.target.checked ? [...current,item.id] : current.filter((id) => id !== item.id)); setAutoPreviewBuilt(false); setAutoDrafts([]); }} /><span><strong>{item.tail_number}</strong>{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? <small>⚠ {item.operational_status.replace("_", " ")}</small> : null}</span></label>)}</div>{!aircraft.length ? <p className="mt-3 text-sm text-amber-800">No aircraft found in My Aircraft or your organizations. Ground lessons can still be generated.</p> : null}</section>
         <section className="mt-4 rounded-xl border border-slate-200 p-3">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">2. Choose students and counts</h3><p className="mt-1 text-xs text-slate-500">Counts mean lessons to add in this run. Defaults fill each weekly goal after subtracting lessons already on the calendar.</p></div><div className="flex gap-1"><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: true, sessions: Math.max(1, item.sessions) }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Select all</button><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: false }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Clear</button></div></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">3. Students and counts</h3><p className="mt-1 text-xs text-slate-500">Flight and Ground counts apply only to this run.</p></div><div className="flex gap-1"><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: true, flightSessions: Math.max(1, item.flightSessions) }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Select all</button><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: false }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Clear</button></div></div>
           <div className={styles.autoRoster} role="group" aria-label="Students to automatically schedule">
             {activeStudents.map((student) => {
-              const request = autoRequests.find((item) => item.studentUserId === student.student_user_id) ?? { studentUserId: student.student_user_id, sessions: 1, selected: false };
+              const request = autoRequests.find((item) => item.studentUserId === student.student_user_id) ?? { studentUserId: student.student_user_id, flightSessions: 1, groundSessions: 0, selected: false };
               const override = weekOverrides.find((item) => item.student_user_id === student.student_user_id);
-              const target = override?.target_sessions ?? student.default_weekly_sessions;
               const duration = override?.duration_min ?? student.default_duration_min;
               const existing = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === student.student_user_id).length;
               const availableDays = Array.from({ length: includeWeekends ? 7 : 5 }, (_, index) => addCalendarDays(weekStart, index)).filter((date) => availabilityForDate({ date, studentUserId: student.student_user_id, slots, overrideDates }).length > 0).length;
               return <div className={styles.autoStudentRow} key={student.student_user_id} data-selected={request.selected}>
-                <label className={styles.autoStudentToggle}><input type="checkbox" checked={request.selected} onChange={(event) => updateAutoRequest(student.student_user_id, { selected: event.target.checked, sessions: event.target.checked ? Math.max(1, request.sessions) : request.sessions })} /><span><strong>{student.student_name}</strong><span className={styles.autoStudentMeta}>{availableDays} available day{availableDays === 1 ? "" : "s"} · {existing} already scheduled · {duration} min</span>{availableDays === 0 ? <span className={styles.autoStudentWarning}>No availability in the selected days</span> : null}<span className={styles.autoStudentMeta}>Weekly goal {target}{override ? " · week override" : ""}</span></span></label>
-                <label className={styles.autoCount}><span>Add</span><input type="number" inputMode="numeric" min={0} max={14} value={request.sessions} disabled={!request.selected} aria-label={`Lessons to add for ${student.student_name}`} onChange={(event) => { const sessions = Math.max(0, Math.min(14, Number(event.target.value) || 0)); updateAutoRequest(student.student_user_id, { sessions }); }} /><span>lesson{request.sessions === 1 ? "" : "s"}</span></label>
+                <label className={styles.autoStudentToggle}><input type="checkbox" checked={request.selected} onChange={(event) => updateAutoRequest(student.student_user_id, { selected: event.target.checked, flightSessions: event.target.checked && request.flightSessions + request.groundSessions === 0 ? 1 : request.flightSessions })} /><span><strong>{student.student_name}</strong><span className={styles.autoStudentMeta}>{availableDays} available day{availableDays === 1 ? "" : "s"} · {existing} scheduled · {duration} min</span>{availableDays === 0 ? <span className={styles.autoStudentWarning}>No availability in the selected days</span> : null}</span></label>
+                <div className={styles.autoCounts}><label><span>Flight</span><input type="number" inputMode="numeric" min={0} max={14} value={request.flightSessions} disabled={!request.selected} aria-label={`Flight lessons for ${student.student_name}`} onChange={(event) => updateAutoRequest(student.student_user_id, { flightSessions: Math.max(0,Math.min(14,Number(event.target.value)||0)) })} /></label><label><span>Ground</span><input type="number" inputMode="numeric" min={0} max={14} value={request.groundSessions} disabled={!request.selected} aria-label={`Ground lessons for ${student.student_name}`} onChange={(event) => updateAutoRequest(student.student_user_id, { groundSessions: Math.max(0,Math.min(14,Number(event.target.value)||0)) })} /></label></div>
               </div>;
             })}
           </div>
           <p className="mt-3 text-xs text-slate-500">These choices apply only to this run and do not change anyone’s weekly goal.</p>
         </section>
-        <section className="mt-4 rounded-xl border border-slate-200 p-3"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">3. Generate preview</h3><p className="mt-1 text-xs text-slate-500">Starts are considered from 07:00 through 16:00. The scheduler gives each student one day before adding a second lesson on the same day.</p></div><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeWeekends} onChange={(event) => { setIncludeWeekends(event.target.checked); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }} /> Include weekend</label></div><button className="primary-button mt-3" type="button" disabled={!autoRequests.some((item) => item.selected && item.sessions > 0)} onClick={buildAutomaticPreview}>Generate preview</button></section>
-        {autoPreviewBuilt ? <section className="mt-4 rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">4. Review</h3><p className="mt-1 text-xs text-slate-500">{autoDrafts.length} of {autoRequests.filter((item) => item.selected && item.sessions > 0).reduce((total, item) => total + item.sessions, 0)} requested Flight lessons fit.</p><div className="mt-3 grid gap-3">{autoRequests.filter((item) => item.selected && item.sessions > 0).map((request) => {
+        <section className="mt-4 rounded-xl border border-slate-200 p-3"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">4. Generate preview</h3><p className="mt-1 text-xs text-slate-500">Starts are considered from 07:00 through 16:00. Each day stays within eight hours from its first lesson.</p></div><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeWeekends} onChange={(event) => { setIncludeWeekends(event.target.checked); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }} /> Include weekend</label></div><button className="primary-button mt-3" type="button" disabled={!autoRequests.some((item) => item.selected && (item.flightSessions > 0 || item.groundSessions > 0))} onClick={buildAutomaticPreview}>Generate preview</button></section>
+        {autoPreviewBuilt ? <section className="mt-4 rounded-xl border border-slate-200 p-3"><h3 className="text-sm font-semibold text-slate-900">5. Review</h3><p className="mt-1 text-xs text-slate-500">{autoDrafts.length} of {autoRequests.filter((item) => item.selected).reduce((total, item) => total + item.flightSessions + item.groundSessions, 0)} requested lessons fit.</p><div className="mt-3 grid gap-3">{autoRequests.filter((item) => item.selected && (item.flightSessions > 0 || item.groundSessions > 0)).map((request) => {
           const student = activeStudents.find((item) => item.student_user_id === request.studentUserId);
           const studentDrafts = autoDrafts.filter((draft) => draft.student_user_id === request.studentUserId);
-          const missed = autoUnscheduled.find((item) => item.studentUserId === request.studentUserId);
-          return <div key={request.studentUserId} className={styles.autoPreviewStudent}><div><strong>{student?.student_name}</strong><span>{studentDrafts.length}/{request.sessions} scheduled</span></div>{studentDrafts.map((draft) => <p key={draft.start_at}>{formatDate(new Date(draft.start_at))} · {formatTime(draft.start_at)}–{formatTime(draft.end_at)}</p>)}{missed ? <p className={styles.autoStudentWarning}>{missed.remaining} could not be scheduled. {missed.reason}</p> : null}</div>;
-        })}</div><button className="primary-button mt-4" type="button" disabled={saving || !autoDrafts.length} onClick={() => void confirmAutomaticSchedule()}>{saving ? "Saving…" : `Add ${autoDrafts.length} Flight ${autoDrafts.length === 1 ? "lesson" : "lessons"} to draft`}</button></section> : null}
+          const missed = autoUnscheduled.filter((item) => item.studentUserId === request.studentUserId);
+          return <div key={request.studentUserId} className={styles.autoPreviewStudent}><div><strong>{student?.student_name}</strong><span>{studentDrafts.length}/{request.flightSessions + request.groundSessions} scheduled</span></div>{studentDrafts.map((draft) => <p key={`${draft.lesson_kind}-${draft.start_at}`}>{formatDate(new Date(draft.start_at))} · {formatTime(draft.start_at)}–{formatTime(draft.end_at)} · {draft.lesson_kind === "flight" ? `Flight · ${draft.aircraft_tail_number}` : "Ground"}</p>)}{missed.map((item) => <p key={item.lessonKind} className={styles.autoStudentWarning}>{item.remaining} {item.lessonKind} could not be scheduled. {item.reason}</p>)}</div>;
+        })}</div><button className="primary-button mt-4" type="button" disabled={saving || !autoDrafts.length} onClick={() => void confirmAutomaticSchedule()}>{saving ? "Saving…" : `Add ${autoDrafts.length} lesson${autoDrafts.length === 1 ? "" : "s"} to draft`}</button></section> : null}
       </DetailDrawer>
 
       <DetailDrawer open={drawer === "settings"} onClose={() => setDrawer(null)} title="Student schedule settings" description="Set the general target and optional override for the selected week.">
@@ -1093,7 +1144,6 @@ export default function CfiScheduleManager() {
       </DetailDrawer>
 
       <ConfirmDialog open={confirmPermissions} title="Update schedule access?" description="Students whose access is removed will stop seeing this schedule. Existing schedule data is retained." confirmLabel="Apply changes" busy={saving} destructive onCancel={() => setConfirmPermissions(false)} onConfirm={() => void applyPermissions()} />
-      <ConfirmDialog open={Boolean(cancelLessonId)} title="Cancel this lesson?" description="This cancellation stays in your draft. The student is notified only when you publish the final changes." confirmLabel="Cancel lesson" busy={saving} destructive onCancel={() => setCancelLessonId("")} onConfirm={() => void confirmCancelLesson()} />
       <ConfirmDialog open={discardOpen} title="Discard unpublished changes?" description="Your published schedule stays unchanged. All edits in this draft will be removed." confirmLabel="Discard draft" busy={saving} destructive onCancel={() => setDiscardOpen(false)} onConfirm={() => void discardDraft()} />
       <ConfirmDialog open={Boolean(deleteBlockId)} title="Remove unavailable block?" description="Automatic scheduling will be able to use this time again." confirmLabel="Remove block" busy={saving} destructive onCancel={() => setDeleteBlockId("")} onConfirm={() => void confirmDeleteBlock()} />
     </div>
@@ -1108,17 +1158,17 @@ function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => v
   return <DetailDrawer open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
     <div className={styles.helpContent}>
       <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
-      <section><p className={styles.eyebrow}>Instructors</p><h3>Build and publish the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Manage access lets linked students see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use + to add a Flight or Ground lesson, mark aircraft unavailable, or automatically schedule Flight lessons.</li><li>For automatic scheduling, choose exactly which students to include and how many new lessons to add for each. The suggested counts fill their weekly goals without counting cancelled lessons.</li><li>The scheduler uses student availability, aircraft blocks, and 07:00–16:00 starts. It gives each student a separate day before using the same day twice and limits the teaching span to 8 hours from the first lesson.</li><li>Edits stay in a private draft. Review conflicts, then publish once; only affected linked students are notified according to their preferences.</li></ol></section>
+      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling lets you select several aircraft and choose separate Flight and Ground counts for each student. Those counts apply only to that run.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. A Grounded, Maintenance, or Away status stays visible but does not prevent booking.</li><li>Manual edits save immediately. Moving a lesson pushes every later lesson that day; linked affected students are notified according to their preferences.</li></ol></section>
       <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson pushes every later lesson that day by the same amount. Manual conflicts are warnings, so you stay in control.</p></section>
     </div>
   </DetailDrawer>;
 }
 
-function BlockForm({ value, onChange }: { value: { date: string; start: string; end: string; note: string }; onChange: (value: { date: string; start: string; end: string; note: string }) => void }) {
-  return <div className="grid gap-3"><div className="grid grid-cols-2 gap-3"><label className="saas-field col-span-2"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={value.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, date: event.target.value })} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={value.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={value.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, end: event.target.value })} /></label></div><label className="saas-field"><span>Reason (optional)</span><input maxLength={300} value={value.note} placeholder="Reserved, maintenance, or other" onChange={(event) => onChange({ ...value, note: event.target.value })} /></label></div>;
+function BlockForm({ value, aircraft, onChange }: { value: { date: string; start: string; end: string; note: string; aircraftId: string }; aircraft: ScheduleAircraft[]; onChange: (value: { date: string; start: string; end: string; note: string; aircraftId: string }) => void }) {
+  return <div className="grid gap-3"><label className="saas-field"><span>Aircraft</span><select value={value.aircraftId} onChange={(event) => onChange({ ...value, aircraftId: event.target.value })}><option value="">All aircraft</option>{aircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field col-span-2"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={value.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, date: event.target.value })} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={value.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={value.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, end: event.target.value })} /></label></div><label className="saas-field"><span>Reason (private)</span><input maxLength={300} value={value.note} placeholder="Reserved, maintenance, or other" onChange={(event) => onChange({ ...value, note: event.target.value })} /></label></div>;
 }
 
 function BlockList({ blocks, onDelete }: { blocks: UnavailableBlock[]; onDelete: (id: string) => void }) {
   if (!blocks.length) return <p className="mt-4 text-xs text-slate-500">No unavailable blocks this week.</p>;
-  return <div className="mt-4 divide-y divide-slate-100 border-t border-slate-100">{blocks.map((block) => <div key={block.id} className="flex items-center justify-between gap-3 py-2 text-xs"><span><strong>{formatDate(new Date(block.start_at))}</strong> · {formatTime(block.start_at)}–{formatTime(block.end_at)}{block.note ? ` · ${block.note}` : ""}</span><button className="text-xs font-semibold text-rose-700" type="button" onClick={() => onDelete(block.id)}>Remove</button></div>)}</div>;
+  return <div className="mt-4 divide-y divide-slate-100 border-t border-slate-100">{blocks.map((block) => <div key={block.id} className="flex items-center justify-between gap-3 py-2 text-xs"><span><strong>{block.aircraft_tail_number ?? "All aircraft"}</strong> · {formatDate(new Date(block.start_at))} · {formatTime(block.start_at)}–{formatTime(block.end_at)}{block.note ? ` · ${block.note}` : ""}</span><button className="text-xs font-semibold text-rose-700" type="button" onClick={() => onDelete(block.id)}>Remove</button></div>)}</div>;
 }

@@ -1,6 +1,6 @@
 import type { LessonKind, ScheduleEntry } from "./cfi-schedule";
 
-export type LessonEdit = { start_at: string; end_at: string; lesson_kind: LessonKind; note: string };
+export type LessonEdit = { start_at: string; end_at: string; lesson_kind: LessonKind; note: string; aircraft_id: string | null; aircraft_tail_number?: string | null; aircraft_status?: ScheduleEntry["aircraft_status"] };
 export type ScheduleOperation =
   | { type: "edit"; id: string; values: LessonEdit }
   | { type: "add"; entry: ScheduleEntry }
@@ -48,7 +48,7 @@ export function scheduleChanges(original: ScheduleEntry[], current: ScheduleEntr
   for (const [id, before] of beforeById) {
     const after = afterById.get(id);
     if (!after) result.push({ before, after: { ...before, status: "cancelled" } });
-    else if (Date.parse(before.start_at) !== Date.parse(after.start_at) || Date.parse(before.end_at) !== Date.parse(after.end_at) || before.lesson_kind !== after.lesson_kind || before.note !== after.note) result.push({ before, after });
+    else if (Date.parse(before.start_at) !== Date.parse(after.start_at) || Date.parse(before.end_at) !== Date.parse(after.end_at) || before.lesson_kind !== after.lesson_kind || before.aircraft_id !== after.aircraft_id || before.note !== after.note) result.push({ before, after });
   }
   for (const [id, after] of afterById) if (!beforeById.has(id)) result.push({ before: null, after });
   return result;
