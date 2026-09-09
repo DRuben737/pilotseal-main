@@ -117,6 +117,7 @@ export default function CfiScheduleManager() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [weekStart, setWeekStart] = useState(() => getWeekStart());
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const [access, setAccess] = useState<ScheduleAccess[]>([]);
   const [linkedCandidates, setLinkedCandidates] = useState<LinkedScheduleCandidate[]>([]);
   const [viewKey, setViewKey] = useState("cfi");
@@ -188,6 +189,11 @@ export default function CfiScheduleManager() {
   );
   const activeStudents = useMemo(() => cfiAccess.filter((item) => item.access_enabled), [cfiAccess]);
   const maxAvailabilityDate = localDateKey(addCalendarDays(new Date(), 27));
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function loadIdentityData() {
     if (!userId) return;
@@ -995,15 +1001,17 @@ export default function CfiScheduleManager() {
         {weekReady && !visibleDays.length ? <p className={styles.empty}>No upcoming lessons in this date range.</p> : null}
         {visibleDays.map((day) => {
           const date = localDateKey(day);
+          const isToday = date === localDateKey(currentTime);
           const dayEntries = visibleEntriesForDate(day);
-          return <section key={date} data-schedule-date={date} aria-label={formatDate(day)} className={`${styles.day} ${date === localDateKey(new Date()) ? styles.today : ""}`}>
+          return <section key={date} data-schedule-date={date} aria-label={formatDate(day)} className={`${styles.day} ${isToday ? styles.today : ""}`}>
             <div className={styles.dayHeader}>
-              <div className={styles.dayHeading}><span>{date === localDateKey(new Date()) ? "Today" : new Intl.DateTimeFormat(undefined,{weekday:"short"}).format(day)}</span><strong>{new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric"}).format(day)}</strong><small>{day.getFullYear()}</small></div>
+              <div className={styles.dayHeading}><span>{isToday ? "Today" : new Intl.DateTimeFormat(undefined,{weekday:"short"}).format(day)}</span><strong>{new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric"}).format(day)}</strong><small>{day.getFullYear()}</small></div>
               {isCfiView ? <ScheduleMenu label={`Add on ${date}`} icon="＋" disabled={!weekReady || saving} actions={[
                 { label: "Add lesson", disabled: !activeStudents.length, onSelect: () => openNewLesson(date) },
                 { label: "Aircraft unavailable", onSelect: () => openBlockDrawer(date) },
               ]} /> : null}
             </div>
+            {calendarView && isToday ? <div className={styles.nowIndicator} data-current-time role="status" aria-label={`Current time ${formatTime(currentTime.toISOString())}`}><span>{formatTime(currentTime.toISOString())}</span></div> : null}
             <div className={styles.dayEntries}>
               {!weekReady ? null : !isCfiView && studentTab === "availability" ? <button type="button" className={styles.availability} aria-label={`Edit availability on ${date}`} disabled={date < localDateKey(new Date()) || date > maxAvailabilityDate} onClick={() => openAvailabilityDrawer("date", 1, date)}>
                 {availabilityForDate({date:day,studentUserId:activeStudent?.student_user_id ?? userId,slots,overrideDates}).map((period) => `${formatTime(period.start.toISOString())}–${formatTime(period.end.toISOString())}`).join(", ") || "Not available"}
