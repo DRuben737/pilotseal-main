@@ -2127,15 +2127,16 @@ ${riskComments}
   return (
     <div className="flightbrief-body" ref={topRef}>
       <div className="flightbrief-header">
-        <div className="flightbrief-stepBadge">
-          Step {currentStep + 1} of {steps.length}
+        <div className="flightbrief-currentStep">
+          <h1>{steps[currentStep].title}</h1>
+        </div>
+        <div className="flightbrief-progressMeta">
+          <span>{currentStep + 1} of {steps.length}</span>
+          <span className="flightbrief-progressTrack" aria-hidden="true">
+            <span style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }} />
+          </span>
         </div>
       </div>
-      {session?.user?.id ? (
-        <p className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
-          Only completed Flight Briefs are retained. One record stays in your history and becomes visible automatically to every organization whose membership rules apply when it is completed.
-        </p>
-      ) : null}
       {recordStatus ? (
         <div className="mx-3 mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700" role="status" aria-live="polite">
           {recordStatus}
@@ -2204,8 +2205,6 @@ ${riskComments}
           </datalist>
           {currentStep === 0 && (
             <section className="flightbrief-panel">
-              <h2 className="text-xl font-bold mb-4">Flight Information</h2>
-
               <div className="flightbrief-mobile-settings">
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">People</h3>
@@ -2416,8 +2415,6 @@ ${riskComments}
 
           {currentStep === 1 && (
             <section className="flightbrief-panel">
-              <h2 className="text-xl font-bold mb-4">Aircraft</h2>
-
               {!aircraftId && !grossWeight ? (
                 <div className="copy-muted mb-3">
                   No aircraft loading data yet. Complete the aircraft section.
@@ -2507,8 +2504,6 @@ ${riskComments}
 
           {currentStep === 2 && (
             <section className="flightbrief-panel">
-              <h2 className="text-xl font-bold mb-4">Route & Lesson</h2>
-
               <div className="flightbrief-toggleRow">
                 <button type="button" className={`btn-toggle ${routeMode === "cross" ? "active" : ""}`} onClick={onSelectCross}>
                   Cross Country
@@ -2554,8 +2549,6 @@ ${riskComments}
 
           {currentStep === 3 && (
             <section className="flightbrief-panel">
-              <h2 className="text-xl font-bold mb-4">Weather & NOTAMs</h2>
-
               <div className="space-y-6">
           <div className="text-center" style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
             <button
@@ -3023,7 +3016,6 @@ ${riskComments}
 
           {currentStep === 4 && (
             <section className="flightbrief-panel">
-              <h2>Risk Assessment</h2>
               <div className="flightbrief-riskInstructions" aria-label="Flight risk assessment instructions">
                 <strong>Flight Risk Assessment Tool</strong>
                 <p>

@@ -250,7 +250,11 @@ export default function DashboardOverview() {
   }, [overview.defaultCfi, overview.medicalExpiry, overview.medicalLastExam, overview.notifications]);
 
   return (
-    <div className="space-y-4">
+    <div className="dashboard-unified-overview space-y-4">
+      <header className="dashboard-page-heading">
+        <h1>Dashboard</h1>
+        <p>Your schedule, people, aircraft, and records in one place.</p>
+      </header>
       {statusNote ? (
         <section className="border-b border-amber-200 bg-amber-50/70 py-4 text-sm text-amber-900">
           <p>{statusNote}</p>
@@ -264,11 +268,11 @@ export default function DashboardOverview() {
         <p className="mt-1 text-xs">{companyRequest.status === "pending" ? "The organization has not been created yet. You will be notified after a platform administrator reviews it." : companyRequest.review_reason || "Review completed."}</p>
       </section> : null}
 
-      <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
+      <section className="dashboard-overview-section rounded-[20px] border border-slate-200/80 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Personal features</h2>
-            <p className="mt-1 text-sm text-slate-500">Add only the workspace features you want to use.</p>
+            <h2 className="text-base font-semibold text-slate-900">Optional tools</h2>
+            <p className="mt-1 text-sm text-slate-500">Choose the additional tools you want to use.</p>
           </div>
           <QuickEditPopover
             open={customizingFeatures}
@@ -318,9 +322,9 @@ export default function DashboardOverview() {
       </section>
 
       <section className="grid items-start gap-4 lg:grid-cols-2">
-          <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
+          <section className="dashboard-overview-section rounded-[20px] border border-slate-200/80 bg-white p-4">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Notifications</h2>
+              <h2 className="text-base font-semibold text-slate-900">Updates</h2>
               <Link href="/dashboard/notifications" className="text-sm font-medium text-[var(--accent-strong)]">
                 View all
               </Link>
@@ -339,9 +343,9 @@ export default function DashboardOverview() {
             </div>
           </section>
 
-          <section className="rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
+          <section className="dashboard-overview-section rounded-[20px] border border-slate-200/80 bg-white p-4">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Quick Actions</h2>
+              <h2 className="text-base font-semibold text-slate-900">Quick actions</h2>
               <QuickEditPopover
                 open={customizingQuickActions}
                 onOpenChange={setQuickActionCustomizerOpen}

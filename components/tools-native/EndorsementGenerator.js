@@ -2018,7 +2018,6 @@ function EndorsementGenerator() {
         <div className={styles.workspace}>
           <section className={styles.mainPanel}>
             <div className={styles.modeSwitch} role="group" aria-label="Endorsement generator mode">
-              <span className={styles.mobileStepLabel}>1 Mode</span>
               <button
                 type="button"
                 className={generatorMode === 'customized' ? styles.modeSwitchActive : ''}
@@ -2037,28 +2036,10 @@ function EndorsementGenerator() {
               </button>
             </div>
 
-            <div className={styles.dataVersionNotice}>
-              <span>Template data: {templateDataVersion.source}</span>
-              <span>Source date: {templateDataVersion.sourceDate}</span>
-              <span>Updated: {templateDataVersion.updatedAt}</span>
-            </div>
-
-            <div className={styles.mobileWorkflowStatus} aria-label="Endorsement workflow status">
-              <span>{generatorMode === 'blank' ? 'Blank' : 'Custom'}</span>
-              <span>{selectedTemplates.length} selected</span>
-              <span>
-                {selectedTemplateFields.length > 0
-                  ? `${completedTemplateFieldCount}/${requiredTemplateFields.length} required`
-                  : 'No details'}
-              </span>
-              <span>{signaturePreviewDataUrl ? 'Signed' : 'No signature'}</span>
-            </div>
-
             <div className={styles.card}>
-              <p className={styles.mobileStepLabel}>2 Profiles</p>
               <div className={styles.sectionHeader}>
                 <div>
-                  <h2>{generatorMode === 'blank' ? 'Optional instructor details' : 'Information details(* required)'}</h2>
+                  <h2>{generatorMode === 'blank' ? 'Instructor' : 'People and certificates'}</h2>
                   {generatorMode === 'blank' ? (
                     <p className={styles.sectionCopy}>
                       Enter any instructor details you want to preprint. All other fields stay blank for handwriting.
@@ -2134,7 +2115,6 @@ function EndorsementGenerator() {
 
             {generatorMode === 'customized' && selectedTemplateFields.length > 0 ? (
               <div className={styles.card}>
-                <p className={styles.mobileStepLabel}>3 Details</p>
                 <div className={styles.sectionHeader}>
                   <div>
                     <h2>Template details</h2>
@@ -2164,7 +2144,6 @@ function EndorsementGenerator() {
             ) : null}
 
             <div className={styles.card}>
-              <p className={styles.mobileStepLabel}>4 Signature</p>
               <div className={styles.sectionHeader}>
                 <div>
                   <h2>Signature</h2>
@@ -2208,7 +2187,6 @@ function EndorsementGenerator() {
               />
 
               <div className={styles.actionRow}>
-                <span className={styles.mobileStepLabel}>5 Preview &amp; print</span>
                 <button className={styles.secondaryButton} onClick={handlePreview} type="button">
                   Preview
                 </button>
@@ -2223,14 +2201,20 @@ function EndorsementGenerator() {
               </div>
 
               <p className={styles.printHint}>
-                You can choose a print format after clicking Print: standard Letter paper or Avery 5163 labels.
-                {generatorMode === 'customized' && session?.user?.id
-                  ? ' Printing saves one record. Organization visibility is added automatically when current membership rules apply.'
-                  : ''}
+                Print on standard Letter paper or Avery 5163 labels.
               </p>
               {statusMessage ? <p className={styles.statusMessage}>{statusMessage}</p> : null}
               {errors.selectedTemplates ? <p className={styles.inlineError}>{errors.selectedTemplates}</p> : null}
             </div>
+
+            <details className={styles.dataVersionDetails}>
+              <summary>About template data</summary>
+              <div className={styles.dataVersionNotice}>
+                <span>{templateDataVersion.source}</span>
+                <span>Source date: {templateDataVersion.sourceDate}</span>
+                <span>Updated: {templateDataVersion.updatedAt}</span>
+              </div>
+            </details>
           </section>
         </div>
       </div>

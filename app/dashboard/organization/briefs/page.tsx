@@ -1,2 +1,2 @@
-import PreflightRecordsManager from "@/components/dashboard/PreflightRecordsManager";
-export default function Page() { return <PreflightRecordsManager organizationOnly />; }
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/records"); }

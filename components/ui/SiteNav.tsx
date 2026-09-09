@@ -7,6 +7,13 @@ import { useEffect, useState } from "react";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import UserMenu from "@/components/ui/UserMenu";
+import {
+  dashboardOrganizationNavigation,
+  dashboardPlatformNavigation,
+  dashboardPrimaryNavigation,
+  isDashboardDestinationActive,
+} from "@/lib/dashboard-navigation";
+import { fetchEnabledFeatureIds, type OptionalFeatureId } from "@/lib/dashboard-preferences";
 import { resolveDisplayIdentity } from "@/lib/identity";
 import { canManageOrganization } from "@/lib/organizations";
 import { fetchCurrentProfile } from "@/lib/profile";
@@ -22,11 +29,17 @@ const publicNavItems = [
 export default function SiteNav() {
   const pathname = usePathname();
   const { loading, session } = useAuthSession();
-  const { activeOrganization } = useOrganization();
+  const {
+    organizations,
+    activeOrganization,
+    activeOrganizationId,
+    setActiveOrganizationId,
+  } = useOrganization();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [defaultCfiName, setDefaultCfiName] = useState("");
   const [profileRole, setProfileRole] = useState("");
+  const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
 
   const isAuthenticated = Boolean(session?.user);
   const userEmail = session?.user?.email ?? "";
@@ -36,31 +49,16 @@ export default function SiteNav() {
     email: userEmail,
   });
   const inDashboard = pathname.startsWith("/dashboard");
-  const activeWorkspace = pathname.startsWith("/dashboard/admin")
-    ? "platform"
-    : pathname.startsWith("/dashboard/organization")
-      ? "organization"
-      : "personal";
-  const dashboardWorkspaces = [
-    { href: "/dashboard", label: "Personal", id: "personal", visible: true },
-    {
-      href: "/dashboard/organization/overview",
-      label: "Organization",
-      id: "organization",
-      visible: Boolean(
-        activeOrganization && (
-          canManageOrganization(activeOrganization.member_role)
-          || activeOrganization.teaching_role === "instructor"
-        )
-      ),
-    },
-    {
-      href: "/dashboard/admin/overview",
-      label: "Platform",
-      id: "platform",
-      visible: profileRole === "admin",
-    },
-  ].filter((workspace) => workspace.visible);
+  const canManage = canManageOrganization(activeOrganization?.member_role);
+  const canUseOrganizationTools = Boolean(
+    activeOrganization && (canManage || activeOrganization.teaching_role === "instructor")
+  );
+  const primaryDashboardItems = dashboardPrimaryNavigation.filter((item) => (
+    !item.featureId || enabledFeatureIds.includes(item.featureId)
+  ));
+  const organizationDashboardItems = dashboardOrganizationNavigation.filter((item) => (
+    canUseOrganizationTools && (item.access !== "organization-manager" || canManage)
+  ));
 
   useEffect(() => {
     let cancelled = false;
@@ -71,25 +69,29 @@ export default function SiteNav() {
           setDisplayName("");
           setDefaultCfiName("");
           setProfileRole("");
+          setEnabledFeatureIds([]);
         }
         return;
       }
 
       try {
-        const [profile, defaultCfi] = await Promise.all([
+        const [profile, defaultCfi, features] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchDefaultCfi(session.user.id),
+          fetchEnabledFeatureIds(session.user.id),
         ]);
         if (!cancelled) {
           setDisplayName(profile?.display_name ?? "");
           setDefaultCfiName(defaultCfi?.display_name ?? "");
           setProfileRole(profile?.role ?? "");
+          setEnabledFeatureIds(features);
         }
       } catch {
         if (!cancelled) {
           setDisplayName("");
           setDefaultCfiName("");
           setProfileRole("");
+          setEnabledFeatureIds([]);
         }
       }
     }
@@ -190,22 +192,84 @@ export default function SiteNav() {
             </Link>
           ) : (
             <div className="site-nav-mobile-account">
-              {inDashboard && dashboardWorkspaces.length > 1 ? (
-                <div className="site-nav-mobile-workspaces">
-                  <p>Workspace</p>
-                  <div>
-                    {dashboardWorkspaces.map((workspace) => (
-                      <Link
-                        key={workspace.id}
-                        href={workspace.href}
-                        className={`site-nav-link ${activeWorkspace === workspace.id ? "site-nav-link-active" : ""}`}
-                        aria-current={activeWorkspace === workspace.id ? "page" : undefined}
-                        onClick={() => setMobileOpen(false)}
-                      >
-                        {workspace.label}
-                      </Link>
-                    ))}
+              {inDashboard ? (
+                <div className="site-nav-mobile-dashboard">
+                  <div className="site-nav-mobile-group">
+                    <p>Dashboard</p>
+                    <div>
+                      {primaryDashboardItems.map((item) => {
+                        const active = isDashboardDestinationActive(pathname, item.href);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`site-nav-link ${active ? "site-nav-link-active" : ""}`}
+                            aria-current={active ? "page" : undefined}
+                            onClick={() => setMobileOpen(false)}
+                          >
+                            {item.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {organizationDashboardItems.length ? (
+                    <div className="site-nav-mobile-group">
+                      <div className="site-nav-mobile-group-heading">
+                        <p>Organization administration</p>
+                        {organizations.length > 1 ? (
+                          <select
+                            aria-label="Organization to manage"
+                            value={activeOrganizationId}
+                            onChange={(event) => setActiveOrganizationId(event.target.value)}
+                          >
+                            {organizations.map((organization) => (
+                              <option key={organization.id} value={organization.id}>{organization.name}</option>
+                            ))}
+                          </select>
+                        ) : activeOrganization ? <span>{activeOrganization.name}</span> : null}
+                      </div>
+                      <div>
+                        {organizationDashboardItems.map((item) => {
+                          const active = isDashboardDestinationActive(pathname, item.href);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              className={`site-nav-link ${active ? "site-nav-link-active" : ""}`}
+                              aria-current={active ? "page" : undefined}
+                              onClick={() => setMobileOpen(false)}
+                            >
+                              {item.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {profileRole === "admin" ? (
+                    <div className="site-nav-mobile-group">
+                      <p>Platform administration</p>
+                      <div>
+                        {dashboardPlatformNavigation.map((item) => {
+                          const active = isDashboardDestinationActive(pathname, item.href);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              className={`site-nav-link ${active ? "site-nav-link-active" : ""}`}
+                              aria-current={active ? "page" : undefined}
+                              onClick={() => setMobileOpen(false)}
+                            >
+                              {item.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <Link

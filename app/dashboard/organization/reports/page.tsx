@@ -1,6 +1,4 @@
-import { Suspense } from "react";
-
-import ReportsManager from "@/components/dashboard/ReportsManager";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Organization Safety Reports | PilotSeal",
@@ -9,15 +7,5 @@ export const metadata = {
 };
 
 export default function OrganizationReportsPage() {
-  return (
-    <Suspense
-      fallback={(
-        <section className="saas-panel">
-          <p className="saas-empty-state">Loading safety reports…</p>
-        </section>
-      )}
-    >
-      <ReportsManager />
-    </Suspense>
-  );
+  redirect("/dashboard/reports");
 }

@@ -1,4 +1,4 @@
-import OrganizationManager from "@/components/dashboard/OrganizationManager";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Organization | PilotSeal",
@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function DashboardOrganizationPage() {
-  return <OrganizationManager />;
+  redirect("/dashboard");
 }

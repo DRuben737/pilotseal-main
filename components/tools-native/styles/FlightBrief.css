@@ -76,21 +76,47 @@
 
 .flightbrief-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 1rem;
-  align-items: start;
-  margin-bottom: 0;
-  padding: 0 0.1rem;
+  align-items: end;
+  margin-bottom: 0.4rem;
+  padding: 0.2rem 0.1rem 0.55rem;
 }
 
-.flightbrief-stepBadge {
-  padding: 0.45rem 0.72rem;
+.flightbrief-currentStep h1 {
+  margin: 0;
+}
+
+.flightbrief-currentStep h1 {
+  color: #1d1d1f;
+  font-size: 1.55rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.flightbrief-progressMeta {
+  display: grid;
+  width: min(11rem, 38%);
+  gap: 0.4rem;
+  color: #6e6e73;
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.flightbrief-progressTrack {
+  display: block;
+  height: 3px;
+  overflow: hidden;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-weight: 700;
-  white-space: nowrap;
-  font-size: 0.84rem;
+  background: #d2d2d7;
+}
+
+.flightbrief-progressTrack > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #0066cc;
+  transition: width 180ms ease;
 }
 
 .flightbrief-stepper {
@@ -992,7 +1018,8 @@
   }
 
   .flightbrief-header {
-    align-items: center;
+    align-items: end;
+    padding: 0 0.15rem 0.65rem;
   }
 
   .flightbrief-mobile-settings {
@@ -1008,24 +1035,7 @@
   }
 
   .flightbrief-stepper {
-    gap: 0.35rem;
-    padding-inline: max(0.3rem, calc(50% - 3.55rem));
-  }
-
-  .flightbrief-step {
-    flex-basis: 7.1rem;
-    padding: 0.34rem 0.25rem;
-  }
-
-  .flightbrief-step strong {
-    font-size: 0.68rem;
-    line-height: 1.1;
-  }
-
-  .flightbrief-stepIndex {
-    width: 18px;
-    height: 18px;
-    font-size: 0.64rem;
+    display: none;
   }
 
   .flightbrief-nav {

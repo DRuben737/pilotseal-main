@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
+import DashboardOverview from "@/components/dashboard/DashboardOverview";
 
 export const metadata = {
-  title: "Schedule | PilotSeal",
-  description: "Open your personal schedule.",
+  title: "Dashboard | PilotSeal",
+  description: "View your schedule, records, people, aircraft, and organization activity.",
 };
 
 export default function DashboardPage() {
-  redirect("/dashboard/schedule");
+  return <DashboardOverview />;
 }

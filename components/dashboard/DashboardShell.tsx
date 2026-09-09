@@ -6,6 +6,13 @@ import { useEffect, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
+import {
+  dashboardOrganizationNavigation,
+  dashboardPlatformNavigation,
+  dashboardPrimaryNavigation,
+  isDashboardDestinationActive,
+  type DashboardNavItem,
+} from "@/lib/dashboard-navigation";
 import { resolveDisplayIdentity } from "@/lib/identity";
 import { fetchEnabledFeatureIds, type OptionalFeatureId } from "@/lib/dashboard-preferences";
 import { canManageOrganization } from "@/lib/organizations";
@@ -18,40 +25,12 @@ import {
   subscribeToNotificationChanges,
 } from "@/lib/notifications";
 
-const dashboardLinks = [
-  { href: "/dashboard/schedule", label: "Schedule", featureId: "cfi_schedule" as OptionalFeatureId },
-  { href: "/dashboard/my-aircraft", label: "My Aircraft" },
-  { href: "/dashboard/reports", label: "Safety Reports" },
-  { href: "/dashboard/saved-people", label: "People" },
-  { href: "/dashboard/records", label: "Records" },
-  { href: "/dashboard/notifications", label: "Notifications" },
-  { href: "/dashboard/account-settings", label: "Account" },
-];
-const organizationLinks = [
-  { href: "/dashboard/organization/overview", label: "Overview" },
-  { href: "/dashboard/organization/people", label: "People" },
-  { href: "/dashboard/organization/fleet", label: "Aircraft & Maintenance" },
-  { href: "/dashboard/organization/reports", label: "Safety Reports" },
-  { href: "/dashboard/organization/briefs", label: "Preflight Records" },
-  { href: "/dashboard/organization/endorsements", label: "Endorsements" },
-  { href: "/dashboard/organization/messages", label: "Messages" },
-  { href: "/dashboard/organization/audit", label: "Audit Log" },
-];
-const platformLinks = [
-  { href: "/dashboard/admin/overview", label: "Platform Overview" },
-  { href: "/dashboard/admin/access", label: "Organizations & Access" },
-  { href: "/dashboard/admin/aircraft", label: "Aircraft Library" },
-  { href: "/dashboard/admin/aircraft-assignments", label: "Aircraft Assignments" },
-  { href: "/dashboard/admin/endorsements", label: "Endorsement Approvals" },
-  { href: "/dashboard/admin/notifications", label: "Platform Notices" },
-  { href: "/dashboard/admin/audit", label: "Audit Log" },
-];
-
 function DashboardIcon({ kind }: { kind: string }) {
   const common = "h-[18px] w-[18px]";
 
   switch (kind) {
     case "Overview":
+    case "Dashboard":
     case "Platform Overview":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
@@ -62,6 +41,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "People":
+    case "Members":
     case "Organization":
     case "Organizations & Access":
       return (
@@ -126,6 +106,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Aircraft":
+    case "Fleet management":
     case "Aircraft & Maintenance":
     case "Aircraft Library":
     case "Aircraft Assignments":
@@ -136,6 +117,7 @@ function DashboardIcon({ kind }: { kind: string }) {
       );
     case "Endorsements":
     case "Endorsement Approvals":
+    case "Endorsement approvals":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M6 3.8h12v16.4H6z" />
@@ -316,44 +298,22 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     email: session?.user?.email,
   });
 
-  const workspace = pathname.startsWith("/dashboard/admin")
-    ? "platform"
-    : pathname.startsWith("/dashboard/organization")
-      ? "organization"
-      : "personal";
-  const visibleDashboardLinks = workspace === "platform"
-    ? platformLinks
-    : workspace === "organization"
-      ? organizationLinks
-      : dashboardLinks.filter((link) => !("featureId" in link) || !link.featureId || enabledFeatureIds.includes(link.featureId));
-  const workspaceLabel = workspace === "platform"
-    ? "Platform administration"
-    : workspace === "organization"
-      ? activeOrganization?.name ?? "Organization"
-      : "Personal workspace";
-  const workspaceSwitches = [
-    { href: "/dashboard", label: "Personal", icon: "Overview", visible: true },
-    {
-      href: "/dashboard/organization/overview",
-      label: "Organization",
-      icon: "Organization",
-      visible: Boolean(
-        activeOrganization && (
-          canManageOrganization(activeOrganization.member_role)
-          || activeOrganization.teaching_role === "instructor"
-        )
-      ),
-    },
-    {
-      href: "/dashboard/admin/overview",
-      label: "Platform",
-      icon: "Access",
-      visible: profileRole === "admin",
-    },
-  ].filter((item) => item.visible);
-  const isDashboardLinkActive = (href: string) =>
-    href === "/dashboard" ? pathname === "/dashboard" : pathname === href || pathname.startsWith(`${href}/`);
-  const mobileDashboardLinks = visibleDashboardLinks;
+  const canManage = canManageOrganization(activeOrganization?.member_role);
+  const canUseOrganizationTools = Boolean(
+    activeOrganization && (canManage || activeOrganization.teaching_role === "instructor")
+  );
+  const primaryLinks = dashboardPrimaryNavigation.filter((item) => (
+    !item.featureId || enabledFeatureIds.includes(item.featureId as OptionalFeatureId)
+  ));
+  const organizationLinks = dashboardOrganizationNavigation.filter((item) => (
+    canUseOrganizationTools && (item.access !== "organization-manager" || canManage)
+  ));
+  const platformLinks = profileRole === "admin" ? dashboardPlatformNavigation : [];
+  const navigationGroups: Array<{ label: string; links: DashboardNavItem[] }> = [
+    { label: "Dashboard", links: primaryLinks },
+    ...(organizationLinks.length ? [{ label: "Organization administration", links: organizationLinks }] : []),
+    ...(platformLinks.length ? [{ label: "Platform administration", links: platformLinks }] : []),
+  ];
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -379,7 +339,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <aside
                 className="dashboard-sidebar"
                 data-expanded={sidebarExpanded}
-                aria-label={`${workspaceLabel} sidebar`}
+                aria-label="Dashboard navigation"
                 onPointerEnter={() => setSidebarHovered(true)}
                 onPointerLeave={() => setSidebarHovered(false)}
                 onClickCapture={(event) => {
@@ -413,61 +373,36 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     </div>
                   </div>
 
-                  {workspaceSwitches.length > 1 ? (
-                    <div className="dashboard-workspace-switcher">
-                      <p className="dashboard-workspace-label">Workspace</p>
-                      <nav
-                        className="dashboard-workspace-grid"
-                        style={{
-                          gridTemplateColumns: `repeat(${workspaceSwitches.length}, minmax(0, 1fr))`,
-                        }}
-                        aria-label="Switch workspace"
-                      >
-                        {workspaceSwitches.map((item) => {
-                          const active = workspace === item.label.toLowerCase();
-                          return (
-                            <Link
-                              key={item.href}
-                              href={item.href}
-                              aria-label={`${item.label} workspace`}
-                              title={`${item.label} workspace`}
-                              className={`dashboard-workspace-link ${active ? "dashboard-workspace-link-active" : ""}`}
-                            >
-                              <DashboardIcon kind={item.icon} />
-                              <span>{item.label}</span>
-                            </Link>
-                          );
-                        })}
-                      </nav>
-                    </div>
-                  ) : null}
                 </header>
 
-                <nav aria-label={`${workspaceLabel} navigation`} className="dashboard-sidebar-nav">
-                  <p className="dashboard-sidebar-section-label">{workspaceLabel}</p>
-                  {visibleDashboardLinks.map((item) => {
-                    const active = isDashboardLinkActive(item.href);
-
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        aria-label={item.label}
-                        title={item.label}
-                        className={`dashboard-sidebar-link ${active ? "dashboard-sidebar-link-active" : ""}`}
-                      >
-                        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-                          <DashboardIcon kind={item.label} />
-                          {item.label === "Notifications" && unreadNotificationCount > 0 ? (
-                            <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
-                              {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                <nav aria-label="Dashboard navigation" className="dashboard-sidebar-nav">
+                  {navigationGroups.map((group) => (
+                    <div className="dashboard-sidebar-group" key={group.label}>
+                      <p className="dashboard-sidebar-section-label">{group.label}</p>
+                      {group.links.map((item) => {
+                        const active = isDashboardDestinationActive(pathname, item.href);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            aria-label={item.label}
+                            title={item.label}
+                            className={`dashboard-sidebar-link ${active ? "dashboard-sidebar-link-active" : ""}`}
+                          >
+                            <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                              <DashboardIcon kind={item.label} />
+                              {item.label === "Notifications" && unreadNotificationCount > 0 ? (
+                                <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
+                                  {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                                </span>
+                              ) : null}
                             </span>
-                          ) : null}
-                        </span>
-                        <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">{item.label}</span>
-                      </Link>
-                    );
-                  })}
+                            <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">{item.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </nav>
 
                 <footer className="dashboard-sidebar-footer">
@@ -502,50 +437,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </div>
 
             <div className="min-w-0 flex-1">
-              <section className="dashboard-mobile-top">
-                <div className="min-w-0">
-                  <p className="dashboard-mobile-kicker">{workspaceLabel}</p>
-                  <p className="dashboard-mobile-identity">{identityLabel}</p>
-                </div>
-                <Link
-                  href="/tools/endorsement-generator"
-                  className="dashboard-mobile-action"
-                >
-                  <DashboardIcon kind="new" />
-                  <span>New</span>
-                </Link>
-              </section>
-            <nav className="dashboard-bottom-nav" aria-label="Dashboard navigation">
-              {mobileDashboardLinks.map((item) => {
-                const active =
-                  item.href === "/dashboard"
-                    ? pathname === "/dashboard"
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`dashboard-bottom-nav-link relative ${
-                      active ? "dashboard-bottom-nav-link-active" : ""
-                    }`}
-                  >
-                    <DashboardIcon kind={item.label} />
-                    {item.label === "Notifications" && unreadNotificationCount > 0 ? (
-                      <span className="absolute right-2 top-1 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
-                        {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-                      </span>
-                    ) : null}
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-              {!organizationsLoading && organizations.length > 1 && (profileRole !== "admin" || workspace === "organization") ? (
-                <div className="mb-3 flex justify-end">
+              {!organizationsLoading && organizations.length > 1 && pathname.startsWith("/dashboard/organization") ? (
+                <div className="dashboard-organization-context">
+                  <span>Managing</span>
                   <select
                     aria-label="Current organization"
-                    className="h-9 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
                     value={activeOrganizationId}
                     onChange={(event) => setActiveOrganizationId(event.target.value)}
                   >

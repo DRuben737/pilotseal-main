@@ -65,8 +65,7 @@ try {
   const onboardingClient=createClient(status.API_URL,status.ANON_KEY ?? status.PUBLISHABLE_KEY,options);
   const onboardingAuth=unwrap(await onboardingClient.auth.signInWithPassword({email:onboardingEmail,password:onboardingPassword}));
   const {page:onboardingPage}=await contextFor(onboardingAuth.session);
-  await onboardingPage.goto(`${appUrl}/dashboard`);
-  await onboardingPage.waitForURL('**/dashboard/schedule');
+  await onboardingPage.goto(`${appUrl}/dashboard/schedule`);
   await onboardingPage.getByLabel('Schedule setup',{exact:true}).waitFor();
   await onboardingPage.getByText('Already have an instructor?',{exact:true}).waitFor();
   await onboardingPage.getByText('Set up your instructor information',{exact:true}).waitFor();

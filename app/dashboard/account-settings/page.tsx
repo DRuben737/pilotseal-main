@@ -1,4 +1,5 @@
 import AccountSettingsPanel from "@/components/dashboard/AccountSettingsPanel";
+import OrganizationMembershipSettings from "@/components/dashboard/OrganizationMembershipSettings";
 
 export const metadata = {
   title: "Account Settings | PilotSeal",
@@ -6,5 +7,5 @@ export const metadata = {
 };
 
 export default function DashboardAccountSettingsPage() {
-  return <AccountSettingsPanel />;
+  return <div className="grid gap-4"><AccountSettingsPanel /><OrganizationMembershipSettings /></div>;
 }

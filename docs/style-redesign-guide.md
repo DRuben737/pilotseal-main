@@ -5,9 +5,9 @@ This document is the decision source for the next PilotSeal style pass. Follow t
 ## Core Direction
 
 - Product feel: practical tool, not marketing landing page.
-- Visual model: simple, direct, mobile-first, close to the useful parts of `uitest-main/styles/22-feature-rich.html`.
+- Visual model: Apple-inspired application UI: quiet chrome, system typography, flat grouped surfaces, one blue action color, and strong progressive disclosure.
 - Do not restore decorative clutter. Images, previews, or illustrations are allowed only when they help a user choose or use a tool.
-- Keep mobile navigation as-is unless there is a functional bug.
+- Mobile uses the header hamburger as the only primary navigation. Do not add bottom, floating, or page-level duplicate navigation.
 - Preserve routes, auth behavior, dashboard data, tool logic, article/legal content, and SEO metadata.
 
 ## Final Decisions
@@ -18,9 +18,9 @@ This document is the decision source for the next PilotSeal style pass. Follow t
 | Homepage flow block | Delete `Today's flow` from the hero. |
 | Homepage tool cards | Show 3 core tool cards only. |
 | Tool page previews | Use the current online-version treatment for previews. |
-| Mobile spacing | Reduce section and card spacing by about 25%. |
+| Mobile spacing | Use an 8/12/16/24px rhythm with 16px page gutters. |
 | Card copy | Use title + one natural short line. Rewrite copy to fit naturally instead of truncating. |
-| Primary blue | Shift from bright blue toward a calmer slate-blue. |
+| Primary blue | Use one action blue (`#0066cc`) for interactive emphasis. |
 | Auth pages | Restore the current online desktop layout for login, register, and reset password. Keep mobile as the simple single-column form without illustration. |
 | Icons | Use the existing hand-written SVG style. Do not add a new icon dependency for this pass. |
 
@@ -45,7 +45,7 @@ This document is the decision source for the next PilotSeal style pass. Follow t
 
 ### Tools
 
-- Keep the page practical and scannable.
+- Keep the page practical and scannable. Mobile uses grouped list rows, not a marketing hero or gallery cards.
 - Use current online-version preview treatment as the reference.
 - If previews are rebuilt:
   - Use a low-height preview strip at the top of each card.
@@ -66,12 +66,10 @@ This document is the decision source for the next PilotSeal style pass. Follow t
 ### Dashboard, Read, Endorsements, Legal Pages
 
 - Keep the simple system:
-  - White cards.
-  - Small radius.
-  - Light border.
-  - Low shadow.
-  - Slate text.
-  - Slate-blue actions.
+  - White grouped surfaces on `#f5f5f7`.
+  - 12–18px radii and light hairlines.
+  - No decorative gradients or card shadows.
+  - Near-black text and one blue action color.
 - Reduce vertical rhythm on mobile by about 25%.
 - Do not delete functional data, article text, endorsement/legal references, or dashboard controls.
 
@@ -139,14 +137,14 @@ Use **Compact Admin Grid** for every Platform Admin and Organization Admin data-
 
 ## Visual Tokens
 
-- Background: light slate, close to `#f8fafc`.
+- Background: Apple-style neutral, `#f5f5f7`.
 - Surface: white.
-- Text: slate/navy, close to `#0f172a`.
-- Muted text: slate gray, close to `#64748b`.
-- Border: light slate, close to `#e2e8f0`.
-- Primary action: slate-blue, calmer than bright `#2563eb`.
+- Text: near-black `#1d1d1f`.
+- Muted text: `#6e6e73`.
+- Border: black at roughly 10% opacity.
+- Primary action: `#0066cc`.
 - Radius:
-  - Cards: small radius, around 10-12px.
+  - Cards and grouped lists: 12–18px.
   - Buttons: around 8-10px.
   - Avoid large pill shapes except where the existing navigation pattern requires them.
 - Shadow:
@@ -160,7 +158,9 @@ Use **Compact Admin Grid** for every Platform Admin and Organization Admin data-
 - No horizontal scroll.
 - No clipped text or clipped buttons.
 - Primary CTAs should fit full width when stacked.
-- Bottom nav remains visible and uses the current style.
+- The header hamburger is the sole mobile navigation entry point.
+- Do not render the full site footer on Dashboard, Tools, tool workflows, or auth pages.
+- Public pages use a compact mobile legal footer instead of the desktop sitemap.
 - Content should start higher and use tighter spacing than the reverted experiment.
 
 ## Copy Rules

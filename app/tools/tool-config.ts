@@ -7,38 +7,32 @@ export type ToolEmbedConfig = {
 export const toolEmbedConfig: Record<string, ToolEmbedConfig> = {
   "endorsement-generator": {
     title: "Endorsement Generator",
-    description:
-      "Generate FAA-style endorsement draft packets with searchable templates, signatures, and PDF export.",
+    description: "Create and print FAA-style endorsement packets.",
     eyebrow: "Most used",
   },
   "flight-brief": {
     title: "Flight Brief",
-    description:
-      "Review preflight workflow details, weather context, and planning notes in one place.",
+    description: "Build a briefing from route, aircraft, and weather details.",
     eyebrow: "Preflight",
   },
   "flight-computer": {
     title: "Flight Computer",
-    description:
-      "Compute wind correction, runway wind, time, fuel, and unit conversions in one cockpit-ready tool.",
+    description: "Run wind, time, fuel, and unit calculations.",
     eyebrow: "Performance",
   },
   wb: {
     title: "Weight & Balance",
-    description:
-      "Run loading scenarios and check envelope impact without leaving the main PilotSeal domain.",
+    description: "Check loading changes against the aircraft envelope.",
     eyebrow: "Safety",
   },
   nighttime: {
     title: "Night Time Calculator",
-    description:
-      "Calculate night periods and supporting timing details for training and currency use cases.",
+    description: "Calculate night periods for training and currency.",
     eyebrow: "Reference",
   },
   decoder: {
     title: "Aviation Decoder",
-    description:
-      "Decode METARs, TAFs, NOTAMs, and common aviation shorthand into a faster operational read.",
+    description: "Read METARs, TAFs, NOTAMs, and aviation shorthand.",
     eyebrow: "Weather",
   },
 };
