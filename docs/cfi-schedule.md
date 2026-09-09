@@ -64,7 +64,9 @@ marked manual. Availability changes never move or cancel published lessons;
 conflicts are shown to the student and CFI, with no notification to the CFI.
 
 Availability periods are at least two hours and support 00:00–24:00. The browser's
-time zone is used. Automatic scheduling generates Flight only. Before generation,
+time zone is used. Schedule date and time fields use the device's native pickers;
+an availability end time of 00:00 means midnight at the end of that day and is stored
+as 24:00. Automatic scheduling generates Flight only. Before generation,
 the instructor chooses the participating students and an exact number of new lessons
 for each. Defaults fill the student's general or week-specific goal after subtracting
 scheduled lessons already in the week; changing the number in the automatic scheduling

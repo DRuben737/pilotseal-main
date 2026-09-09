@@ -43,7 +43,10 @@ assert.equal(scheduleChanges(original, restored).length, 0);
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');
 const scheduleCompiled = ts.transpileModule(scheduleSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { getManualConflictWarnings, generateAutomaticSchedule } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
+const { availabilityEndToMinutes, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
+assert.equal(availabilityEndToMinutes('00:00'),1440,'native midnight end time saves as the end of the day');
+assert.equal(minutesToAvailabilityEnd(1440),'00:00','end-of-day availability loads into a valid native time input');
+assert.equal(availabilityEndToMinutes('18:30'),1110,'ordinary end times keep their minute value');
 const slots = [{ student_user_id:'a', scope:'weekly', weekday:1, start_minute:420, end_minute:900, timezone:'America/New_York' }];
 const aircraftBlock = { id:'resource', cfi_user_id:'cfi', start_at:a.start_at, end_at:a.end_at, note:'' };
 const warningInput = { studentUserId:'a', start:new Date(a.start_at), end:new Date(a.end_at), slots, overrideDates:[], blocks:[aircraftBlock] };

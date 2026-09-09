@@ -254,11 +254,18 @@ try {
   assert.equal(await studentPage.locator('[data-schedule-date]').count(),28,'more appends two weeks');
   await studentPage.getByLabel('Jump to date').fill(today);
   await studentPage.locator('[aria-label="Upcoming days"][aria-busy="false"]').waitFor();
+  await studentPage.setViewportSize({width:390,height:900});
   await studentPage.getByRole('button',{name:'Edit usual week',exact:true}).click();
   await studentPage.getByRole('button',{name:/^Monday/}).click();
   dialog=studentPage.getByRole('dialog');
   await dialog.getByRole('combobox').first().selectOption(String(base.getDay()||7));
   assert(await dialog.getByLabel('Auto-fill this weekday for 4 weeks').isChecked());
+  const availabilityPickers=dialog.locator('input[data-native-picker]');
+  assert.deepEqual(await availabilityPickers.evaluateAll(inputs=>inputs.map(input=>input.type)),['time','time'],'availability uses native mobile time pickers');
+  assert((await dialog.getByLabel('Start',{exact:true}).evaluate(input=>input.getBoundingClientRect().height))>=44,'time picker has a full touch target');
+  assert.equal(await dialog.getByLabel('End',{exact:true}).getAttribute('inputmode'),null,'end time no longer opens a numeric-only keyboard');
+  await dialog.getByRole('button',{name:'Available all day',exact:true}).click();
+  assert.equal(await dialog.getByLabel('End',{exact:true}).inputValue(),'00:00','all-day availability remains valid in a native time input');
   await dialog.getByLabel('Start',{exact:true}).fill('14:00');
   await dialog.getByLabel('End',{exact:true}).fill('18:00');
   await dialog.getByRole('button',{name:'Apply',exact:true}).click();

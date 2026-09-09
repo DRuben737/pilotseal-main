@@ -143,6 +143,14 @@ export function timeToMinutes(value: string) {
   return hours * 60 + minutes;
 }
 
+export function availabilityEndToMinutes(value: string) {
+  return value === "00:00" ? 1440 : timeToMinutes(value);
+}
+
+export function minutesToAvailabilityEnd(value: number) {
+  return value === 1440 ? "00:00" : minutesToTime(value);
+}
+
 function datePartsInZone(input: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,

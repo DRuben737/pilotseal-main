@@ -9,6 +9,7 @@ import ScheduleMenu from "./ScheduleMenu";
 import styles from "./CfiScheduleManager.module.css";
 import {
   addCalendarDays,
+  availabilityEndToMinutes,
   availabilityForDate,
   browserTimeZone,
   createUnavailableBlock,
@@ -28,6 +29,7 @@ import {
   grantScheduleAccess,
   localDateKey,
   minutesToTime,
+  minutesToAvailabilityEnd,
   publishScheduleDraft,
   removeDateAvailabilityOverride,
   removeWeekOverride,
@@ -79,6 +81,15 @@ function localDateTimeToIso(date: string, time: string, durationMin = 0) {
   const value = new Date(`${date}T${time}:00`);
   value.setMinutes(value.getMinutes() + durationMin);
   return value.toISOString();
+}
+
+function showNativePicker(input: HTMLInputElement) {
+  if (input.disabled) return;
+  try {
+    input.showPicker?.();
+  } catch {
+    // A normal click still opens the platform picker when showPicker is unavailable.
+  }
 }
 
 function formatDate(input: Date) {
@@ -437,7 +448,7 @@ export default function CfiScheduleManager() {
       )
     );
     setAvailabilityRows(current.length
-      ? current.map((slot) => ({ start: minutesToTime(slot.start_minute), end: minutesToTime(slot.end_minute) }))
+      ? current.map((slot) => ({ start: minutesToTime(slot.start_minute), end: minutesToAvailabilityEnd(slot.end_minute) }))
       : dateOverride ? [] : [{ start: "07:00", end: "15:00" }]);
     setDrawer("availability");
   }
@@ -446,7 +457,7 @@ export default function CfiScheduleManager() {
     const studentAccess = isCfiView ? cfiAccess.find((item) => item.student_user_id === availabilityStudentId) : studentViews.find((item) => item.cfi_user_id === activeCfiId);
     if (!studentAccess) return;
     const normalized = availabilityRows
-      .map((row) => ({ startMinute: timeToMinutes(row.start), endMinute: timeToMinutes(row.end) }));
+      .map((row) => ({ startMinute: timeToMinutes(row.start), endMinute: availabilityEndToMinutes(row.end) }));
     setSaving(true);
     setError("");
     try {
@@ -882,7 +893,7 @@ export default function CfiScheduleManager() {
           <button className={styles.weekArrow} type="button" aria-label="Previous week" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(addCalendarDays(new Date(`${selectedDate}T12:00:00`), -7)))}>‹</button>
           <label className={styles.datePicker}>
             <span>{new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${selectedDate}T12:00:00`))}</span>
-            <input type="date" aria-label="Jump to date" value={selectedDate} disabled={hasDraft || saving} onChange={(event) => jumpToDate(event.target.value)} />
+            <input className={styles.nativePicker} data-native-picker type="date" aria-label="Jump to date" value={selectedDate} disabled={hasDraft || saving} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => jumpToDate(event.target.value)} />
           </label>
           <button className={styles.weekArrow} type="button" aria-label="Next week" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(addCalendarDays(new Date(`${selectedDate}T12:00:00`), 7)))}>›</button>
         </div>
@@ -1017,17 +1028,18 @@ export default function CfiScheduleManager() {
         <div className="mb-3 flex gap-2"><button type="button" className={availabilityScope === "weekly" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("weekly", availabilityWeekday)}>Usual week</button><button type="button" className={availabilityScope === "date" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("date", 1, availabilityDate)}>Specific date</button></div>
         {availabilityScope === "weekly" ? <div className="mb-4 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={autofillDates} onChange={(event) => setAutofillDates(event.target.checked)} />Auto-fill this weekday for 4 weeks</label><p className="mt-2 text-xs text-slate-600">{fillCandidates.map((date) => formatDate(date)).join(" · ")}</p><p className="mt-1 text-xs text-slate-600">{preservedDates.length} individually edited date(s) stay unchanged. To fill all weekdays together, use Auto-fill next 4 weeks in your weekly pattern.</p></div> : <p className="mb-3 text-xs text-slate-500">Saving this date makes it a personal exception; future auto-fill will not overwrite it.</p>}
         <div className="grid gap-4">
-          {availabilityScope === "weekly" ? <label className="saas-field"><span>Weekday</span><select value={availabilityWeekday} onChange={(event) => { const day = Number(event.target.value); setAvailabilityWeekday(day); openAvailabilityDrawer("weekly", day); }}>{weekdayLabels.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select></label> : <label className="saas-field"><span>Date</span><input type="date" min={localDateKey(new Date())} max={maxAvailabilityDate} value={availabilityDate} onChange={(event) => openAvailabilityDrawer("date", 1, event.target.value)} /></label>}
-          {availabilityRows.map((row, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"><label className="saas-field"><span>Start</span><input type="time" value={row.start} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, start: event.target.value } : item))} /></label><label className="saas-field"><span>End</span><input type="text" inputMode="numeric" placeholder="HH:MM (24:00 = midnight)" value={row.end} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, end: event.target.value } : item))} /></label><button className="ghost-button" type="button" onClick={() => setAvailabilityRows((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}
+          {availabilityScope === "weekly" ? <label className="saas-field"><span>Weekday</span><select value={availabilityWeekday} onChange={(event) => { const day = Number(event.target.value); setAvailabilityWeekday(day); openAvailabilityDrawer("weekly", day); }}>{weekdayLabels.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select></label> : <label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" min={localDateKey(new Date())} max={maxAvailabilityDate} value={availabilityDate} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => openAvailabilityDrawer("date", 1, event.target.value)} /></label>}
+          {availabilityRows.map((row, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={row.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, start: event.target.value } : item))} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={row.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, end: event.target.value } : item))} /></label><button className="ghost-button" type="button" onClick={() => setAvailabilityRows((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}
+          <p className="text-xs text-slate-500">Tap a field to use your phone’s time picker. For availability through the end of the day, choose 00:00 as the end time.</p>
           <button className="secondary-button justify-self-start" type="button" onClick={() => setAvailabilityRows((current) => [...current, { start: "07:00", end: "15:00" }])}>＋ Add period</button>
-          <button className="ghost-button justify-self-start" type="button" onClick={() => setAvailabilityRows([{ start: "00:00", end: "24:00" }])}>Available all day</button>
+          <button className="ghost-button justify-self-start" type="button" onClick={() => setAvailabilityRows([{ start: "00:00", end: "00:00" }])}>Available all day</button>
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2">{availabilityScope === "date" && overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === availabilityDate) ? <button className="ghost-button" type="button" disabled={saving} onClick={() => void clearDateOverride()}>Use general rule</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAvailability()}>{saving ? "Saving…" : "Apply"}</button></div>
       </DetailDrawer>
 
       <DetailDrawer open={drawer === "lesson"} onClose={() => setDrawer(null)} title={lesson.id ? "Edit lesson draft" : "Add lesson draft"} description="Moving any lesson within its day moves all later lessons by the same amount. Review the times below. Nothing is published until you confirm the full draft.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
-        <div className="grid gap-4"><label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input type="date" value={lesson.date} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input type="time" step={900} value={lesson.start} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind })); }}><option value="flight">Flight</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div><label className="saas-field"><span>Note</span><textarea rows={3} maxLength={500} value={lesson.note} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, note: event.target.value })); }} /></label>{previewChanges.length ? <div><p className="mb-2 text-sm font-semibold">Changes in this edit · {previewChanges.length} lesson(s)</p>{renderChangePreview(previewChanges, lessonPreviewEntries)}</div> : null}{lessonWarnings.length ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Conflict warning</p><ul className="mt-1 list-disc pl-5">{lessonWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}</div>
+        <div className="grid gap-4"><label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={lesson.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" step={900} value={lesson.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind })); }}><option value="flight">Flight</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div><label className="saas-field"><span>Note</span><textarea rows={3} maxLength={500} value={lesson.note} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, note: event.target.value })); }} /></label>{previewChanges.length ? <div><p className="mb-2 text-sm font-semibold">Changes in this edit · {previewChanges.length} lesson(s)</p>{renderChangePreview(previewChanges, lessonPreviewEntries)}</div> : null}{lessonWarnings.length ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Conflict warning</p><ul className="mt-1 list-disc pl-5">{lessonWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}</div>
         <div className="mt-5 flex flex-wrap justify-end gap-2">{lesson.id ? <button className="danger-button mr-auto" type="button" onClick={() => setCancelLessonId(lesson.id)}>Cancel lesson</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Close</button><button className="primary-button" type="button" disabled={saving || !lesson.studentUserId} onClick={() => void saveLesson(lessonWarnings.length > 0)}>{lessonWarnings.length ? "Add to draft anyway" : "Add changes to draft"}</button></div>
       </DetailDrawer>
 
@@ -1103,7 +1115,7 @@ function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => v
 }
 
 function BlockForm({ value, onChange }: { value: { date: string; start: string; end: string; note: string }; onChange: (value: { date: string; start: string; end: string; note: string }) => void }) {
-  return <div className="grid gap-3"><div className="grid grid-cols-2 gap-3"><label className="saas-field col-span-2"><span>Date</span><input type="date" value={value.date} onChange={(event) => onChange({ ...value, date: event.target.value })} /></label><label className="saas-field"><span>Start</span><input type="time" value={value.start} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label><label className="saas-field"><span>End</span><input type="time" value={value.end} onChange={(event) => onChange({ ...value, end: event.target.value })} /></label></div><label className="saas-field"><span>Reason (optional)</span><input maxLength={300} value={value.note} placeholder="Reserved, maintenance, or other" onChange={(event) => onChange({ ...value, note: event.target.value })} /></label></div>;
+  return <div className="grid gap-3"><div className="grid grid-cols-2 gap-3"><label className="saas-field col-span-2"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={value.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, date: event.target.value })} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={value.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={value.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, end: event.target.value })} /></label></div><label className="saas-field"><span>Reason (optional)</span><input maxLength={300} value={value.note} placeholder="Reserved, maintenance, or other" onChange={(event) => onChange({ ...value, note: event.target.value })} /></label></div>;
 }
 
 function BlockList({ blocks, onDelete }: { blocks: UnavailableBlock[]; onDelete: (id: string) => void }) {
