@@ -778,7 +778,7 @@ export default function CfiScheduleManager() {
       const existingFlight = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === student.student_user_id && entry.lesson_kind === "flight" && localDateKey(new Date(entry.start_at)) >= localDateKey(weekStart) && localDateKey(new Date(entry.start_at)) < localDateKey(addCalendarDays(weekStart, 7))).length;
       return { studentUserId: student.student_user_id, flightSessions: target, groundSessions: 0, selected: existingFlight < target };
     }));
-    setSelectedAircraftIds(aircraft.map((item) => item.id));
+    setSelectedAircraftIds([]);
     setEditingBlockId("");
     setBlockForm({ date: localDateKey(weekStart), start: "07:00", end: "09:00", note: "", aircraftId: "" });
     setDrawer("auto");

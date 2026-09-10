@@ -66,7 +66,7 @@ try{
   await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
   await page.getByRole('menuitem',{name:'Auto schedule',exact:true}).click();
   const auto=page.getByRole('dialog',{name:'Automatic scheduling',exact:true});
-  assert(await auto.getByRole('checkbox',{name:/N000PS/}).isChecked(),'available aircraft are selected for the run');
+  assert.equal(await auto.getByRole('checkbox',{name:/N000PS/}).isChecked(),false,'aircraft are not preselected for an automatic-schedule run');
   assert.equal(await auto.getByLabel('Flight lessons for Aircraft UI Student').count(),1);
   assert.equal(await auto.getByLabel('Ground lessons for Aircraft UI Student').count(),1);
   await context.close();
