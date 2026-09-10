@@ -135,6 +135,7 @@ Deno.serve(async (request) => {
     displayName?: string;
     teachingRole?: string;
     assignedInstructorUserId?: string | null;
+    savedPersonId?: string | null;
   };
   try {
     body = await request.json();
@@ -147,6 +148,7 @@ Deno.serve(async (request) => {
   const displayName = body.displayName?.trim() || "";
   const teachingRole = body.teachingRole?.trim().toLowerCase() || "";
   const assignedInstructorUserId = body.assignedInstructorUserId?.trim() || null;
+  const savedPersonId = body.savedPersonId?.trim() || null;
   if (!organizationId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
     return jsonResponse({ error: "A valid organization is required." }, 400);
   }
@@ -165,6 +167,12 @@ Deno.serve(async (request) => {
   if (teachingRole === "instructor" && assignedInstructorUserId) {
     return jsonResponse({ error: "Only student invitations can assign an instructor." }, 400);
   }
+  if (savedPersonId && !savedPersonId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
+    return jsonResponse({ error: "Select a valid Saved People student." }, 400);
+  }
+  if (teachingRole !== "student" && savedPersonId) {
+    return jsonResponse({ error: "Only student invitations can reuse Saved People." }, 400);
+  }
 
   const authenticatedClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authorization } },
@@ -180,13 +188,14 @@ Deno.serve(async (request) => {
   }
 
   const { data: invitationRows, error: invitationError } = await authenticatedClient.rpc(
-    "create_organization_member_invitation_v2",
+    "create_organization_member_invitation_v3",
     {
       p_organization_id: organizationId,
       p_email: email,
       p_display_name: displayName || null,
       p_teaching_role: teachingRole,
       p_assigned_instructor_user_id: assignedInstructorUserId,
+      p_existing_saved_person_id: savedPersonId,
       p_internal_id: null,
       p_notes: null,
     },

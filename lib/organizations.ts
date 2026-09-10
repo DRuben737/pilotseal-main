@@ -237,6 +237,7 @@ export async function createOrganizationMemberInvitation(input: {
   displayName: string;
   teachingRole: OrganizationTeachingRole;
   assignedInstructorUserId: string | null;
+  savedPersonId?: string | null;
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.functions.invoke("organization-invitation-email", {
@@ -246,6 +247,7 @@ export async function createOrganizationMemberInvitation(input: {
       displayName: input.displayName.trim(),
       teachingRole: input.teachingRole,
       assignedInstructorUserId: input.assignedInstructorUserId,
+      savedPersonId: input.savedPersonId ?? null,
     },
   });
   if (error) throw error;

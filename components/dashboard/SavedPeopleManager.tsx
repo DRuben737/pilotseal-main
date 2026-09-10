@@ -31,6 +31,7 @@ import {
   fetchSavedPersonAccountLinkRequests,
   fetchSavedPeople,
   formatUsDateInput,
+  mergeSavedPersonDuplicate,
   requestSavedPersonAccountLink,
   respondSavedPersonAccountLinkRequest,
   unlinkSavedPersonAccount,
@@ -373,6 +374,8 @@ export default function SavedPeopleManager() {
   const [search, setSearch] = useState("");
   const [linkingPersonId, setLinkingPersonId] = useState<string | null>(null);
   const [linkEmailDrafts, setLinkEmailDrafts] = useState<Record<string, string>>({});
+  const [mergingPersonId, setMergingPersonId] = useState<string | null>(null);
+  const [mergeTargetPersonId, setMergeTargetPersonId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -612,6 +615,29 @@ export default function SavedPeopleManager() {
       setStatus("Student identity link removed.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to unlink this student identity.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleMergeDuplicate(person: SavedPerson) {
+    const keepPerson = people.find((candidate) => candidate.id === mergeTargetPersonId);
+    if (!keepPerson) {
+      setStatus("Select the original Saved People record to keep.");
+      return;
+    }
+    if (!window.confirm(`Merge the linked ${person.display_name} entry into ${keepPerson.display_name}? The original record will be kept and this duplicate will be removed.`)) return;
+
+    setSaving(true);
+    setStatus("");
+    try {
+      await mergeSavedPersonDuplicate(keepPerson.id, person.id);
+      setMergingPersonId(null);
+      setMergeTargetPersonId("");
+      await refreshPeople();
+      setStatus(`${keepPerson.display_name} now contains the linked account and all related records.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to merge these student records.");
     } finally {
       setSaving(false);
     }
@@ -1129,6 +1155,11 @@ export default function SavedPeopleManager() {
           const accountLink = accountLinksByPerson.get(person.id) ?? null;
           const endorsementPerson = endorsementPeopleByPerson.get(person.id) ?? null;
           const outgoingRequest = outgoingRequestsByPerson.get(person.id) ?? null;
+          const mergeCandidates = people.filter((candidate) => (
+            candidate.id !== person.id
+            && candidate.role === "student"
+            && !accountLinksByPerson.has(candidate.id)
+          ));
 
           return (
             <div key={person.id} className="people-row-group">
@@ -1272,14 +1303,39 @@ export default function SavedPeopleManager() {
                       </p>
                     </div>
                     {accountLink ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={saving}
-                        onClick={() => void handleUnlinkAccount(person)}
-                      >
-                        Unlink
-                      </button>
+                      <div className="people-account-link-form">
+                        {mergingPersonId === person.id ? (
+                          <>
+                            <label className="saas-field">
+                              <span>Original Saved People record</span>
+                              <select value={mergeTargetPersonId} onChange={(event) => setMergeTargetPersonId(event.target.value)}>
+                                <option value="">Select the record to keep</option>
+                                {mergeCandidates.map((candidate) => (
+                                  <option key={candidate.id} value={candidate.id}>
+                                    {candidate.display_name}{candidate.cert_number ? ` · ${candidate.cert_number}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="saas-inline-actions">
+                              <button type="button" className="primary-button" disabled={saving || !mergeTargetPersonId} onClick={() => void handleMergeDuplicate(person)}>Merge</button>
+                              <button type="button" className="secondary-button" disabled={saving} onClick={() => { setMergingPersonId(null); setMergeTargetPersonId(""); }}>Cancel</button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="saas-inline-actions">
+                            {mergeCandidates.length ? <button type="button" className="secondary-button" disabled={saving} onClick={() => { setMergingPersonId(person.id); setMergeTargetPersonId(""); }}>Merge duplicate</button> : null}
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              disabled={saving}
+                              onClick={() => void handleUnlinkAccount(person)}
+                            >
+                              Unlink
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ) : outgoingRequest ? (
                       <button
                         type="button"

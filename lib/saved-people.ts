@@ -345,6 +345,19 @@ export async function unlinkSavedPersonAccount(personId: string) {
   if (error) throw error;
 }
 
+export async function mergeSavedPersonDuplicate(
+  keepSavedPersonId: string,
+  removeSavedPersonId: string,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("merge_saved_person_duplicate", {
+    p_keep_saved_person_id: keepSavedPersonId,
+    p_remove_saved_person_id: removeSavedPersonId,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
 export async function fetchDefaultCfi(userId: string) {
   const supabase = getSupabaseClient();
 

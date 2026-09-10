@@ -61,6 +61,7 @@ import {
   StatusBadge,
 } from "@/components/admin/AdminConsole";
 import { formatUsMonthYear } from "@/lib/date-format";
+import { fetchSavedPeople, type SavedPerson } from "@/lib/saved-people";
 
 export type OrganizationManagerView = "overview" | "people" | "fleet" | "endorsements";
 type FleetWorkspace = "aircraft" | "records" | "models" | "inspections";
@@ -226,6 +227,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [memberFormalName, setMemberFormalName] = useState("");
   const [inviteTeachingRole, setInviteTeachingRole] = useState<OrganizationTeachingRole>("student");
   const [inviteInstructorUserId, setInviteInstructorUserId] = useState("");
+  const [inviteSavedPersonId, setInviteSavedPersonId] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [inviteRecipient, setInviteRecipient] = useState("");
   const [inviteEmailSent, setInviteEmailSent] = useState(false);
@@ -233,6 +235,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [organizationPeople, setOrganizationPeople] = useState<OrganizationPerson[]>([]);
   const [memberInvitations, setMemberInvitations] = useState<OrganizationMemberInvitation[]>([]);
+  const [ownSavedStudents, setOwnSavedStudents] = useState<SavedPerson[]>([]);
   const [editingPersonId, setEditingPersonId] = useState("");
   const [personDraft, setPersonDraft] = useState({
     displayName: "",
@@ -293,6 +296,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setMembers([]);
       setOrganizationPeople([]);
       setMemberInvitations([]);
+      setOwnSavedStudents([]);
       setAircraft([]);
       setLoading(false);
       return;
@@ -301,18 +305,20 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
     setLoading(true);
     setStatus("");
     try {
-      const [aircraftList, modelList, memberList, peopleList, invitationList] = await Promise.all([
+      const [aircraftList, modelList, memberList, peopleList, invitationList, savedPeopleList] = await Promise.all([
         fetchOrganizationAircraft(activeOrganization.id),
         fetchAircraftModels(activeOrganization.id),
         canEditStudents ? fetchOrganizationMembers(activeOrganization.id) : Promise.resolve([]),
         canEditStudents ? fetchOrganizationPeople(activeOrganization.id) : Promise.resolve([]),
         canManageMembers ? fetchOrganizationMemberInvitations(activeOrganization.id) : Promise.resolve([]),
+        session?.user?.id ? fetchSavedPeople(session.user.id) : Promise.resolve([]),
       ]);
       setAircraft(aircraftList);
       setModels(modelList);
       setMembers(memberList);
       setOrganizationPeople(peopleList);
       setMemberInvitations(invitationList);
+      setOwnSavedStudents(savedPeopleList.filter((person) => person.role === "student"));
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to load organization data."));
     } finally {
@@ -323,13 +329,14 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   useEffect(() => {
     void loadOrganizationData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOrganization?.id, canEditStudents, canManageMembers]);
+  }, [activeOrganization?.id, canEditStudents, canManageMembers, session?.user?.id]);
 
   function openInviteDrawer() {
     setMemberEmail("");
     setMemberFormalName("");
     setInviteTeachingRole("student");
     setInviteInstructorUserId(organizationInstructors[0]?.user_id || "");
+    setInviteSavedPersonId("");
     setInviteLink("");
     setInviteRecipient("");
     setInviteEmailSent(false);
@@ -350,6 +357,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         assignedInstructorUserId: inviteTeachingRole === "student"
           ? inviteInstructorUserId || null
           : null,
+        savedPersonId: inviteTeachingRole === "student" && inviteInstructorUserId === session?.user?.id
+          ? inviteSavedPersonId || null
+          : null,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
       const nextInviteLink = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
@@ -360,6 +370,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       setMemberFormalName("");
       setInviteTeachingRole("student");
       setInviteInstructorUserId("");
+      setInviteSavedPersonId("");
       const [nextMembers, nextPeople, nextInvitations] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
@@ -403,6 +414,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
         teachingRole: person.teaching_role || "student",
         assignedInstructorUserId: person.teaching_role === "student"
           ? previousInvitation?.assigned_instructor_user_id || null
+          : null,
+        savedPersonId: person.teaching_role === "student"
+          ? previousInvitation?.assigned_saved_person_id || null
           : null,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
@@ -1833,12 +1847,15 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               </div>
             ) : <form className="grid gap-4" onSubmit={handleAddMember}>
               <label className="grid gap-1 text-xs font-semibold text-slate-700">Email<input autoFocus required type="email" aria-label="Email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950" placeholder="person@example.com" /></label>
-              <label className="grid gap-1 text-xs font-semibold text-slate-700">Teaching role<select required aria-label="Teaching role" value={inviteTeachingRole} onChange={(event) => { const nextRole = event.target.value as OrganizationTeachingRole; setInviteTeachingRole(nextRole); if (nextRole === "instructor") setInviteInstructorUserId(""); else if (!inviteInstructorUserId) setInviteInstructorUserId(organizationInstructors[0]?.user_id || ""); }} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950"><option value="student">Student</option><option value="instructor">Instructor</option></select></label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-700">Teaching role<select required aria-label="Teaching role" value={inviteTeachingRole} onChange={(event) => { const nextRole = event.target.value as OrganizationTeachingRole; setInviteTeachingRole(nextRole); setInviteSavedPersonId(""); if (nextRole === "instructor") setInviteInstructorUserId(""); else if (!inviteInstructorUserId) setInviteInstructorUserId(organizationInstructors[0]?.user_id || ""); }} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950"><option value="student">Student</option><option value="instructor">Instructor</option></select></label>
               {inviteTeachingRole === "student" ? <>
-                <label className="grid gap-1 text-xs font-semibold text-slate-700">Student formal name<input required type="text" aria-label="Student formal name" value={memberFormalName} onChange={(event) => setMemberFormalName(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950" placeholder="Name used on endorsements" /></label>
-                <label className="grid gap-1 text-xs font-semibold text-slate-700">Assigned instructor<select required aria-label="Assigned instructor" value={inviteInstructorUserId} onChange={(event) => setInviteInstructorUserId(event.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950"><option value="">Select instructor</option>{organizationInstructors.map((instructor) => <option key={instructor.user_id} value={instructor.user_id}>{instructor.display_name || instructor.email}</option>)}</select></label>
+                {inviteInstructorUserId === session?.user?.id && ownSavedStudents.length ? (
+                  <label className="grid gap-1 text-xs font-semibold text-slate-700">Existing Saved People record<select aria-label="Existing Saved People record" value={inviteSavedPersonId} onChange={(event) => { const personId = event.target.value; setInviteSavedPersonId(personId); const selected = ownSavedStudents.find((person) => person.id === personId); if (selected) setMemberFormalName(selected.display_name); }} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950"><option value="">Create a new student profile</option>{ownSavedStudents.map((person) => <option key={person.id} value={person.id}>{person.display_name}{person.cert_number ? ` · ${person.cert_number}` : ""}</option>)}</select></label>
+                ) : null}
+                <label className="grid gap-1 text-xs font-semibold text-slate-700">Student formal name<input required readOnly={Boolean(inviteSavedPersonId)} type="text" aria-label="Student formal name" value={memberFormalName} onChange={(event) => setMemberFormalName(event.target.value)} className={`h-9 rounded-md border border-slate-300 px-3 text-sm font-normal text-slate-950 ${inviteSavedPersonId ? "bg-slate-100" : "bg-white"}`} placeholder="Name used on endorsements" /></label>
+                <label className="grid gap-1 text-xs font-semibold text-slate-700">Assigned instructor<select required aria-label="Assigned instructor" value={inviteInstructorUserId} onChange={(event) => { setInviteInstructorUserId(event.target.value); setInviteSavedPersonId(""); }} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950"><option value="">Select instructor</option>{organizationInstructors.map((instructor) => <option key={instructor.user_id} value={instructor.user_id}>{instructor.display_name || instructor.email}</option>)}</select></label>
                 {!organizationInstructors.length ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Set at least one linked organization member’s teaching role to Instructor before inviting a student.</p> : null}
-                <p className="text-xs text-slate-600">This formal name becomes the instructor’s Saved People record. The student account nickname is never used on endorsements.</p>
+                <p className="text-xs text-slate-600">{inviteSavedPersonId ? "The formal name comes from the selected Saved People record." : "This formal name becomes the instructor’s Saved People record."} The student account nickname is never used on endorsements.</p>
               </> : <p className="text-xs text-slate-600">The invited account will join as an organization instructor after accepting the verified invitation.</p>}
               <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving || (inviteTeachingRole === "student" && (!memberFormalName.trim() || !inviteInstructorUserId))}>{saving ? "Sending…" : "Send invitation"}</CompactButton></div>
             </form>}
