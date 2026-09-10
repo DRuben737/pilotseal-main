@@ -67,7 +67,13 @@ assert.equal(selective.drafts.length,2,'the requested number controls additions 
 assert(selective.drafts.every(draft=>draft.student_user_id==='b'),'only selected students are scheduled');
 assert.deepEqual(new Set(selective.drafts.map(draft=>draft.lesson_kind)),new Set(['flight','ground']),'Flight and Ground counts are independent');
 const explicitAdditions=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[a],requests:[{studentUserId:'a',flightSessions:2,groundSessions:0}]});
-assert.equal(explicitAdditions.drafts.length,2,'an explicit request adds the chosen count even when a lesson already exists');
+assert.equal(explicitAdditions.drafts.length,1,'a weekly Flight total subtracts the student\'s existing Flight lesson');
+const metTarget=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[a],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0}]});
+assert.equal(metTarget.drafts.length,0,'no duplicate is added when the weekly Flight total is already met');
+const existingGround={...a,id:'ground-a',lesson_kind:'ground',aircraft_id:null,aircraft_tail_number:null};
+const separateKinds=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[a,existingGround],requests:[{studentUserId:'a',flightSessions:2,groundSessions:2}]});
+assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='flight').length,1,'existing Flight is deducted only from the Flight total');
+assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='ground').length,1,'existing Ground is deducted only from the Ground total');
 const cancelledEntry={...a,status:'cancelled'};
 const ignoresCancelled=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[cancelledEntry],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0}]});
 assert.equal(ignoresCancelled.drafts[0].start_at,new Date(a.start_at).toISOString(),'cancelled lessons do not consume time or weekly counts');
@@ -75,4 +81,4 @@ const unavailable=generateAutomaticSchedule({...autoInput,slots:[],blocks:[],req
 assert.equal(unavailable.studentUserId,'a');
 assert.equal(unavailable.scheduled,0);
 assert.match(unavailable.reason,/No availability/);
-console.log('Automatic scheduling assertions passed, including selection, exact counts, cancellation, Flight blocks, and Ground independence.');
+console.log('Automatic scheduling assertions passed, including weekly totals, existing lessons, cancellation, Flight blocks, and Ground independence.');

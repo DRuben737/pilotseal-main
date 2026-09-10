@@ -717,12 +717,18 @@ export function generateAutomaticSchedule(input: {
     );
     const existingCount = input.existingEntries.filter(
       (entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id
+        && consideredDates.some((date) => localDateKey(new Date(entry.start_at)) === localDateKey(date))
+    ).length;
+    const existingByKind = (lessonKind: LessonKind) => input.existingEntries.filter(
+      (entry) => entry.entry_type === "lesson" && entry.status === "scheduled"
+        && entry.student_user_id === access.student_user_id && entry.lesson_kind === lessonKind
+        && consideredDates.some((date) => localDateKey(new Date(entry.start_at)) === localDateKey(date))
     ).length;
     const fallback = Math.max(0, (override?.target_sessions ?? access.default_weekly_sessions) - existingCount);
     const counts: Array<{ lessonKind: LessonKind; requested: number }> = request
       ? [
-          { lessonKind: "flight", requested: Math.max(0, Math.min(14, Math.floor(request.flightSessions || 0))) },
-          { lessonKind: "ground", requested: Math.max(0, Math.min(14, Math.floor(request.groundSessions || 0))) },
+          { lessonKind: "flight", requested: Math.max(0, Math.min(14, Math.floor(request.flightSessions || 0)) - existingByKind("flight")) },
+          { lessonKind: "ground", requested: Math.max(0, Math.min(14, Math.floor(request.groundSessions || 0)) - existingByKind("ground")) },
         ]
       : [{ lessonKind: "flight", requested: fallback }];
     const usedDays = usedDaysByStudent.get(access.student_user_id) ?? new Set(
