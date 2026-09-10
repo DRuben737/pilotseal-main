@@ -46,7 +46,6 @@ try{
   const page=await context.newPage();
   await page.goto(`${appUrl}/dashboard/schedule`);
   await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
-  await page.locator('[data-current-time]').waitFor();
   await page.getByLabel('Jump to date').fill(date);
   await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
   await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
