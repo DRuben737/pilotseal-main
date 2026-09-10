@@ -758,18 +758,17 @@ export function generateAutomaticSchedule(input: {
       .map((draft) => ({ start: new Date(draft.start_at), end: new Date(draft.end_at), studentUserId: draft.student_user_id })),
   ];
 
-  for (const allowSameDay of [false, true]) {
-    let madeProgress = true;
-    while (madeProgress && settings.some((item) => item.remaining > 0)) {
-      madeProgress = false;
-      const ordered = [...settings].sort((a, b) => b.remaining - a.remaining || a.access.student_name.localeCompare(b.access.student_name));
-      for (const setting of ordered) {
-        if (setting.remaining <= 0) continue;
-        let placed = false;
-        for (let dayIndex = 0; dayIndex < dayCount && !placed; dayIndex += 1) {
-          const date = addCalendarDays(input.weekStart, dayIndex);
-          const dateKey = localDateKey(date);
-          if (!allowSameDay && setting.usedDays.has(dateKey)) continue;
+  let madeProgress = true;
+  while (madeProgress && settings.some((item) => item.remaining > 0)) {
+    madeProgress = false;
+    const ordered = [...settings].sort((a, b) => b.remaining - a.remaining || a.access.student_name.localeCompare(b.access.student_name));
+    for (const setting of ordered) {
+      if (setting.remaining <= 0) continue;
+      let placed = false;
+      for (let dayIndex = 0; dayIndex < dayCount && !placed; dayIndex += 1) {
+        const date = addCalendarDays(input.weekStart, dayIndex);
+        const dateKey = localDateKey(date);
+        if (setting.usedDays.has(dateKey)) continue;
           const periods = availabilityForDate({
             date,
             studentUserId: setting.access.student_user_id,
@@ -818,7 +817,6 @@ export function generateAutomaticSchedule(input: {
             }
             if (placed) break;
           }
-        }
       }
     }
   }
@@ -836,7 +834,7 @@ export function generateAutomaticSchedule(input: {
           ? "No availability is set for the selected days."
           : setting.lessonKind === "flight" && selectedAircraft.length === 0
             ? "Choose at least one aircraft for Flight lessons."
-            : "No remaining slot satisfies availability, existing lessons, aircraft availability, and the eight-hour teaching span.",
+            : "No remaining day satisfies availability, one-lesson-per-student-per-day, aircraft availability, and the eight-hour teaching span.",
       });
     }
   }
