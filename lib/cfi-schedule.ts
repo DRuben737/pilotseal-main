@@ -725,22 +725,23 @@ export function generateAutomaticSchedule(input: {
         && consideredDates.some((date) => localDateKey(new Date(entry.start_at)) === localDateKey(date))
     ).length;
     const fallback = Math.max(0, (override?.target_sessions ?? access.default_weekly_sessions) - existingCount);
-    const counts: Array<{ lessonKind: LessonKind; requested: number }> = request
+    const counts: Array<{ lessonKind: LessonKind; requested: number; existing: number }> = request
       ? [
-          { lessonKind: "flight", requested: Math.max(0, Math.min(14, Math.floor(request.flightSessions || 0)) - existingByKind("flight")) },
-          { lessonKind: "ground", requested: Math.max(0, Math.min(14, Math.floor(request.groundSessions || 0)) - existingByKind("ground")) },
+          { lessonKind: "flight", requested: Math.max(0, Math.min(14, Math.floor(request.flightSessions || 0)) - existingByKind("flight")), existing: existingByKind("flight") },
+          { lessonKind: "ground", requested: Math.max(0, Math.min(14, Math.floor(request.groundSessions || 0)) - existingByKind("ground")), existing: existingByKind("ground") },
         ]
-      : [{ lessonKind: "flight", requested: fallback }];
+      : [{ lessonKind: "flight", requested: fallback, existing: existingByKind("flight") }];
     const usedDays = usedDaysByStudent.get(access.student_user_id) ?? new Set(
       input.existingEntries
         .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id)
         .map((entry) => localDateKey(new Date(entry.start_at)))
     );
     usedDaysByStudent.set(access.student_user_id, usedDays);
-    return counts.filter((item) => item.requested > 0).map(({ lessonKind, requested }) => ({
+    return counts.filter((item) => item.requested > 0).map(({ lessonKind, requested, existing }) => ({
       access, lessonKind,
       durationMin: override?.duration_min ?? access.default_duration_min,
       requested, remaining: requested,
+      existing,
       availabilityDays: consideredDates.filter((date) => availabilityForDate({
         date,
         studentUserId: access.student_user_id,
@@ -761,7 +762,15 @@ export function generateAutomaticSchedule(input: {
   let madeProgress = true;
   while (madeProgress && settings.some((item) => item.remaining > 0)) {
     madeProgress = false;
-    const ordered = [...settings].sort((a, b) => b.remaining - a.remaining || a.access.student_name.localeCompare(b.access.student_name));
+    const ordered = [...settings].sort((a, b) => {
+      if (a.lessonKind !== b.lessonKind) return a.lessonKind === "flight" ? -1 : 1;
+      const aWeeklyTotal = a.existing + (a.requested - a.remaining);
+      const bWeeklyTotal = b.existing + (b.requested - b.remaining);
+      return aWeeklyTotal - bWeeklyTotal
+        || a.availabilityDays - b.availabilityDays
+        || b.remaining - a.remaining
+        || a.access.student_name.localeCompare(b.access.student_name);
+    });
     for (const setting of ordered) {
       if (setting.remaining <= 0) continue;
       let placed = false;
@@ -816,8 +825,9 @@ export function generateAutomaticSchedule(input: {
               break;
             }
             if (placed) break;
-          }
+        }
       }
+      if (placed) break;
     }
   }
 

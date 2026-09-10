@@ -77,6 +77,14 @@ const existingGround={...a,id:'ground-a',lesson_kind:'ground',aircraft_id:null,a
 const separateKinds=generateAutomaticSchedule({...autoInput,slots:[...twoDaySlots,{student_user_id:'a',scope:'weekly',weekday:3,start_minute:420,end_minute:900,timezone:'America/New_York'}],blocks:[],existingEntries:[a,existingGround],requests:[{studentUserId:'a',flightSessions:2,groundSessions:2}]});
 assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='flight').length,1,'existing Flight is deducted only from the Flight total');
 assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='ground').length,1,'existing Ground is deducted only from the Ground total');
+const fairAccess=['fa','fb','fc'].map((id)=>({student_user_id:id,student_name:id.toUpperCase(),default_duration_min:120,default_weekly_sessions:3}));
+const fairSlots=fairAccess.flatMap((student)=>[3,4,5].map((weekday)=>({student_user_id:student.student_user_id,scope:'weekly',weekday,start_minute:420,end_minute:540,timezone:'America/New_York'})));
+const faMonday={...lesson('fa','07:00','09:00'),id:'fa-monday'};
+const faTuesday={...lesson('fa','07:00','09:00','2026-09-15'),id:'fa-tuesday'};
+const fairResult=generateAutomaticSchedule({...autoInput,access:fairAccess,slots:fairSlots,blocks:[],existingEntries:[faMonday,faTuesday],requests:fairAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:3,groundSessions:0}))});
+const fairTotals=Object.fromEntries(fairAccess.map((student)=>[student.student_user_id,(student.student_user_id==='fa'?2:0)+fairResult.drafts.filter((draft)=>draft.student_user_id===student.student_user_id&&draft.lesson_kind==='flight').length]));
+assert.equal(fairResult.drafts.filter((draft)=>draft.student_user_id==='fa').length,0,'students with more existing Flights wait while lower-count students receive scarce slots');
+assert(Math.max(...Object.values(fairTotals))-Math.min(...Object.values(fairTotals))<=1,'final weekly Flight totals remain as even as available slots allow');
 const cancelledEntry={...a,status:'cancelled'};
 const ignoresCancelled=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[cancelledEntry],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0}]});
 assert.equal(ignoresCancelled.drafts[0].start_at,new Date(a.start_at).toISOString(),'cancelled lessons do not consume time or weekly counts');
