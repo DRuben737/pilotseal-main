@@ -7,5 +7,10 @@ export const metadata = {
 };
 
 export default function DashboardAccountSettingsPage() {
-  return <div className="grid gap-4"><AccountSettingsPanel /><OrganizationMembershipSettings /></div>;
+  return (
+    <div className="grid gap-4">
+      <AccountSettingsPanel />
+      <OrganizationMembershipSettings />
+    </div>
+  );
 }

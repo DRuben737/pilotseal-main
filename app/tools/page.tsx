@@ -30,10 +30,7 @@ export default function ToolsPage() {
   return (
     <main className="page-shell page-tools px-3">
       <div className="site-shell tools-index">
-        <header className="tools-index-header">
-          <h1>Tools</h1>
-          <p>Training and flight-planning utilities.</p>
-        </header>
+        <h1 className="sr-only">Tools</h1>
         <div className="tools-index-groups">
           {toolGroups.map((group) => (
             <section className="tools-index-group" key={group.title}>

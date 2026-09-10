@@ -5,9 +5,11 @@ import { AdminDataTable, AdminPageHeader, EmptyState, ManagementDisclosure, Stat
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { fetchAircraftAssignmentAudit, type AircraftAssignmentAuditEntry } from "@/lib/aircraft";
 import { formatUsDateTime } from "@/lib/date-format";
+import { hasOrganizationPermission } from "@/lib/organizations";
 
 export default function AssignmentAuditLog({ platform = false }: { platform?: boolean }) {
   const { activeOrganization } = useOrganization();
+  const canView = platform || hasOrganizationPermission(activeOrganization, "audit");
   const [entries, setEntries] = useState<AircraftAssignmentAuditEntry[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -15,7 +17,7 @@ export default function AssignmentAuditLog({ platform = false }: { platform?: bo
     const organizationId = platform ? null : activeOrganization?.id;
     let cancelled = false;
     async function load() {
-      if (!platform && !organizationId) {
+      if (!canView || (!platform && !organizationId)) {
         if (!cancelled) { setEntries([]); setLoading(false); }
         return;
       }
@@ -30,6 +32,7 @@ export default function AssignmentAuditLog({ platform = false }: { platform?: bo
     }
     void load();
     return () => { cancelled = true; };
-  }, [activeOrganization?.id, platform]);
+  }, [activeOrganization?.id, canView, platform]);
+  if (!canView) return <div className="saas-panel">You do not have permission to view this organization audit log.</div>;
   return <section className="space-y-5"><AdminPageHeader eyebrow={platform ? "Platform administration" : activeOrganization?.name} title="Audit Log" />{error ? <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{error}</p> : null}<ManagementDisclosure id={platform ? "platform-assignment-audit" : "organization-assignment-audit"} title="Aircraft assignment changes" summary={loading ? "Loading…" : `${entries.length}`} helpContent={<p>This immutable audit log lists aircraft organization-access changes, newest first.</p>}><AdminDataTable label="Aircraft assignment audit log"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><th className="px-4 py-3">Time</th><th className="px-4 py-3">Aircraft</th><th className="px-4 py-3">Organization</th><th className="px-4 py-3">Action</th></tr></thead><tbody>{loading ? <tr><td colSpan={4} className="p-8 text-center text-slate-500">Loading audit log…</td></tr> : null}{!loading && !entries.length ? <tr><td colSpan={4}><EmptyState title="No assignment changes" description="Aircraft access changes will appear here." /></td></tr> : entries.map((entry) => <tr key={entry.id} className="border-b border-slate-100"><td className="px-4 py-3 text-slate-500">{formatUsDateTime(entry.created_at)}</td><td className="px-4 py-3 font-semibold text-slate-900">{entry.aircraft_tail_number}</td><td className="px-4 py-3">{entry.organization_name}</td><td className="px-4 py-3"><StatusBadge tone={entry.action === "assigned" ? "success" : "warning"}>{entry.action === "assigned" ? "＋ Assigned" : "− Unassigned"}</StatusBadge></td></tr>)}</tbody></AdminDataTable></ManagementDisclosure></section>;
 }

@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
-  dashboardOrganizationNavigation,
-  dashboardPlatformNavigation,
-  dashboardPrimaryNavigation,
+  getDashboardLinksForWorkspace,
+  getDashboardWorkspace,
+  getDashboardWorkspaceLinks,
   isDashboardDestinationActive,
-  type DashboardNavItem,
+  type DashboardWorkspace,
 } from "@/lib/dashboard-navigation";
 import { resolveDisplayIdentity } from "@/lib/identity";
 import { fetchEnabledFeatureIds, type OptionalFeatureId } from "@/lib/dashboard-preferences";
-import { canManageOrganization } from "@/lib/organizations";
+import { type OrganizationPermission } from "@/lib/organizations";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -174,7 +174,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const { loading, session } = useAuthSession();
   const {
     organizations,
-    activeOrganization,
     activeOrganizationId,
     loading: organizationsLoading,
     setActiveOrganizationId,
@@ -186,6 +185,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
   const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileNavigationRef = useRef<HTMLElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarExpanded = sidebarHovered;
 
   useEffect(() => {
@@ -196,7 +198,30 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   useEffect(() => {
     setSidebarHovered(false);
+    setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !mobileNavigationRef.current?.contains(event.target)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMobileMenuOpen(false);
+      mobileMenuButtonRef.current?.focus();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -298,22 +323,73 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     email: session?.user?.email,
   });
 
-  const canManage = canManageOrganization(activeOrganization?.member_role);
-  const canUseOrganizationTools = Boolean(
-    activeOrganization && (canManage || activeOrganization.teaching_role === "instructor")
+  const organizationWorkspacePermissions: OrganizationPermission[] = ["fleet", "members", "endorsements", "audit"];
+  const managedOrganizations = organizations.filter((organization) => (
+    organization.member_role === "owner"
+    || organization.member_role === "platform_admin"
+    || organization.permissions.some((permission) => organizationWorkspacePermissions.includes(permission))
+  ));
+  const canManage = managedOrganizations.length > 0;
+  const activeManagedOrganization = managedOrganizations.find(
+    (organization) => organization.id === activeOrganizationId
+  ) ?? managedOrganizations[0] ?? null;
+  const organizationPermissions = activeManagedOrganization?.permissions ?? [];
+  const isPlatformAdmin = profileRole === "admin";
+  const requestedWorkspace = getDashboardWorkspace(pathname);
+  const workspace: DashboardWorkspace = requestedWorkspace === "organization" && !canManage
+    ? "personal"
+    : requestedWorkspace === "platform" && !isPlatformAdmin
+      ? "personal"
+      : requestedWorkspace;
+  const workspaceLinks = getDashboardWorkspaceLinks({
+    canManageOrganization: canManage,
+    enabledFeatureIds,
+    isPlatformAdmin,
+    organizationPermissions,
+  });
+  const visibleDashboardLinks = getDashboardLinksForWorkspace({
+    enabledFeatureIds,
+    workspace,
+    organizationPermissions,
+  });
+  const workspaceLabel = workspace === "organization"
+    ? (activeManagedOrganization?.name
+        ?? "Organization")
+    : workspace === "platform"
+      ? "Platform administration"
+      : "Personal";
+  const currentLink = visibleDashboardLinks.find((item) => isDashboardDestinationActive(pathname, item.href));
+  const showOrganizationContext = !organizationsLoading && organizations.length > 1 && (
+    pathname.startsWith("/dashboard/organization")
+    || pathname.startsWith("/dashboard/my-aircraft")
+    || pathname.startsWith("/dashboard/records")
+    || pathname.startsWith("/dashboard/reports")
   );
-  const primaryLinks = dashboardPrimaryNavigation.filter((item) => (
-    !item.featureId || enabledFeatureIds.includes(item.featureId as OptionalFeatureId)
-  ));
-  const organizationLinks = dashboardOrganizationNavigation.filter((item) => (
-    canUseOrganizationTools && (item.access !== "organization-manager" || canManage)
-  ));
-  const platformLinks = profileRole === "admin" ? dashboardPlatformNavigation : [];
-  const navigationGroups: Array<{ label: string; links: DashboardNavItem[] }> = [
-    { label: "Dashboard", links: primaryLinks },
-    ...(organizationLinks.length ? [{ label: "Organization administration", links: organizationLinks }] : []),
-    ...(platformLinks.length ? [{ label: "Platform administration", links: platformLinks }] : []),
-  ];
+  const organizationContextOptions = workspace === "organization" ? managedOrganizations : organizations;
+  const organizationContextValue = organizationContextOptions.some((organization) => organization.id === activeOrganizationId)
+    ? activeOrganizationId
+    : organizationContextOptions[0]?.id ?? "";
+
+  useEffect(() => {
+    if (requestedWorkspace !== "organization" || organizationsLoading) return;
+    if (activeManagedOrganization?.id && activeManagedOrganization.id !== activeOrganizationId) {
+      setActiveOrganizationId(activeManagedOrganization.id);
+      return;
+    }
+    if (workspace === "organization" && visibleDashboardLinks.length > 0 && !currentLink) {
+      router.replace(visibleDashboardLinks[0].href);
+    }
+  }, [
+    activeManagedOrganization?.id,
+    activeOrganizationId,
+    currentLink,
+    organizationsLoading,
+    requestedWorkspace,
+    router,
+    setActiveOrganizationId,
+    visibleDashboardLinks,
+    workspace,
+  ]);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -339,7 +415,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <aside
                 className="dashboard-sidebar"
                 data-expanded={sidebarExpanded}
-                aria-label="Dashboard navigation"
+                aria-label={`${workspaceLabel} navigation`}
                 onPointerEnter={() => setSidebarHovered(true)}
                 onPointerLeave={() => setSidebarHovered(false)}
                 onClickCapture={(event) => {
@@ -373,36 +449,60 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     </div>
                   </div>
 
+                  {workspaceLinks.length > 1 ? (
+                    <div className="dashboard-workspace-switcher">
+                      <p className="dashboard-workspace-label">Workspace</p>
+                      <nav
+                        className="dashboard-workspace-grid"
+                        style={{ gridTemplateColumns: `repeat(${workspaceLinks.length}, minmax(0, 1fr))` }}
+                        aria-label="Switch workspace"
+                      >
+                        {workspaceLinks.map((item) => (
+                          <Link
+                            key={item.workspace}
+                            href={item.href}
+                            aria-current={workspace === item.workspace ? "page" : undefined}
+                            className={`dashboard-workspace-link ${workspace === item.workspace ? "dashboard-workspace-link-active" : ""}`}
+                            onClick={() => {
+                              if (item.workspace === "organization" && organizationContextValue !== activeOrganizationId) {
+                                setActiveOrganizationId(organizationContextValue);
+                              }
+                            }}
+                          >
+                            <DashboardIcon kind={item.workspace === "platform" ? "Access" : item.workspace === "organization" ? "Organization" : "Overview"} />
+                            <span>{item.label}</span>
+                          </Link>
+                        ))}
+                      </nav>
+                    </div>
+                  ) : null}
                 </header>
 
-                <nav aria-label="Dashboard navigation" className="dashboard-sidebar-nav">
-                  {navigationGroups.map((group) => (
-                    <div className="dashboard-sidebar-group" key={group.label}>
-                      <p className="dashboard-sidebar-section-label">{group.label}</p>
-                      {group.links.map((item) => {
-                        const active = isDashboardDestinationActive(pathname, item.href);
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            aria-label={item.label}
-                            title={item.label}
-                            className={`dashboard-sidebar-link ${active ? "dashboard-sidebar-link-active" : ""}`}
-                          >
-                            <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-                              <DashboardIcon kind={item.label} />
-                              {item.label === "Notifications" && unreadNotificationCount > 0 ? (
-                                <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
-                                  {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-                                </span>
-                              ) : null}
+                <nav aria-label={`${workspaceLabel} pages`} className="dashboard-sidebar-nav">
+                  <p className="dashboard-sidebar-section-label">{workspaceLabel}</p>
+                  {visibleDashboardLinks.map((item) => {
+                    const active = isDashboardDestinationActive(pathname, item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        aria-label={item.label}
+                        title={item.label}
+                        className={`dashboard-sidebar-link ${active ? "dashboard-sidebar-link-active" : ""}`}
+                      >
+                        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                          <DashboardIcon kind={item.label} />
+                          {item.label === "Notifications" && unreadNotificationCount > 0 ? (
+                            <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
+                              {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
                             </span>
-                            <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">{item.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  ))}
+                          ) : null}
+                        </span>
+                        <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">{item.label}</span>
+                      </Link>
+                    );
+                  })}
                 </nav>
 
                 <footer className="dashboard-sidebar-footer">
@@ -437,15 +537,83 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </div>
 
             <div className="min-w-0 flex-1">
-              {!organizationsLoading && organizations.length > 1 && pathname.startsWith("/dashboard/organization") ? (
+              <section ref={mobileNavigationRef} className="dashboard-mobile-navigation" aria-label="Dashboard navigation">
+                {workspaceLinks.length > 1 ? (
+                  <nav className="dashboard-mobile-workspace-tabs" aria-label="Switch workspace">
+                    {workspaceLinks.map((item) => (
+                      <Link
+                        key={item.workspace}
+                        href={item.href}
+                        aria-current={workspace === item.workspace ? "page" : undefined}
+                        className={workspace === item.workspace ? "dashboard-mobile-workspace-active" : ""}
+                        onClick={() => {
+                          if (item.workspace === "organization" && organizationContextValue !== activeOrganizationId) {
+                            setActiveOrganizationId(organizationContextValue);
+                          }
+                        }}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </nav>
+                ) : null}
+                <div className="dashboard-mobile-page-menu">
+                  <button
+                    ref={mobileMenuButtonRef}
+                    type="button"
+                    aria-expanded={mobileMenuOpen}
+                    aria-controls="dashboard-mobile-page-list"
+                    onClick={() => setMobileMenuOpen((open) => !open)}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <DashboardIcon kind={currentLink?.label ?? "Overview"} />
+                      <span className="truncate">{currentLink?.label ?? workspaceLabel}</span>
+                    </span>
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className={mobileMenuOpen ? "dashboard-mobile-chevron-open" : ""}>
+                      <path d="m5 7.5 5 5 5-5" />
+                    </svg>
+                  </button>
+                  {mobileMenuOpen ? (
+                    <nav id="dashboard-mobile-page-list" aria-label={`${workspaceLabel} pages`}>
+                      {visibleDashboardLinks.map((item) => {
+                        const active = isDashboardDestinationActive(pathname, item.href);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            aria-current={active ? "page" : undefined}
+                            className={active ? "dashboard-mobile-page-active" : ""}
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                              <DashboardIcon kind={item.label} />
+                              {item.label === "Notifications" && unreadNotificationCount > 0 ? (
+                                <span className="dashboard-mobile-notification-badge">{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</span>
+                              ) : null}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                            {active ? (
+                              <svg className="dashboard-mobile-current-mark" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                <path d="m4.5 10.5 3.2 3.2 7.8-8" />
+                              </svg>
+                            ) : null}
+                          </Link>
+                        );
+                      })}
+                    </nav>
+                  ) : null}
+                </div>
+              </section>
+
+              {showOrganizationContext ? (
                 <div className="dashboard-organization-context">
-                  <span>Managing</span>
+                  <span>{workspace === "organization" ? "Managing" : "Organization"}</span>
                   <select
                     aria-label="Current organization"
-                    value={activeOrganizationId}
+                    value={organizationContextValue}
                     onChange={(event) => setActiveOrganizationId(event.target.value)}
                   >
-                    {organizations.map((organization) => (
+                    {organizationContextOptions.map((organization) => (
                       <option key={organization.id} value={organization.id}>
                         {organization.name}
                       </option>

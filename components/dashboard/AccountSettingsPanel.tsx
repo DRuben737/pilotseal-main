@@ -11,6 +11,7 @@ import {
   PASSWORD_MIN_LENGTH,
 } from "@/components/auth/auth-errors";
 import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
+import ScheduleAccessSettings from "@/components/dashboard/ScheduleAccessSettings";
 import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
 import { getDeterministicGreeting } from "@/lib/greetings";
 import {
@@ -432,6 +433,7 @@ export default function AccountSettingsPanel() {
   const [certificateDrafts, setCertificateDrafts] = useState<Record<string, CertificateForm>>({});
   const [savingCertificate, setSavingCertificate] = useState(false);
   const [certificateStatus, setCertificateStatus] = useState("");
+  const [certificateRevision, setCertificateRevision] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -653,6 +655,17 @@ export default function AccountSettingsPanel() {
         ? nextCertificates.filter((certificate) => certificate.person_id === nextProfile.self_person_id)
         : []
     );
+    setCertificateRevision((current) => current + 1);
+  }
+
+  function openInstructorCertificateForm() {
+    setShowCertificates(true);
+    setShowCertificateForm(true);
+    setCertificateForm({ ...emptyCertificateForm, certificate_type: "flight_instructor" });
+    setCertificateStatus("");
+    window.requestAnimationFrame(() => {
+      document.getElementById("account-certificates")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   async function ensureSelfPerson() {
@@ -1290,7 +1303,12 @@ export default function AccountSettingsPanel() {
         ) : null}
       </section>
 
-      <section className="saas-panel dashboard-setting-row">
+      <ScheduleAccessSettings
+        certificateRevision={certificateRevision}
+        onAddInstructorCertificate={openInstructorCertificateForm}
+      />
+
+      <section id="account-certificates" className="saas-panel dashboard-setting-row scroll-mt-28">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <p className="saas-subsection-title">My certificates</p>

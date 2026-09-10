@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import OrganizationNotificationPublisher from "@/components/notifications/OrganizationNotificationPublisher";
+import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { UsDateTimeInput } from "@/components/forms/UsDateInput";
 import {
   createNotification,
@@ -28,6 +30,7 @@ import {
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { formatUsDateTime } from "@/lib/date-format";
+import { hasOrganizationPermission } from "@/lib/organizations";
 
 const priorityOptions: NotificationPriority[] = ["low", "normal", "high", "critical"];
 const statusOptions: NotificationStatus[] = ["draft", "scheduled", "sent"];
@@ -40,9 +43,17 @@ const emptyForm = {
   title: "",
 };
 type InboxFilter = "all" | "unread" | "reminder" | "organization" | "schedule" | "system";
+type NotificationView = "inbox" | "organization";
 
-export default function NotificationManager({ platformPublishingOnly = false }: { platformPublishingOnly?: boolean }) {
+export default function NotificationManager({
+  initialView = "inbox",
+  platformPublishingOnly = false,
+}: {
+  initialView?: NotificationView;
+  platformPublishingOnly?: boolean;
+}) {
   const { session } = useAuthSession();
+  const { organizations } = useOrganization();
   const userId = session?.user?.id ?? "";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -56,6 +67,12 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
   const [inboxQuery, setInboxQuery] = useState("");
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => defaultNotificationPreferences(userId));
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [activeView, setActiveView] = useState<NotificationView>(initialView);
+  const canPublishOrganization = organizations.some((organization) => hasOrganizationPermission(organization, "notifications"));
+
+  useEffect(() => {
+    setActiveView(initialView === "organization" && canPublishOrganization ? "organization" : "inbox");
+  }, [canPublishOrganization, initialView]);
 
   const unreadCount = useMemo(
     () => inbox.filter((notification) => !notification.read_at).length,
@@ -299,7 +316,28 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
     <div className="grid gap-6">
       {status ? <p className="saas-panel text-sm text-slate-600">{status}</p> : null}
 
-      {!platformPublishingOnly ? <>
+      {!platformPublishingOnly && canPublishOrganization ? (
+        <nav className="dashboard-notification-tabs" aria-label="Notification views">
+          <button
+            type="button"
+            aria-current={activeView === "inbox" ? "page" : undefined}
+            className={activeView === "inbox" ? "dashboard-notification-tab-active" : ""}
+            onClick={() => setActiveView("inbox")}
+          >
+            Inbox
+          </button>
+          <button
+            type="button"
+            aria-current={activeView === "organization" ? "page" : undefined}
+            className={activeView === "organization" ? "dashboard-notification-tab-active" : ""}
+            onClick={() => setActiveView("organization")}
+          >
+            Organization publishing
+          </button>
+        </nav>
+      ) : null}
+
+      {!platformPublishingOnly && activeView === "inbox" ? <>
       <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} actions={<button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
             Mark all read ({unreadCount})
           </button>} helpContent={<p>Personal reminders, organization messages, schedule updates and platform notices appear in this unified inbox. Expand it to search or filter.</p>}>
@@ -406,6 +444,10 @@ export default function NotificationManager({ platformPublishingOnly = false }: 
         </div>
       </section>
       </> : null}
+
+      {!platformPublishingOnly && activeView === "organization" && canPublishOrganization ? (
+        <OrganizationNotificationPublisher />
+      ) : null}
 
       {platformPublishingOnly && isAdmin ? (
         <>

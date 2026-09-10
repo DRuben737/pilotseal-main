@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function DashboardOrganizationPage() {
-  redirect("/dashboard");
+  redirect("/dashboard/organization/fleet");
 }

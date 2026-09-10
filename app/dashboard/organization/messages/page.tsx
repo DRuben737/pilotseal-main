@@ -1,2 +1,5 @@
-import OrganizationManager from "@/components/dashboard/OrganizationManager";
-export default function Page() { return <OrganizationManager view="messages" />; }
+import { redirect } from "next/navigation";
+
+export default function Page() {
+  redirect("/dashboard/notifications?view=organization");
+}

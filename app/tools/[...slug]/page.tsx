@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { createElement, type CSSProperties } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getToolEmbedConfig } from "@/app/tools/tool-config";
 import { nativeToolRegistry } from "@/components/tools-native/tool-registry";
+import ToolQuickSwitcher from "@/components/tools-native/ToolQuickSwitcher";
 import endorsementPageImage from "@/images/endorsementpage.png";
 import endorsementSampleImage from "@/images/endorsementsample.png";
 import feature1Image from "@/images/toolFlightcomputer.png";
@@ -134,11 +134,11 @@ export default async function EmbeddedToolPage({ params }: ToolPageProps) {
         className="page-shell page-tool-child tool-theme-endorsement-generator px-3"
         style={pageStyle}
       >
-        <div className="site-shell mx-auto max-w-7xl space-y-8">
-          <section className="tool-page-heading">
-            <Link href="/tools" className="tool-page-back" aria-label="Back to tools">‹ Tools</Link>
-            <h1>{tool.title}</h1>
-          </section>
+        <div className="site-shell mx-auto max-w-7xl space-y-4 sm:space-y-6">
+          <div>
+            <h1 className="sr-only">{tool.title}</h1>
+            <ToolQuickSwitcher currentToolKey={slugKey} />
+          </div>
 
           <section className="content-card tool-stage p-3 sm:p-4">
             {toolContent}
@@ -189,11 +189,11 @@ export default async function EmbeddedToolPage({ params }: ToolPageProps) {
       className={`page-shell page-tool-child tool-theme-${slugKey} px-3`}
       style={pageStyle}
     >
-      <div className="site-shell page-stack space-y-6">
-        <section className="tool-page-heading">
-          <Link href="/tools" className="tool-page-back" aria-label="Back to tools">‹ Tools</Link>
-          <h1>{tool.title}</h1>
-        </section>
+      <div className="site-shell page-stack space-y-4 sm:space-y-6">
+        <div>
+          <h1 className="sr-only">{tool.title}</h1>
+          <ToolQuickSwitcher currentToolKey={slugKey} />
+        </div>
 
         <section
           className={

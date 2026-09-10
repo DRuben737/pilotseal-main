@@ -2,12 +2,15 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 export type OrganizationRole = "owner" | "organization_admin" | "member" | "platform_admin";
 export type OrganizationTeachingRole = "instructor" | "student";
+export const ORGANIZATION_PERMISSIONS = ["members", "fleet", "endorsements", "notifications", "audit"] as const;
+export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
 
 export type Organization = {
   id: string;
   name: string;
   member_role: OrganizationRole;
   teaching_role: OrganizationTeachingRole | null;
+  permissions: OrganizationPermission[];
   created_at: string;
 };
 
@@ -31,6 +34,7 @@ export type OrganizationMember = {
   display_name: string | null;
   member_role: Exclude<OrganizationRole, "platform_admin">;
   teaching_role: OrganizationTeachingRole | null;
+  permissions: OrganizationPermission[];
   created_at: string;
 };
 
@@ -376,6 +380,39 @@ export async function setOrganizationMemberRole(
   }
 }
 
+export type OrganizationRolePermissionSettings = {
+  role: "organization_admin" | "member";
+  permissions: OrganizationPermission[];
+  updated_at: string;
+};
+
+export async function fetchOrganizationRolePermissions(organizationId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("list_organization_role_permissions", {
+    p_organization_id: organizationId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((record) => ({
+    role: record.role === "organization_admin" ? "organization_admin" : "member",
+    permissions: normalizeOrganizationPermissions(record.permissions),
+    updated_at: String(record.updated_at ?? ""),
+  })) satisfies OrganizationRolePermissionSettings[];
+}
+
+export async function setOrganizationRolePermissions(
+  organizationId: string,
+  role: "organization_admin" | "member",
+  permissions: OrganizationPermission[]
+) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("set_organization_role_permissions", {
+    p_organization_id: organizationId,
+    p_role: role,
+    p_permissions: normalizeOrganizationPermissions(permissions),
+  });
+  if (error) throw error;
+}
+
 export async function setOrganizationMemberTeachingRole(
   organizationId: string,
   userId: string,
@@ -451,6 +488,24 @@ export function canManageOrganizationAdmins(role: OrganizationRole | null | unde
   return role === "owner" || role === "platform_admin";
 }
 
+export function hasOrganizationPermission(
+  organization: Pick<Organization, "member_role" | "permissions"> | null | undefined,
+  permission: OrganizationPermission
+) {
+  if (!organization) return false;
+  return organization.member_role === "owner"
+    || organization.member_role === "platform_admin"
+    || organization.permissions.includes(permission);
+}
+
+export function normalizeOrganizationPermissions(value: unknown): OrganizationPermission[] {
+  if (!Array.isArray(value)) return [];
+  const selected = new Set(value.filter((item): item is OrganizationPermission => (
+    typeof item === "string" && ORGANIZATION_PERMISSIONS.includes(item as OrganizationPermission)
+  )));
+  return ORGANIZATION_PERMISSIONS.filter((permission) => selected.has(permission));
+}
+
 function normalizeOrganization(value: unknown): Organization {
   const record = (value ?? {}) as Record<string, unknown>;
   return {
@@ -461,6 +516,7 @@ function normalizeOrganization(value: unknown): Organization {
       record.teaching_role === "instructor" || record.teaching_role === "student"
         ? record.teaching_role
         : null,
+    permissions: normalizeOrganizationPermissions(record.permissions),
     created_at: String(record.created_at ?? ""),
   };
 }
@@ -479,6 +535,7 @@ function normalizeOrganizationMember(value: unknown): OrganizationMember {
       record.teaching_role === "instructor" || record.teaching_role === "student"
         ? record.teaching_role
         : null,
+    permissions: normalizeOrganizationPermissions(record.permissions),
     created_at: String(record.created_at ?? ""),
   };
 }

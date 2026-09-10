@@ -1,10 +1,10 @@
-import DashboardOverview from "@/components/dashboard/DashboardOverview";
+import DashboardIndexRedirect from "@/components/dashboard/DashboardIndexRedirect";
 
 export const metadata = {
   title: "Dashboard | PilotSeal",
-  description: "View your schedule, records, people, aircraft, and organization activity.",
+  description: "Open your personal PilotSeal workspace.",
 };
 
 export default function DashboardPage() {
-  return <DashboardOverview />;
+  return <DashboardIndexRedirect />;
 }

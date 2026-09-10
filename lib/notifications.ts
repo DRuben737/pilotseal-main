@@ -397,7 +397,16 @@ export async function createOrganizationNotification(input: {
     p_title: input.title.trim(),
     p_message: input.message.trim(),
     p_priority: input.priority,
-    p_action_url: "/dashboard/organization",
+    p_action_url: "/dashboard/notifications",
+  });
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export async function fetchOrganizationNotificationRecipientCount(organizationId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_organization_notification_recipient_count", {
+    p_organization_id: organizationId,
   });
   if (error) throw error;
   return Number(data ?? 0);
