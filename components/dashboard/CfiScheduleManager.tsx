@@ -480,7 +480,7 @@ export default function CfiScheduleManager() {
       });
       await loadWeekData(activeCfiId);
       setDrawer(availabilityReturn);
-      setMessage(availabilityScope === "weekly" && autofillDates ? `Availability saved. ${filled} matching dates filled across the next four weeks. Review your dates; individual exceptions and existing lessons stay unchanged.` : "Availability saved. Review the next two weeks. Existing lessons did not move; check any conflicts.");
+      setMessage(availabilityScope === "weekly" && autofillDates ? `Saved and filled ${filled} dates.` : "Availability saved.");
     } catch (availabilityError) {
       setError(getErrorMessage(availabilityError, "Unable to save availability."));
     } finally {
@@ -512,7 +512,7 @@ export default function CfiScheduleManager() {
     try {
       const count = await fillAvailabilityWeeks(activeCfiId, student.storage_kind === "person" ? student.saved_person_id : undefined);
       await loadWeekData();
-      setMessage(`Availability saved. ${count} dates filled across four weeks; individually edited dates were kept.`);
+      setMessage(`Filled ${count} dates across four weeks.`);
       if (!isCfiView) setDrawer("review");
     } catch (failure) { setError(getErrorMessage(failure, "Unable to fill future dates.")); }
     finally { setSaving(false); }
@@ -525,7 +525,7 @@ export default function CfiScheduleManager() {
       await confirmAvailabilityReview(activeCfiId);
       await loadWeekData();
       setDrawer(null);
-      setMessage("Your next two weeks are confirmed. Update your availability whenever plans change; existing lessons do not move.");
+      setMessage("Next two weeks confirmed.");
     } catch (failure) { setError(getErrorMessage(failure, "Unable to confirm availability.")); }
     finally { setSaving(false); }
   }
@@ -933,9 +933,6 @@ export default function CfiScheduleManager() {
   const publishWarnings = changes.flatMap((change) => entryWarnings(change.after));
   const previewChanges = drawer === "lesson" ? lessonPreviewChanges() : [];
   const lessonPreviewEntries = drawer === "lesson" && lesson.date && lesson.start && lesson.studentUserId ? applyScheduleOperations(entries, [lessonOperation()]) : entries;
-  const fillCandidates = Array.from({ length: 28 }, (_, index) => addCalendarDays(new Date(), index)).filter((date) => (date.getDay() || 7) === availabilityWeekday);
-  const preservedDates = fillCandidates.filter((date) => overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === localDateKey(date) && item.source !== "auto"));
-
   return (
     <div className={styles.root} aria-label="Schedule workspace">
       <header className={styles.header}>
@@ -984,7 +981,7 @@ export default function CfiScheduleManager() {
         <button className={styles.textButton} type="button" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(new Date()))}>Today</button>
       </div>
       <p className={styles.range}>{formatDate(displayDays[0])} – {formatDate(displayDays[displayDays.length - 1])}<span>{!isCfiView ? `${activeCfiName} · ` : ""}{browserTimeZone()}</span></p>
-      {!isCfiView && weekReady ? <div className={styles.reminder} role="status"><span>{availabilityReview?.needs_review ? "Review at least your next 7 days. Aim to keep 2–4 weeks up to date." : `Availability confirmed through ${formatDate(new Date(`${availabilityReview?.confirmed_through}T12:00:00`))}. Update it if plans change.`}</span><button type="button" className={styles.textButton} onClick={() => { setReviewChecked(false); setDrawer("review"); }}>Review dates</button></div> : null}
+      {!isCfiView && weekReady ? <div className={styles.reminder} role="status"><span>{availabilityReview?.needs_review ? "Confirm your next 7 days." : `Confirmed through ${formatDate(new Date(`${availabilityReview?.confirmed_through}T12:00:00`))}.`}</span><button type="button" className={styles.textButton} onClick={() => { setReviewChecked(false); setDrawer("review"); }}>Review dates</button></div> : null}
       {error ? <p role="alert" className={`${styles.feedback} ${styles.error}`}>{error}</p> : null}
       {message ? <p role="status" className={styles.feedback}>{message}</p> : null}
       {hasDraft ? <div className={styles.draftBar}><strong>Unpublished draft · {changes.length} changed lesson(s)</strong><button className={styles.textButton} type="button" disabled={saving || !changes.length} onClick={() => void openPublishDrawer()}>Review &amp; publish</button></div> : null}
@@ -1040,20 +1037,18 @@ export default function CfiScheduleManager() {
             })}</tbody></table></div>
           )}
       </DetailDrawer>
-      <DetailDrawer open={drawer === "review"} onClose={() => setDrawer(null)} title="Set your availability" description="Before your instructor schedules you, confirm at least the next seven days. Review the next two weeks below; you can plan up to four weeks ahead.">
-        <p className="text-sm text-slate-600">Tap any date to edit. Days with no times are unavailable. Changes do not move existing lessons; check conflicts and coordinate any lesson changes with your instructor.</p>
-        <button type="button" className={styles.textButton} onClick={() => setDrawer("weekly")}>Set weekly pattern &amp; auto-fill 4 weeks</button>
+      <DetailDrawer open={drawer === "review"} onClose={() => setDrawer(null)} title="Your availability" description="Check the next 14 days.">
+        <button type="button" className={styles.textButton} onClick={() => setDrawer("weekly")}>Set usual week</button>
         <div className={styles.weeklyList}>{Array.from({length:14},(_,i)=>addCalendarDays(new Date(),i)).map(day=>{
           const date=localDateKey(day);
           const times=availabilityForDate({date:day,studentUserId:activeStudent?.student_user_id ?? userId,slots,overrideDates});
           return <button type="button" key={date} disabled={!weekReady || saving} aria-label={`Review availability on ${date}`} onClick={()=>openAvailabilityDrawer("date",day.getDay()||7,date)}><span>{new Intl.DateTimeFormat(undefined,{weekday:"short",month:"short",day:"numeric"}).format(day)}</span><span>{times.map(period=>`${formatTime(period.start.toISOString())}–${formatTime(period.end.toISOString())}`).join(", ") || "Unavailable"} ›</span></button>;
         })}</div>
-        <label className="my-4 flex items-start gap-3 text-sm"><input className="mt-1" type="checkbox" checked={reviewChecked} onChange={event=>setReviewChecked(event.target.checked)} /><span>I reviewed every date through {formatDate(addCalendarDays(new Date(),13))}, including unavailable days.</span></label>
+        <label className="my-4 flex items-center gap-3 text-sm"><input type="checkbox" checked={reviewChecked} onChange={event=>setReviewChecked(event.target.checked)} /><span>Checked through {formatDate(addCalendarDays(new Date(),13))}</span></label>
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         <button type="button" className="primary-button" disabled={!reviewChecked || saving || !weekReady} onClick={()=>void confirmReviewedDates()}>{saving ? "Saving…" : "Confirm next 2 weeks"}</button>
       </DetailDrawer>
-      <DetailDrawer open={drawer === "weekly"} onClose={() => setDrawer(null)} title="Usual weekly availability" description="Your weekly pattern. Individual dates can be different.">
-        <p className="text-sm text-slate-600">Set each weekday once, then fill {formatDate(new Date())}–{formatDate(addCalendarDays(new Date(),27))}. All seven weekdays repeat for four weeks. Unset weekdays stay unavailable; individually edited dates are preserved.</p>
+      <DetailDrawer open={drawer === "weekly"} onClose={() => setDrawer(null)} title="Usual week" description="Set once, then fill the next four weeks.">
         <div className={styles.weeklyList}>{weekdayLabels.map((label,index) => {
           const periods = slots.filter((slot) => slot.student_user_id === activeStudent?.student_user_id && slot.scope === "weekly" && slot.weekday === index + 1);
           return <button key={label} type="button" onClick={() => openAvailabilityDrawer("weekly", index + 1)}><span>{label}</span><span>{periods.length ? periods.map((slot) => `${minutesToTime(slot.start_minute)}–${minutesToTime(slot.end_minute)}`).join(", ") : "Not available"} ›</span></button>;
@@ -1074,17 +1069,17 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex justify-end gap-2"><button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={requestPermissionApply}>Apply changes</button></div>
       </DetailDrawer>
 
-      <DetailDrawer open={drawer === "availability"} onClose={() => setDrawer(null)} title={availabilityScope === "weekly" ? "General availability" : "Date availability"} description="Auto-fill matching weekdays over the next four weeks; individually edited dates are preserved. Availability changes do not move existing lessons.">
+      <DetailDrawer open={drawer === "availability"} onClose={() => setDrawer(null)} title={availabilityScope === "weekly" ? "Usual time" : "Date availability"} description={availabilityScope === "weekly" ? "Set one or more time ranges." : "Only for this date."}>
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         {isCfiView ? <p className="mb-3 text-sm font-semibold">{cfiAccess.find((item) => item.student_user_id === availabilityStudentId)?.student_name}</p> : null}
-        <div className="mb-3 flex gap-2"><button type="button" className={availabilityScope === "weekly" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("weekly", availabilityWeekday)}>Usual week</button><button type="button" className={availabilityScope === "date" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("date", 1, availabilityDate)}>Specific date</button></div>
-        {availabilityScope === "weekly" ? <div className="mb-4 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={autofillDates} onChange={(event) => setAutofillDates(event.target.checked)} />Auto-fill this weekday for 4 weeks</label><p className="mt-2 text-xs text-slate-600">{fillCandidates.map((date) => formatDate(date)).join(" · ")}</p><p className="mt-1 text-xs text-slate-600">{preservedDates.length} individually edited date(s) stay unchanged. To fill all weekdays together, use Auto-fill next 4 weeks in your weekly pattern.</p></div> : <p className="mb-3 text-xs text-slate-500">Saving this date makes it a personal exception; future auto-fill will not overwrite it.</p>}
+        <div className="mb-3 flex gap-2"><button type="button" className={availabilityScope === "weekly" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("weekly", availabilityWeekday)}>Usual week</button><button type="button" className={availabilityScope === "date" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("date", 1, availabilityDate)}>One date</button></div>
+        {availabilityScope === "weekly" ? <label className="mb-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={autofillDates} onChange={(event) => setAutofillDates(event.target.checked)} />Repeat for 4 weeks</label> : null}
         <div className="grid gap-4">
           {availabilityScope === "weekly" ? <label className="saas-field"><span>Weekday</span><select value={availabilityWeekday} onChange={(event) => { const day = Number(event.target.value); setAvailabilityWeekday(day); openAvailabilityDrawer("weekly", day); }}>{weekdayLabels.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select></label> : <label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" min={localDateKey(new Date())} max={maxAvailabilityDate} value={availabilityDate} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => openAvailabilityDrawer("date", 1, event.target.value)} /></label>}
           {availabilityRows.map((row, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={row.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, start: event.target.value } : item))} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={row.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, end: event.target.value } : item))} /></label><button className="ghost-button" type="button" onClick={() => setAvailabilityRows((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}
-          <p className="text-xs text-slate-500">Tap a field to use your phone’s time picker. For availability through the end of the day, choose 00:00 as the end time.</p>
-          <button className="secondary-button justify-self-start" type="button" onClick={() => setAvailabilityRows((current) => [...current, { start: "07:00", end: "15:00" }])}>＋ Add period</button>
-          <button className="ghost-button justify-self-start" type="button" onClick={() => setAvailabilityRows([{ start: "00:00", end: "00:00" }])}>Available all day</button>
+          <p className="text-xs text-slate-500">Use 00:00 as the end time for midnight.</p>
+          <button className="secondary-button justify-self-start" type="button" onClick={() => setAvailabilityRows((current) => [...current, { start: "07:00", end: "15:00" }])}>＋ Add time</button>
+          <button className="ghost-button justify-self-start" type="button" onClick={() => setAvailabilityRows([{ start: "00:00", end: "00:00" }])}>All day</button>
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2">{availabilityScope === "date" && overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === availabilityDate) ? <button className="ghost-button" type="button" disabled={saving} onClick={() => void clearDateOverride()}>Use general rule</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAvailability()}>{saving ? "Saving…" : "Apply"}</button></div>
       </DetailDrawer>
