@@ -99,6 +99,15 @@
 .weeklyList { display: grid; }
 .weeklyList button { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; border: 0; border-bottom: 1px solid #e5e5ea; background: transparent; padding: 12px 0; text-align: left; font-size: 14px; }
 .weeklyList button span:last-child { color: #6e6e73; font-size: 13px; }
+.quickAvailability { display: grid; gap: 16px; }
+.quickLabel { color: var(--schedule-muted); font-size: 12px; font-weight: 600; }
+.dayChips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dayChips button { aspect-ratio: 1; min-width: 0; border: 0; border-radius: 50%; background: var(--schedule-surface); color: var(--schedule-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.dayChips button[aria-pressed="true"] { background: var(--schedule-blue); color: #fff; font-weight: 600; }
+.quickTimes { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.quickAvailability > button { width: 100%; min-height: 48px; justify-content: center; }
+.individualDays { margin-top: 22px; border-top: 1px solid var(--schedule-line); }
+.individualDays summary { padding: 18px 0; color: var(--schedule-blue); font-size: 13px; cursor: pointer; list-style-position: inside; }
 .autoRoster { display: grid; margin-top: 12px; border-top: 1px solid var(--schedule-line); }
 .autoStudentRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 68px; padding: 10px 0; border-bottom: 1px solid var(--schedule-line); }
 .autoStudentRow[data-selected="false"] { opacity: .68; }

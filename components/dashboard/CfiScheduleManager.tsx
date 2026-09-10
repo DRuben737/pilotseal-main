@@ -21,7 +21,6 @@ import {
   fetchScheduleEditorSnapshot,
   fetchAvailabilityReview,
   confirmAvailabilityReview,
-  fillAvailabilityWeeks,
   type AvailabilityReview,
   generateAutomaticSchedule,
   getManualConflictWarnings,
@@ -158,6 +157,8 @@ export default function CfiScheduleManager() {
   const [availabilityWeekday, setAvailabilityWeekday] = useState(1);
   const [availabilityDate, setAvailabilityDate] = useState(localDateKey(new Date()));
   const [availabilityRows, setAvailabilityRows] = useState<AvailabilityRow[]>([{ start: "07:00", end: "15:00" }]);
+  const [quickWeekdays, setQuickWeekdays] = useState([1, 2, 3, 4, 5]);
+  const [quickAvailability, setQuickAvailability] = useState({ start: "07:00", end: "15:00" });
   const [autofillDates, setAutofillDates] = useState(true);
   const [lesson, setLesson] = useState(emptyLesson);
   const [lessonWarnings, setLessonWarnings] = useState<string[]>([]);
@@ -505,16 +506,27 @@ export default function CfiScheduleManager() {
     }
   }
 
-  async function autoFillUsualWeek() {
+  async function applyQuickAvailability() {
     const student = isCfiView ? cfiAccess.find((item) => item.student_user_id === availabilityStudentId) : studentViews.find((item) => item.cfi_user_id === activeCfiId);
     if (!student) return;
+    if (!quickWeekdays.length) { setError("Choose at least one day."); return; }
     setSaving(true); setError(""); setReviewChecked(false);
     try {
-      const count = await fillAvailabilityWeeks(activeCfiId, student.storage_kind === "person" ? student.saved_person_id : undefined);
-      await loadWeekData();
-      setMessage(`Filled ${count} dates across four weeks.`);
-      if (!isCfiView) setDrawer("review");
-    } catch (failure) { setError(getErrorMessage(failure, "Unable to fill future dates.")); }
+      const period = { startMinute: timeToMinutes(quickAvailability.start), endMinute: availabilityEndToMinutes(quickAvailability.end) };
+      await Promise.all(quickWeekdays.map((weekday) => saveScheduleAvailability({
+        personId: student.storage_kind === "person" ? student.saved_person_id : undefined,
+        cfiUserId: activeCfiId,
+        timezone: browserTimeZone(),
+        scope: "weekly",
+        weekday,
+        date: localDateKey(new Date()),
+        slots: [period],
+        autofill: true,
+      })));
+      await loadWeekData(activeCfiId);
+      setMessage("Availability saved.");
+      setDrawer(isCfiView ? null : "review");
+    } catch (failure) { setError(getErrorMessage(failure, "Unable to save availability.")); }
     finally { setSaving(false); }
   }
 
@@ -1048,13 +1060,27 @@ export default function CfiScheduleManager() {
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         <button type="button" className="primary-button" disabled={!reviewChecked || saving || !weekReady} onClick={()=>void confirmReviewedDates()}>{saving ? "Saving…" : "Confirm next 2 weeks"}</button>
       </DetailDrawer>
-      <DetailDrawer open={drawer === "weekly"} onClose={() => setDrawer(null)} title="Usual week" description="Set once, then fill the next four weeks.">
-        <div className={styles.weeklyList}>{weekdayLabels.map((label,index) => {
-          const periods = slots.filter((slot) => slot.student_user_id === activeStudent?.student_user_id && slot.scope === "weekly" && slot.weekday === index + 1);
-          return <button key={label} type="button" onClick={() => openAvailabilityDrawer("weekly", index + 1)}><span>{label}</span><span>{periods.length ? periods.map((slot) => `${minutesToTime(slot.start_minute)}–${minutesToTime(slot.end_minute)}`).join(", ") : "Not available"} ›</span></button>;
-        })}</div>
+      <DetailDrawer open={drawer === "weekly"} onClose={() => setDrawer(null)} title="Availability" description="Set several days at once.">
         {error ? <p role="alert" className="my-3 text-sm text-rose-700">{error}</p> : null}
-        <div className="mt-4 flex flex-wrap gap-2"><button type="button" className="primary-button" disabled={!weekReady || saving} onClick={()=>void autoFillUsualWeek()}>{saving ? "Filling…" : "Auto-fill next 4 weeks"}</button>{!isCfiView ? <button type="button" className="ghost-button" onClick={()=>{setReviewChecked(false);setDrawer("review");}}>Review dates</button> : null}</div>
+        <section className={styles.quickAvailability}>
+          <span className={styles.quickLabel}>Days</span>
+          <div className={styles.dayChips} aria-label="Available weekdays">{weekdayLabels.map((label,index) => {
+            const weekday = index + 1;
+            return <button key={label} type="button" aria-label={label} aria-pressed={quickWeekdays.includes(weekday)} onClick={() => setQuickWeekdays((current) => current.includes(weekday) ? current.filter((day) => day !== weekday) : [...current, weekday].sort())}>{label.slice(0,2)}</button>;
+          })}</div>
+          <div className={styles.quickTimes}>
+            <label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={quickAvailability.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setQuickAvailability((current) => ({ ...current, start: event.target.value }))} /></label>
+            <label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={quickAvailability.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setQuickAvailability((current) => ({ ...current, end: event.target.value }))} /></label>
+          </div>
+          <button type="button" className="primary-button" disabled={!weekReady || saving || !quickWeekdays.length} onClick={() => void applyQuickAvailability()}>{saving ? "Saving…" : "Save for 4 weeks"}</button>
+        </section>
+        <details className={styles.individualDays}>
+          <summary>Edit individual days</summary>
+          <div className={styles.weeklyList}>{weekdayLabels.map((label,index) => {
+            const periods = slots.filter((slot) => slot.student_user_id === activeStudent?.student_user_id && slot.scope === "weekly" && slot.weekday === index + 1);
+            return <button key={label} type="button" onClick={() => openAvailabilityDrawer("weekly", index + 1)}><span>{label}</span><span>{periods.length ? periods.map((slot) => `${minutesToTime(slot.start_minute)}–${minutesToTime(slot.end_minute)}`).join(", ") : "Unavailable"} ›</span></button>;
+          })}</div>
+        </details>
       </DetailDrawer>
       <DetailDrawer open={drawer === "details"} onClose={() => setDrawer(null)} title="Lesson details">
         {detailEntry ? <div className="space-y-3"><p className="font-semibold">{formatDate(new Date(detailEntry.start_at))} · {formatTime(detailEntry.start_at)}–{formatTime(detailEntry.end_at)}</p><p className="capitalize">{detailEntry.lesson_kind}</p>{detailEntry.aircraft_tail_number ? <p>{detailEntry.aircraft_tail_number}{detailEntry.aircraft_status && detailEntry.aircraft_status !== "available" ? ` · ${detailEntry.aircraft_status.replace("_", " ")}` : " · Available"}</p> : null}{detailEntry.note ? <p className="whitespace-pre-wrap">{detailEntry.note}</p> : null}{entryWarnings(detailEntry).map((warning) => <p key={warning} className="text-sm text-amber-800">⚠ {warning}</p>)}</div> : null}
