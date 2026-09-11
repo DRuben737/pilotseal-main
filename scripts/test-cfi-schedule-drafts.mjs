@@ -5,7 +5,7 @@ import ts from 'typescript';
 process.env.TZ = 'America/New_York';
 const source = await readFile(new URL('../lib/cfi-schedule-drafts.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { applyScheduleOperations, scheduleChanges, scheduleHasOverlap } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { applyScheduleOperations, scheduleChanges, scheduleHasOverlap, swapScheduleLessons } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const lesson = (id, start, end, day = '2026-09-14') => ({ id, entry_type: 'lesson', student_user_id: id, student_name: id, lesson_kind: 'flight', aircraft_id:null, aircraft_tail_number:null, aircraft_status:null, aircraft_status_note:null, aircraft_conflict:false, start_at: `${day}T${start}:00-04:00`, end_at: `${day}T${end}:00-04:00`, status: 'scheduled', note: '', auto_generated: false, is_own: false });
 const a = lesson('a', '07:00', '09:00');
 const b = lesson('b', '09:30', '11:30');
@@ -39,6 +39,14 @@ const repeated = applyScheduleOperations(original, [edit(b, 30), edit({ ...b, ..
 assert.equal(Date.parse(repeated.find(e => e.id === 'c').start_at), Date.parse(c.start_at) + 3600000);
 const restored = applyScheduleOperations(original, [edit(b, 30), { type: 'edit', id: 'b', values: { start_at: b.start_at, end_at: b.end_at, note: '', lesson_kind: 'flight', aircraft_id:null } }]);
 assert.equal(scheduleChanges(original, restored).length, 0);
+const swapped = swapScheduleLessons(original, 'a', 'd');
+assert.equal(Date.parse(swapped.find(e => e.id === 'a').start_at), Date.parse(d.start_at));
+assert.equal(Date.parse(swapped.find(e => e.id === 'd').start_at), Date.parse(a.start_at));
+assert.equal(Date.parse(swapped.find(e => e.id === 'a').end_at) - Date.parse(swapped.find(e => e.id === 'a').start_at), Date.parse(a.end_at) - Date.parse(a.start_at), 'a lesson keeps its duration');
+assert.equal(swapped.find(e => e.id === 'a').lesson_kind, a.lesson_kind, 'lesson details stay with the student');
+assert.equal(scheduleChanges(original, swapped).length, 2, 'a swap publishes exactly two edits');
+assert.throws(() => swapScheduleLessons(original, 'a', 'a'), /different lessons/);
+assert.throws(() => swapScheduleLessons([...original, { ...c, id:'same-student', student_user_id:'a' }], 'a', 'same-student'), /different students/);
 // Pure scheduling checks: no database or network calls.
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');

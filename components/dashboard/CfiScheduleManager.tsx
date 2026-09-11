@@ -53,7 +53,7 @@ import {
   type UnavailableBlock,
   type WeekOverride,
 } from "@/lib/cfi-schedule";
-import { applyScheduleOperations, scheduleChanges, scheduleHasOverlap, type ScheduleOperation, type ScheduleChange } from "@/lib/cfi-schedule-drafts";
+import { applyScheduleOperations, scheduleChanges, scheduleHasOverlap, swapScheduleLessons, type ScheduleOperation, type ScheduleChange } from "@/lib/cfi-schedule-drafts";
 import { fetchEnabledFeatureIds, fetchScheduleEligibility, updateEnabledFeatureIds, type ScheduleEligibility } from "@/lib/dashboard-preferences";
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
 
@@ -148,6 +148,11 @@ export default function CfiScheduleManager() {
   const [aircraft, setAircraft] = useState<ScheduleAircraft[]>([]);
   const [aircraftReservations, setAircraftReservations] = useState<AircraftReservation[]>([]);
   const [drawer, setDrawer] = useState<DrawerMode>(null);
+  const [swapMode, setSwapMode] = useState(false);
+  const [swapSourceId, setSwapSourceId] = useState("");
+  const [swapTargetId, setSwapTargetId] = useState("");
+  const dragSourceId = useRef("");
+  const suppressEntryClick = useRef(false);
 
   const [permissionDraft, setPermissionDraft] = useState<string[]>([]);
   const [confirmPermissions, setConfirmPermissions] = useState(false);
@@ -346,6 +351,8 @@ export default function CfiScheduleManager() {
     setWeekStart(getWeekStart(value));
     setAgendaStart(date);
     setAgendaDays(14);
+    setSwapMode(false);
+    setSwapSourceId("");
   }
 
   function stageOperations(next: ScheduleOperation[]) {
@@ -353,6 +360,47 @@ export default function CfiScheduleManager() {
     setOperations(next);
     batchId.current = crypto.randomUUID();
     setPublishAcknowledged(false);
+  }
+
+  function beginLessonSwap() {
+    setSwapMode(true);
+    setSwapSourceId("");
+    setSwapTargetId("");
+    setError("");
+    setMessage("");
+  }
+
+  function cancelLessonSwap() {
+    setSwapMode(false);
+    setSwapSourceId("");
+    setSwapTargetId("");
+    dragSourceId.current = "";
+  }
+
+  async function swapLessons(sourceId: string, targetId: string) {
+    if (!isCfiView || hasDraft || saving || !sourceId || !targetId || sourceId === targetId) return;
+    setError("");
+    try {
+      const next = swapScheduleLessons(entries, sourceId, targetId);
+      if (scheduleHasOverlap(next)) {
+        setError("These lesson lengths do not fit cleanly in each other's positions. Edit one lesson first, then try the swap again.");
+        setSwapTargetId("");
+        return;
+      }
+      const directChanges = scheduleChanges(entries, next).map((change) => change.after);
+      if (directChanges.length !== 2) throw new Error("The schedule changed before the swap could be prepared. Refresh and try again.");
+      const warningCount = directChanges.reduce((count, entry) => count + entryWarnings(entry, next).length, 0);
+      setSaving(true);
+      await publishScheduleDraft(revision, crypto.randomUUID(), directChanges);
+      cancelLessonSwap();
+      setMessage(warningCount ? `Lessons swapped. ${warningCount} schedule issue${warningCount === 1 ? " is" : "s are"} marked on the calendar.` : "Lessons swapped. Affected linked students were notified according to their preferences.");
+      const { start, end } = weekRange();
+      adoptSnapshot(await fetchScheduleEditorSnapshot(start, end));
+    } catch (failure) {
+      setError(getErrorMessage(failure, "Unable to swap these lessons."));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function reviewLatestDraft() {
@@ -966,6 +1014,7 @@ export default function CfiScheduleManager() {
             ...(isCfiView ? [
               { label: "Students", onSelect: () => setDrawer("students" as DrawerMode) },
               { label: "Manage access", disabled: hasDraft, onSelect: openAccessDrawer },
+              { label: "Swap lessons", disabled: hasDraft || entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled").length < 2, onSelect: beginLessonSwap },
             ] : [
               { label: "Usual weekly availability", disabled: !weekReady, onSelect: () => setDrawer("weekly" as DrawerMode) },
               ...(activeStudent?.storage_kind === "person" ? [{ label: "Weekly goal", disabled: !weekReady, onSelect: () => openStudentSettings(activeStudent) }] : []),
@@ -995,6 +1044,7 @@ export default function CfiScheduleManager() {
       {!isCfiView && weekReady ? <div className={styles.reminder} role="status"><span>{availabilityReview?.needs_review ? "Confirm your next 7 days." : `Confirmed through ${formatDate(new Date(`${availabilityReview?.confirmed_through}T12:00:00`))}.`}</span><button type="button" className={styles.textButton} onClick={() => { setReviewChecked(false); setDrawer("review"); }}>Review dates</button></div> : null}
       {error ? <p role="alert" className={`${styles.feedback} ${styles.error}`}>{error}</p> : null}
       {message ? <p role="status" className={styles.feedback}>{message}</p> : null}
+      {swapMode ? <div id="schedule-swap-guide" className={styles.swapBar} role="status"><span>{swapSourceId ? `${entries.find((entry) => entry.id === swapSourceId)?.student_name ?? "Lesson"} selected · tap another lesson` : "Tap two lessons to swap"}</span><button type="button" className={styles.textButton} onClick={cancelLessonSwap}>Cancel</button></div> : null}
       {hasDraft ? <div className={styles.draftBar}><strong>Unpublished draft · {changes.length} changed lesson(s)</strong><button className={styles.textButton} type="button" disabled={saving || !changes.length} onClick={() => void openPublishDrawer()}>Review &amp; publish</button></div> : null}
       {stale ? <p role="alert" className={styles.feedback}>The schedule changed. <button type="button" className={styles.textButton} onClick={() => void reviewLatestDraft()}>Review latest and reapply draft</button></p> : null}
       {!isCfiView && studentTab === "availability" ? <button type="button" className={styles.textButton} disabled={!weekReady} onClick={() => setDrawer("weekly")}>Edit usual week</button> : null}
@@ -1021,9 +1071,46 @@ export default function CfiScheduleManager() {
                 const warnings = entryWarnings(entry);
                 const aircraftLabel = entry.aircraft_tail_number || (entry.aircraft_id ? "Aircraft" : "All aircraft");
                 const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${entry.lesson_kind === "flight" ? "Flight" : "Ground"}` : entry.unavailable_kind === "aircraft" ? `${aircraftLabel} unavailable` : "Busy"}</span>{entry.entry_type === "lesson" && entry.lesson_kind === "flight" && entry.aircraft_tail_number ? <span className={styles.entryMeta}>{entry.aircraft_tail_number}{entry.aircraft_status && entry.aircraft_status !== "available" ? ` · ${entry.aircraft_status.replace("_", " ")}` : ""}</span> : null}{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ {warnings.length} schedule issue{warnings.length === 1 ? "" : "s"} · tap for details</span> : null}</>;
-                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""}`;
-                return isCfiView || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving} onClick={() => {
+                const selectedForSwap = swapSourceId === entry.id;
+                const targetedForSwap = swapTargetId === entry.id;
+                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${selectedForSwap ? styles.swapSelected : ""} ${targetedForSwap ? styles.swapTarget : ""}`;
+                const canSwapEntry = isCfiView && entry.entry_type === "lesson" && entry.status === "scheduled" && !hasDraft;
+                return isCfiView || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving || (swapMode && !canSwapEntry)} draggable={canSwapEntry && !saving}
+                  aria-pressed={swapMode && selectedForSwap} aria-describedby={swapMode ? "schedule-swap-guide" : undefined}
+                  title={canSwapEntry && !swapMode ? "Drag onto another student's lesson to swap" : undefined}
+                  onDragStart={(event) => {
+                    if (!canSwapEntry) { event.preventDefault(); return; }
+                    dragSourceId.current = entry.id;
+                    suppressEntryClick.current = true;
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", entry.id);
+                  }}
+                  onDragOver={(event) => {
+                    if (!canSwapEntry || !dragSourceId.current || dragSourceId.current === entry.id) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setSwapTargetId(entry.id);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const sourceId = event.dataTransfer.getData("text/plain") || dragSourceId.current;
+                    setSwapTargetId("");
+                    suppressEntryClick.current = true;
+                    void swapLessons(sourceId, entry.id);
+                  }}
+                  onDragEnd={() => {
+                    dragSourceId.current = "";
+                    setSwapTargetId("");
+                    window.setTimeout(() => { suppressEntryClick.current = false; }, 0);
+                  }}
+                  onClick={() => {
+                  if (suppressEntryClick.current) { suppressEntryClick.current = false; return; }
                   if (!isCfiView) { setDetailEntry(entry); setDrawer("details"); }
+                  else if (entry.entry_type === "lesson" && swapMode) {
+                    if (!swapSourceId) setSwapSourceId(entry.id);
+                    else if (swapSourceId === entry.id) setSwapSourceId("");
+                    else void swapLessons(swapSourceId, entry.id);
+                  }
                   else if (entry.entry_type === "lesson") openEditLesson(entry);
                   else { const block = blocks.find((item) => item.id === entry.id); if (block) openBlockDrawer(date, block); }
                 }}>{content}</button> : <div key={entry.id} className={className}>{content}</div>;
@@ -1180,7 +1267,7 @@ function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => v
   return <DetailDrawer open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
     <div className={styles.helpContent}>
       <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
-      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling lets you select several aircraft and choose separate Flight and Ground counts for each student. Those counts apply only to that run.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. A Grounded, Maintenance, or Away status stays visible but does not prevent booking.</li><li>Manual edits save immediately. Moving a lesson pushes every later lesson that day; linked affected students are notified according to their preferences.</li></ol></section>
+      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling lets you select several aircraft and choose separate Flight and Ground counts for each student. Those counts apply only to that run.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. A Grounded, Maintenance, or Away status stays visible but does not prevent booking.</li><li>Drag one lesson onto another student’s lesson to swap them. On a phone, choose Swap lessons from the options menu, then tap the two lessons.</li><li>Manual edits save immediately. Moving a lesson pushes every later lesson that day; linked affected students are notified according to their preferences.</li></ol></section>
       <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson pushes every later lesson that day by the same amount. Manual conflicts are warnings, so you stay in control.</p></section>
     </div>
   </DetailDrawer>;

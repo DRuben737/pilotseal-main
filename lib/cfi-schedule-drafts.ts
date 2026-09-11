@@ -58,3 +58,18 @@ export function scheduleHasOverlap(entries: ScheduleEntry[]) {
   const lessons = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled").sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
   return lessons.some((entry, index) => index > 0 && Date.parse(entry.start_at) < Date.parse(lessons[index - 1].end_at));
 }
+
+export function swapScheduleLessons(entries: ScheduleEntry[], sourceId: string, targetId: string) {
+  if (!sourceId || !targetId || sourceId === targetId) throw new Error("Choose two different lessons to swap.");
+  const source = entries.find((entry) => entry.id === sourceId && entry.entry_type === "lesson" && entry.status === "scheduled");
+  const target = entries.find((entry) => entry.id === targetId && entry.entry_type === "lesson" && entry.status === "scheduled");
+  if (!source || !target) throw new Error("One of these lessons is no longer available. Refresh and try again.");
+  if (source.student_user_id === target.student_user_id) throw new Error("Choose lessons for two different students.");
+
+  const moveTo = (entry: ScheduleEntry, startAt: string) => {
+    const duration = Date.parse(entry.end_at) - Date.parse(entry.start_at);
+    return { ...entry, start_at: new Date(startAt).toISOString(), end_at: new Date(Date.parse(startAt) + duration).toISOString() };
+  };
+  return entries.map((entry) => entry.id === sourceId ? moveTo(entry, target.start_at) : entry.id === targetId ? moveTo(entry, source.start_at) : { ...entry })
+    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
+}

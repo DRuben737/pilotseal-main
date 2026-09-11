@@ -65,6 +65,7 @@
 .error, .warning { color: #9a5200; }
 .draftBar { border-top: 1px solid var(--schedule-line); border-bottom: 1px solid var(--schedule-line); padding: 8px 0; font-size: 13px; }
 .draftBar strong { font-weight: 600; }
+.swapBar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px; margin: 8px 0; padding: 4px 4px 4px 10px; border: 1px solid #99c8f4; border-radius: 10px; background: #f2f7ff; color: #17456f; font-size: 12px; font-weight: 600; }
 .calendar { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; border-top: 1px solid var(--schedule-line); }
 .fullWeek { grid-template-columns: repeat(7, minmax(0,1fr)); }
 .day { min-width: 0; padding: 12px 10px; border-right: 1px solid var(--schedule-line); }
@@ -80,6 +81,11 @@
 .entry { display: block; width: 100%; border: 0; border-left: 2px solid var(--schedule-blue); border-radius: 0; background: #f5f9ff; padding: 9px 10px; text-align: left; color: var(--schedule-ink); font: inherit; font-size: 13px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
 .entry strong { font-weight: 600; }
 .entryMeta { display: block; font-size: 12px; color: var(--schedule-muted); }
+.entry[draggable="true"] { cursor: grab; }
+.entry[draggable="true"]:active { cursor: grabbing; }
+.swapSelected { box-shadow: inset 0 0 0 2px #0066cc; background-image: repeating-linear-gradient(135deg, transparent, transparent 7px, rgba(0,102,204,.1) 7px, rgba(0,102,204,.1) 14px); }
+.swapSelected::after { content: "Selected"; display: block; margin-top: 4px; color: #0055aa; font-size: 11px; font-weight: 600; }
+.swapTarget { box-shadow: inset 0 0 0 2px #34a853; }
 .flight { border-left-color: #147ce5; background: #f2f7ff; }
 .ground { border-left-color: #8b5cf6; background: #f7f3ff; }
 .busy { border-left-color: #c7c7cc; background: var(--schedule-surface); color: var(--schedule-muted); }
@@ -157,4 +163,9 @@
   .autoCount { padding-left: 26px; justify-content: start; }
   .autoCounts { padding-left: 26px; }
   .toolbar { justify-content: flex-start; }
+  .swapBar { position: sticky; top: 6px; z-index: 20; margin: 6px 0; box-shadow: 0 3px 12px rgba(0,0,0,.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entry, .swapBar { transition: none; }
 }
