@@ -15,7 +15,6 @@ import {
 } from "@/lib/dashboard-navigation";
 import { resolveDisplayIdentity } from "@/lib/identity";
 import { fetchEnabledFeatureIds, type OptionalFeatureId } from "@/lib/dashboard-preferences";
-import { type OrganizationPermission } from "@/lib/organizations";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -323,12 +322,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     email: session?.user?.email,
   });
 
-  const organizationWorkspacePermissions: OrganizationPermission[] = ["fleet", "members", "endorsements", "audit"];
-  const managedOrganizations = organizations.filter((organization) => (
-    organization.member_role === "owner"
-    || organization.member_role === "platform_admin"
-    || organization.permissions.some((permission) => organizationWorkspacePermissions.includes(permission))
-  ));
+  const managedOrganizations = organizations;
   const canManage = managedOrganizations.length > 0;
   const activeManagedOrganization = managedOrganizations.find(
     (organization) => organization.id === activeOrganizationId

@@ -47,6 +47,7 @@ import {
   type OrganizationTeachingRole,
 } from "@/lib/organizations";
 import OrganizationEndorsementRequests from "@/components/dashboard/OrganizationEndorsementRequests";
+import EndorsementRecordsManager from "@/components/dashboard/EndorsementRecordsManager";
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
 import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
 import {
@@ -218,7 +219,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const canManage = canManageOrganization(role) || Boolean(activeOrganization?.permissions.length);
   const canManageMembers = hasOrganizationPermission(activeOrganization, "members");
   const canEditStudents = canManageMembers || activeOrganization?.teaching_role === "instructor";
-  const canManageFleet = hasOrganizationPermission(activeOrganization, "fleet");
+  const canManageFleet = canManageOrganization(role);
   const canManageAdmins = canManageOrganizationAdmins(role);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1355,9 +1356,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const canViewRequestedPage = view === "people"
     ? canEditStudents
     : view === "fleet"
-      ? canManageFleet
+      ? true
       : view === "endorsements"
-        ? hasOrganizationPermission(activeOrganization, "endorsements")
+        ? canManageOrganization(role)
         : canManage;
   if (!canViewRequestedPage) {
     return (
@@ -2115,7 +2116,10 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       ) : null}
 
       {view === "endorsements" ? (
-        <OrganizationEndorsementRequests organizationId={activeOrganization.id} embedded />
+        <>
+          <EndorsementRecordsManager organizationOnly />
+          <OrganizationEndorsementRequests organizationId={activeOrganization.id} embedded />
+        </>
       ) : null}
     </div>
   );

@@ -110,7 +110,7 @@ function ActionIcon({ kind }: { kind: "open" | "external" | "delete" | "close" |
   }
 }
 
-export default function EndorsementRecordsManager() {
+export default function EndorsementRecordsManager({ organizationOnly = false }: { organizationOnly?: boolean }) {
   const { session } = useAuthSession();
   const { activeOrganization } = useOrganization();
   const canViewOrganizationRecords = canManageOrganization(activeOrganization?.member_role);
@@ -123,7 +123,9 @@ export default function EndorsementRecordsManager() {
   const [activePdfUrl, setActivePdfUrl] = useState("");
   const [expandedStudent, setExpandedStudent] = useState("");
   const [editingRecord, setEditingRecord] = useState<EndorsementRecord | null>(null);
-  const [view, setView] = useState<"personal" | "received" | "organization">("personal");
+  const [view, setView] = useState<"personal" | "received" | "organization">(
+    organizationOnly ? "organization" : "personal"
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -140,13 +142,14 @@ export default function EndorsementRecordsManager() {
       try {
         setLoading(true);
         setStatus("");
+        const effectiveView = organizationOnly ? "organization" : view;
         const [ownRecords, organizationRecords] = await Promise.all([
-          view === "personal"
+          effectiveView === "personal"
             ? fetchEndorsementRecords(session.user.id)
-            : view === "received"
+            : effectiveView === "received"
               ? fetchReceivedEndorsementRecords(session.user.id)
-              : fetchIssuedOrganizationEndorsementRecords(session.user.id),
-          view === "organization" && activeOrganization?.id && canViewOrganizationRecords
+              : organizationOnly ? Promise.resolve([]) : fetchIssuedOrganizationEndorsementRecords(session.user.id),
+          effectiveView === "organization" && activeOrganization?.id && canViewOrganizationRecords
             ? fetchOrganizationEndorsementRecords(activeOrganization.id)
             : Promise.resolve([]),
         ]);
@@ -172,7 +175,7 @@ export default function EndorsementRecordsManager() {
     return () => {
       cancelled = true;
     };
-  }, [activeOrganization?.id, canViewOrganizationRecords, session?.user?.id, view]);
+  }, [activeOrganization?.id, canViewOrganizationRecords, organizationOnly, session?.user?.id, view]);
 
   const filteredRecords = useMemo(
     () => records.filter((record) => matchesRecord(record, query)),
@@ -262,18 +265,22 @@ export default function EndorsementRecordsManager() {
       {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
       <ManagementDisclosure
         id="endorsement-records"
-        title="Endorsement Records"
+        title={organizationOnly ? "Issued endorsements" : "Endorsement Records"}
         summary={loading ? "Loading…" : `${records.length}`}
         helpContent={
-          <>
-            <p>Your issued records remain in your personal history.</p>
-            <p>Records created while you belong to an organization also appear in that organization’s activity. This overlap is intentional and does not create duplicate records.</p>
-            <p>Use the three views to switch between records you issued, records issued to you, and organization activity. Personal records you own can be edited or deleted; confirmed organization records are immutable.</p>
-          </>
+          organizationOnly ? (
+            <p>Shows immutable endorsements issued by organization CFIs to organization students while both memberships were active.</p>
+          ) : (
+            <>
+              <p>Your issued records remain in your personal history.</p>
+              <p>Records created while you belong to an organization also appear in that organization’s activity. This overlap is intentional and does not create duplicate records.</p>
+              <p>Use the three views to switch between records you issued, records issued to you, and organization activity. Personal records you own can be edited or deleted; confirmed organization records are immutable.</p>
+            </>
+          )
         }
       >
 
-        <nav className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Endorsement record views">
+        {!organizationOnly ? <nav className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Endorsement record views">
           {([
             ["personal", "My issued records"],
             ["received", "Issued to me"],
@@ -289,7 +296,7 @@ export default function EndorsementRecordsManager() {
               {label}
             </button>
           ))}
-        </nav>
+        </nav> : null}
 
         <div className="mt-5 flex flex-col items-end gap-2 sm:flex-row">
           <label className="saas-field min-w-0 flex-1">

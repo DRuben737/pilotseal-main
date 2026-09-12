@@ -615,15 +615,20 @@ export async function updateOrganizationAircraft(
 
 export async function deleteOrganizationAircraft(organizationId: string, aircraftId: string) {
   const supabase = getSupabaseClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("aircraft")
     .delete()
     .eq("id", aircraftId)
     .eq("organization_id", organizationId)
-    .eq("visibility", "organization");
+    .eq("visibility", "organization")
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw error;
+  }
+  if (!data) {
+    throw new Error("You do not have permission to delete this organization aircraft.");
   }
 }
 

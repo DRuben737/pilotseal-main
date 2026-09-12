@@ -22,9 +22,9 @@ export const dashboardPrimaryNavigation: DashboardNavItem[] = [
 ];
 
 export const dashboardOrganizationNavigation: DashboardNavItem[] = [
-  { href: "/dashboard/organization/fleet", label: "Fleet management", access: "organization-manager", organizationPermission: "fleet" },
+  { href: "/dashboard/organization/fleet", label: "Aircraft records", access: "organization" },
   { href: "/dashboard/organization/people", label: "Members", access: "organization-manager", organizationPermission: "members" },
-  { href: "/dashboard/organization/endorsements", label: "Endorsement approvals", access: "organization-manager", organizationPermission: "endorsements" },
+  { href: "/dashboard/organization/endorsements", label: "Endorsements", access: "organization-manager", organizationPermission: "endorsements" },
   { href: "/dashboard/organization/audit", label: "Audit Log", access: "organization-manager", organizationPermission: "audit" },
 ];
 
@@ -110,5 +110,5 @@ export function getDashboardLinksForWorkspace(input: {
 export function getOrganizationDashboardHref(permissions: readonly OrganizationPermission[]) {
   return dashboardOrganizationNavigation.find(
     (item) => item.organizationPermission && permissions.includes(item.organizationPermission)
-  )?.href ?? "/dashboard/account-settings";
+  )?.href ?? "/dashboard/organization/fleet";
 }

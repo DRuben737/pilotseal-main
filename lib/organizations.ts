@@ -495,9 +495,16 @@ export function hasOrganizationPermission(
   permission: OrganizationPermission
 ) {
   if (!organization) return false;
-  return organization.member_role === "owner"
-    || organization.member_role === "platform_admin"
-    || organization.permissions.includes(permission);
+  if (organization.member_role === "owner" || organization.member_role === "platform_admin") {
+    return true;
+  }
+  if (organization.member_role === "organization_admin" && (permission === "fleet" || permission === "endorsements")) {
+    return true;
+  }
+  if (organization.member_role === "member" && permission === "fleet") {
+    return false;
+  }
+  return organization.permissions.includes(permission);
 }
 
 export function normalizeOrganizationPermissions(value: unknown): OrganizationPermission[] {

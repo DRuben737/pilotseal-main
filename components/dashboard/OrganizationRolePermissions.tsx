@@ -80,6 +80,10 @@ export default function OrganizationRolePermissions() {
     setStatus("");
   }
 
+  function isFixedPermission(role: ConfigurableRole, permission: OrganizationPermission) {
+    return permission === "fleet" || (role === "organization_admin" && permission === "endorsements");
+  }
+
   async function saveRole(role: ConfigurableRole) {
     if (!activeOrganization?.id) return;
     setSavingRole(role);
@@ -112,10 +116,16 @@ export default function OrganizationRolePermissions() {
               <div className="mt-1 grid gap-1">
                 {ORGANIZATION_PERMISSIONS.map((permission) => (
                   <label key={permission} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-slate-50">
-                    <input className="mt-0.5 h-4 w-4 accent-blue-600" type="checkbox" checked={drafts[role].includes(permission)} onChange={() => togglePermission(role, permission)} />
+                    <input className="mt-0.5 h-4 w-4 accent-blue-600" type="checkbox" checked={drafts[role].includes(permission)} disabled={isFixedPermission(role, permission)} onChange={() => togglePermission(role, permission)} />
                     <span>
                       <span className="block text-xs font-semibold text-slate-900">{permissionLabels[permission].label}</span>
-                      <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{permissionLabels[permission].description}</span>
+                      <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
+                        {permission === "fleet"
+                          ? role === "member" ? "Owner and Organization Admin only." : "Required for Organization Admin."
+                          : role === "organization_admin" && permission === "endorsements"
+                            ? "Required so Organization Admin can review issued records."
+                            : permissionLabels[permission].description}
+                      </span>
                     </span>
                   </label>
                 ))}

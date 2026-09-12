@@ -48,8 +48,8 @@ select lives_ok(
 );
 select is(
   (select permissions from public.list_organization_role_permissions('85000000-0000-4000-8000-000000000010') where role = 'member'),
-  array['fleet', 'notifications']::text[],
-  'role permissions are normalized and deduplicated'
+  array['notifications']::text[],
+  'role permissions are normalized and Fleet is removed from Member'
 );
 select throws_ok(
   $$select public.set_organization_role_permissions(
@@ -62,8 +62,8 @@ select throws_ok(
 select set_config('request.jwt.claim.sub', '85000000-0000-4000-8000-000000000002', true);
 select is(
   (select permissions from public.get_my_organizations() where id = '85000000-0000-4000-8000-000000000010'),
-  array['fleet', 'notifications']::text[],
-  'a member receives the capabilities assigned to the member role'
+  array['notifications']::text[],
+  'a member receives assigned capabilities except Fleet administration'
 );
 select throws_ok(
   $$select public.set_organization_role_permissions(
