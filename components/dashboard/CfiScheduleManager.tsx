@@ -57,7 +57,7 @@ import { applyScheduleOperations, scheduleChanges, scheduleHasOverlap, swapSched
 import { fetchEnabledFeatureIds, fetchScheduleEligibility, updateEnabledFeatureIds, type ScheduleEligibility } from "@/lib/dashboard-preferences";
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
 
-type DrawerMode = "help" | "review" | "students" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "settings" | "publish" | null;
+type DrawerMode = "help" | "review" | "students" | "availability-overview" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "settings" | "publish" | null;
 type AvailabilityRow = { start: string; end: string };
 type AutoRequestRow = AutomaticScheduleRequest & { selected: boolean };
 
@@ -590,10 +590,10 @@ export default function CfiScheduleManager() {
     finally { setSaving(false); }
   }
 
-  function openNewLesson(date = localDateKey(weekStart), start = "08:00") {
+  function openNewLesson(date = localDateKey(weekStart), start = "08:00", studentUserId = activeStudents[0]?.student_user_id ?? "") {
     if (!weekReady) return;
     ++loadGeneration.current;
-    setLesson({ ...emptyLesson, studentUserId: activeStudents[0]?.student_user_id ?? "", date, start });
+    setLesson({ ...emptyLesson, studentUserId, date, start });
     setLessonWarnings([]);
     setDrawer("lesson");
   }
@@ -974,6 +974,7 @@ export default function CfiScheduleManager() {
   }
 
   const displayDays = Array.from({ length: calendarView ? 7 : agendaDays }, (_, index) => addCalendarDays(new Date(`${rangeStartKey}T12:00:00`), index));
+  const availabilityOverviewDays = Array.from({ length: 7 }, (_, index) => addCalendarDays(weekStart, index));
   const activeStudent = studentViews.find((item) => item.cfi_user_id === activeCfiId);
   const calendarEntries: ScheduleEntry[] = isCfiView ? [
     ...entries.filter((entry) => entry.entry_type === "lesson"),
@@ -1013,6 +1014,7 @@ export default function CfiScheduleManager() {
           <ScheduleMenu label="Schedule options" icon="⋯" disabled={saving} actions={[
             ...(isCfiView ? [
               { label: "Students", onSelect: () => setDrawer("students" as DrawerMode) },
+              { label: "Student availability", disabled: !activeStudents.length || !weekReady, onSelect: () => setDrawer("availability-overview" as DrawerMode) },
               { label: "Manage access", disabled: hasDraft, onSelect: openAccessDrawer },
               { label: "Swap lessons", disabled: hasDraft || entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled").length < 2, onSelect: beginLessonSwap },
             ] : [
@@ -1134,6 +1136,32 @@ export default function CfiScheduleManager() {
               return <tr key={student.student_user_id} className="border-b border-slate-100"><td className="py-2 font-semibold text-slate-900"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: student.color }} />{student.student_name}</td><td>{override?.target_sessions ?? student.default_weekly_sessions}{override ? " · override" : ""}</td><td>{override?.duration_min ?? student.default_duration_min} min</td><td>{availabilityCount} day{availabilityCount === 1 ? "" : "s"}</td><td className="text-right">{student.storage_kind === "person" ? <button className="ghost-button" type="button" disabled={!weekReady || saving} onClick={() => openAvailabilityDrawer("weekly", 1, localDateKey(new Date()), student.student_user_id)}>Availability</button> : null}<button className="ghost-button" type="button" disabled={hasDraft || saving} onClick={() => openStudentSettings(student)}>Settings</button></td></tr>;
             })}</tbody></table></div>
           )}
+      </DetailDrawer>
+      <DetailDrawer open={drawer === "availability-overview"} onClose={() => setDrawer(null)} title="Student availability" description="Tap an available time to add a lesson." width="wide">
+        <div className={styles.availabilityWeekNav}>
+          <button className={styles.weekArrow} type="button" aria-label="Previous availability week" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(addCalendarDays(weekStart, -7)))}>‹</button>
+          <strong>{formatDate(availabilityOverviewDays[0])} – {formatDate(availabilityOverviewDays[6])}</strong>
+          <button className={styles.weekArrow} type="button" aria-label="Next availability week" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(addCalendarDays(weekStart, 7)))}>›</button>
+        </div>
+        <div className={styles.availabilityOverview} aria-busy={!weekReady}>
+          {activeStudents.map((student) => {
+            const studentDays = availabilityOverviewDays.map((day) => ({ day, periods: availabilityForDate({ date: day, studentUserId: student.student_user_id, slots, overrideDates }) }));
+            return <section className={styles.studentAvailability} key={student.student_user_id} aria-label={`${student.student_name} availability`}>
+              <div className={styles.studentAvailabilityHeader}><span className={styles.studentColor} style={{ background: student.color }} aria-hidden="true" /><strong>{student.student_name}</strong></div>
+              <div className={styles.availabilityDayGrid}>{studentDays.map(({ day, periods }) => {
+                const date = localDateKey(day);
+                return <div className={styles.availabilityDay} key={date} data-empty={!periods.length}>
+                  <div className={styles.availabilityDayLabel}><strong>{new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(day)}</strong><span>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(day)}</span></div>
+                  <div className={styles.availabilityPeriods}>{periods.length ? periods.map((period) => {
+                    const start = localDateTimeValue(period.start).slice(11);
+                    const label = `${formatTime(period.start.toISOString())}–${formatTime(period.end.toISOString())}`;
+                    return <button type="button" key={`${period.start.toISOString()}-${period.end.toISOString()}`} disabled={!weekReady || saving} aria-label={`Schedule ${student.student_name} on ${formatDate(day)} at ${formatTime(period.start.toISOString())}`} onClick={() => openNewLesson(date, start, student.student_user_id)}>{label}</button>;
+                  }) : <span>Unavailable</span>}</div>
+                </div>;
+              })}</div>
+            </section>;
+          })}
+        </div>
       </DetailDrawer>
       <DetailDrawer open={drawer === "review"} onClose={() => setDrawer(null)} title="Your availability" description="Check the next 14 days.">
         <button type="button" className={styles.textButton} onClick={() => setDrawer("weekly")}>Set usual week</button>
@@ -1267,7 +1295,7 @@ function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => v
   return <DetailDrawer open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
     <div className={styles.helpContent}>
       <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
-      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling lets you select several aircraft and choose separate Flight and Ground counts for each student. Those counts apply only to that run.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. A Grounded, Maintenance, or Away status stays visible but does not prevent booking.</li><li>Drag one lesson onto another student’s lesson to swap them. On a phone, choose Swap lessons from the options menu, then tap the two lessons.</li><li>Manual edits save immediately. Moving a lesson pushes every later lesson that day; linked affected students are notified according to their preferences.</li></ol></section>
+      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use Student availability in the options menu to scan everyone’s week. Tap any available time to start a lesson for that student.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling lets you select several aircraft and choose separate Flight and Ground counts for each student. Those counts apply only to that run.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. A Grounded, Maintenance, or Away status stays visible but does not prevent booking.</li><li>Drag one lesson onto another student’s lesson to swap them. On a phone, choose Swap lessons from the options menu, then tap the two lessons.</li><li>Manual edits save immediately. Moving a lesson pushes every later lesson that day; linked affected students are notified according to their preferences.</li></ol></section>
       <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson pushes every later lesson that day by the same amount. Manual conflicts are warnings, so you stay in control.</p></section>
     </div>
   </DetailDrawer>;

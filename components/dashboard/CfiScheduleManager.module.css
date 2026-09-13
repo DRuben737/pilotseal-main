@@ -102,6 +102,24 @@
 .agenda .entry + .entry { border-top: 1px solid #f0f0f0; padding-top: 9px; }
 .availability { display: block; text-align: left; width: 100%; padding: 4px 0; border: 0; background: transparent; color: var(--schedule-blue); font: inherit; font-size: 14px; line-height: 1.6; cursor: pointer; }
 .moreDates { display: block; margin: 12px auto 0; }
+.availabilityWeekNav { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; gap: 6px; margin-bottom: 6px; }
+.availabilityWeekNav strong { text-align: center; color: var(--schedule-ink); font-size: 13px; font-weight: 600; }
+.availabilityOverview { display: grid; }
+.studentAvailability { padding: 16px 0; border-bottom: 1px solid var(--schedule-line); }
+.studentAvailability:first-child { border-top: 1px solid var(--schedule-line); }
+.studentAvailabilityHeader { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; }
+.studentAvailabilityHeader strong { font-weight: 600; }
+.studentColor { flex: 0 0 9px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.1); }
+.availabilityDayGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.availabilityDay { min-width: 0; padding: 8px; border-radius: 9px; background: var(--schedule-surface); }
+.availabilityDay[data-empty="true"] { background: transparent; }
+.availabilityDayLabel { display: flex; flex-direction: column; margin-bottom: 7px; line-height: 1.25; }
+.availabilityDayLabel strong { font-size: 11px; font-weight: 600; }
+.availabilityDayLabel span { color: var(--schedule-muted); font-size: 10px; }
+.availabilityPeriods { display: grid; gap: 5px; }
+.availabilityPeriods button { width: 100%; min-height: 34px; padding: 5px 4px; border: 1px solid #b8d8f6; border-radius: 7px; background: #fff; color: #0055aa; font: inherit; font-size: 10px; font-weight: 600; cursor: pointer; }
+.availabilityPeriods button:hover, .availabilityPeriods button:active { border-color: #0071e3; background: #eaf4ff; }
+.availabilityPeriods > span { color: var(--schedule-muted); font-size: 10px; line-height: 1.35; }
 .weeklyList { display: grid; }
 .weeklyList button { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; border: 0; border-bottom: 1px solid #e5e5ea; background: transparent; padding: 12px 0; text-align: left; font-size: 14px; }
 .weeklyList button span:last-child { color: #6e6e73; font-size: 13px; }
@@ -164,6 +182,15 @@
   .autoCounts { padding-left: 26px; }
   .toolbar { justify-content: flex-start; }
   .swapBar { position: sticky; top: 6px; z-index: 20; margin: 6px 0; box-shadow: 0 3px 12px rgba(0,0,0,.08); }
+  .availabilityWeekNav { margin-bottom: 2px; }
+  .studentAvailability { padding: 14px 0; }
+  .availabilityDayGrid { display: grid; grid-template-columns: 1fr; gap: 0; }
+  .availabilityDay { display: grid; grid-template-columns: 74px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 45px; padding: 5px 0; border-radius: 0; border-top: 1px solid #f0f0f2; background: transparent; }
+  .availabilityDayLabel { margin: 0; }
+  .availabilityDayLabel span { font-size: 11px; }
+  .availabilityPeriods { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+  .availabilityPeriods button { width: auto; min-height: 38px; padding: 6px 9px; font-size: 11px; }
+  .availabilityPeriods > span { font-size: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -46,6 +46,14 @@ try{
   const page=await context.newPage();
   await page.goto(`${appUrl}/dashboard/schedule`);
   await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Schedule options',exact:true}).click();
+  await page.getByRole('menuitem',{name:'Student availability',exact:true}).click();
+  const availabilityOverview=page.getByRole('dialog',{name:'Student availability',exact:true});
+  await availabilityOverview.waitFor();
+  await availabilityOverview.getByRole('region',{name:'Aircraft UI Student availability',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'student availability overview fits a mobile viewport');
+  await page.keyboard.press('Escape');
+  await availabilityOverview.waitFor({state:'hidden'});
   await page.getByLabel('Jump to date').fill(date);
   await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
   await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
