@@ -10,7 +10,6 @@ import {
   PASSWORD_HELP_TEXT,
   PASSWORD_MIN_LENGTH,
 } from "@/components/auth/auth-errors";
-import OrganizationAccessManager from "@/components/dashboard/OrganizationAccessManager";
 import ScheduleAccessSettings from "@/components/dashboard/ScheduleAccessSettings";
 import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
 import { getDeterministicGreeting } from "@/lib/greetings";
@@ -984,8 +983,6 @@ export default function AccountSettingsPanel() {
   return (
     <div className="dashboard-settings-list">
       {greeting ? <p className="saas-greeting">{greeting}</p> : null}
-
-      <OrganizationAccessManager />
 
       <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">

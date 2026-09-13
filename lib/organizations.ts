@@ -278,9 +278,27 @@ export async function fetchOrganizationInvitation(token: string) {
 
 export async function acceptOrganizationMemberInvitation(token: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("accept_organization_member_invitation", { p_token: token });
-  if (error) throw error;
-  return data as string;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data, error } = await supabase.rpc("accept_organization_member_invitation", { p_token: token });
+    if (!error) return data as string;
+
+    lastError = error;
+    if (!isTransientOrganizationJoinError(error) || attempt === 2) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+
+  throw lastError;
+}
+
+function isTransientOrganizationJoinError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const value = error as Record<string, unknown>;
+  const message = [value.code, value.message, value.details, value.hint]
+    .filter((part) => typeof part === "string")
+    .join(" ");
+  return /\b(?:502|503|504)\b|gateway|upstream|timed?\s*out|temporar(?:y|ily)|connection/i.test(message);
 }
 
 export async function registerFromOrganizationInvitation(input: {
