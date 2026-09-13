@@ -93,6 +93,19 @@ const fairResult=generateAutomaticSchedule({...autoInput,access:fairAccess,slots
 const fairTotals=Object.fromEntries(fairAccess.map((student)=>[student.student_user_id,(student.student_user_id==='fa'?2:0)+fairResult.drafts.filter((draft)=>draft.student_user_id===student.student_user_id&&draft.lesson_kind==='flight').length]));
 assert.equal(fairResult.drafts.filter((draft)=>draft.student_user_id==='fa').length,0,'students with more existing Flights wait while lower-count students receive scarce slots');
 assert(Math.max(...Object.values(fairTotals))-Math.min(...Object.values(fairTotals))<=1,'final weekly Flight totals remain as even as available slots allow');
+const compactAccess=[
+  {student_user_id:'compact-a',student_name:'Alpha',default_duration_min:120,default_weekly_sessions:1},
+  {student_user_id:'compact-b',student_name:'Bravo',default_duration_min:120,default_weekly_sessions:1},
+  {student_user_id:'compact-c',student_name:'Charlie',default_duration_min:120,default_weekly_sessions:1},
+];
+const compactSlots=[
+  {student_user_id:'compact-a',scope:'weekly',weekday:1,start_minute:420,end_minute:540,timezone:'America/New_York'},
+  {student_user_id:'compact-b',scope:'weekly',weekday:1,start_minute:600,end_minute:780,timezone:'America/New_York'},
+  {student_user_id:'compact-c',scope:'weekly',weekday:1,start_minute:540,end_minute:660,timezone:'America/New_York'},
+];
+const compactResult=generateAutomaticSchedule({...autoInput,access:compactAccess,slots:compactSlots,blocks:[],requests:compactAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:1,groundSessions:0}))});
+assert.deepEqual(compactResult.drafts.map((draft)=>draft.student_user_id),['compact-a','compact-c','compact-b'],'an available student who closes the current gap is selected before a later start');
+assert.deepEqual(compactResult.drafts.map((draft)=>new Date(draft.start_at).getHours()),[7,9,11],'automatic lessons run back-to-back when availability and aircraft permit');
 const cancelledEntry={...a,status:'cancelled'};
 const ignoresCancelled=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[cancelledEntry],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0}]});
 assert.equal(ignoresCancelled.drafts[0].start_at,new Date(a.start_at).toISOString(),'cancelled lessons do not consume time or weekly counts');

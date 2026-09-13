@@ -759,76 +759,87 @@ export function generateAutomaticSchedule(input: {
       .map((draft) => ({ start: new Date(draft.start_at), end: new Date(draft.end_at), studentUserId: draft.student_user_id })),
   ];
 
+  const findBestPlacement = (setting: (typeof settings)[number]) => {
+    let best: { start: Date; end: Date; aircraft?: ScheduleAircraft; dayIndex: number; joinsExistingDay: number; gapMs: number } | null = null;
+    for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+      const date = addCalendarDays(input.weekStart, dayIndex);
+      const dateKey = localDateKey(date);
+      if (setting.usedDays.has(dateKey)) continue;
+      const periods = availabilityForDate({
+        date,
+        studentUserId: setting.access.student_user_id,
+        slots: input.slots,
+        overrideDates: input.overrideDates,
+      });
+      for (const period of periods) {
+        for (let startMs = period.start.getTime(); startMs + setting.durationMin * 60_000 <= period.end.getTime(); startMs += 15 * 60_000) {
+          const start = new Date(startMs);
+          const end = new Date(startMs + setting.durationMin * 60_000);
+          const localStartMinute = start.getHours() * 60 + start.getMinutes();
+          if (localStartMinute < 420 || localStartMinute > 960) continue;
+          const items = dailyItems(date);
+          if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;
+          let aircraft: ScheduleAircraft | undefined;
+          if (setting.lessonKind === "flight") {
+            aircraft = selectedAircraft.find((candidate) => {
+              const blocked = input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === candidate.id) && overlaps(start,end,new Date(block.start_at),new Date(block.end_at)));
+              const externallyReserved = input.aircraftReservations.some((reservation) => reservation.aircraft_id === candidate.id && overlaps(start,end,new Date(reservation.start_at),new Date(reservation.end_at)));
+              const locallyReserved = input.existingEntries.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && item.status !== "cancelled" && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)))
+                || drafts.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)));
+              return !blocked && !externallyReserved && !locallyReserved;
+            });
+            if (!aircraft) continue;
+          }
+          const spanStart = Math.min(start.getTime(), ...items.map((item) => item.start.getTime()));
+          const spanEnd = Math.max(end.getTime(), ...items.map((item) => item.end.getTime()));
+          if (spanEnd - spanStart > 8 * 60 * 60_000) continue;
+          const gapMs = items.length ? Math.min(...items.map((item) => item.end <= start ? start.getTime() - item.end.getTime() : item.start.getTime() - end.getTime())) : 0;
+          const candidate = { start, end, aircraft, dayIndex, joinsExistingDay: items.length ? 0 : 1, gapMs };
+          if (!best || candidate.joinsExistingDay < best.joinsExistingDay
+            || candidate.joinsExistingDay === best.joinsExistingDay && candidate.gapMs < best.gapMs
+            || candidate.joinsExistingDay === best.joinsExistingDay && candidate.gapMs === best.gapMs && candidate.dayIndex < best.dayIndex
+            || candidate.joinsExistingDay === best.joinsExistingDay && candidate.gapMs === best.gapMs && candidate.dayIndex === best.dayIndex && candidate.start < best.start) best = candidate;
+        }
+      }
+    }
+    return best;
+  };
+
   let madeProgress = true;
   while (madeProgress && settings.some((item) => item.remaining > 0)) {
     madeProgress = false;
-    const ordered = [...settings].sort((a, b) => {
-      if (a.lessonKind !== b.lessonKind) return a.lessonKind === "flight" ? -1 : 1;
-      const aWeeklyTotal = a.existing + (a.requested - a.remaining);
-      const bWeeklyTotal = b.existing + (b.requested - b.remaining);
+    const choices = settings.filter((setting) => setting.remaining > 0).map((setting) => ({ setting, placement: findBestPlacement(setting) })).filter((choice) => choice.placement !== null);
+    choices.sort((a, b) => {
+      if (a.setting.lessonKind !== b.setting.lessonKind) return a.setting.lessonKind === "flight" ? -1 : 1;
+      const aWeeklyTotal = a.setting.existing + (a.setting.requested - a.setting.remaining);
+      const bWeeklyTotal = b.setting.existing + (b.setting.requested - b.setting.remaining);
       return aWeeklyTotal - bWeeklyTotal
-        || a.availabilityDays - b.availabilityDays
-        || b.remaining - a.remaining
-        || a.access.student_name.localeCompare(b.access.student_name);
+        || a.placement!.joinsExistingDay - b.placement!.joinsExistingDay
+        || a.placement!.gapMs - b.placement!.gapMs
+        || a.placement!.dayIndex - b.placement!.dayIndex
+        || a.placement!.start.getTime() - b.placement!.start.getTime()
+        || a.setting.availabilityDays - b.setting.availabilityDays
+        || b.setting.remaining - a.setting.remaining
+        || a.setting.access.student_name.localeCompare(b.setting.access.student_name);
     });
-    for (const setting of ordered) {
-      if (setting.remaining <= 0) continue;
-      let placed = false;
-      for (let dayIndex = 0; dayIndex < dayCount && !placed; dayIndex += 1) {
-        const date = addCalendarDays(input.weekStart, dayIndex);
-        const dateKey = localDateKey(date);
-        if (setting.usedDays.has(dateKey)) continue;
-          const periods = availabilityForDate({
-            date,
-            studentUserId: setting.access.student_user_id,
-            slots: input.slots,
-            overrideDates: input.overrideDates,
-          });
-          for (const period of periods) {
-            for (let startMs = period.start.getTime(); startMs + setting.durationMin * 60_000 <= period.end.getTime(); startMs += 15 * 60_000) {
-              const start = new Date(startMs);
-              const end = new Date(startMs + setting.durationMin * 60_000);
-              const localStartMinute = start.getHours() * 60 + start.getMinutes();
-              if (localStartMinute < 420 || localStartMinute > 960) continue;
-              const items = dailyItems(date);
-              if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;
-              let aircraft: ScheduleAircraft | undefined;
-              if (setting.lessonKind === "flight") {
-                aircraft = selectedAircraft.find((candidate) => {
-                  const blocked = input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === candidate.id) && overlaps(start,end,new Date(block.start_at),new Date(block.end_at)));
-                  const externallyReserved = input.aircraftReservations.some((reservation) => reservation.aircraft_id === candidate.id && overlaps(start,end,new Date(reservation.start_at),new Date(reservation.end_at)));
-                  const locallyReserved = input.existingEntries.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && item.status !== "cancelled" && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)))
-                    || drafts.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)));
-                  return !blocked && !externallyReserved && !locallyReserved;
-                });
-                if (!aircraft) continue;
-              }
-              const spanStart = Math.min(start.getTime(), ...items.map((item) => item.start.getTime()));
-              const spanEnd = Math.max(end.getTime(), ...items.map((item) => item.end.getTime()));
-              if (spanEnd - spanStart > 8 * 60 * 60_000) continue;
-              drafts.push({
-                cfi_user_id: input.cfiUserId,
-                student_user_id: setting.access.student_user_id,
-                student_name: setting.access.student_name,
-                lesson_kind: setting.lessonKind,
-                aircraft_id: aircraft?.id ?? null,
-                aircraft_tail_number: aircraft?.tail_number ?? null,
-                start_at: start.toISOString(),
-                end_at: end.toISOString(),
-                note: "Auto-scheduled",
-                auto_generated: true,
-              });
-              setting.remaining -= 1;
-              setting.usedDays.add(dateKey);
-              placed = true;
-              madeProgress = true;
-              break;
-            }
-            if (placed) break;
-        }
-      }
-      if (placed) break;
-    }
+    const choice = choices[0];
+    if (!choice?.placement) continue;
+    const { setting, placement } = choice;
+    drafts.push({
+      cfi_user_id: input.cfiUserId,
+      student_user_id: setting.access.student_user_id,
+      student_name: setting.access.student_name,
+      lesson_kind: setting.lessonKind,
+      aircraft_id: placement.aircraft?.id ?? null,
+      aircraft_tail_number: placement.aircraft?.tail_number ?? null,
+      start_at: placement.start.toISOString(),
+      end_at: placement.end.toISOString(),
+      note: "Auto-scheduled",
+      auto_generated: true,
+    });
+    setting.remaining -= 1;
+    setting.usedDays.add(localDateKey(placement.start));
+    madeProgress = true;
   }
 
   for (const setting of settings) {
