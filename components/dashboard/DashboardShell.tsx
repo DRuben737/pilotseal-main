@@ -105,6 +105,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Aircraft":
+    case "Aircraft records":
     case "Fleet management":
     case "Aircraft & Maintenance":
     case "Aircraft Library":
