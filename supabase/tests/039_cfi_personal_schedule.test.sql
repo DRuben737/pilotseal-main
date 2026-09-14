@@ -50,8 +50,8 @@ select is((select count(*) from public.cfi_schedule_student_grants), 2::bigint, 
 select is((select count(*) from public.list_my_cfi_schedule_access()), 2::bigint, 'CFI access RPC lists both students');
 
 select lives_ok(
-  $$insert into public.cfi_schedule_unavailable_blocks (cfi_user_id, start_at, end_at, note)
-    values (auth.uid(), '2026-09-08 14:00:00+00', '2026-09-08 16:00:00+00', 'Aircraft unavailable')$$,
+  $$insert into public.cfi_schedule_unavailable_blocks (cfi_user_id, aircraft_id, start_at, end_at, note)
+    values (auth.uid(), '30000000-0000-4000-8000-000000000001', '2026-09-08 14:00:00+00', '2026-09-08 16:00:00+00', 'Aircraft unavailable')$$,
   'CFI can add an unavailable block'
 );
 

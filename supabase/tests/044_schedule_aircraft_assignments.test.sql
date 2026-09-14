@@ -7,6 +7,10 @@ select set_config('aircraft_schedule.student',(select id::text from public.profi
 select set_config('aircraft_schedule.aircraft','30000000-0000-4000-8000-000000000001',true);
 select set_config('aircraft_schedule.other_student',(select id::text from public.profiles where email='platform.admin@example.test'),true);
 
+insert into private.cfi_schedule_revisions(cfi_user_id,revision)
+values(current_setting('aircraft_schedule.cfi')::uuid,0)
+on conflict(cfi_user_id) do update set revision=0;
+
 insert into public.saved_people(id,user_id,role,display_name,cert_number)
 values('54000000-0000-4000-8000-000000000001',current_setting('aircraft_schedule.cfi')::uuid,'student','Aircraft Schedule Student','AIR-1');
 insert into public.saved_people(id,user_id,role,display_name,cert_number)
@@ -22,9 +26,12 @@ insert into public.cfi_schedule_student_grants(cfi_user_id,saved_person_id,stude
 values(auth.uid(),'54000000-0000-4000-8000-000000000002',current_setting('aircraft_schedule.other_student')::uuid);
 insert into public.cfi_schedule_events(id,cfi_user_id,student_user_id,lesson_kind,aircraft_id,start_at,end_at,note)
 values('54000000-0000-4000-8000-000000000009',auth.uid(),current_setting('aircraft_schedule.other_student')::uuid,'flight',current_setting('aircraft_schedule.aircraft')::uuid,'2026-09-14T12:00:00Z','2026-09-14T14:00:00Z','Other instructor private lesson');
+insert into public.cfi_schedule_unavailable_blocks(id,cfi_user_id,aircraft_id,start_at,end_at,note)
+values('54000000-0000-4000-8000-000000000013',auth.uid(),current_setting('aircraft_schedule.aircraft')::uuid,'2026-09-16T12:00:00Z','2026-09-16T14:00:00Z','Other instructor organization block');
 
 select set_config('request.jwt.claim.sub',current_setting('aircraft_schedule.cfi'),true);
 set local role authenticated;
+select is((public.get_cfi_schedule_snapshot_v2('2026-09-14','2026-09-21')->>'revision')::bigint,1::bigint,'organization aircraft block advances another member schedule revision');
 insert into public.cfi_schedule_student_grants(cfi_user_id,saved_person_id,student_user_id)
 values(auth.uid(),'54000000-0000-4000-8000-000000000001',current_setting('aircraft_schedule.student')::uuid);
 
@@ -49,6 +56,10 @@ select lives_ok($$select public.publish_cfi_schedule_draft(
 select is((select aircraft_id from public.cfi_schedule_events where id='54000000-0000-4000-8000-000000000011'),current_setting('aircraft_schedule.aircraft')::uuid,'published lesson retains selected aircraft');
 select is((select e->>'aircraft_status' from jsonb_array_elements(public.get_cfi_schedule_snapshot_v2('2026-09-14','2026-09-21')->'entries') e where e->>'id'='54000000-0000-4000-8000-000000000011'),'grounded','owner snapshot exposes current status');
 select is((select e->>'aircraft_conflict' from jsonb_array_elements(public.get_cfi_schedule_snapshot_v2('2026-09-14','2026-09-21')->'entries') e where e->>'id'='54000000-0000-4000-8000-000000000011'),'true','another instructor booking becomes a warning');
+select is((select e->>'aircraft_tail_number' from jsonb_array_elements(public.get_cfi_schedule_snapshot_v2('2026-09-14','2026-09-21')->'entries') e where e->>'id'='54000000-0000-4000-8000-000000000013'),'N000PS','organization aircraft block appears on another instructor schedule');
+select is((select b->>'can_manage' from jsonb_array_elements(public.get_cfi_schedule_snapshot_v2('2026-09-14','2026-09-21')->'blocks') b where b->>'id'='54000000-0000-4000-8000-000000000013'),'false','shared organization block remains read-only for other instructors');
+select is((select b->>'note' from jsonb_array_elements(public.get_cfi_schedule_snapshot_v2('2026-09-14','2026-09-21')->'blocks') b where b->>'id'='54000000-0000-4000-8000-000000000013'),'','shared block keeps its creator note private');
+select throws_ok($$insert into public.cfi_schedule_unavailable_blocks(cfi_user_id,start_at,end_at,note) values(auth.uid(),'2026-09-17T12:00:00Z','2026-09-17T14:00:00Z','No aircraft')$$,'23514',null,'new aircraft block requires a specific aircraft');
 insert into public.cfi_schedule_unavailable_blocks(id,cfi_user_id,aircraft_id,start_at,end_at,note)
 values('54000000-0000-4000-8000-000000000012',auth.uid(),current_setting('aircraft_schedule.aircraft')::uuid,'2026-09-15T12:00:00Z','2026-09-15T14:00:00Z','Private maintenance reason');
 

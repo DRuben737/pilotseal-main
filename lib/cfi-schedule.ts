@@ -59,6 +59,7 @@ export type ScheduleEntry = {
   aircraft_status_note: string | null;
   aircraft_conflict: boolean;
   unavailable_kind?: "private_lesson" | "aircraft" | null;
+  block_owner_name?: string | null;
   start_at: string;
   end_at: string;
   note: string;
@@ -75,6 +76,8 @@ export type UnavailableBlock = {
   note: string;
   aircraft_id: string | null;
   aircraft_tail_number?: string | null;
+  can_manage?: boolean;
+  block_owner_name?: string | null;
 };
 
 export type AircraftOperationalStatus = "available" | "away" | "in_maintenance" | "grounded";
