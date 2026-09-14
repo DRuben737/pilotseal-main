@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
@@ -12,7 +13,6 @@ import {
   fetchIssuedOrganizationEndorsementRecords,
   fetchOrganizationEndorsementRecords,
   fetchReceivedEndorsementRecords,
-  updateEndorsementRecord,
   type EndorsementRecord,
 } from "@/lib/endorsement-records";
 import { canManageOrganization } from "@/lib/organizations";
@@ -111,6 +111,7 @@ function ActionIcon({ kind }: { kind: "open" | "external" | "delete" | "close" |
 }
 
 export default function EndorsementRecordsManager({ organizationOnly = false }: { organizationOnly?: boolean }) {
+  const router = useRouter();
   const { session } = useAuthSession();
   const { activeOrganization } = useOrganization();
   const canViewOrganizationRecords = canManageOrganization(activeOrganization?.member_role);
@@ -122,7 +123,6 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   const [activeRecord, setActiveRecord] = useState<EndorsementRecord | null>(null);
   const [activePdfUrl, setActivePdfUrl] = useState("");
   const [expandedStudent, setExpandedStudent] = useState("");
-  const [editingRecord, setEditingRecord] = useState<EndorsementRecord | null>(null);
   const [view, setView] = useState<"personal" | "received" | "organization">(
     organizationOnly ? "organization" : "personal"
   );
@@ -235,31 +235,6 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
     }
   }
 
-  async function handleEditSave(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!editingRecord || editingRecord.user_id !== session?.user?.id || editingRecord.scope_status !== "personal") return;
-    setBusy(true);
-    setStatus("");
-    try {
-      const form = new FormData(event.currentTarget);
-      const updated = await updateEndorsementRecord(editingRecord.id, {
-        student_name: String(form.get("student_name") ?? "").trim(),
-        student_cert_number: String(form.get("student_cert_number") ?? "").trim() || null,
-        instructor_name: String(form.get("instructor_name") ?? "").trim(),
-        instructor_cert_number: String(form.get("instructor_cert_number") ?? "").trim() || null,
-        endorsement_date: String(form.get("endorsement_date") ?? "").trim(),
-        template_titles: String(form.get("template_titles") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
-      });
-      setRecords((current) => current.map((record) => record.id === updated.id ? updated : record));
-      setEditingRecord(null);
-      setStatus("Endorsement record updated.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to update record.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <>
       {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
@@ -269,12 +244,12 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
         summary={loading ? "Loading…" : `${records.length}`}
         helpContent={
           organizationOnly ? (
-            <p>Shows immutable endorsements issued by organization CFIs to organization students while both memberships were active.</p>
+            <p>Shows endorsements issued while the instructor belonged to this organization. Students do not need to be organization members.</p>
           ) : (
             <>
               <p>Your issued records remain in your personal history.</p>
               <p>Records created while you belong to an organization also appear in that organization’s activity. This overlap is intentional and does not create duplicate records.</p>
-              <p>Use the three views to switch between records you issued, records issued to you, and organization activity. Personal records you own can be edited or deleted; confirmed organization records are immutable.</p>
+              <p>Use the three views to switch between records you issued, records issued to you, and organization activity. Issuing instructors can reopen and replace their endorsements; shared records cannot be deleted.</p>
             </>
           )
         }
@@ -349,7 +324,7 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
                             </h4>
                             <span className="saas-pill">{formatRecordDate(record.endorsement_date)}</span>
                             {record.scope_status === "pending_review" ? <span className="saas-pill">Pending legacy review</span> : null}
-                            {record.scope_status === "confirmed" ? <span className="saas-pill">Organization · immutable</span> : null}
+                            {record.scope_status === "confirmed" ? <span className="saas-pill">Visible to organization</span> : null}
                           </div>
                           <p className="saas-meta-text">
                             Instructor: {record.instructor_name}
@@ -376,8 +351,8 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
                           >
                             <ActionIcon kind="open" />
                           </button>
-                          {record.user_id === session?.user?.id && record.scope_status === "personal" ? (
-                            <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingRecord(record)}>
+                          {record.user_id === session?.user?.id ? (
+                            <button type="button" className="secondary-button" disabled={busy} onClick={() => router.push(`/tools/endorsement-generator?editRecord=${encodeURIComponent(record.id)}`)}>
                               Edit
                             </button>
                           ) : null}
@@ -444,31 +419,6 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
                   </div>
                 </div> : null}
       </DetailDrawer>
-      <DetailDrawer open={Boolean(editingRecord)} title="Edit endorsement record" onClose={() => setEditingRecord(null)}>
-        {editingRecord ? <form onSubmit={handleEditSave}>
-                <div className="grid gap-4 p-5 md:grid-cols-2">
-                  <RecordField label="Student name" name="student_name" defaultValue={editingRecord.student_name} required />
-                  <RecordField label="Student certificate" name="student_cert_number" defaultValue={editingRecord.student_cert_number ?? ""} />
-                  <RecordField label="Instructor name" name="instructor_name" defaultValue={editingRecord.instructor_name} required />
-                  <RecordField label="Instructor certificate" name="instructor_cert_number" defaultValue={editingRecord.instructor_cert_number ?? ""} />
-                  <RecordField label="Endorsement date" name="endorsement_date" defaultValue={editingRecord.endorsement_date} required />
-                  <RecordField label="Endorsements (comma separated)" name="template_titles" defaultValue={editingRecord.template_titles.join(", ")} required />
-                  <div className="flex gap-2 md:col-span-2">
-                    <button className="primary-button" disabled={busy}>{busy ? "Saving..." : "Save"}</button>
-                    <button type="button" className="ghost-button" onClick={() => setEditingRecord(null)}>Cancel</button>
-                  </div>
-                </div>
-              </form> : null}
-      </DetailDrawer>
     </>
-  );
-}
-
-function RecordField({ label, name, defaultValue, required = false }: { label: string; name: string; defaultValue: string; required?: boolean }) {
-  return (
-    <label className="grid gap-2 text-sm">
-      <span>{label}</span>
-      <input className="rounded-xl border border-slate-300 px-3 py-2" name={name} defaultValue={defaultValue} required={required} />
-    </label>
   );
 }

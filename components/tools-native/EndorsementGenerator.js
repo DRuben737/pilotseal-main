@@ -11,6 +11,8 @@ import { useAuthSession } from '@/components/auth/AuthSessionProvider';
 import {
   createEndorsementRecord,
   ENDORSEMENT_RECORDS_BUCKET,
+  fetchIssuedEndorsementRecord,
+  replaceEndorsementRecord,
 } from '@/lib/endorsement-records';
 import {
   fetchPersonCertificates,
@@ -627,6 +629,7 @@ function EndorsementGenerator() {
   const [savedCfis, setSavedCfis] = useState([]);
   const [savedStudents, setSavedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [editingRecord, setEditingRecord] = useState(null);
   const [templateCategoryOpen, setTemplateCategoryOpen] = useState({});
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signaturePreviewDataUrl, setSignaturePreviewDataUrl] = useState('');
@@ -644,6 +647,7 @@ function EndorsementGenerator() {
   const printablePdfIsTemporaryRef = useRef(false);
   const printFrameRef = useRef(null);
   const defaultCfiAppliedRef = useRef(false);
+  const editLoadStartedRef = useRef(false);
 
   const templateEntries = useMemo(() => Object.entries(templateCatalog), [templateCatalog]);
 
@@ -944,6 +948,88 @@ function EndorsementGenerator() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (editLoadStartedRef.current) {
+      return;
+    }
+
+    const recordId = new URLSearchParams(window.location.search).get('editRecord');
+    if (!recordId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadEditingRecord() {
+      try {
+        const activeSession = session || (await getSupabaseClient().auth.getSession()).data.session;
+        if (!activeSession?.user?.id || editLoadStartedRef.current || cancelled) {
+          return;
+        }
+        const record = await fetchIssuedEndorsementRecord(recordId, activeSession.user.id);
+        if (cancelled) return;
+        editLoadStartedRef.current = true;
+
+        const payload = record.generator_payload;
+        const payloadFormData = payload?.formData && typeof payload.formData === 'object'
+          ? payload.formData
+          : {};
+        const requestedTemplates = Array.isArray(payload?.selectedTemplates)
+          ? payload.selectedTemplates
+          : record.template_titles;
+        const matchedStudent = savedStudents.find((student) => (
+          student.saved_person_id === record.student_id
+          || student.person_id === record.student_id
+          || (record.student_user_id && student.student_user_id === record.student_user_id)
+        ));
+
+        setEditingRecord(record);
+        setGeneratorMode('customized');
+        setFormData({
+          ...INITIAL_FORM_DATA,
+          ...Object.fromEntries(
+            Object.entries(payloadFormData).filter(([, value]) => typeof value === 'string')
+          ),
+          instructorName: payloadFormData.instructorName || record.instructor_name,
+          instructorCertNumber: payloadFormData.instructorCertNumber || record.instructor_cert_number || '',
+          instructorCertExpDate: payloadFormData.instructorCertExpDate || '',
+          studentName: record.student_name,
+          studentCertNumber: record.student_cert_number || '',
+          date: record.endorsement_date,
+        });
+        setSelectedTemplates(requestedTemplates);
+        setTemplateFieldData(
+          payload?.templateFieldData && typeof payload.templateFieldData === 'object'
+            ? payload.templateFieldData
+            : {}
+        );
+        setSelectedStudentId(
+          getStudentRecordPersonId(matchedStudent) || record.student_id || record.student_user_id || ''
+        );
+        if (payload?.printFormat === 'avery-5163' || payload?.printFormat === 'letter') {
+          setPrintFormat(payload.printFormat);
+        }
+        if (typeof payload?.labelStartSlot === 'string') {
+          setLabelStartSlot(payload.labelStartSlot);
+        }
+        defaultCfiAppliedRef.current = true;
+        setStatusMessage(
+          requestedTemplates.every((title) => templateCatalog[title])
+            ? 'Editing an issued endorsement. Preview it, then replace the saved record. Add the signature again if needed.'
+            : 'One or more legacy templates are no longer available. Select replacement templates and complete every required field before saving.'
+        );
+      } catch (error) {
+        console.error('Unable to load endorsement for editing:', error);
+        setStatusMessage('This endorsement could not be opened for editing. Only its issuing instructor can replace it.');
+      }
+    }
+
+    void loadEditingRecord();
+    return () => {
+      cancelled = true;
+    };
+  }, [savedStudents, session, templateCatalog]);
 
   const visibleTemplates = templateEntries
     .map(([title, template]) => ({
@@ -1645,8 +1731,10 @@ function EndorsementGenerator() {
     let uploadedStoragePath = '';
 
     try {
-      const recordId = createUuid();
-      const storagePath = `${session.user.id}/${recordId}.pdf`;
+      const recordId = editingRecord?.id || createUuid();
+      const storagePath = editingRecord
+        ? `${session.user.id}/${recordId}-replacement-${createUuid()}.pdf`
+        : `${session.user.id}/${recordId}.pdf`;
       const supabase = getSupabaseClient();
 
       const { error: uploadError } = await supabase.storage
@@ -1661,20 +1749,56 @@ function EndorsementGenerator() {
       }
       uploadedStoragePath = storagePath;
 
-      await createEndorsementRecord({
-        id: recordId,
-        studentId: selectedStudentId || null,
-        studentName: formData.studentName.trim(),
-        studentCertNumber: formData.studentCertNumber.trim() || null,
-        instructorName: formData.instructorName.trim(),
-        instructorCertNumber: formData.instructorCertNumber.trim() || null,
-        endorsementDate: formatDateForPdf(formData.date),
-        templateTitles: selectedTemplates,
-        storagePath,
-        fileSizeBytes: pdfBlob.size,
-      });
+      const generatorPayload = {
+        version: 1,
+        generatorMode: 'customized',
+        formData: { ...formData },
+        selectedTemplates: [...selectedTemplates],
+        templateFieldData: { ...templateFieldData },
+        printFormat,
+        labelStartSlot,
+      };
 
-      setStatusMessage('The PDF was saved to your dashboard records.');
+      if (editingRecord) {
+        const previousStoragePath = editingRecord.storage_path;
+        const updatedRecord = await replaceEndorsementRecord({
+          recordId,
+          studentId: selectedStudentId || null,
+          studentName: formData.studentName.trim(),
+          studentCertNumber: formData.studentCertNumber.trim() || null,
+          instructorName: formData.instructorName.trim(),
+          instructorCertNumber: formData.instructorCertNumber.trim() || null,
+          endorsementDate: formatDateForPdf(formData.date),
+          templateTitles: selectedTemplates,
+          storagePath,
+          fileSizeBytes: pdfBlob.size,
+          generatorPayload,
+        });
+        setEditingRecord(updatedRecord);
+
+        const { error: cleanupError } = await supabase.storage
+          .from(ENDORSEMENT_RECORDS_BUCKET)
+          .remove([previousStoragePath]);
+        if (cleanupError) {
+          console.warn('The replaced endorsement was saved, but the old unreferenced PDF could not be removed:', cleanupError);
+        }
+        setStatusMessage('The issued endorsement and saved PDF were replaced.');
+      } else {
+        await createEndorsementRecord({
+          id: recordId,
+          studentId: selectedStudentId || null,
+          studentName: formData.studentName.trim(),
+          studentCertNumber: formData.studentCertNumber.trim() || null,
+          instructorName: formData.instructorName.trim(),
+          instructorCertNumber: formData.instructorCertNumber.trim() || null,
+          endorsementDate: formatDateForPdf(formData.date),
+          templateTitles: selectedTemplates,
+          storagePath,
+          fileSizeBytes: pdfBlob.size,
+          generatorPayload,
+        });
+        setStatusMessage('The PDF was saved to your dashboard records.');
+      }
       return true;
     } catch (error) {
       console.error('Error saving endorsement record:', error);
@@ -2017,6 +2141,12 @@ function EndorsementGenerator() {
       <div className={styles.page}>
         <div className={styles.workspace}>
           <section className={styles.mainPanel}>
+            {editingRecord ? (
+              <div className={styles.editNotice} role="status">
+                <strong>Editing issued endorsement</strong>
+                <span>Saving replaces the current record and PDF. The original issue time and organization visibility stay unchanged.</span>
+              </div>
+            ) : null}
             <div className={styles.modeSwitch} role="group" aria-label="Endorsement generator mode">
               <button
                 type="button"
@@ -2031,6 +2161,7 @@ function EndorsementGenerator() {
                 className={generatorMode === 'blank' ? styles.modeSwitchActive : ''}
                 onClick={() => handleGeneratorModeChange('blank')}
                 aria-pressed={generatorMode === 'blank'}
+                disabled={Boolean(editingRecord)}
               >
                 Blank template
               </button>
@@ -2191,7 +2322,7 @@ function EndorsementGenerator() {
                   Preview
                 </button>
                 <button className={styles.secondaryButton} onClick={handlePrint} type="button" disabled={!pdfUrl || savingRecord}>
-                  {savingRecord ? 'Saving...' : 'Print'}
+                  {savingRecord ? 'Saving...' : editingRecord ? 'Replace & print' : 'Print'}
                 </button>
                 {printablePdfUrl ? (
                   <button className={styles.secondaryButton} onClick={handleOpenPrintablePdf} type="button">

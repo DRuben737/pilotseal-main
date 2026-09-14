@@ -101,8 +101,8 @@ select lives_ok(
   'unregistered student endorsement is still allowed'
 );
 reset role;
-select is((select count(*) from private.endorsement_record_organization_access where record_id = '68000000-0000-4000-8000-000000000002'), 0::bigint, 'unregistered student endorsement has no organization access');
-select is((select scope_status from public.endorsement_records where id = '68000000-0000-4000-8000-000000000002'), 'personal', 'unregistered student endorsement remains Personal');
+select is((select count(*) from private.endorsement_record_organization_access where record_id = '68000000-0000-4000-8000-000000000002'), 2::bigint, 'unregistered student endorsement follows the instructor into both organizations');
+select is((select scope_status from public.endorsement_records where id = '68000000-0000-4000-8000-000000000002'), 'confirmed', 'unregistered student endorsement is organization-visible through the instructor');
 
 delete from public.organization_members
 where organization_id = '10000000-0000-4000-8000-000000000001'
@@ -123,7 +123,7 @@ select lives_ok(
 );
 reset role;
 select is((select count(*) from private.endorsement_record_organization_access where record_id = '68000000-0000-4000-8000-000000000003' and organization_id = '10000000-0000-4000-8000-000000000038'), 1::bigint, 'post-exit endorsement remains visible to the other common organization');
-select is((select count(*) from private.endorsement_record_organization_access where record_id = '68000000-0000-4000-8000-000000000003' and organization_id = '10000000-0000-4000-8000-000000000001'), 0::bigint, 'post-exit endorsement is hidden from the exited organization');
+select is((select count(*) from private.endorsement_record_organization_access where record_id = '68000000-0000-4000-8000-000000000003' and organization_id = '10000000-0000-4000-8000-000000000001'), 1::bigint, 'student exit does not hide an endorsement issued by an active organization instructor');
 
 insert into public.organization_members (
   organization_id, user_id, role, teaching_role, added_by
@@ -132,7 +132,7 @@ insert into public.organization_members (
   current_setting('pilotseal_test.student_id')::uuid,
   'member', 'student', current_setting('pilotseal_test.instructor_id')::uuid
 );
-select is((select count(*) from private.endorsement_record_organization_access where record_id = '68000000-0000-4000-8000-000000000003' and organization_id = '10000000-0000-4000-8000-000000000001'), 0::bigint, 'rejoin does not expose an exit-gap endorsement retroactively');
+select is((select count(*) from private.endorsement_record_organization_access where record_id = '68000000-0000-4000-8000-000000000003' and organization_id = '10000000-0000-4000-8000-000000000001'), 1::bigint, 'student rejoin does not alter existing instructor-derived visibility');
 
 select set_config('request.jwt.claim.sub', current_setting('pilotseal_test.instructor_id'), true);
 set local role authenticated;

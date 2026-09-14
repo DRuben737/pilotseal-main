@@ -20,7 +20,19 @@ export type EndorsementRecord = {
   template_titles: string[];
   storage_path: string;
   file_size_bytes: number | null;
+  generator_payload: EndorsementGeneratorPayload | null;
   created_at: string;
+  updated_at: string;
+};
+
+export type EndorsementGeneratorPayload = {
+  version: 1;
+  generatorMode: "customized";
+  formData: Record<string, string>;
+  selectedTemplates: string[];
+  templateFieldData: Record<string, string | string[]>;
+  printFormat: "letter" | "avery-5163";
+  labelStartSlot: string;
 };
 
 export type LegacyEndorsementReviewContext = {
@@ -50,10 +62,11 @@ export type CreateEndorsementRecordInput = {
   storagePath: string;
   fileSizeBytes?: number | null;
   supersedesRecordId?: string | null;
+  generatorPayload: EndorsementGeneratorPayload;
 };
 
 const ENDORSEMENT_RECORD_SELECTS = [
-  "id, user_id, organization_id, student_id, student_user_id, instructor_membership_period_id, student_membership_period_id, scope_status, supersedes_record_id, student_name, student_cert_number, instructor_name, instructor_cert_number, endorsement_date, template_titles, storage_path, file_size_bytes, created_at, updated_at",
+  "id, user_id, organization_id, student_id, student_user_id, instructor_membership_period_id, student_membership_period_id, scope_status, supersedes_record_id, student_name, student_cert_number, instructor_name, instructor_cert_number, endorsement_date, template_titles, storage_path, file_size_bytes, generator_payload, created_at, updated_at",
   "id, user_id, student_id, student_name, student_cert_number, instructor_name, endorsement_date, template_titles, storage_path, file_size_bytes, created_at",
 ];
 
@@ -89,7 +102,12 @@ function normalizeRecord(record: Record<string, unknown>): EndorsementRecord {
     storage_path: String(record.storage_path ?? ""),
     file_size_bytes:
       typeof record.file_size_bytes === "number" ? record.file_size_bytes : null,
+    generator_payload:
+      record.generator_payload && typeof record.generator_payload === "object"
+        ? (record.generator_payload as EndorsementGeneratorPayload)
+        : null,
     created_at: String(record.created_at ?? ""),
+    updated_at: String(record.updated_at ?? record.created_at ?? ""),
   };
 }
 
@@ -108,6 +126,7 @@ export async function createEndorsementRecord(input: CreateEndorsementRecordInpu
     p_storage_path: input.storagePath,
     p_file_size_bytes: input.fileSizeBytes ?? null,
     p_supersedes_record_id: input.supersedesRecordId ?? null,
+    p_generator_payload: input.generatorPayload,
   });
   if (error) throw error;
   return normalizeRecord(data as unknown as Record<string, unknown>);
@@ -133,6 +152,18 @@ export async function fetchEndorsementRecords(userId: string) {
   }
 
   throw lastError;
+}
+
+export async function fetchIssuedEndorsementRecord(recordId: string, userId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("endorsement_records")
+    .select(ENDORSEMENT_RECORD_SELECTS[0])
+    .eq("id", recordId)
+    .eq("user_id", userId)
+    .single();
+  if (error) throw error;
+  return normalizeRecord(data as unknown as Record<string, unknown>);
 }
 
 export async function fetchReceivedEndorsementRecords(userId: string) {
@@ -203,17 +234,33 @@ export async function fetchOrganizationEndorsementRecords(organizationId: string
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeRecord);
 }
 
-export async function updateEndorsementRecord(
-  recordId: string,
-  input: Pick<EndorsementRecord, "student_name" | "student_cert_number" | "instructor_name" | "instructor_cert_number" | "endorsement_date" | "template_titles">
-) {
+export async function replaceEndorsementRecord(input: {
+  recordId: string;
+  studentId?: string | null;
+  studentName: string;
+  studentCertNumber?: string | null;
+  instructorName: string;
+  instructorCertNumber?: string | null;
+  endorsementDate: string;
+  templateTitles: string[];
+  storagePath: string;
+  fileSizeBytes: number;
+  generatorPayload: EndorsementGeneratorPayload;
+}) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("endorsement_records")
-    .update(input)
-    .eq("id", recordId)
-    .select(ENDORSEMENT_RECORD_SELECTS[0])
-    .single();
+  const { data, error } = await supabase.rpc("replace_endorsement_record", {
+    p_record_id: input.recordId,
+    p_student_id: input.studentId || null,
+    p_student_name: input.studentName.trim(),
+    p_student_cert_number: normalizeText(input.studentCertNumber),
+    p_instructor_name: input.instructorName.trim(),
+    p_instructor_cert_number: normalizeText(input.instructorCertNumber),
+    p_endorsement_date: input.endorsementDate,
+    p_template_titles: input.templateTitles,
+    p_storage_path: input.storagePath,
+    p_file_size_bytes: input.fileSizeBytes,
+    p_generator_payload: input.generatorPayload,
+  });
   if (error) throw error;
   return normalizeRecord(data as unknown as Record<string, unknown>);
 }

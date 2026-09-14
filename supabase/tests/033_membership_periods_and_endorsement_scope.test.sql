@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(27);
 select set_config('pilotseal_test.instructor_id', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 select set_config('pilotseal_test.student_id', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 
@@ -30,7 +30,7 @@ select lives_ok(
 );
 reset role;
 select is((select scope_status from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'), 'confirmed', 'organization endorsement is confirmed');
-select ok((select count(*) = 1 and bool_and(instructor_membership_period_id is not null and student_membership_period_id is not null) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000001'), 'automatic organization access stores both membership periods');
+select ok((select count(*) = 1 and bool_and(instructor_membership_period_id is not null and student_membership_period_id is null) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000001'), 'automatic organization access stores only the instructor membership period');
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
@@ -50,7 +50,7 @@ select lives_ok(
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['Post-exit organization attempt'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000002.pdf', 1000, null
   )$$,
-  'legacy organization input is ignored and the server derives Personal scope after exit'
+  'student exit does not stop the instructor membership from sharing a new endorsement'
 );
 select lives_ok(
   $$select public.create_endorsement_record(
@@ -59,10 +59,10 @@ select lives_ok(
     'Morgan Testflight', 'CFI-1', '08/27/2026', array['Post-exit personal'],
     current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000003.pdf', 1000, null
   )$$,
-  'post-exit endorsement can be created as Personal'
+  'student membership is not required for automatic organization visibility'
 );
 reset role;
-select is((select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000002'), 0::bigint, 'post-exit endorsement is not visible to the organization');
+select is((select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000002'), 1::bigint, 'student exit does not remove organization visibility derived from the instructor');
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
@@ -101,8 +101,58 @@ select lives_ok(
   'organization endorsement works again after rejoin'
 );
 reset role;
-select is((select count(*) from private.endorsement_record_organization_access where organization_id = '10000000-0000-4000-8000-000000000001'), 2::bigint, 'only pre-exit and post-rejoin records are organization-visible');
-select is((select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000003'), 0::bigint, 'the exit-gap record remains Personal after rejoin');
+select is((select count(*) from private.endorsement_record_organization_access where organization_id = '10000000-0000-4000-8000-000000000001'), 4::bigint, 'all endorsements issued during the instructor membership are organization-visible');
+select is((select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000003'), 1::bigint, 'student membership gaps do not affect organization visibility');
+
+select set_config(
+  'pilotseal_test.original_endorsement_created_at',
+  (select created_at::text from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'),
+  true
+);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+set local role authenticated;
+select lives_ok(
+  $$select public.replace_endorsement_record(
+    '60000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000003',
+    'Avery Testpilot', 'STUDENT-1', 'Morgan Testflight', 'CFI-1',
+    '09/14/2026', array['Corrected endorsement'],
+    current_setting('request.jwt.claim.sub') || '/60000000-0000-4000-8000-000000000001-replacement.pdf',
+    1200,
+    '{"version":1,"generatorMode":"customized","formData":{"studentName":"Avery Testpilot"},"selectedTemplates":["Corrected endorsement"],"templateFieldData":{},"printFormat":"letter","labelStartSlot":"1"}'::jsonb
+  )$$,
+  'issuing instructor can replace an organization-visible endorsement'
+);
+reset role;
+select is(
+  (select created_at::text from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'),
+  current_setting('pilotseal_test.original_endorsement_created_at'),
+  'replacement preserves immutable issue time'
+);
+select is(
+  (select storage_path from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'),
+  (select id::text from public.profiles where email = 'instructor.one@example.test') || '/60000000-0000-4000-8000-000000000001-replacement.pdf',
+  'replacement switches the active PDF path'
+);
+select is(
+  (select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000001'),
+  1::bigint,
+  'replacement preserves organization access'
+);
+
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
+set local role authenticated;
+select throws_ok(
+  $$select public.replace_endorsement_record(
+    '60000000-0000-4000-8000-000000000001', null,
+    'Avery Testpilot', 'STUDENT-1', 'Avery Testpilot', 'STUDENT-1',
+    '09/14/2026', array['Unauthorized replacement'],
+    current_setting('request.jwt.claim.sub') || '/unauthorized.pdf', 10, '{}'::jsonb
+  )$$,
+  '42501', 'Only the issuing instructor can replace this endorsement.',
+  'student cannot replace an endorsement issued to them'
+);
+reset role;
 
 select * from finish();
 rollback;
