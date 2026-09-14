@@ -287,6 +287,7 @@ function calculateWeightBalance(profile, inputs, envelopeMode = "normal") {
     empty_lat_arm: profile.emptyLatArm,
     total_weight: totalWeight,
     total_moment: totalLongMoment,
+    total_lat_moment: isHelicopter ? totalLatMoment : null,
     cg,
     cg_long: cg,
     cg_lat: cgLat,
@@ -955,6 +956,8 @@ export default function WeightBalanceCalculator({
                 yLabel="Weight (lbs)"
                 primaryPolygon={result.normal_envelope}
                 secondaryPolygon={result.utility_envelope}
+                primaryLabel="Normal category"
+                secondaryLabel="Utility category"
                 currentPoint={{ x: result.cg_long, y: result.total_weight }}
                 referencePoint={{ x: result.zero_fuel_cg, y: result.zero_fuel_weight }}
               />
@@ -1013,17 +1016,24 @@ export default function WeightBalanceCalculator({
             </div>
           ) : null}
 
-          {aircraftType === "helicopter" && result && !embedded ? (
+          {result && !embedded ? (
             <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/70 bg-white/70">
+              <div className="border-b border-slate-200 bg-slate-50/80 px-3 py-2">
+                <h4 className="text-xs font-semibold text-slate-700">Calculation details</h4>
+              </div>
               <table className="min-w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50/80 text-slate-500">
                   <tr>
                     <th className="px-3 py-2 font-medium">Item</th>
                     <th className="px-3 py-2 font-medium">Weight</th>
                     <th className="px-3 py-2 font-medium">Long arm</th>
-                    <th className="px-3 py-2 font-medium">Lat arm</th>
+                    {aircraftType === "helicopter" ? (
+                      <th className="px-3 py-2 font-medium">Lat arm</th>
+                    ) : null}
                     <th className="px-3 py-2 font-medium">Long moment</th>
-                    <th className="px-3 py-2 font-medium">Lat moment</th>
+                    {aircraftType === "helicopter" ? (
+                      <th className="px-3 py-2 font-medium">Lat moment</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -1035,34 +1045,65 @@ export default function WeightBalanceCalculator({
                     <td className="px-3 py-2">
                       {typeof result.empty_arm === "number" ? result.empty_arm.toFixed(2) : "--"}
                     </td>
-                    <td className="px-3 py-2">
-                      {typeof result.empty_lat_arm === "number" ? result.empty_lat_arm.toFixed(2) : "--"}
-                    </td>
+                    {aircraftType === "helicopter" ? (
+                      <td className="px-3 py-2">
+                        {typeof result.empty_lat_arm === "number"
+                          ? result.empty_lat_arm.toFixed(2)
+                          : "--"}
+                      </td>
+                    ) : null}
                     <td className="px-3 py-2">
                       {typeof result.empty_weight === "number" && typeof result.empty_arm === "number"
                         ? (result.empty_weight * result.empty_arm).toFixed(1)
                         : "--"}
                     </td>
-                    <td className="px-3 py-2">
-                      {typeof result.empty_weight === "number" && typeof result.empty_lat_arm === "number"
-                        ? (result.empty_weight * result.empty_lat_arm).toFixed(1)
-                        : "--"}
-                    </td>
+                    {aircraftType === "helicopter" ? (
+                      <td className="px-3 py-2">
+                        {typeof result.empty_weight === "number" &&
+                        typeof result.empty_lat_arm === "number"
+                          ? (result.empty_weight * result.empty_lat_arm).toFixed(1)
+                          : "--"}
+                      </td>
+                    ) : null}
                   </tr>
                   {result.stationBreakdown.map((station) => (
-                    <tr key={station.id} className="border-b border-slate-100 last:border-b-0">
+                    <tr key={station.id} className="border-b border-slate-100">
                       <td className="px-3 py-2">{station.name}</td>
                       <td className="px-3 py-2">{station.weight.toFixed(1)}</td>
                       <td className="px-3 py-2">{station.arm.toFixed(2)}</td>
-                      <td className="px-3 py-2">
-                        {typeof station.latArm === "number" ? station.latArm.toFixed(2) : "--"}
-                      </td>
+                      {aircraftType === "helicopter" ? (
+                        <td className="px-3 py-2">
+                          {typeof station.latArm === "number" ? station.latArm.toFixed(2) : "--"}
+                        </td>
+                      ) : null}
                       <td className="px-3 py-2">{station.longMoment.toFixed(1)}</td>
-                      <td className="px-3 py-2">
-                        {typeof station.latMoment === "number" ? station.latMoment.toFixed(1) : "--"}
-                      </td>
+                      {aircraftType === "helicopter" ? (
+                        <td className="px-3 py-2">
+                          {typeof station.latMoment === "number"
+                            ? station.latMoment.toFixed(1)
+                            : "--"}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
+                  <tr className="bg-slate-50/80 font-semibold text-slate-700">
+                    <td className="px-3 py-2">Total / CG</td>
+                    <td className="px-3 py-2">{result.total_weight.toFixed(1)}</td>
+                    <td className="px-3 py-2">{result.cg_long.toFixed(2)}</td>
+                    {aircraftType === "helicopter" ? (
+                      <td className="px-3 py-2">
+                        {typeof result.cg_lat === "number" ? result.cg_lat.toFixed(2) : "--"}
+                      </td>
+                    ) : null}
+                    <td className="px-3 py-2">{result.total_moment.toFixed(1)}</td>
+                    {aircraftType === "helicopter" ? (
+                      <td className="px-3 py-2">
+                        {typeof result.total_lat_moment === "number"
+                          ? result.total_lat_moment.toFixed(1)
+                          : "--"}
+                      </td>
+                    ) : null}
+                  </tr>
                 </tbody>
               </table>
             </div>

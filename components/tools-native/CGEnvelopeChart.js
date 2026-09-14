@@ -77,6 +77,8 @@ export default function CGEnvelopeChart({
   yLabel = "Weight",
   primaryPolygon,
   secondaryPolygon,
+  primaryLabel,
+  secondaryLabel,
   currentPoint,
   referencePoint,
 }) {
@@ -130,6 +132,25 @@ export default function CGEnvelopeChart({
   return (
     <div className="cg-envelope-chart">
       <h3>{title}</h3>
+      {primaryLabel || (secondaryLabel && hasSecondary) ? (
+        <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.72rem] text-slate-600">
+          {primaryLabel && hasPrimary ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-0.5 w-5 bg-black" aria-hidden="true" />
+              {primaryLabel}
+            </span>
+          ) : null}
+          {secondaryLabel && hasSecondary ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-0 w-5 border-t-2 border-dashed border-[#f4b400]"
+                aria-hidden="true"
+              />
+              {secondaryLabel}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <ResponsiveContainer>
         <ComposedChart margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
