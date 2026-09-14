@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(31);
 select set_config('pilotseal_test.instructor_id', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
 select set_config('pilotseal_test.student_id', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 
@@ -153,6 +153,35 @@ select throws_ok(
   'student cannot replace an endorsement issued to them'
 );
 reset role;
+
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
+set local role authenticated;
+delete from public.endorsement_records
+where id = '60000000-0000-4000-8000-000000000001';
+reset role;
+select is(
+  (select count(*) from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'),
+  1::bigint,
+  'student cannot delete an endorsement issued to them'
+);
+
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+set local role authenticated;
+select lives_ok(
+  $$delete from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'$$,
+  'issuing instructor can delete an organization-visible endorsement'
+);
+reset role;
+select is(
+  (select count(*) from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'),
+  0::bigint,
+  'issuer deletion removes the endorsement record'
+);
+select is(
+  (select count(*) from private.endorsement_record_organization_access where record_id = '60000000-0000-4000-8000-000000000001'),
+  0::bigint,
+  'issuer deletion removes derived organization access'
+);
 
 select * from finish();
 rollback;

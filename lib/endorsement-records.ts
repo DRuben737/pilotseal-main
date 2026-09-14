@@ -281,21 +281,23 @@ export async function createEndorsementRecordSignedUrl(storagePath: string) {
 export async function deleteEndorsementRecord(record: EndorsementRecord) {
   const supabase = getSupabaseClient();
 
-  const { error } = await supabase
+  const { data: deletedRecord, error } = await supabase
     .from("endorsement_records")
     .delete()
     .eq("id", record.id)
-    .eq("user_id", record.user_id);
+    .eq("user_id", record.user_id)
+    .select("id, storage_path")
+    .single();
 
   if (error) {
     throw error;
   }
 
-  // Delete the database row first. Organization-shared records are rejected by
-  // RLS before their immutable PDF can be removed.
+  // Delete the database row first so a failed or unauthorized record deletion
+  // can never leave a visible record whose PDF has already been removed.
   const { error: storageError } = await supabase.storage
     .from(ENDORSEMENT_RECORDS_BUCKET)
-    .remove([record.storage_path]);
+    .remove([String(deletedRecord.storage_path)]);
 
   if (storageError) {
     console.error("The endorsement record was deleted, but PDF cleanup failed:", storageError);

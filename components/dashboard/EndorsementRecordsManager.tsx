@@ -216,7 +216,7 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   }
 
   async function handleDelete(record: EndorsementRecord) {
-    if (!window.confirm("Delete this saved endorsement record?")) {
+    if (!window.confirm("Permanently delete this endorsement? The student and every organization with access will lose it immediately. This cannot be undone.")) {
       return;
     }
 
@@ -249,7 +249,7 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
             <>
               <p>Your issued records remain in your personal history.</p>
               <p>Records created while you belong to an organization also appear in that organization’s activity. This overlap is intentional and does not create duplicate records.</p>
-              <p>Use the three views to switch between records you issued, records issued to you, and organization activity. Issuing instructors can reopen and replace their endorsements; shared records cannot be deleted.</p>
+              <p>Use the three views to switch between records you issued, records issued to you, and organization activity. Only the issuing instructor can edit or permanently delete an endorsement.</p>
             </>
           )
         }
@@ -356,7 +356,7 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
                               Edit
                             </button>
                           ) : null}
-                          {record.user_id === session?.user?.id && record.scope_status === "personal" ? <button
+                          {record.user_id === session?.user?.id ? <button
                             type="button"
                             className="danger-button icon-button"
                             aria-label="Delete endorsement record"
@@ -393,7 +393,7 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
                           <ActionIcon kind="external" />
                         </a>
                       ) : null}
-                      {activeRecord.user_id === session?.user?.id && activeRecord.scope_status === "personal" ? <button
+                      {activeRecord.user_id === session?.user?.id ? <button
                         type="button"
                         className="danger-button icon-button"
                         aria-label="Delete endorsement record"
