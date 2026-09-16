@@ -88,6 +88,10 @@ try{
   await auto.getByRole('button',{name:'Change teaching time'}).click();
   const teaching=page.getByRole('dialog',{name:'My teaching time',exact:true});
   await teaching.waitFor();
+  assert.equal(await teaching.getByText(/first-to-last|day span/i).count(),0,'teaching settings do not expose a redundant day-span rule');
+  const compactField=await teaching.getByLabel('Total teaching hours per day').evaluate((element)=>{const style=getComputedStyle(element);return {height:element.getBoundingClientRect().height,radius:parseFloat(style.borderRadius)}});
+  assert(compactField.height<=40,'schedule inputs stay compact');
+  assert(compactField.radius<=6,'schedule inputs use a restrained corner radius');
   await teaching.getByLabel('Earliest start',{exact:true}).fill('08:00');
   await teaching.getByLabel('Total teaching hours per day').fill('4');
   await teaching.getByRole('button',{name:'Save usual week'}).click();

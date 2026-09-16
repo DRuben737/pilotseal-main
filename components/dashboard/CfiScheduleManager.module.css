@@ -6,8 +6,8 @@
   --schedule-surface: #f5f5f7;
   color: var(--schedule-ink);
   background: #fff;
-  border-radius: 18px;
-  padding: 24px;
+  border-radius: 10px;
+  padding: 20px;
   font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   min-width: 0;
 }
@@ -46,7 +46,7 @@
 .dateGroup { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .datePicker { position: relative; min-width: 0; padding: 10px 3px; text-align: center; font-size: 16px; font-weight: 600; line-height: 1.45; cursor: pointer; }
 .datePicker input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.nativePicker { min-height: 44px; cursor: pointer; touch-action: manipulation; color-scheme: light; }
+.nativePicker { min-height: 38px; cursor: pointer; touch-action: manipulation; color-scheme: light; }
 .nativePicker::-webkit-calendar-picker-indicator { min-width: 24px; min-height: 24px; padding: 8px; margin: -8px; cursor: pointer; }
 .datePicker:focus-within { outline: 2px solid #0071e3; outline-offset: 2px; border-radius: 6px; }
 .weekArrow { flex: 0 0 30px; width: 30px; height: 40px; border: 0; border-radius: 6px; background: transparent; color: var(--schedule-blue); font-size: 27px; cursor: pointer; }
@@ -132,6 +132,13 @@
 .quickAvailability > button { width: 100%; min-height: 48px; justify-content: center; }
 .individualDays { margin-top: 22px; border-top: 1px solid #e5e5ea; }
 .individualDays summary { padding: 18px 0; color: #0066cc; font-size: 13px; cursor: pointer; list-style-position: inside; }
+.formSection { padding: 14px 0; border-top: 1px solid var(--schedule-line); }
+.formSection:last-child { border-bottom: 1px solid var(--schedule-line); }
+.compactChecks { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; margin-top: 8px; border-top: 1px solid var(--schedule-line); border-bottom: 1px solid var(--schedule-line); }
+.compactChecks label { display: flex; min-width: 0; min-height: 36px; align-items: center; justify-content: center; gap: 4px; border-right: 1px solid var(--schedule-line); color: var(--schedule-muted); font-size: 11px; cursor: pointer; }
+.compactChecks label:last-child { border-right: 0; }
+.compactChecks label:has(input:checked) { background: #eef6ff; color: #0055aa; font-weight: 600; }
+.compactChecks input { width: 13px; height: 13px; margin: 0; }
 .autoRoster { display: grid; margin-top: 12px; border-top: 1px solid var(--schedule-line); }
 .autoStudentRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 68px; padding: 10px 0; border-bottom: 1px solid var(--schedule-line); }
 .autoStudentRow[data-selected="false"] { opacity: .68; }
@@ -145,11 +152,11 @@
 .autoCounts { display: flex; gap: 8px; }
 .autoCounts label { display: grid; gap: 3px; color: var(--schedule-muted); font-size: 11px; }
 .autoCounts input { width: 58px; min-height: 36px; border: 1px solid #d2d2d7; border-radius: 8px; text-align: center; font-size: 14px; }
-.aircraftChoices { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 8px; margin-top: 12px; }
-.aircraftChoices label { display: flex; align-items: flex-start; gap: 8px; min-height: 44px; padding: 9px 10px; border: 1px solid var(--schedule-line); border-radius: 10px; cursor: pointer; }
+.aircraftChoices { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 0 16px; margin-top: 8px; border-top: 1px solid var(--schedule-line); }
+.aircraftChoices label { display: flex; align-items: flex-start; gap: 8px; min-height: 38px; padding: 8px 2px; border-bottom: 1px solid var(--schedule-line); cursor: pointer; }
 .aircraftChoices strong { font-size: 13px; }
 .aircraftChoices small { display: block; margin-top: 2px; color: #9a5200; }
-.autoPreviewStudent { padding: 10px 12px; border-radius: 10px; background: var(--schedule-surface); }
+.autoPreviewStudent { padding: 9px 0; border-bottom: 1px solid var(--schedule-line); }
 .autoPreviewStudent > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .autoPreviewStudent > div span { color: var(--schedule-muted); }
 .autoPreviewStudent p { margin: 6px 0 0; color: #4b4b50; font-size: 12px; line-height: 1.45; }
@@ -163,7 +170,7 @@
   .day .menuPanel { right: auto; left: 0; }
 }
 @media (max-width: 600px) {
-  .root { padding: 18px 14px; border-radius: 14px; }
+  .root { padding: 14px 12px; border-radius: 0; }
   .header h1 { font-size: 22px; }
   .toolbar { margin-top: 16px; gap: 6px; }
   .agenda .day { grid-template-columns: 76px minmax(0,1fr); gap: 12px; padding: 15px 0; }

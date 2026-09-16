@@ -2285,6 +2285,35 @@ summary:focus-visible {
   border-color: rgba(42, 168, 255, 0.28);
 }
 
+.admin-detail-drawer-compact .saas-field {
+  gap: 0.3rem;
+}
+
+.admin-detail-drawer-compact .saas-field span,
+.admin-detail-drawer-compact .saas-label {
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.admin-detail-drawer-compact .saas-field input,
+.admin-detail-drawer-compact .saas-field select,
+.admin-detail-drawer-compact .saas-field textarea {
+  min-height: 38px;
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.admin-detail-drawer-compact :is(.primary-button, .secondary-button, .ghost-button, .danger-button) {
+  min-height: 36px;
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+}
+
 .saas-feedback {
   border-radius: 18px;
   padding: 0.9rem 1rem;

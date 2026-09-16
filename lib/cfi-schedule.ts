@@ -85,7 +85,6 @@ export type TeachingRules = {
   start_minute: number;
   latest_start_minute: number;
   end_minute: number;
-  max_daily_span_min: number;
   max_daily_teaching_min: number;
   weekdays: number[];
 };
@@ -98,12 +97,12 @@ export type InstructorTimeOff = {
   note: string;
 };
 
-export const defaultTeachingRules = { start_minute: 420, latest_start_minute: 960, end_minute: 1440, max_daily_span_min: 480, max_daily_teaching_min: 480, weekdays: [1, 2, 3, 4, 5] };
+export const defaultTeachingRules = { start_minute: 420, latest_start_minute: 960, end_minute: 1440, max_daily_teaching_min: 480, weekdays: [1, 2, 3, 4, 5] };
 
 export async function fetchInstructorScheduleSettings(cfiUserId: string, rangeStart: Date, rangeEnd: Date) {
   const supabase = getSupabaseClient();
   const [rulesResult, timeOffResult] = await Promise.all([
-    supabase.from("cfi_schedule_teaching_rules").select("cfi_user_id, start_minute, latest_start_minute, end_minute, max_daily_span_min, max_daily_teaching_min, weekdays").eq("cfi_user_id", cfiUserId).maybeSingle(),
+    supabase.from("cfi_schedule_teaching_rules").select("cfi_user_id, start_minute, latest_start_minute, end_minute, max_daily_teaching_min, weekdays").eq("cfi_user_id", cfiUserId).maybeSingle(),
     supabase.from("cfi_schedule_time_off").select("id, cfi_user_id, start_at, end_at, note").eq("cfi_user_id", cfiUserId).lt("start_at", rangeEnd.toISOString()).gt("end_at", rangeStart.toISOString()).order("start_at"),
   ]);
   if (rulesResult.error) throw rulesResult.error;
@@ -848,9 +847,6 @@ export function generateAutomaticSchedule(input: {
             });
             if (!aircraft) continue;
           }
-          const spanStart = Math.min(start.getTime(), ...items.map((item) => item.start.getTime()));
-          const spanEnd = Math.max(end.getTime(), ...items.map((item) => item.end.getTime()));
-          if (spanEnd - spanStart > rules.max_daily_span_min * 60_000) continue;
           const gapMs = items.length ? Math.min(...items.map((item) => item.end <= start ? start.getTime() - item.end.getTime() : item.start.getTime() - end.getTime())) : 0;
           const candidate = { start, end, aircraft, dayIndex, joinsExistingDay: items.length ? 0 : 1, gapMs };
           if (!best || candidate.joinsExistingDay < best.joinsExistingDay

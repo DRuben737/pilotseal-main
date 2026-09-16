@@ -107,7 +107,7 @@ const compactResult=generateAutomaticSchedule({...autoInput,access:compactAccess
 assert.deepEqual(compactResult.drafts.map((draft)=>draft.student_user_id),['compact-a','compact-c','compact-b'],'an available student who closes the current gap is selected before a later start');
 assert.deepEqual(compactResult.drafts.map((draft)=>new Date(draft.start_at).getHours()),[7,9,11],'automatic lessons run back-to-back when availability and aircraft permit');
 const cappedTotal=generateAutomaticSchedule({...autoInput,access:compactAccess,slots:compactSlots,blocks:[],teachingRules:{...defaultTeachingRules,max_daily_teaching_min:240},requests:compactAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:1,groundSessions:0}))});
-assert.equal(cappedTotal.drafts.length,2,'daily total teaching minutes cap actual lesson durations, not only first-to-last span');
+assert.equal(cappedTotal.drafts.length,2,'daily total teaching minutes cap actual lesson durations');
 const existingCap=generateAutomaticSchedule({...autoInput,access:[secondAccess],slots:[{student_user_id:'b',scope:'weekly',weekday:1,start_minute:540,end_minute:660,timezone:'America/New_York'}],blocks:[],existingEntries:[a],teachingRules:{...defaultTeachingRules,max_daily_teaching_min:120},requests:[{studentUserId:'b',flightSessions:1,groundSessions:0}]});
 assert.equal(existingCap.drafts.length,0,'existing lessons consume the instructor daily total before adding a new lesson');
 const cancelledEntry={...a,status:'cancelled'};
@@ -117,7 +117,7 @@ const unavailable=generateAutomaticSchedule({...autoInput,slots:[],blocks:[],req
 assert.equal(unavailable.studentUserId,'a');
 assert.equal(unavailable.scheduled,0);
 assert.match(unavailable.reason,/No availability/);
-const teachingRules={cfi_user_id:'cfi',start_minute:480,latest_start_minute:600,end_minute:720,max_daily_span_min:240,weekdays:[1]};
+const teachingRules={cfi_user_id:'cfi',start_minute:480,latest_start_minute:600,end_minute:720,max_daily_teaching_min:480,weekdays:[1]};
 const laterSlot={student_user_id:'a',scope:'weekly',weekday:1,start_minute:540,end_minute:1020,timezone:'America/New_York'};
 assert.equal(new Date(generateAutomaticSchedule({...autoInput,slots:[laterSlot],blocks:[]}).drafts[0].start_at).getHours(),9,'default rules keep later student start times available');
 const taught=generateAutomaticSchedule({...autoInput,blocks:[],teachingRules}).drafts;
@@ -125,6 +125,9 @@ assert.equal(new Date(taught[0].start_at).getHours(),8,'instructor start time li
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,end_minute:540}}).drafts.length,0,'instructor end time must accommodate the whole lesson');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,weekdays:[2]}}).drafts.length,0,'disabled teaching days are not used');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,latest_start_minute:420}}).drafts.length,0,'latest start time limits automatic scheduling');
+const wideWindowRules={...defaultTeachingRules,start_minute:420,latest_start_minute:960,end_minute:1080,max_daily_teaching_min:240,weekdays:[1]};
+const wideWindow=generateAutomaticSchedule({...autoInput,access:[compactAccess[0],compactAccess[1]],slots:[compactSlots[0],{...compactSlots[1],start_minute:960,end_minute:1080}],blocks:[],teachingRules:wideWindowRules,requests:[{studentUserId:'compact-a',flightSessions:1,groundSessions:0},{studentUserId:'compact-b',flightSessions:1,groundSessions:0}]});
+assert.equal(wideWindow.drafts.length,2,'the configured teaching window does not add a separate first-to-last span limit');
 const ownTimeOff={id:'time-off',cfi_user_id:'cfi',start_at:a.start_at,end_at:a.end_at,note:'Vacation'};
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],instructorTimeOff:[ownTimeOff]}).drafts[0].start_at,new Date(a.end_at).toISOString(),'automatic scheduling skips instructor time off');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],instructorTimeOff:[{...ownTimeOff,end_at:'2026-09-21T04:00:00Z'}]}).drafts.length,0,'a full-week vacation prevents automatic additions');

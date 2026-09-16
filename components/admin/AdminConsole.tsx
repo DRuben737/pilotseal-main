@@ -331,6 +331,7 @@ export function DetailDrawer({
   title,
   description,
   width = "default",
+  compact = false,
   onClose,
   children,
 }: {
@@ -338,6 +339,7 @@ export function DetailDrawer({
   title: string;
   description?: string;
   width?: "default" | "wide";
+  compact?: boolean;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -408,15 +410,15 @@ export function DetailDrawer({
   return createPortal(
     <div className="fixed inset-0 z-[90]" role="presentation">
       <button aria-label="Close details" className="absolute inset-0 cursor-default bg-slate-950/35" onClick={onClose} />
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-2xl ${width === "wide" ? "max-w-4xl" : "max-w-xl"}`}>
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-2xl ${width === "wide" ? "max-w-4xl" : "max-w-xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
+        <header className={`flex items-start justify-between border-b border-slate-200 ${compact ? "gap-3 px-4 py-3" : "gap-4 px-5 py-4"}`}>
           <div>
             <h2 id={titleId} className="text-lg font-semibold text-slate-950">{title}</h2>
             {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
           </div>
-          <button autoFocus type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-xl text-slate-600 hover:bg-slate-50" aria-label="Close">×</button>
+          <button autoFocus type="button" onClick={onClose} className={`flex items-center justify-center border border-slate-200 text-xl text-slate-600 hover:bg-slate-50 ${compact ? "h-9 w-9 rounded-md" : "h-10 w-10 rounded-xl"}`} aria-label="Close">×</button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+        <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? "p-4" : "p-5"}`}>{children}</div>
       </section>
     </div>,
     document.body
