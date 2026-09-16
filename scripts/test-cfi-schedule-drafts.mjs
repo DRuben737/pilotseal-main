@@ -69,6 +69,7 @@ const generated = generateAutomaticSchedule(autoInput).drafts;
 assert.equal(generated.length,1);
 assert.equal(Date.parse(generated[0].start_at),Date.parse(a.end_at),'automatic flight starts after the aircraft block');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[]}).drafts[0].start_at,new Date(a.start_at).toISOString(),'removing the block releases the earlier slot');
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],selectedAircraftIds:['plane-2']}).drafts.length,0,'unavailable aircraft are excluded even if a stale selection includes them');
 const secondAccess={student_user_id:'b',student_name:'Second student',default_duration_min:120,default_weekly_sessions:4};
 const selective=generateAutomaticSchedule({...autoInput,access:[...autoInput.access,secondAccess],slots:[...slots,{student_user_id:'b',scope:'weekly',weekday:1,start_minute:420,end_minute:900,timezone:'America/New_York'},{student_user_id:'b',scope:'weekly',weekday:2,start_minute:420,end_minute:900,timezone:'America/New_York'}],blocks:[],requests:[{studentUserId:'b',flightSessions:1,groundSessions:1}]});
 assert.equal(selective.drafts.length,2,'the requested number controls additions instead of the saved weekly goal');

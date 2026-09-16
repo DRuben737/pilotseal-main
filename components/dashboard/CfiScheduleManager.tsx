@@ -159,8 +159,6 @@ export default function CfiScheduleManager() {
   const [aircraft, setAircraft] = useState<ScheduleAircraft[]>([]);
   const [aircraftReservations, setAircraftReservations] = useState<AircraftReservation[]>([]);
   const [drawer, setDrawer] = useState<DrawerMode>(null);
-  const [swapMode, setSwapMode] = useState(false);
-  const [swapSourceId, setSwapSourceId] = useState("");
   const [swapTargetId, setSwapTargetId] = useState("");
   const dragSourceId = useRef("");
   const suppressEntryClick = useRef(false);
@@ -204,6 +202,7 @@ export default function CfiScheduleManager() {
     [access, userId]
   );
   const activeStudents = useMemo(() => cfiAccess.filter((item) => item.access_enabled), [cfiAccess]);
+  const automaticAircraft = useMemo(() => aircraft.filter((item) => item.operational_status === "available"), [aircraft]);
   const maxAvailabilityDate = localDateKey(addCalendarDays(new Date(), 27));
 
   async function loadIdentityData() {
@@ -366,8 +365,6 @@ export default function CfiScheduleManager() {
     setWeekStart(getWeekStart(value));
     setAgendaStart(date);
     setAgendaDays(14);
-    setSwapMode(false);
-    setSwapSourceId("");
   }
 
   function stageOperations(next: ScheduleOperation[]) {
@@ -377,17 +374,7 @@ export default function CfiScheduleManager() {
     setPublishAcknowledged(false);
   }
 
-  function beginLessonSwap() {
-    setSwapMode(true);
-    setSwapSourceId("");
-    setSwapTargetId("");
-    setError("");
-    setMessage("");
-  }
-
-  function cancelLessonSwap() {
-    setSwapMode(false);
-    setSwapSourceId("");
+  function resetLessonDrag() {
     setSwapTargetId("");
     dragSourceId.current = "";
   }
@@ -407,7 +394,7 @@ export default function CfiScheduleManager() {
       const warningCount = directChanges.reduce((count, entry) => count + entryWarnings(entry, next).length, 0);
       setSaving(true);
       await publishScheduleDraft(revision, crypto.randomUUID(), directChanges);
-      cancelLessonSwap();
+      resetLessonDrag();
       setMessage(warningCount ? `Lessons swapped. ${warningCount} schedule issue${warningCount === 1 ? " is" : "s are"} marked on the calendar.` : "Lessons swapped. Affected linked students were notified according to their preferences.");
       const { start, end } = weekRange();
       adoptSnapshot(await fetchScheduleEditorSnapshot(start, end));
@@ -1099,7 +1086,6 @@ export default function CfiScheduleManager() {
               { label: "Student availability", disabled: !activeStudents.length || !weekReady, onSelect: () => setDrawer("availability-overview" as DrawerMode) },
               { label: "My teaching time", disabled: !weekReady, onSelect: openTeachingDrawer },
               { label: "Manage access", disabled: hasDraft, onSelect: openAccessDrawer },
-              { label: "Swap lessons", disabled: hasDraft || entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled").length < 2, onSelect: beginLessonSwap },
             ] : [
               { label: "Usual weekly availability", disabled: !weekReady, onSelect: () => setDrawer("weekly" as DrawerMode) },
               ...(activeStudent?.storage_kind === "person" ? [{ label: "Weekly goal", disabled: !weekReady, onSelect: () => openStudentSettings(activeStudent) }] : []),
@@ -1129,7 +1115,6 @@ export default function CfiScheduleManager() {
       {!isCfiView && weekReady ? <div className={styles.reminder} role="status"><span>{availabilityReview?.needs_review ? "Confirm your next 7 days." : `Confirmed through ${formatDate(new Date(`${availabilityReview?.confirmed_through}T12:00:00`))}.`}</span><button type="button" className={styles.textButton} onClick={() => { setReviewChecked(false); setDrawer("review"); }}>Review dates</button></div> : null}
       {error ? <p role="alert" className={`${styles.feedback} ${styles.error}`}>{error}</p> : null}
       {message ? <p role="status" className={styles.feedback}>{message}</p> : null}
-      {swapMode ? <div id="schedule-swap-guide" className={styles.swapBar} role="status"><span>{swapSourceId ? `${entries.find((entry) => entry.id === swapSourceId)?.student_name ?? "Lesson"} selected · tap another lesson` : "Tap two lessons to swap"}</span><button type="button" className={styles.textButton} onClick={cancelLessonSwap}>Cancel</button></div> : null}
       {hasDraft ? <div className={styles.draftBar}><strong>Unpublished draft · {changes.length} changed lesson(s)</strong><button className={styles.textButton} type="button" disabled={saving || !changes.length} onClick={() => void openPublishDrawer()}>Review &amp; publish</button></div> : null}
       {stale ? <p role="alert" className={styles.feedback}>The schedule changed. <button type="button" className={styles.textButton} onClick={() => void reviewLatestDraft()}>Review latest and reapply draft</button></p> : null}
       {!isCfiView && studentTab === "availability" ? <button type="button" className={styles.textButton} disabled={!weekReady} onClick={() => setDrawer("weekly")}>Edit usual week</button> : null}
@@ -1156,14 +1141,12 @@ export default function CfiScheduleManager() {
                 const warnings = entryWarnings(entry);
                 const aircraftLabel = entry.aircraft_tail_number || (entry.aircraft_id ? "Aircraft" : "Aircraft not specified");
                 const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${entry.lesson_kind === "flight" ? aircraftLabel : "Ground"}` : entry.unavailable_kind === "aircraft" ? `${aircraftLabel} unavailable${entry.block_owner_name && !entry.is_own ? ` · ${entry.block_owner_name}` : ""}` : entry.unavailable_kind === "instructor" ? `My unavailable time${entry.note ? ` · ${entry.note}` : ""}` : "Busy"}</span>{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ {warnings.length} issue{warnings.length === 1 ? "" : "s"}</span> : null}</>;
-                const selectedForSwap = swapSourceId === entry.id;
                 const targetedForSwap = swapTargetId === entry.id;
-                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${selectedForSwap ? styles.swapSelected : ""} ${targetedForSwap ? styles.swapTarget : ""}`;
+                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${targetedForSwap ? styles.swapTarget : ""}`;
                 const canSwapEntry = isCfiView && entry.entry_type === "lesson" && entry.status === "scheduled" && !hasDraft;
                 const canManageEntry = entry.entry_type === "lesson" || entry.is_own;
-                return (isCfiView && canManageEntry) || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving || (swapMode && !canSwapEntry)} draggable={canSwapEntry && !saving}
-                  aria-pressed={swapMode && selectedForSwap} aria-describedby={swapMode ? "schedule-swap-guide" : undefined}
-                  title={canSwapEntry && !swapMode ? "Drag onto another student's lesson to swap" : undefined}
+                return (isCfiView && canManageEntry) || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving} draggable={canSwapEntry && !saving}
+                  title={canSwapEntry ? "Drag onto another student's lesson to swap" : undefined}
                   onDragStart={(event) => {
                     if (!canSwapEntry) { event.preventDefault(); return; }
                     dragSourceId.current = entry.id;
@@ -1192,11 +1175,6 @@ export default function CfiScheduleManager() {
                   onClick={() => {
                   if (suppressEntryClick.current) { suppressEntryClick.current = false; return; }
                   if (!isCfiView) { setDetailEntry(entry); setDrawer("details"); }
-                  else if (entry.entry_type === "lesson" && swapMode) {
-                    if (!swapSourceId) setSwapSourceId(entry.id);
-                    else if (swapSourceId === entry.id) setSwapSourceId("");
-                    else void swapLessons(swapSourceId, entry.id);
-                  }
                   else if (entry.entry_type === "lesson") openEditLesson(entry);
                   else if (entry.unavailable_kind === "instructor") openTeachingDrawer();
                   else { const block = blocks.find((item) => item.id === entry.id); if (block) openBlockDrawer(date, block); }
@@ -1349,11 +1327,12 @@ export default function CfiScheduleManager() {
         </section>
       </DetailDrawer>
 
-      <DetailDrawer compact open={drawer === "auto"} onClose={() => setDrawer(null)} title="Automatic scheduling" description="Set this week’s Flight and Ground totals. Existing lessons count toward them.">
-        {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}<p className="text-sm text-slate-600">Uses your teaching hours and time off. <button className={styles.textButton} type="button" onClick={openTeachingDrawer}>Change teaching time</button> before generating if needed.</p>
-        <section className={styles.formSection}><h3 className="text-sm font-semibold text-slate-900">2. Aircraft for Flight lessons</h3><p className="mt-1 text-xs text-slate-500">The scheduler assigns one available selected aircraft to each Flight lesson. A current Grounded, Maintenance, or Away status is shown as a warning but does not prevent booking.</p><div className={styles.aircraftChoices}>{aircraft.map((item) => <label key={item.id}><input type="checkbox" checked={selectedAircraftIds.includes(item.id)} onChange={(event) => { setSelectedAircraftIds((current) => event.target.checked ? [...current,item.id] : current.filter((id) => id !== item.id)); setAutoPreviewBuilt(false); setAutoDrafts([]); }} /><span><strong>{item.tail_number}</strong>{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? <small>⚠ {item.operational_status.replace("_", " ")}</small> : null}</span></label>)}</div>{!aircraft.length ? <p className="mt-3 text-sm text-amber-800">No aircraft found in My Aircraft or your organizations. Ground lessons can still be generated.</p> : null}</section>
+      <DetailDrawer compact open={drawer === "auto"} onClose={() => setDrawer(null)} title="Automatic scheduling" description="Choose aircraft and weekly totals.">
+        {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
+        <div className={styles.autoUtility}><button className={styles.textButton} type="button" onClick={openTeachingDrawer}>Teaching time</button><InfoHint label="How teaching time is used">Automatic scheduling follows your teaching window, daily teaching total, and unavailable time.</InfoHint></div>
+        <section className={styles.formSection}><div className={styles.sectionHeading}><h3 className="text-sm font-semibold text-slate-900">Aircraft</h3><InfoHint label="Aircraft selection help">Only aircraft currently marked Available can be selected. Each Flight lesson receives one selected aircraft.</InfoHint></div><div className={styles.aircraftChoices}>{automaticAircraft.map((item) => <label key={item.id}><input type="checkbox" checked={selectedAircraftIds.includes(item.id)} onChange={(event) => { setSelectedAircraftIds((current) => event.target.checked ? [...current,item.id] : current.filter((id) => id !== item.id)); setAutoPreviewBuilt(false); setAutoDrafts([]); }} /><span><strong>{item.tail_number}</strong>{item.model_name ? ` · ${item.model_name}` : ""}</span></label>)}</div>{!automaticAircraft.length ? <p className="mt-2 text-sm text-amber-800">No available aircraft. Ground lessons can still be generated.</p> : null}</section>
         <section className={styles.formSection}>
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">3. Students and weekly totals</h3><p className="mt-1 text-xs text-slate-500">Existing Flight and Ground lessons are counted.</p></div><div className="flex gap-1"><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: true, flightSessions: Math.max(1, item.flightSessions) }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Select all</button><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: false }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Clear</button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div className={styles.sectionHeading}><h3 className="text-sm font-semibold text-slate-900">Students</h3><InfoHint label="Weekly totals help">Enter the desired Flight and Ground totals for this run. Existing lessons are counted, so only the missing number is added.</InfoHint></div><div className="flex gap-1"><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: true, flightSessions: Math.max(1, item.flightSessions) }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Select all</button><button className={styles.textButton} type="button" onClick={() => { setError(""); setAutoRequests((current) => current.map((item) => ({ ...item, selected: false }))); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }}>Clear</button></div></div>
           <div className={styles.autoRoster} role="group" aria-label="Students to automatically schedule">
             {activeStudents.map((student) => {
               const request = autoRequests.find((item) => item.studentUserId === student.student_user_id) ?? { studentUserId: student.student_user_id, flightSessions: 1, groundSessions: 0, selected: false };
@@ -1368,10 +1347,9 @@ export default function CfiScheduleManager() {
               </div>;
             })}
           </div>
-          <p className="mt-3 text-xs text-slate-500">Totals apply to this week only. The scheduler adds only what is missing.</p>
         </section>
-        <section className={styles.formSection}><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">4. Generate preview</h3><p className="mt-1 text-xs text-slate-600">Students with fewer Flight lessons are scheduled first. Your teaching window, unavailable time, and daily teaching total are respected.</p></div>{teachingRules.weekdays.some((day) => day > 5) ? <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeWeekends} onChange={(event) => { setIncludeWeekends(event.target.checked); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }} /> Include weekend</label> : null}</div><button className="primary-button mt-3" type="button" disabled={!autoRequests.some((item) => item.selected && (item.flightSessions > 0 || item.groundSessions > 0))} onClick={buildAutomaticPreview}>Generate preview</button></section>
-        {autoPreviewBuilt ? <section className={styles.formSection}><h3 className="text-sm font-semibold text-slate-900">5. Review</h3><p className="mt-1 text-xs text-slate-500">{autoDrafts.length} new lesson{autoDrafts.length === 1 ? "" : "s"} will be added after counting existing lessons.</p><div className="mt-3 grid gap-3">{autoRequests.filter((item) => item.selected && (item.flightSessions > 0 || item.groundSessions > 0)).map((request) => {
+        <section className={styles.formSection}><div className="flex items-center justify-between gap-3"><div className={styles.sectionHeading}><h3 className="text-sm font-semibold text-slate-900">Preview</h3><InfoHint label="Automatic placement help">Students with fewer Flight lessons are considered first. The scheduler also avoids gaps when availability and aircraft permit.</InfoHint></div>{teachingRules.weekdays.some((day) => day > 5) ? <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeWeekends} onChange={(event) => { setIncludeWeekends(event.target.checked); setAutoPreviewBuilt(false); setAutoDrafts([]); setAutoUnscheduled([]); }} /> Include weekend</label> : null}</div><button className="primary-button mt-3" type="button" disabled={!autoRequests.some((item) => item.selected && (item.flightSessions > 0 || item.groundSessions > 0))} onClick={buildAutomaticPreview}>Generate preview</button></section>
+        {autoPreviewBuilt ? <section className={styles.formSection}><h3 className="text-sm font-semibold text-slate-900">Review</h3><p className="mt-1 text-xs text-slate-500">{autoDrafts.length} new lesson{autoDrafts.length === 1 ? "" : "s"}</p><div className="mt-3 grid gap-3">{autoRequests.filter((item) => item.selected && (item.flightSessions > 0 || item.groundSessions > 0)).map((request) => {
           const student = activeStudents.find((item) => item.student_user_id === request.studentUserId);
           const studentDrafts = autoDrafts.filter((draft) => draft.student_user_id === request.studentUserId);
           const missed = autoUnscheduled.filter((item) => item.studentUserId === request.studentUserId);
@@ -1395,11 +1373,18 @@ function HelpButton({ onClick }: { onClick: () => void }) {
   return <button type="button" className={styles.helpButton} onClick={onClick} aria-label="Schedule help" title="How Schedule works"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1c0 1.8-2.4 2.1-2.4 3.8" /><path d="M12 17.5h.01" /></svg></button>;
 }
 
+function InfoHint({ label, children }: { label: string; children: string }) {
+  return <details className={styles.infoHint}>
+    <summary aria-label={label} title={label}><svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="currentColor" /><path d="M10 8.5v5M10 6.25h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg></summary>
+    <p>{children}</p>
+  </details>;
+}
+
 function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   return <DetailDrawer compact open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
     <div className={styles.helpContent}>
       <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
-      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use Student availability in the options menu to scan everyone’s week. Tap any available time to start a lesson for that student.</li><li>Set your teaching days, start and end times, and maximum total lesson time per day in My teaching time. Add a full-day vacation or a short break there too. Auto scheduling avoids this time; existing lessons only receive conflict warnings.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling lets you select several aircraft and choose separate Flight and Ground counts for each student. Those counts apply only to that run.</li><li>Every unavailable aircraft block identifies one aircraft. Blocks for organization aircraft are shared across the organization; only the instructor who created one can change or remove it.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. A Grounded, Maintenance, or Away status stays visible but does not prevent booking.</li><li>Drag one lesson onto another student’s lesson to swap them. On a phone, choose Swap lessons from the options menu, then tap the two lessons.</li><li>Manual edits save immediately. Moving a lesson pushes every later lesson that day; linked affected students are notified according to their preferences.</li></ol></section>
+      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use Student availability in the options menu to scan everyone’s week. Tap any available time to start a lesson for that student.</li><li>Set your teaching days, start and end times, and maximum total lesson time per day in My teaching time. Add a full-day vacation or a short break there too. Auto scheduling avoids this time; existing lessons only receive conflict warnings.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling shows only Available aircraft and lets you choose separate Flight and Ground totals for each student.</li><li>Every unavailable aircraft block identifies one aircraft. Blocks for organization aircraft are shared across the organization; only the instructor who created one can change or remove it.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. Away, Grounded, and Maintenance aircraft remain visible on the calendar but are excluded from automatic scheduling.</li><li>Drag one lesson onto another student’s lesson to swap them.</li><li>Manual edits save immediately. Moving a lesson pushes every later lesson that day; linked affected students are notified according to their preferences.</li></ol></section>
       <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson pushes every later lesson that day by the same amount. Manual conflicts are warnings, so you stay in control.</p></section>
     </div>
   </DetailDrawer>;

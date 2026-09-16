@@ -759,7 +759,7 @@ export function generateAutomaticSchedule(input: {
   const drafts: ScheduleDraft[] = [];
   const unscheduled: AutomaticScheduleUnscheduled[] = [];
   const weekKey = localDateKey(input.weekStart);
-  const selectedAircraft = input.aircraft.filter((aircraft) => input.selectedAircraftIds.includes(aircraft.id));
+  const selectedAircraft = input.aircraft.filter((aircraft) => aircraft.operational_status === "available" && input.selectedAircraftIds.includes(aircraft.id));
   const usedDaysByStudent = new Map<string, Set<string>>();
   const settings = input.access.flatMap((access) => {
     const request = input.requests?.find((item) => item.studentUserId === access.student_user_id);

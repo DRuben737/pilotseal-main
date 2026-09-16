@@ -65,7 +65,6 @@
 .error, .warning { color: #9a5200; }
 .draftBar { border-top: 1px solid var(--schedule-line); border-bottom: 1px solid var(--schedule-line); padding: 8px 0; font-size: 13px; }
 .draftBar strong { font-weight: 600; }
-.swapBar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px; margin: 8px 0; padding: 4px 4px 4px 10px; border: 1px solid #99c8f4; border-radius: 10px; background: #f2f7ff; color: #17456f; font-size: 12px; font-weight: 600; }
 .calendar { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; border-top: 1px solid var(--schedule-line); }
 .fullWeek { grid-template-columns: repeat(7, minmax(0,1fr)); }
 .day { min-width: 0; padding: 12px 10px; border-right: 1px solid var(--schedule-line); }
@@ -83,8 +82,6 @@
 .entryMeta { display: block; font-size: 12px; color: var(--schedule-muted); }
 .entry[draggable="true"] { cursor: grab; }
 .entry[draggable="true"]:active { cursor: grabbing; }
-.swapSelected { box-shadow: inset 0 0 0 2px #0066cc; background-image: repeating-linear-gradient(135deg, transparent, transparent 7px, rgba(0,102,204,.1) 7px, rgba(0,102,204,.1) 14px); }
-.swapSelected::after { content: "Selected"; display: block; margin-top: 4px; color: #0055aa; font-size: 11px; font-weight: 600; }
 .swapTarget { box-shadow: inset 0 0 0 2px #34a853; }
 .flight { border-left-color: #147ce5; background: #f2f7ff; }
 .ground { border-left-color: #8b5cf6; background: #f7f3ff; }
@@ -134,6 +131,17 @@
 .individualDays summary { padding: 18px 0; color: #0066cc; font-size: 13px; cursor: pointer; list-style-position: inside; }
 .formSection { padding: 14px 0; border-top: 1px solid var(--schedule-line); }
 .formSection:last-child { border-bottom: 1px solid var(--schedule-line); }
+.autoUtility, .sectionHeading { display: flex; align-items: center; gap: 5px; }
+.autoUtility { justify-content: flex-end; min-height: 34px; }
+.sectionHeading h3 { margin: 0; }
+.infoHint { position: relative; z-index: 5; }
+.infoHint summary { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--schedule-muted); cursor: pointer; list-style: none; touch-action: manipulation; }
+.infoHint summary::-webkit-details-marker { display: none; }
+.infoHint summary:hover, .infoHint summary:focus-visible { background: var(--schedule-surface); color: var(--schedule-blue); outline: none; }
+.infoHint summary:focus-visible { box-shadow: 0 0 0 2px #99c8f4; }
+.infoHint summary svg { width: 17px; height: 17px; }
+.infoHint p { display: none; position: absolute; z-index: 90; top: calc(100% + 4px); right: 0; width: min(260px, calc(100vw - 40px)); margin: 0; padding: 8px 10px; border: 1px solid #d2d2d7; border-radius: 6px; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.12); color: #3a3a3c; font-size: 12px; font-weight: 400; line-height: 1.45; }
+.infoHint[open] p, .infoHint:hover p, .infoHint:focus-within p { display: block; }
 .compactChecks { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; margin-top: 8px; border-top: 1px solid var(--schedule-line); border-bottom: 1px solid var(--schedule-line); }
 .compactChecks label { display: flex; min-width: 0; min-height: 36px; align-items: center; justify-content: center; gap: 4px; border-right: 1px solid var(--schedule-line); color: var(--schedule-muted); font-size: 11px; cursor: pointer; }
 .compactChecks label:last-child { border-right: 0; }
@@ -188,7 +196,7 @@
   .autoCount { padding-left: 26px; justify-content: start; }
   .autoCounts { padding-left: 26px; }
   .toolbar { justify-content: flex-start; }
-  .swapBar { position: sticky; top: 6px; z-index: 20; margin: 6px 0; box-shadow: 0 3px 12px rgba(0,0,0,.08); }
+  .infoHint summary { width: 44px; height: 44px; margin: -8px; }
   .availabilityWeekNav { margin-bottom: 2px; }
   .studentAvailability { padding: 14px 0; }
   .availabilityDayGrid { display: grid; grid-template-columns: 1fr; gap: 0; }
@@ -201,5 +209,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .entry, .swapBar { transition: none; }
+  .entry { transition: none; }
 }

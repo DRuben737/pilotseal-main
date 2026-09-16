@@ -55,6 +55,9 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'student availability overview fits a mobile viewport');
   await page.keyboard.press('Escape');
   await availabilityOverview.waitFor({state:'hidden'});
+  await page.getByRole('button',{name:'Schedule options',exact:true}).click();
+  assert.equal(await page.getByRole('menuitem',{name:'Swap lessons',exact:true}).count(),0,'lesson swapping does not add a separate menu action');
+  await page.getByRole('button',{name:'Schedule options',exact:true}).click();
   await page.getByLabel('Jump to date').fill(date);
   await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
   await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
@@ -82,10 +85,13 @@ try{
   await page.getByRole('menuitem',{name:'Auto schedule',exact:true}).click();
   const auto=page.getByRole('dialog',{name:'Automatic scheduling',exact:true});
   assert.equal(await auto.getByRole('button',{name:'Add block',exact:true}).count(),0,'automatic scheduling does not show the aircraft-block editor');
-  assert.equal(await auto.getByRole('checkbox',{name:/N000PS/}).isChecked(),false,'aircraft are not preselected for an automatic-schedule run');
+  assert.equal(await auto.getByRole('checkbox',{name:/N000PS/}).count(),0,'grounded aircraft are excluded from automatic scheduling');
+  assert.equal(await auto.getByRole('heading',{name:/^\d+\./}).count(),0,'automatic scheduling does not present numbered steps');
+  await auto.getByLabel('Aircraft selection help').click();
+  await auto.getByText(/Only aircraft currently marked Available/).waitFor();
   assert.equal(await auto.getByLabel('Flight lessons for Aircraft UI Student').count(),1);
   assert.equal(await auto.getByLabel('Ground lessons for Aircraft UI Student').count(),1);
-  await auto.getByRole('button',{name:'Change teaching time'}).click();
+  await auto.getByRole('button',{name:'Teaching time'}).click();
   const teaching=page.getByRole('dialog',{name:'My teaching time',exact:true});
   await teaching.waitFor();
   assert.equal(await teaching.getByText(/first-to-last|day span/i).count(),0,'teaching settings do not expose a redundant day-span rule');
