@@ -58,7 +58,7 @@ export type ScheduleEntry = {
   aircraft_status: AircraftOperationalStatus | null;
   aircraft_status_note: string | null;
   aircraft_conflict: boolean;
-  unavailable_kind?: "private_lesson" | "aircraft" | null;
+  unavailable_kind?: "private_lesson" | "aircraft" | "instructor" | null;
   block_owner_name?: string | null;
   start_at: string;
   end_at: string;
@@ -79,6 +79,52 @@ export type UnavailableBlock = {
   can_manage?: boolean;
   block_owner_name?: string | null;
 };
+
+export type TeachingRules = {
+  cfi_user_id: string;
+  start_minute: number;
+  latest_start_minute: number;
+  end_minute: number;
+  max_daily_span_min: number;
+  max_daily_teaching_min: number;
+  weekdays: number[];
+};
+
+export type InstructorTimeOff = {
+  id: string;
+  cfi_user_id: string;
+  start_at: string;
+  end_at: string;
+  note: string;
+};
+
+export const defaultTeachingRules = { start_minute: 420, latest_start_minute: 960, end_minute: 1440, max_daily_span_min: 480, max_daily_teaching_min: 480, weekdays: [1, 2, 3, 4, 5] };
+
+export async function fetchInstructorScheduleSettings(cfiUserId: string, rangeStart: Date, rangeEnd: Date) {
+  const supabase = getSupabaseClient();
+  const [rulesResult, timeOffResult] = await Promise.all([
+    supabase.from("cfi_schedule_teaching_rules").select("cfi_user_id, start_minute, latest_start_minute, end_minute, max_daily_span_min, max_daily_teaching_min, weekdays").eq("cfi_user_id", cfiUserId).maybeSingle(),
+    supabase.from("cfi_schedule_time_off").select("id, cfi_user_id, start_at, end_at, note").eq("cfi_user_id", cfiUserId).lt("start_at", rangeEnd.toISOString()).gt("end_at", rangeStart.toISOString()).order("start_at"),
+  ]);
+  if (rulesResult.error) throw rulesResult.error;
+  if (timeOffResult.error) throw timeOffResult.error;
+  return { rules: { ...defaultTeachingRules, ...rulesResult.data, cfi_user_id: cfiUserId } as TeachingRules, timeOff: (timeOffResult.data ?? []) as InstructorTimeOff[] };
+}
+
+export async function saveTeachingRules(input: TeachingRules) {
+  const { error } = await getSupabaseClient().from("cfi_schedule_teaching_rules").upsert(input, { onConflict: "cfi_user_id" });
+  if (error) throw error;
+}
+
+export async function createInstructorTimeOff(input: Omit<InstructorTimeOff, "id">) {
+  const { error } = await getSupabaseClient().from("cfi_schedule_time_off").insert(input);
+  if (error) throw error;
+}
+
+export async function deleteInstructorTimeOff(id: string) {
+  const { error } = await getSupabaseClient().from("cfi_schedule_time_off").delete().eq("id", id);
+  if (error) throw error;
+}
 
 export type AircraftOperationalStatus = "available" | "away" | "in_maintenance" | "grounded";
 export type ScheduleAircraft = {
@@ -701,9 +747,13 @@ export function generateAutomaticSchedule(input: {
   aircraft: ScheduleAircraft[];
   selectedAircraftIds: string[];
   aircraftReservations: AircraftReservation[];
+  teachingRules?: TeachingRules;
+  instructorTimeOff?: InstructorTimeOff[];
 }) {
-  const dayCount = input.includeWeekends ? 7 : 5;
-  const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) => addCalendarDays(input.weekStart, dayIndex));
+  const rules = input.teachingRules ?? defaultTeachingRules;
+  const dayCount = 7;
+  const allowedWeekdays = input.includeWeekends ? rules.weekdays : rules.weekdays.filter((day) => day <= 5);
+  const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) => addCalendarDays(input.weekStart, dayIndex)).filter((date) => allowedWeekdays.includes((date.getDay() + 6) % 7 + 1));
   const occupied = input.existingEntries
     .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled")
     .map((entry) => ({ start: new Date(entry.start_at), end: new Date(entry.end_at), studentUserId: entry.student_user_id }));
@@ -767,6 +817,7 @@ export function generateAutomaticSchedule(input: {
     for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
       const date = addCalendarDays(input.weekStart, dayIndex);
       const dateKey = localDateKey(date);
+      if (!allowedWeekdays.includes((date.getDay() + 6) % 7 + 1)) continue;
       if (setting.usedDays.has(dateKey)) continue;
       const periods = availabilityForDate({
         date,
@@ -779,9 +830,13 @@ export function generateAutomaticSchedule(input: {
           const start = new Date(startMs);
           const end = new Date(startMs + setting.durationMin * 60_000);
           const localStartMinute = start.getHours() * 60 + start.getMinutes();
-          if (localStartMinute < 420 || localStartMinute > 960) continue;
+          const localEndMinute = end.getHours() * 60 + end.getMinutes();
+          if (localDateKey(end) !== dateKey || localStartMinute < rules.start_minute || localStartMinute > rules.latest_start_minute || localEndMinute > rules.end_minute) continue;
+          if (input.instructorTimeOff?.some((item) => overlaps(start, end, new Date(item.start_at), new Date(item.end_at)))) continue;
           const items = dailyItems(date);
           if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;
+          const teachingMinutes = setting.durationMin + items.reduce((total, item) => total + (item.end.getTime() - item.start.getTime()) / 60_000, 0);
+          if (teachingMinutes > rules.max_daily_teaching_min) continue;
           let aircraft: ScheduleAircraft | undefined;
           if (setting.lessonKind === "flight") {
             aircraft = selectedAircraft.find((candidate) => {
@@ -795,7 +850,7 @@ export function generateAutomaticSchedule(input: {
           }
           const spanStart = Math.min(start.getTime(), ...items.map((item) => item.start.getTime()));
           const spanEnd = Math.max(end.getTime(), ...items.map((item) => item.end.getTime()));
-          if (spanEnd - spanStart > 8 * 60 * 60_000) continue;
+          if (spanEnd - spanStart > rules.max_daily_span_min * 60_000) continue;
           const gapMs = items.length ? Math.min(...items.map((item) => item.end <= start ? start.getTime() - item.end.getTime() : item.start.getTime() - end.getTime())) : 0;
           const candidate = { start, end, aircraft, dayIndex, joinsExistingDay: items.length ? 0 : 1, gapMs };
           if (!best || candidate.joinsExistingDay < best.joinsExistingDay
@@ -858,7 +913,7 @@ export function generateAutomaticSchedule(input: {
           ? "No availability is set for the selected days."
           : setting.lessonKind === "flight" && selectedAircraft.length === 0
             ? "Choose at least one aircraft for Flight lessons."
-            : "No remaining day satisfies availability, one-lesson-per-student-per-day, aircraft availability, and the eight-hour teaching span.",
+            : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, aircraft availability, and the daily teaching span.",
       });
     }
   }

@@ -51,7 +51,7 @@ assert.throws(() => swapScheduleLessons([...original, { ...c, id:'same-student',
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');
 const scheduleCompiled = ts.transpileModule(scheduleSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { availabilityEndToMinutes, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
+const { availabilityEndToMinutes, defaultTeachingRules, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
 assert.equal(availabilityEndToMinutes('00:00'),1440,'native midnight end time saves as the end of the day');
 assert.equal(minutesToAvailabilityEnd(1440),'00:00','end-of-day availability loads into a valid native time input');
 assert.equal(availabilityEndToMinutes('18:30'),1110,'ordinary end times keep their minute value');
@@ -106,6 +106,10 @@ const compactSlots=[
 const compactResult=generateAutomaticSchedule({...autoInput,access:compactAccess,slots:compactSlots,blocks:[],requests:compactAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:1,groundSessions:0}))});
 assert.deepEqual(compactResult.drafts.map((draft)=>draft.student_user_id),['compact-a','compact-c','compact-b'],'an available student who closes the current gap is selected before a later start');
 assert.deepEqual(compactResult.drafts.map((draft)=>new Date(draft.start_at).getHours()),[7,9,11],'automatic lessons run back-to-back when availability and aircraft permit');
+const cappedTotal=generateAutomaticSchedule({...autoInput,access:compactAccess,slots:compactSlots,blocks:[],teachingRules:{...defaultTeachingRules,max_daily_teaching_min:240},requests:compactAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:1,groundSessions:0}))});
+assert.equal(cappedTotal.drafts.length,2,'daily total teaching minutes cap actual lesson durations, not only first-to-last span');
+const existingCap=generateAutomaticSchedule({...autoInput,access:[secondAccess],slots:[{student_user_id:'b',scope:'weekly',weekday:1,start_minute:540,end_minute:660,timezone:'America/New_York'}],blocks:[],existingEntries:[a],teachingRules:{...defaultTeachingRules,max_daily_teaching_min:120},requests:[{studentUserId:'b',flightSessions:1,groundSessions:0}]});
+assert.equal(existingCap.drafts.length,0,'existing lessons consume the instructor daily total before adding a new lesson');
 const cancelledEntry={...a,status:'cancelled'};
 const ignoresCancelled=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[cancelledEntry],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0}]});
 assert.equal(ignoresCancelled.drafts[0].start_at,new Date(a.start_at).toISOString(),'cancelled lessons do not consume time or weekly counts');
@@ -113,4 +117,16 @@ const unavailable=generateAutomaticSchedule({...autoInput,slots:[],blocks:[],req
 assert.equal(unavailable.studentUserId,'a');
 assert.equal(unavailable.scheduled,0);
 assert.match(unavailable.reason,/No availability/);
-console.log('Automatic scheduling assertions passed, including weekly totals, existing lessons, cancellation, Flight blocks, and Ground independence.');
+const teachingRules={cfi_user_id:'cfi',start_minute:480,latest_start_minute:600,end_minute:720,max_daily_span_min:240,weekdays:[1]};
+const laterSlot={student_user_id:'a',scope:'weekly',weekday:1,start_minute:540,end_minute:1020,timezone:'America/New_York'};
+assert.equal(new Date(generateAutomaticSchedule({...autoInput,slots:[laterSlot],blocks:[]}).drafts[0].start_at).getHours(),9,'default rules keep later student start times available');
+const taught=generateAutomaticSchedule({...autoInput,blocks:[],teachingRules}).drafts;
+assert.equal(new Date(taught[0].start_at).getHours(),8,'instructor start time limits automatic scheduling');
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,end_minute:540}}).drafts.length,0,'instructor end time must accommodate the whole lesson');
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,weekdays:[2]}}).drafts.length,0,'disabled teaching days are not used');
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,latest_start_minute:420}}).drafts.length,0,'latest start time limits automatic scheduling');
+const ownTimeOff={id:'time-off',cfi_user_id:'cfi',start_at:a.start_at,end_at:a.end_at,note:'Vacation'};
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],instructorTimeOff:[ownTimeOff]}).drafts[0].start_at,new Date(a.end_at).toISOString(),'automatic scheduling skips instructor time off');
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],instructorTimeOff:[{...ownTimeOff,end_at:'2026-09-21T04:00:00Z'}]}).drafts.length,0,'a full-week vacation prevents automatic additions');
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],instructorTimeOff:[ownTimeOff],requests:[{studentUserId:'a',flightSessions:0,groundSessions:1}]}).drafts[0].start_at,new Date(a.end_at).toISOString(),'time off applies to Ground as well as Flight');
+console.log('Automatic scheduling assertions passed, including instructor rules and time off.');
