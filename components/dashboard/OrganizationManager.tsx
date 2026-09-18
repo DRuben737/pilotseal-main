@@ -1369,7 +1369,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid min-w-0 gap-3">
       {status ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{status}</p> : null}
 
       {view === "fleet" ? (
@@ -1780,60 +1780,138 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       {view === "people" ? (
         <>
           <ManagementDisclosure id="organization-people" title="People" summary={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite</CompactButton> : undefined} helpContent={<><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Student invitations create the assigned instructor relationship as soon as the verified student accepts. Role changes, removal and ownership transfer require confirmation.</p></>}>
-          <AdminDataTable label="Linked organization members">
-            <thead>
-              <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite by email</CompactButton> : undefined} /></th></tr>
-              <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
-                <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {members.map((member) => {
-                const isOwner = member.member_role === "owner";
-                const isSelf = member.user_id === session?.user?.id;
-                const organizationPerson = peopleByUserId.get(member.user_id);
-                const adminCanRemove = canManageMembers && role === "organization_admin" && member.member_role === "member";
-                const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
-                return (
-                  <tr key={member.user_id} className="hover:bg-blue-50/40">
-                    <td className="px-3 py-2 font-semibold text-slate-950">{member.display_name || member.email}</td>
-                    <td className="px-3 py-2 text-xs text-slate-600">{member.email}</td>
-                    <td className="px-3 py-2"><StatusBadge tone={isOwner ? "info" : member.member_role === "organization_admin" ? "warning" : "neutral"}>{formatRole(member.member_role)}</StatusBadge></td>
-                    <td className="px-3 py-2"><select className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs" value={member.teaching_role ?? ""} disabled={saving || !canManageMembers} aria-label={`Teaching role for ${member.email}`} onChange={(event) => void handleTeachingRoleChange(member, (event.target.value || null) as "instructor" | "student" | null)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></td>
-                    <td className="px-3 py-2 text-xs text-slate-600">{organizationPerson?.internal_id || "—"}</td>
-                    <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={organizationPerson?.notes ?? ""}>{organizationPerson?.notes || "—"}</td>
-                    <td className="px-3 py-2"><div className="flex justify-end gap-1">
-                      {organizationPerson && (canManageMembers || member.teaching_role === "student") ? <CompactButton type="button" disabled={saving} onClick={() => void startEditOrganizationPerson(organizationPerson)}>Edit profile</CompactButton> : null}
-                      {canManageAdmins && !isOwner && !isSelf ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "role", member })}>{member.member_role === "organization_admin" ? "Make member" : "Make admin"}</CompactButton> : null}
-                      {canManageAdmins && !isSelf && !isOwner ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member })}>Transfer owner</CompactButton> : null}
-                      {canRemove ? <CompactButton type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member })}>Remove</CompactButton> : null}
-                    </div></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </AdminDataTable>
+          <div className="hidden md:block">
+            <AdminDataTable label="Linked organization members">
+              <thead>
+                <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite by email</CompactButton> : undefined} /></th></tr>
+                <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+                  <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {members.map((member) => {
+                  const isOwner = member.member_role === "owner";
+                  const isSelf = member.user_id === session?.user?.id;
+                  const organizationPerson = peopleByUserId.get(member.user_id);
+                  const adminCanRemove = canManageMembers && role === "organization_admin" && member.member_role === "member";
+                  const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
+                  return (
+                    <tr key={member.user_id} className="hover:bg-blue-50/40">
+                      <td className="px-3 py-2 font-semibold text-slate-950">{member.display_name || member.email}</td>
+                      <td className="px-3 py-2 text-xs text-slate-600">{member.email}</td>
+                      <td className="px-3 py-2"><StatusBadge tone={isOwner ? "info" : member.member_role === "organization_admin" ? "warning" : "neutral"}>{formatRole(member.member_role)}</StatusBadge></td>
+                      <td className="px-3 py-2"><select className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs" value={member.teaching_role ?? ""} disabled={saving || !canManageMembers} aria-label={`Teaching role for ${member.email}`} onChange={(event) => void handleTeachingRoleChange(member, (event.target.value || null) as "instructor" | "student" | null)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></td>
+                      <td className="px-3 py-2 text-xs text-slate-600">{organizationPerson?.internal_id || "—"}</td>
+                      <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={organizationPerson?.notes ?? ""}>{organizationPerson?.notes || "—"}</td>
+                      <td className="px-3 py-2"><div className="flex justify-end gap-1">
+                        {organizationPerson && (canManageMembers || member.teaching_role === "student") ? <CompactButton type="button" disabled={saving} onClick={() => void startEditOrganizationPerson(organizationPerson)}>Edit profile</CompactButton> : null}
+                        {canManageAdmins && !isOwner && !isSelf ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "role", member })}>{member.member_role === "organization_admin" ? "Make member" : "Make admin"}</CompactButton> : null}
+                        {canManageAdmins && !isSelf && !isOwner ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member })}>Transfer owner</CompactButton> : null}
+                        {canRemove ? <CompactButton type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member })}>Remove</CompactButton> : null}
+                      </div></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </AdminDataTable>
+          </div>
+          <ul className="grid gap-2 md:hidden" aria-label="Linked organization members">
+            {members.map((member) => {
+              const isOwner = member.member_role === "owner";
+              const isSelf = member.user_id === session?.user?.id;
+              const organizationPerson = peopleByUserId.get(member.user_id);
+              const canEditProfile = Boolean(organizationPerson && (canManageMembers || member.teaching_role === "student"));
+              const canChangeRole = canManageAdmins && !isOwner && !isSelf;
+              const canTransfer = canManageAdmins && !isSelf && !isOwner;
+              const adminCanRemove = canManageMembers && role === "organization_admin" && member.member_role === "member";
+              const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
+              const hasActions = canEditProfile || canChangeRole || canTransfer || canRemove;
+              return (
+                <li key={member.user_id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_3px_12px_rgba(15,23,42,0.04)]">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-950">{member.display_name || member.email}</p>
+                      <p className="mt-0.5 break-all text-xs leading-4 text-slate-500">{member.email}</p>
+                    </div>
+                    <StatusBadge tone={isOwner ? "info" : member.member_role === "organization_admin" ? "warning" : "neutral"}>{formatRole(member.member_role)}</StatusBadge>
+                  </div>
+                  <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3">
+                    <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Teaching role
+                      <select className="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-slate-900" value={member.teaching_role ?? ""} disabled={saving || !canManageMembers} aria-label={`Teaching role for ${member.email}`} onChange={(event) => void handleTeachingRoleChange(member, (event.target.value || null) as "instructor" | "student" | null)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select>
+                    </label>
+                    {(organizationPerson?.internal_id || organizationPerson?.notes) ? (
+                      <dl className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-2.5 text-xs">
+                        <div className="min-w-0"><dt className="font-semibold text-slate-500">Internal ID</dt><dd className="mt-1 break-words text-slate-800">{organizationPerson?.internal_id || "—"}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-slate-500">Notes</dt><dd className="mt-1 break-words text-slate-800">{organizationPerson?.notes || "—"}</dd></div>
+                      </dl>
+                    ) : null}
+                    {hasActions ? (
+                      <div className="grid grid-cols-2 gap-2" aria-label={`Actions for ${member.email}`}>
+                        {canEditProfile && organizationPerson ? <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => void startEditOrganizationPerson(organizationPerson)}>Edit profile</CompactButton> : null}
+                        {canChangeRole ? <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "role", member })}>{member.member_role === "organization_admin" ? "Make member" : "Make admin"}</CompactButton> : null}
+                        {canTransfer ? <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member })}>Transfer owner</CompactButton> : null}
+                        {canRemove ? <CompactButton className="min-h-11 w-full" type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member })}>Remove</CompactButton> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
           </ManagementDisclosure>
 
           <ManagementDisclosure id="organization-pending-invitations" title="Pending invitations" summary={`${pendingPeople.length}`} helpContent={<p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}>
-          <AdminDataTable label="Pending organization invitations">
-            <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {!pendingPeople.length ? <tr><td colSpan={5}><EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /></td></tr> : null}
-              {pendingPeople.map((person) => {
-                const invitation = memberInvitations.find(
-                  (item) => item.organization_person_id === person.id && item.status === "pending",
-                );
-                return <tr key={person.id} className="hover:bg-amber-50/50">
-                  <td className="px-3 py-2 font-semibold text-slate-950">{person.organization_display_name || "—"}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{person.email}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{invitation?.assigned_instructor_name || "—"}</td>
-                  <td className="px-3 py-2"><StatusBadge tone="warning">Awaiting registration</StatusBadge></td>
-                  <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
-                </tr>;
-              })}
-            </tbody>
-          </AdminDataTable>
+          <div className="hidden md:block">
+            <AdminDataTable label="Pending organization invitations">
+              <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {!pendingPeople.length ? <tr><td colSpan={5}><EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /></td></tr> : null}
+                {pendingPeople.map((person) => {
+                  const invitation = memberInvitations.find(
+                    (item) => item.organization_person_id === person.id && item.status === "pending",
+                  );
+                  return <tr key={person.id} className="hover:bg-amber-50/50">
+                    <td className="px-3 py-2 font-semibold text-slate-950">{person.organization_display_name || "—"}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600">{person.email}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600">{invitation?.assigned_instructor_name || "—"}</td>
+                    <td className="px-3 py-2"><StatusBadge tone="warning">Awaiting registration</StatusBadge></td>
+                    <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
+                  </tr>;
+                })}
+              </tbody>
+            </AdminDataTable>
+          </div>
+          <div className="md:hidden">
+            {!pendingPeople.length ? <EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /> : (
+              <ul className="grid gap-2" aria-label="Pending organization invitations">
+                {pendingPeople.map((person) => {
+                  const invitation = memberInvitations.find(
+                    (item) => item.organization_person_id === person.id && item.status === "pending",
+                  );
+                  return (
+                    <li key={person.id} className="min-w-0 rounded-xl border border-amber-200 bg-white p-3 shadow-[0_3px_12px_rgba(15,23,42,0.04)]">
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-950">{person.organization_display_name || "Pending member"}</p>
+                          <p className="mt-0.5 break-all text-xs leading-4 text-slate-500">{person.email}</p>
+                        </div>
+                        <StatusBadge tone="warning">Pending</StatusBadge>
+                      </div>
+                      <dl className="mt-3 border-t border-slate-100 pt-3 text-xs">
+                        <dt className="font-semibold text-slate-500">Assigned instructor</dt>
+                        <dd className="mt-1 break-words text-slate-800">{invitation?.assigned_instructor_name || "Not assigned"}</dd>
+                      </dl>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton>
+                        <CompactButton className="min-h-11 w-full" type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
           </ManagementDisclosure>
 
           <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="For a student, choose the instructor now. Accepting the verified invitation creates both membership and the instructor link.">

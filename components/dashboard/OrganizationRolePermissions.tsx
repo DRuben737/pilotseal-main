@@ -116,7 +116,7 @@ export default function OrganizationRolePermissions() {
     : false;
 
   return (
-    <section className="saas-panel" aria-labelledby="role-permissions-title">
+    <section className="saas-panel min-w-0" aria-labelledby="role-permissions-title">
       <header>
         <h2 id="role-permissions-title" className="text-base font-semibold text-slate-950">Role permissions</h2>
         <p className="mt-1 text-xs leading-5 text-slate-600">Choose the management areas available to each organization role. Owner always has full access.</p>

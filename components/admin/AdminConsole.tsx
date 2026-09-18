@@ -126,7 +126,7 @@ export function ManagementDisclosure({
   const [helpOpen, setHelpOpen] = useState(false);
 
   return (
-    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] ${className}`}>
+    <section className={`min-w-0 max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] ${className}`}>
       <div className="flex min-h-16 flex-wrap items-center gap-2 px-3 py-3 sm:flex-nowrap sm:px-4">
         <button
           type="button"
@@ -155,7 +155,7 @@ export function ManagementDisclosure({
           {actions ? <div onClick={() => { if (openOnAction) setOpen(true); }}>{actions}</div> : null}
         </div>
       </div>
-      {open ? <div id={contentId} className="border-t border-slate-200 bg-slate-50/35 p-3 sm:p-4">{children}</div> : null}
+      {open ? <div id={contentId} className="min-w-0 border-t border-slate-200 bg-slate-50/35 p-3 sm:p-4">{children}</div> : null}
       {helpContent ? (
         <HelpDrawer open={helpOpen} title={helpTitle ?? `${title} help`} onClose={() => setHelpOpen(false)}>
           {helpContent}

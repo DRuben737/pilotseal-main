@@ -3,7 +3,7 @@ import OrganizationRolePermissions from "@/components/dashboard/OrganizationRole
 
 export default function Page() {
   return (
-    <div className="grid gap-3">
+    <div className="grid min-w-0 gap-3">
       <OrganizationRolePermissions />
       <OrganizationManager view="people" />
     </div>
