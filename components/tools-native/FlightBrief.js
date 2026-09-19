@@ -29,7 +29,6 @@ import {
   HUMAN_FACTOR_FIELDS,
   HUMAN_FACTOR_ROLES,
   HUMAN_FACTOR_CHOICES,
-  HUMAN_FACTOR_MODEL_VERSION,
   humanFactorReportLines,
   humanFactorReviewItems,
   humanFactorSnapshot,
@@ -37,6 +36,14 @@ import {
   normalizeHumanFactors,
   scoreHumanFactors,
 } from "@/lib/flight-brief-human-factors.mjs";
+import {
+  FLIGHT_RISK_FACTORS,
+  FLIGHT_RISK_GROUPS,
+  FLIGHT_RISK_MODEL_VERSION,
+  flightRiskSnapshot,
+  normalizeFlightRiskAnswers,
+  scoreFlightRisk,
+} from "@/lib/flight-brief-risk-model.mjs";
 
 /** ------------------ constants ------------------ */
 const EMPTY_STOPS = Object.freeze([""]);
@@ -607,76 +614,6 @@ function categorizeNotams(notams) {
   return result;
 }
 
-/** ------------------ Risk definitions ------------------ */
-const STATIC_RISKS = [
-  { id: "static-student-under-50-type", label: "Student < 50 hrs in type (e.g. R44)", value: 1 },
-  { id: "static-training-pre-solo", label: "Training with Pre-solo Student", value: 3 },
-  { id: "static-cfi-under-100-instruction", label: "CFI < 100 hrs Instruction given", value: 3 },
-  { id: "static-last-dual-30", label: "Last DUAL flight > 30 days", value: 1 },
-  { id: "static-last-night-30", label: "Last NIGHT flight > 30 days", value: 1 },
-  { id: "static-solo-flight", label: "SOLO flight", value: 2 },
-  { id: "static-last-solo-30", label: "Last SOLO flight > 30 days (SOLO)", value: 2 },
-  { id: "static-prior-mx", label: "Previous maintenance issue returned or was not duplicated", value: 1 },
-  { id: "static-inspection-under-20", label: "Aircraft < 20 hrs to next required inspection", value: 1 },
-  {
-    id: "static-secondary-aircraft-type",
-    label: "Secondary Aircraft type in same week",
-    detail: "(not the aircraft that is primarily flown)",
-    value: 1,
-  },
-  { id: "static-first-different-cfi", label: "First flight with different CFI", value: 1 },
-  { id: "static-stage-check", label: "Stage Check / Check Ride", value: 1 },
-];
-
-const DYNAMIC_RISKS = [
-  { id: "dynamic-dusk-ops", label: "Dusk Ops (Mesopic Vision)", value: 1 },
-  { id: "dynamic-svfr-dual", label: "Possibility of SVFR (DUAL)", value: 2 },
-  { id: "dynamic-visibility-within-1sm", label: "Visibility w/in 1 SM", detail: "Clouds w/in 200' USATS mins. (SOLO)", value: 1 },
-  { id: "dynamic-clouds-within-200", label: "Clouds w/in 200' USATS mins. (SOLO)", value: 1 },
-  {
-    id: "dynamic-wind-gust-personal-min",
-    label: "Wind / Gust spread w/in 2 kts of personal min or USATS mins, whichever is lower.",
-    value: 2,
-  },
-  {
-    id: "dynamic-high-da-gw",
-    label: "High density altitude / high gross weight",
-    value: 1,
-  },
-  { id: "dynamic-frontal-passage", label: "Frontal Passage to occur within 6 hrs.", value: 1 },
-  { id: "dynamic-deteriorating-wx", label: "Deteriorating WX trend", detail: "(FG/BR/VCTS/VCSH)", value: 2 },
-  { id: "dynamic-class-bc-solo", label: "Entering Class B or C airspace (SOLO)", value: 1 },
-  { id: "dynamic-night-flight", label: "Night Flight", value: 1 },
-  { id: "dynamic-fuel-90", label: "90% of usable fuel required", value: 2 },
-  { id: "dynamic-other-cfis-cancel-wx", label: "Other CFIs canceling flights due to WX", value: 2 },
-  { id: "dynamic-full-down-auto-heli", label: "Full Down Autorotation - Helicopter", value: 2, tone: "heli" },
-  { id: "dynamic-stalls-airplane", label: "Stalls - Airplane", value: 2, tone: "airplane" },
-  { id: "dynamic-spins-airplane", label: "Spins - Airplane", value: 2, tone: "airplane" },
-  { id: "dynamic-single-engine-out-me", label: "Single Engine Out - ME Airplane", value: 2, tone: "airplane" },
-];
-
-function sumChecked(riskConfig, checkedMap) {
-  return riskConfig.reduce((acc, r) => acc + (checkedMap[r.id] ? r.value : 0), 0);
-}
-
-function checkedItemsLines(riskConfig, checkedMap) {
-  return riskConfig
-    .filter((r) => checkedMap[r.id])
-    .map((r) => `- ${r.label} [${r.value}]`);
-}
-
-function RiskItemCopy({ risk, className = "risk-item-copy" }) {
-  return (
-    <span className={className}>
-      <span className="risk-item-title">
-        <strong>{risk.label}</strong>
-        <small className="risk-item-score">{risk.value} pt</small>
-      </span>
-      {risk.detail && <small className="risk-item-detail">{risk.detail}</small>}
-    </span>
-  );
-}
-
 function HumanFactorQuestionnaire({ answers, onAnswer, context, onContextChange, assessment, legacyNotice }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="IMSAFE guided assessment">
@@ -760,6 +697,42 @@ function HumanFactorQuestionnaire({ answers, onAnswer, context, onContextChange,
         {assessment.drivers.some((driver) => driver.severity === 2) ? (
           <p className="mt-2 font-semibold text-red-800">Pause and discuss significant concerns, even if the total score is low.</p>
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+function FlightRiskQuestionnaire({ answers, onAnswer, assessment, legacyNotice, idPrefix = "guided" }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Guided flight risk assessment">
+      <h3 className="text-lg font-semibold text-slate-900">Flight conditions · guided assessment</h3>
+      <p className="mt-1 text-sm text-slate-600">Pilot / aircraft / environment / mission / pressure. Choose the description that best fits this flight. No answer is not zero; use Not applicable when the factor does not apply.</p>
+      <p className="mt-1 text-xs text-slate-600">Trial scoring rule: no concern 0, some concern base weight, significant concern twice base weight; add both IMSAFE scores. Total 0–12 low, 13–24 mitigate, 25+ further review. Any significant concern is reviewed separately.</p>
+      {legacyNotice && !assessment.complete ? <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">This draft used the older checkbox score. Reassess all flight factors for the new score.</p> : null}
+      <p className="mt-2 text-sm font-medium text-slate-700" aria-live="polite">{assessment.answered} / {FLIGHT_RISK_FACTORS.length} factors answered</p>
+      <div className="mt-4 space-y-5">
+        {FLIGHT_RISK_GROUPS.map((group) => (
+          <div key={group.id} className="rounded-xl border border-slate-200 p-3 sm:p-4">
+            <h4 className="font-semibold text-slate-900">{group.label}</h4>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {FLIGHT_RISK_FACTORS.filter((factor) => factor.group === group.id).map((factor) => (
+                <label key={factor.id} className="block rounded-lg bg-slate-50 p-3 text-sm text-slate-900" htmlFor={`${idPrefix}-${factor.id}`}>
+                  <span className="font-medium">{factor.label}</span>
+                  <select id={`${idPrefix}-${factor.id}`} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600" value={answers[factor.id] ?? ""} onChange={(event) => onAnswer(factor.id, event.target.value === "na" ? "na" : event.target.value === "" ? null : Number(event.target.value))}>
+                    <option value="">Choose current condition</option>
+                    <option value="na">Not applicable · 0 pt</option>
+                    {factor.choices.map((choice, severity) => <option key={severity} value={severity}>{choice} · {severity * factor.weight} pt</option>)}
+                  </select>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700" aria-live="polite">
+        <strong>{assessment.complete ? `Flight factors: ${assessment.factors.reduce((sum, factor) => sum + factor.score, 0)} pt` : "Flight factors: incomplete"}</strong>
+        {assessment.drivers.length ? <ul className="mt-2 list-disc pl-5">{assessment.drivers.slice(0, 6).map((factor) => <li key={factor.id} className={factor.severity === 2 ? "font-semibold text-red-800" : ""}>{factor.label}: {factor.choices[factor.severity]} (+{factor.score})</li>)}</ul> : null}
+        {assessment.significant.length ? <p className="mt-2 font-semibold text-red-800">Significant concerns need individual review, regardless of total score.</p> : null}
       </div>
     </section>
   );
@@ -1008,10 +981,14 @@ export default function FlightBrief() {
             ...current,
             ...record.brief_data,
             humanFactors: savedAssessment.answers,
+            flightRiskAnswers: record.brief_data?.riskModelVersion === FLIGHT_RISK_MODEL_VERSION
+              ? normalizeFlightRiskAnswers(record.brief_data.flightRiskAnswers)
+              : normalizeFlightRiskAnswers(null),
+            otherRisks: record.brief_data?.riskModelVersion === FLIGHT_RISK_MODEL_VERSION ? record.brief_data.otherRisks ?? 0 : 0,
             flightBriefDraftId: record.id,
             finalizedFlightBriefId: "",
           }));
-          setLegacyHumanFactorsNotice(savedAssessment.requiresReassessment);
+          setLegacyHumanFactorsNotice(savedAssessment.requiresReassessment || record.brief_data?.riskModelVersion !== FLIGHT_RISK_MODEL_VERSION);
           setRecordStatus(`Editing revision ${record.revision_number}.`);
         }
       } catch (error) {
@@ -1153,10 +1130,6 @@ export default function FlightBrief() {
   }, [weatherResults, departure]);
 
   /** ---- risk ---- */
-  const staticChecked = brief.staticChecked ?? EMPTY_OBJECT;
-  const setStaticChecked = useCallback((value) => setBriefField("staticChecked", value), [setBriefField]);
-  const dynamicChecked = brief.dynamicChecked ?? EMPTY_OBJECT;
-  const setDynamicChecked = useCallback((value) => setBriefField("dynamicChecked", value), [setBriefField]);
   const humanFactors = useMemo(() => normalizeHumanFactors(brief.humanFactors), [brief.humanFactors]);
   const [legacyHumanFactorsNotice, setLegacyHumanFactorsNotice] = useState(false);
   const [humanFactorContext, setHumanFactorContext] = useState(() => ({
@@ -1175,7 +1148,7 @@ export default function FlightBrief() {
       [role]: { ...previous[role], [field]: value },
     }));
   }, []);
-  const otherRisks = brief.otherRisks ?? 0; // 0..5
+  const otherRisks = brief.otherRisks ?? 0; // 0..2 severity
   const setOtherRisks = useCallback((value) => setBriefField("otherRisks", value), [setBriefField]);
   const otherRiskLabel = brief.otherRiskLabel ?? "";
   const setOtherRiskLabel = useCallback((value) => setBriefField("otherRiskLabel", value), [setBriefField]);
@@ -1193,36 +1166,17 @@ export default function FlightBrief() {
     setMobileEditingField(null);
   }, [currentStep]);
 
-  const dynamicScore = useMemo(
-    () => sumChecked(DYNAMIC_RISKS, dynamicChecked) + (parseInt(otherRisks, 10) || 0),
-    [dynamicChecked, otherRisks]
-  );
-  const nonHumanStaticScore = useMemo(() => sumChecked(STATIC_RISKS, staticChecked), [staticChecked]);
-  const humanAssessment = useMemo(
-    () => scoreHumanFactors(humanFactors, nonHumanStaticScore, dynamicScore),
-    [humanFactors, nonHumanStaticScore, dynamicScore]
-  );
-  const staticScore = humanAssessment.staticScore;
-  const totalRisk = humanAssessment.totalRisk;
-  const riskMeta = humanAssessment.category;
-
-  useEffect(() => {
-    if (calculatedFuelTime === null) {
-      return;
-    }
-
-    const eteHours = parseFloat(ete);
-    if (!Number.isFinite(eteHours)) {
-      return;
-    }
-
-    if (calculatedFuelTime - eteHours < 0.5 && !dynamicChecked["dynamic-fuel-90"]) {
-      setDynamicChecked((current) => ({
-        ...current,
-        "dynamic-fuel-90": true,
-      }));
-    }
-  }, [calculatedFuelTime, dynamicChecked, ete, setDynamicChecked]);
+  const flightRiskAnswers = useMemo(() => normalizeFlightRiskAnswers(brief.flightRiskAnswers), [brief.flightRiskAnswers]);
+  const setFlightRiskAnswer = useCallback((id, severity) => {
+    setBriefField("flightRiskAnswers", (previous) => ({ ...normalizeFlightRiskAnswers(previous), [id]: severity }));
+  }, [setBriefField]);
+  const humanAssessment = useMemo(() => scoreHumanFactors(humanFactors), [humanFactors]);
+  const flightAssessment = useMemo(() => scoreFlightRisk(flightRiskAnswers, humanAssessment, { label: otherRiskLabel, severity: Number(otherRisks) }), [flightRiskAnswers, humanAssessment, otherRiskLabel, otherRisks]);
+  const staticScore = flightAssessment.staticScore;
+  const dynamicScore = flightAssessment.dynamicScore;
+  const totalRisk = flightAssessment.totalRisk;
+  const riskMeta = flightAssessment.category;
+  const selectedRisk = useCallback((id) => flightRiskAnswers[id] === 1 || flightRiskAnswers[id] === 2, [flightRiskAnswers]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1456,15 +1410,15 @@ export default function FlightBrief() {
   const riskGates = useMemo(() => {
   const gates = [];
 
-  const isSolo = staticChecked["static-solo-flight"];
-  const isPreSolo = staticChecked["static-training-pre-solo"];
-  const isSVFR = dynamicChecked["dynamic-svfr-dual"];
-  const isNight = dynamicChecked["dynamic-night-flight"];
-  const nightCurrency = staticChecked["static-last-night-30"];
+  const isSolo = selectedRisk("static-solo-flight");
+  const isPreSolo = selectedRisk("static-training-pre-solo");
+  const isSVFR = selectedRisk("dynamic-svfr-dual");
+  const isNight = selectedRisk("dynamic-night-flight");
+  const nightCurrency = selectedRisk("static-last-night-30");
 
-  const isStall = dynamicChecked["dynamic-stalls-airplane"];
-  const isSpin = dynamicChecked["dynamic-spins-airplane"];
-  const isAutorotation = dynamicChecked["dynamic-full-down-auto-heli"];
+  const isStall = selectedRisk("dynamic-stalls-airplane");
+  const isSpin = selectedRisk("dynamic-spins-airplane");
+  const isAutorotation = selectedRisk("dynamic-full-down-auto-heli");
 
   if (isSVFR && isSolo) {
     gates.push("SVFR possibility with SOLO flight - Chief Pilot review required.");
@@ -1474,8 +1428,17 @@ export default function FlightBrief() {
     gates.push("Night flight with last night flight > 30 days - mitigation required.");
   }
 
-  if (totalRisk !== null && totalRisk > 18) {
-    gates.push("Trial risk score above 18 - adjust plan or obtain the appropriate review before release.");
+  if (totalRisk !== null && totalRisk > 24) {
+    gates.push("Trial risk score above 24 - adjust plan or obtain the appropriate review before release.");
+  }
+  for (const factor of flightAssessment.significant) {
+    gates.push(`${factor.label}: significant concern - ${factor.choices[2]}. Review separately from the total score.`);
+  }
+  if (flightAssessment.otherSeverity === 2 && otherRiskLabel.trim()) {
+    gates.push(`Additional risk (${otherRiskLabel.trim()}): significant concern - review separately from the total score.`);
+  }
+  if (calculatedFuelTime !== null && Number.isFinite(Number(ete)) && calculatedFuelTime - Number(ete) < 0.5) {
+    gates.push("Calculated fuel endurance leaves less than 30 minutes beyond ETE - verify legal reserve and fuel plan independently.");
   }
   gates.push(...humanFactorReviewItems(humanAssessment));
 
@@ -1519,8 +1482,11 @@ export default function FlightBrief() {
 
   return gates;
 }, [
-  staticChecked,
-  dynamicChecked,
+  selectedRisk,
+  flightAssessment,
+  otherRiskLabel,
+  calculatedFuelTime,
+  ete,
   humanAssessment,
   totalRisk,
   flightRules,
@@ -1791,13 +1757,13 @@ export default function FlightBrief() {
     const humanLines = humanFactorReportLines(humanAssessment);
 
     const staticLines = [
-      ...checkedItemsLines(STATIC_RISKS, staticChecked),
+      ...flightAssessment.drivers.filter((factor) => factor.id.startsWith("static-")).map((factor) => `- ${factor.label}: ${factor.choices[factor.severity]} [${factor.score}]`),
       ...humanLines.slice(2),
     ];
     const dynamicLines = [
-      ...checkedItemsLines(DYNAMIC_RISKS, dynamicChecked),
-      ...(parseInt(otherRisks, 10)
-        ? [`- Other: ${otherRiskLabel || "Other Risks"} [${parseInt(otherRisks, 10)}]`]
+      ...flightAssessment.drivers.filter((factor) => factor.id.startsWith("dynamic-")).map((factor) => `- ${factor.label}: ${factor.choices[factor.severity]} [${factor.score}]`),
+      ...(flightAssessment.otherSeverity > 0
+        ? [`- Other: ${otherRiskLabel} [${flightAssessment.otherSeverity * 2}]`]
         : []),
     ];
 
@@ -1848,12 +1814,12 @@ Total Static Risk Score: ${staticScore ?? "Incomplete"}
 
 🌪️ Dynamic Risk:
 ${dynamicLines.length ? dynamicLines.join("\n") : "- None"}
-Total Dynamic Risk Score: ${dynamicScore}
+Total Dynamic Risk Score: ${dynamicScore ?? "Incomplete"}
 
 Total Risk Score: ${totalRisk ?? "Incomplete"}
 Category: ${riskMeta.level}
 Recommendation: ${riskMeta.recommendation}
-Scoring model: Pilot trial v${HUMAN_FACTOR_MODEL_VERSION} - decision aid only, not a go/no-go determination.
+Scoring model: Pilot trial v${FLIGHT_RISK_MODEL_VERSION} - decision aid only, not a go/no-go determination. 0 / base weight / twice base weight; 0-12 low, 13-24 mitigation, 25+ further review. Significant concerns always require separate review.
 Mandatory Review Items:
 ${riskGates.length ? riskGates.map((item) => `- ${item}`).join("\n") : "- None"}
 
@@ -1903,11 +1869,9 @@ ${riskComments}
     mxRemaining,
     selectedAircraftDueMeta,
     customInspectionSummary,
-    staticChecked,
-    dynamicChecked,
+    flightAssessment,
     humanAssessment,
     otherRiskLabel,
-    otherRisks,
     staticScore,
     dynamicScore,
     totalRisk,
@@ -2002,6 +1966,7 @@ ${riskComments}
 
     if (stepIndex === 4) {
       if (!humanAssessment.complete) missing.push("Student and CFI IMSAFE assessments (risk score will be incomplete)");
+      if (!flightAssessment.complete) missing.push("Flight condition assessment (risk score will be incomplete)");
       if (!riskComments.trim()) missing.push("Risk discussion / comments");
     }
 
@@ -2016,6 +1981,7 @@ ${riskComments}
     flightDate,
     instructorName,
     humanAssessment.complete,
+    flightAssessment.complete,
     lessonPractice,
     mxDue,
     mxNow,
@@ -2158,9 +2124,8 @@ ${riskComments}
           mxDue,
           meterType,
           meterObservedAt,
-          staticChecked,
-          dynamicChecked,
           ...humanFactorSnapshot(humanAssessment, riskGates),
+          ...flightRiskSnapshot(flightAssessment),
           otherRiskLabel,
           otherRisks,
           riskComments,
@@ -3116,25 +3081,10 @@ ${riskComments}
                   If unable to mitigate risks at the pilot&apos;s level, adjust plan of action or seek the
                   appropriate approval level for discussion and release.
                 </p>
-                <p>Cross out any specific risk that is not applicable.</p>
+                  <p>Select a description for every factor, or mark it Not applicable. Trial weights are a discussion aid, not a go/no-go decision.</p>
               </div>
               <div className="flightbrief-mobile-settings">
-                <div className="settings-card">
-                  <h3 className="settings-cardTitle">Static Risk</h3>
-                  <div className="settings-checklist">
-                    {STATIC_RISKS.map((r) => (
-                      <label className="settings-checkRow" key={r.id} htmlFor={`mobile-${r.id}`}>
-                        <RiskItemCopy risk={r} className="settings-checkCopy" />
-                        <input
-                          id={`mobile-${r.id}`}
-                          type="checkbox"
-                          checked={!!staticChecked[r.id]}
-                          onChange={(e) => setStaticChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                <FlightRiskQuestionnaire answers={flightRiskAnswers} onAnswer={setFlightRiskAnswer} assessment={flightAssessment} legacyNotice={legacyHumanFactorsNotice} idPrefix="mobile-guided" />
 
                 <HumanFactorQuestionnaire
                   answers={humanFactors}
@@ -3146,19 +3096,8 @@ ${riskComments}
                 />
 
                 <div className="settings-card">
-                  <h3 className="settings-cardTitle">Dynamic Risk</h3>
+                  <h3 className="settings-cardTitle">Additional risk</h3>
                   <div className="settings-checklist">
-                    {DYNAMIC_RISKS.map((r) => (
-                      <label className="settings-checkRow" key={r.id} htmlFor={`mobile-${r.id}`}>
-                        <RiskItemCopy risk={r} className="settings-checkCopy" />
-                        <input
-                          id={`mobile-${r.id}`}
-                          type="checkbox"
-                          checked={!!dynamicChecked[r.id]}
-                          onChange={(e) => setDynamicChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
-                        />
-                      </label>
-                    ))}
                     <EditableInfoRow
                       label="Other:"
                       value={formatDisplayValue(otherRiskLabel, "Not set")}
@@ -3175,21 +3114,13 @@ ${riskComments}
                       )}
                     />
                     <EditableInfoRow
-                      label="Other Risks"
-                      value={formatDisplayValue(otherRisks, "0")}
+                      label="Additional risk severity"
+                      value={otherRiskLabel ? formatDisplayValue(otherRisks, "0") : "Not applicable"}
                       rowKey="otherRisks"
                       editingKey={mobileEditingField}
                       setEditingKey={setMobileEditingField}
                       renderEditor={(close) => (
-                        <input
-                          autoFocus
-                          type="number"
-                          min="0"
-                          max="5"
-                          value={otherRisks}
-                          onChange={(e) => setOtherRisks(e.target.value)}
-                          onBlur={close}
-                        />
+                        <select autoFocus value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)} onBlur={close}><option value="0">No concern · 0</option><option value="1">Some concern · 2</option><option value="2">Significant concern · 4</option></select>
                       )}
                     />
                   </div>
@@ -3198,7 +3129,7 @@ ${riskComments}
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">Summary</h3>
                   <div className="settings-summaryCopy">
-                    Static {staticScore ?? "Incomplete"} + Dynamic {dynamicScore}
+                    Static {staticScore ?? "Incomplete"} + Dynamic {dynamicScore ?? "Incomplete"}
                   </div>
                   <div className="settings-summaryValue">{totalRisk ?? "—"}</div>
                   <div className="settings-summaryMeta" style={{ color: riskMeta.color }}>
@@ -3230,73 +3161,11 @@ ${riskComments}
               </div>
 
               <div className="flightbrief-desktop-form">
-              <div className="risk-columns">
-                <div className="static-risk-column">
-                  <div className="flightbrief-riskColumnHead">
-                    <div>
-                      <h3>Static Risk</h3>
-                      <p>Pilot, instructor, recency.</p>
-                    </div>
-                    <strong>{staticScore ?? "—"}</strong>
-                  </div>
-                  <div className="flightbrief-riskList">
-                    {STATIC_RISKS.map((r) => (
-                      <label className="risk-item" key={r.id} htmlFor={r.id}>
-                        <RiskItemCopy risk={r} />
-                        <input
-                          type="checkbox"
-                          id={r.id}
-                          checked={!!staticChecked[r.id]}
-                          onChange={(e) => setStaticChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <div className="flightbrief-riskSubtotal">
-                    <span>Subtotal Static Risks</span>
-                    <strong>{staticScore ?? "Incomplete"}</strong>
-                  </div>
-                </div>
-
-                <div className="dynamic-risk-column">
-                  <div className="flightbrief-riskColumnHead">
-                    <div>
-                      <h3>Dynamic Risk</h3>
-                      <p>Weather, mission, conditions.</p>
-                    </div>
-                    <strong>{dynamicScore}</strong>
-                  </div>
-                  <div className="flightbrief-riskList">
-                    {DYNAMIC_RISKS.map((r) => (
-                      <label className={`risk-item${r.tone ? ` risk-item-${r.tone}` : ""}`} key={r.id} htmlFor={r.id}>
-                        <RiskItemCopy risk={r} />
-                        <input
-                          type="checkbox"
-                          id={r.id}
-                          checked={!!dynamicChecked[r.id]}
-                          onChange={(e) => setDynamicChecked((prev) => ({ ...prev, [r.id]: e.target.checked }))}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <div className="risk-item risk-item-other">
-                    <label htmlFor="other-risk-label">Other:</label>
-                    <input
-                      id="other-risk-label"
-                      value={otherRiskLabel}
-                      onChange={(e) => setOtherRiskLabel(e.target.value)}
-                      placeholder="Specific risk"
-                    />
-                  </div>
-                  <div className="risk-item risk-item-number">
-                    <label htmlFor="other-risk">Other Risks</label>
-                    <input id="other-risk" type="number" min="0" max="5" value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)} />
-                  </div>
-                  <div className="flightbrief-riskSubtotal">
-                    <span>Subtotal Dynamic Risks</span>
-                    <strong>{dynamicScore}</strong>
-                  </div>
-                </div>
+              <FlightRiskQuestionnaire answers={flightRiskAnswers} onAnswer={setFlightRiskAnswer} assessment={flightAssessment} legacyNotice={legacyHumanFactorsNotice} />
+              <div className="section inline-label-input">
+                <label className="label" htmlFor="other-risk-label"><strong>Additional risk</strong></label>
+                <input id="other-risk-label" className="input-field" value={otherRiskLabel} onChange={(e) => setOtherRiskLabel(e.target.value)} placeholder="Optional additional factor" />
+                {otherRiskLabel.trim() ? <select id="other-risk" className="input-field" value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)}><option value="0">No concern · 0 pt</option><option value="1">Some concern · 2 pt</option><option value="2">Significant concern · 4 pt</option></select> : null}
               </div>
 
               <HumanFactorQuestionnaire

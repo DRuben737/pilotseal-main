@@ -124,3 +124,10 @@ test("a saved v2 assessment can be reopened without storing context details", ()
   assert.equal(loaded.answers.cfi.illness, 2);
   assert.equal(scoreHumanFactors(loaded.answers).totalRisk, 3);
 });
+
+test("a saved v3 draft keeps its IMSAFE levels while reopening", () => {
+  const answers = completeAnswers({ fatigue: 1 });
+  const restored = loadHumanFactorsForDraft({ riskModelVersion: 3, humanFactors: answers });
+  assert.equal(restored.requiresReassessment, false);
+  assert.equal(restored.answers.student.fatigue, 1);
+});
