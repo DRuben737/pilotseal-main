@@ -7,13 +7,8 @@ export type ScheduleOperation =
   | { type: "cancel"; id: string };
 export type ScheduleChange = { before: ScheduleEntry | null; after: ScheduleEntry };
 
-function dayKey(value: string) {
-  const date = new Date(value);
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-// Each operation starts from the current draft. Replaying against a new server
-// snapshot intentionally includes newly added later lessons in the next preview.
+// Each operation changes only its own lesson, including when replayed against a
+// newer server snapshot. Other lessons must be adjusted explicitly.
 export function applyScheduleOperations(original: ScheduleEntry[], operations: ScheduleOperation[]) {
   let result = original.map((entry) => ({ ...entry }));
   for (const operation of operations) {
@@ -28,15 +23,7 @@ export function applyScheduleOperations(original: ScheduleEntry[], operations: S
       result = result.filter((entry) => entry.id !== operation.id);
       continue;
     }
-    const delta = new Date(operation.values.start_at).getTime() - new Date(target.start_at).getTime();
-    const cascade = delta !== 0 && dayKey(target.start_at) === dayKey(operation.values.start_at);
-    result = result.map((entry) => {
-      if (entry.id === target.id) return { ...entry, ...operation.values };
-      if (cascade && entry.entry_type === "lesson" && dayKey(entry.start_at) === dayKey(target.start_at) && new Date(entry.start_at) > new Date(target.start_at)) {
-        return { ...entry, start_at: new Date(new Date(entry.start_at).getTime() + delta).toISOString(), end_at: new Date(new Date(entry.end_at).getTime() + delta).toISOString() };
-      }
-      return entry;
-    });
+    result = result.map((entry) => entry.id === target.id ? { ...entry, ...operation.values } : entry);
   }
   return result.sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
 }
@@ -57,6 +44,16 @@ export function scheduleChanges(original: ScheduleEntry[], current: ScheduleEntr
 export function scheduleHasOverlap(entries: ScheduleEntry[]) {
   const lessons = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled").sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
   return lessons.some((entry, index) => index > 0 && Date.parse(entry.start_at) < Date.parse(lessons[index - 1].end_at));
+}
+
+export function scheduleConflictsForLesson(entries: ScheduleEntry[], lessonId: string) {
+  const edited = entries.find((entry) => entry.id === lessonId && entry.entry_type === "lesson" && entry.status === "scheduled");
+  if (!edited) return [];
+  const start = Date.parse(edited.start_at);
+  const end = Date.parse(edited.end_at);
+  return entries.filter((entry) => entry.id !== lessonId && entry.entry_type === "lesson" && entry.status === "scheduled"
+    && Date.parse(entry.start_at) < end && Date.parse(entry.end_at) > start)
+    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
 }
 
 export function swapScheduleLessons(entries: ScheduleEntry[], sourceId: string, targetId: string) {
