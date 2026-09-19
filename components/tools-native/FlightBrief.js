@@ -25,6 +25,18 @@ import {
   updateFlightBriefDraft,
 } from "@/lib/preflight";
 import WeightBalanceCalculator from "./WeightBalanceCalculator";
+import {
+  HUMAN_FACTOR_FIELDS,
+  HUMAN_FACTOR_ROLES,
+  HUMAN_FACTOR_CHOICES,
+  HUMAN_FACTOR_MODEL_VERSION,
+  humanFactorReportLines,
+  humanFactorReviewItems,
+  humanFactorSnapshot,
+  loadHumanFactorsForDraft,
+  normalizeHumanFactors,
+  scoreHumanFactors,
+} from "@/lib/flight-brief-human-factors.mjs";
 
 /** ------------------ constants ------------------ */
 const EMPTY_STOPS = Object.freeze([""]);
@@ -595,30 +607,6 @@ function categorizeNotams(notams) {
   return result;
 }
 
-function riskCategory(total) {
-  if (total <= 10) {
-    return {
-      level: "LOW RISK",
-      color: "#15803d",
-      recommendation: "Risk acceptable after normal mitigation and preflight discussion.",
-    };
-  }
-  if (total <= 15) {
-    return {
-      level: "MITIGATION REQUIRED",
-      color: "#b45309",
-      recommendation:
-        "List mitigations and discuss with the appropriate instructor or approval level before release.",
-    };
-  }
-  return {
-    level: "APPROVAL REQUIRED",
-    color: "#b91c1c",
-    recommendation:
-      "Adjust the plan or seek Chief Pilot / designated approval before the flight is released.",
-  };
-}
-
 /** ------------------ Risk definitions ------------------ */
 const STATIC_RISKS = [
   { id: "static-student-under-50-type", label: "Student < 50 hrs in type (e.g. R44)", value: 1 },
@@ -686,6 +674,94 @@ function RiskItemCopy({ risk, className = "risk-item-copy" }) {
       </span>
       {risk.detail && <small className="risk-item-detail">{risk.detail}</small>}
     </span>
+  );
+}
+
+function HumanFactorQuestionnaire({ answers, onAnswer, context, onContextChange, assessment, legacyNotice }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="IMSAFE guided assessment">
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold text-slate-900">Pilot state · IMSAFE</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Pilot scoring trial · decision aid only. Each answer scores 0, 1, or 2 points; a low total never cancels a significant concern.
+        </p>
+        {legacyNotice && !assessment.complete ? (
+          <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+            This draft used the earlier manual IMSAFE count. Complete the new assessment for both people before using the updated score.
+          </p>
+        ) : null}
+      </div>
+      <div className="grid gap-5 xl:grid-cols-2">
+        {HUMAN_FACTOR_ROLES.map((role) => (
+          <fieldset key={role.id} className="min-w-0 rounded-xl border border-slate-200 p-3 sm:p-4">
+            <legend className="px-1 font-semibold text-slate-900">{role.label}</legend>
+            <p className="mb-3 text-xs text-slate-600">
+              {assessment.roles[role.id].score === null
+                ? `${assessment.roles[role.id].answered} of ${HUMAN_FACTOR_FIELDS.length} answered · score incomplete`
+                : `${assessment.roles[role.id].score} points from ${HUMAN_FACTOR_FIELDS.length} factors`}
+            </p>
+            <div className="space-y-3">
+              {HUMAN_FACTOR_FIELDS.map((field) => {
+                const severity = answers[role.id]?.[field.id];
+                const selectId = `human-${role.id}-${field.id}`;
+                return (
+                  <div key={field.id} className="rounded-lg bg-slate-50 p-3">
+                    <label htmlFor={selectId} className="block text-sm font-medium text-slate-900">
+                      {field.label} <span className="font-normal text-slate-600">· {field.prompt}</span>
+                    </label>
+                    <select
+                      id={selectId}
+                      className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      value={severity ?? ""}
+                      onChange={(event) => onAnswer(role.id, field.id, event.target.value === "" ? null : Number(event.target.value))}
+                    >
+                      <option value="">Choose current state</option>
+                      {HUMAN_FACTOR_CHOICES.map((choice) => (
+                        <option key={choice.value} value={choice.value}>
+                          {field.choices?.[choice.value] ?? choice.label} · {choice.value} pt
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 rounded-lg border border-slate-200 p-3">
+              <p className="text-sm font-medium text-slate-900">Context for fatigue and stress</p>
+              <p className="mt-1 text-xs text-slate-600">Use these details to choose the two ratings above. No automatic safety cutoff; these details are not saved.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <label className="text-xs text-slate-700">Hours slept
+                  <input type="number" min="0" max="24" inputMode="decimal" className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" value={context[role.id].sleepHours} onChange={(event) => onContextChange(role.id, "sleepHours", event.target.value)} />
+                </label>
+                <label className="text-xs text-slate-700">Hours awake
+                  <input type="number" min="0" max="48" inputMode="decimal" className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" value={context[role.id].awakeHours} onChange={(event) => onContextChange(role.id, "awakeHours", event.target.value)} />
+                </label>
+                <label className="text-xs text-slate-700">Time pressure
+                  <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" value={context[role.id].timePressure} onChange={(event) => onContextChange(role.id, "timePressure", event.target.value)}>
+                    <option value="">Choose</option><option value="none">None</option><option value="some">Some</option><option value="high">High</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </fieldset>
+        ))}
+      </div>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" aria-live="polite">
+        <strong>{assessment.complete ? `Human factors: ${assessment.roles.student.score + assessment.roles.cfi.score} points` : "Human factors: incomplete"}</strong>
+        {assessment.drivers.length ? (
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {assessment.drivers.map((driver) => (
+              <li key={`${driver.role}-${driver.field}`} className={driver.severity === 2 ? "font-semibold text-red-800" : ""}>
+                {driver.roleLabel}: {driver.label} · {driver.severity === 2 ? "significant concern" : "some concern"} (+{driver.severity})
+              </li>
+            ))}
+          </ul>
+        ) : <p className="mt-1">No concerns reported in answered items.</p>}
+        {assessment.drivers.some((driver) => driver.severity === 2) ? (
+          <p className="mt-2 font-semibold text-red-800">Pause and discuss significant concerns, even if the total score is low.</p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -927,12 +1003,15 @@ export default function FlightBrief() {
           throw new Error("Only your own draft can be opened for editing.");
         }
         if (!cancelled) {
+          const savedAssessment = loadHumanFactorsForDraft(record.brief_data);
           setBrief((current) => ({
             ...current,
             ...record.brief_data,
+            humanFactors: savedAssessment.answers,
             flightBriefDraftId: record.id,
             finalizedFlightBriefId: "",
           }));
+          setLegacyHumanFactorsNotice(savedAssessment.requiresReassessment);
           setRecordStatus(`Editing revision ${record.revision_number}.`);
         }
       } catch (error) {
@@ -1078,10 +1157,24 @@ export default function FlightBrief() {
   const setStaticChecked = useCallback((value) => setBriefField("staticChecked", value), [setBriefField]);
   const dynamicChecked = brief.dynamicChecked ?? EMPTY_OBJECT;
   const setDynamicChecked = useCallback((value) => setBriefField("dynamicChecked", value), [setBriefField]);
-  const imsafe = brief.imsafe ?? 0; // 0..6
-  const setImsafe = useCallback((value) => setBriefField("imsafe", value), [setBriefField]);
-  const cfiStress = brief.cfiStress ?? 0; // 0..6, no flight above 2
-  const setCfiStress = useCallback((value) => setBriefField("cfiStress", value), [setBriefField]);
+  const humanFactors = useMemo(() => normalizeHumanFactors(brief.humanFactors), [brief.humanFactors]);
+  const [legacyHumanFactorsNotice, setLegacyHumanFactorsNotice] = useState(false);
+  const [humanFactorContext, setHumanFactorContext] = useState(() => ({
+    student: { sleepHours: "", awakeHours: "", timePressure: "" },
+    cfi: { sleepHours: "", awakeHours: "", timePressure: "" },
+  }));
+  const setHumanFactorAnswer = useCallback((role, field, severity) => {
+    setBriefField("humanFactors", (previous) => {
+      const normalized = normalizeHumanFactors(previous);
+      return { ...normalized, [role]: { ...normalized[role], [field]: severity } };
+    });
+  }, [setBriefField]);
+  const setHumanFactorContextField = useCallback((role, field, value) => {
+    setHumanFactorContext((previous) => ({
+      ...previous,
+      [role]: { ...previous[role], [field]: value },
+    }));
+  }, []);
   const otherRisks = brief.otherRisks ?? 0; // 0..5
   const setOtherRisks = useCallback((value) => setBriefField("otherRisks", value), [setBriefField]);
   const otherRiskLabel = brief.otherRiskLabel ?? "";
@@ -1100,19 +1193,18 @@ export default function FlightBrief() {
     setMobileEditingField(null);
   }, [currentStep]);
 
-  const staticScore = useMemo(
-    () =>
-      sumChecked(STATIC_RISKS, staticChecked) +
-      (parseInt(imsafe, 10) || 0) +
-      (parseInt(cfiStress, 10) || 0),
-    [staticChecked, imsafe, cfiStress]
-  );
   const dynamicScore = useMemo(
     () => sumChecked(DYNAMIC_RISKS, dynamicChecked) + (parseInt(otherRisks, 10) || 0),
     [dynamicChecked, otherRisks]
   );
-  const totalRisk = staticScore + dynamicScore;
-  const riskMeta = useMemo(() => riskCategory(totalRisk), [totalRisk]);
+  const nonHumanStaticScore = useMemo(() => sumChecked(STATIC_RISKS, staticChecked), [staticChecked]);
+  const humanAssessment = useMemo(
+    () => scoreHumanFactors(humanFactors, nonHumanStaticScore, dynamicScore),
+    [humanFactors, nonHumanStaticScore, dynamicScore]
+  );
+  const staticScore = humanAssessment.staticScore;
+  const totalRisk = humanAssessment.totalRisk;
+  const riskMeta = humanAssessment.category;
 
   useEffect(() => {
     if (calculatedFuelTime === null) {
@@ -1373,7 +1465,6 @@ export default function FlightBrief() {
   const isStall = dynamicChecked["dynamic-stalls-airplane"];
   const isSpin = dynamicChecked["dynamic-spins-airplane"];
   const isAutorotation = dynamicChecked["dynamic-full-down-auto-heli"];
-  const cfiStressScore = parseInt(cfiStress, 10) || 0;
 
   if (isSVFR && isSolo) {
     gates.push("SVFR possibility with SOLO flight - Chief Pilot review required.");
@@ -1383,13 +1474,10 @@ export default function FlightBrief() {
     gates.push("Night flight with last night flight > 30 days - mitigation required.");
   }
 
-  if (cfiStressScore > 2) {
-    gates.push("CFI stress factors above 2 - NO FLIGHT until reduced.");
+  if (totalRisk !== null && totalRisk > 18) {
+    gates.push("Trial risk score above 18 - adjust plan or obtain the appropriate review before release.");
   }
-
-  if (totalRisk > 15) {
-    gates.push("Total risk score above 15 - adjust plan or obtain required approval before release.");
-  }
+  gates.push(...humanFactorReviewItems(humanAssessment));
 
   if (flightRules === "IFR" && isPreSolo) {
     gates.push("IFR selected with pre-solo student - confirm training intent and approval level.");
@@ -1433,7 +1521,7 @@ export default function FlightBrief() {
 }, [
   staticChecked,
   dynamicChecked,
-  cfiStress,
+  humanAssessment,
   totalRisk,
   flightRules,
   metarByIcaoData,
@@ -1700,11 +1788,11 @@ export default function FlightBrief() {
 
     const dep = normalizeICAO(departure);
     const arr = normalizeICAO(arrival);
+    const humanLines = humanFactorReportLines(humanAssessment);
 
     const staticLines = [
       ...checkedItemsLines(STATIC_RISKS, staticChecked),
-      ...(parseInt(imsafe, 10) ? [`- Student stress factors / IMSAFE [${parseInt(imsafe, 10)}]`] : []),
-      ...(parseInt(cfiStress, 10) ? [`- CFI stress factors / IMSAFE [${parseInt(cfiStress, 10)}]`] : []),
+      ...humanLines.slice(2),
     ];
     const dynamicLines = [
       ...checkedItemsLines(DYNAMIC_RISKS, dynamicChecked),
@@ -1755,15 +1843,19 @@ Custom Inspections: ${customInspectionSummary.length ? customInspectionSummary.m
 
 🪨 Static Risk:
 ${staticLines.length ? staticLines.join("\n") : "- None"}
-Total Static Risk Score: ${staticScore}
+${humanLines.slice(0, 2).join("\n")}
+Total Static Risk Score: ${staticScore ?? "Incomplete"}
 
 🌪️ Dynamic Risk:
 ${dynamicLines.length ? dynamicLines.join("\n") : "- None"}
 Total Dynamic Risk Score: ${dynamicScore}
 
-Total Risk Score: ${totalRisk}
+Total Risk Score: ${totalRisk ?? "Incomplete"}
 Category: ${riskMeta.level}
 Recommendation: ${riskMeta.recommendation}
+Scoring model: Pilot trial v${HUMAN_FACTOR_MODEL_VERSION} - decision aid only, not a go/no-go determination.
+Mandatory Review Items:
+${riskGates.length ? riskGates.map((item) => `- ${item}`).join("\n") : "- None"}
 
 Risk Mitigation (RM):
 ${riskComments}
@@ -1813,8 +1905,7 @@ ${riskComments}
     customInspectionSummary,
     staticChecked,
     dynamicChecked,
-    imsafe,
-    cfiStress,
+    humanAssessment,
     otherRiskLabel,
     otherRisks,
     staticScore,
@@ -1822,6 +1913,7 @@ ${riskComments}
     totalRisk,
     riskMeta.level,
     riskMeta.recommendation,
+    riskGates,
     riskComments,
   ]);
 
@@ -1909,6 +2001,7 @@ ${riskComments}
     }
 
     if (stepIndex === 4) {
+      if (!humanAssessment.complete) missing.push("Student and CFI IMSAFE assessments (risk score will be incomplete)");
       if (!riskComments.trim()) missing.push("Risk discussion / comments");
     }
 
@@ -1922,6 +2015,7 @@ ${riskComments}
     etd,
     flightDate,
     instructorName,
+    humanAssessment.complete,
     lessonPractice,
     mxDue,
     mxNow,
@@ -2066,8 +2160,7 @@ ${riskComments}
           meterObservedAt,
           staticChecked,
           dynamicChecked,
-          imsafe,
-          cfiStress,
+          ...humanFactorSnapshot(humanAssessment, riskGates),
           otherRiskLabel,
           otherRisks,
           riskComments,
@@ -3040,44 +3133,17 @@ ${riskComments}
                         />
                       </label>
                     ))}
-                    <EditableInfoRow
-                      label="Student Stress Factors (IMSAFE) - 1 for each"
-                      value={formatDisplayValue(imsafe, "0")}
-                      rowKey="imsafe"
-                      editingKey={mobileEditingField}
-                      setEditingKey={setMobileEditingField}
-                      renderEditor={(close) => (
-                        <input
-                          autoFocus
-                          type="number"
-                          min="0"
-                          max="6"
-                          value={imsafe}
-                          onChange={(e) => setImsafe(e.target.value)}
-                          onBlur={close}
-                        />
-                      )}
-                    />
-                    <EditableInfoRow
-                      label="CFI Stress Factors (IMSAFE) - 1 for each / NO FLIGHT if above 2"
-                      value={formatDisplayValue(cfiStress, "0")}
-                      rowKey="cfiStress"
-                      editingKey={mobileEditingField}
-                      setEditingKey={setMobileEditingField}
-                      renderEditor={(close) => (
-                        <input
-                          autoFocus
-                          type="number"
-                          min="0"
-                          max="6"
-                          value={cfiStress}
-                          onChange={(e) => setCfiStress(e.target.value)}
-                          onBlur={close}
-                        />
-                      )}
-                    />
                   </div>
                 </div>
+
+                <HumanFactorQuestionnaire
+                  answers={humanFactors}
+                  onAnswer={setHumanFactorAnswer}
+                  context={humanFactorContext}
+                  onContextChange={setHumanFactorContextField}
+                  assessment={humanAssessment}
+                  legacyNotice={legacyHumanFactorsNotice}
+                />
 
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">Dynamic Risk</h3>
@@ -3132,14 +3198,24 @@ ${riskComments}
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">Summary</h3>
                   <div className="settings-summaryCopy">
-                    Static {staticScore} + Dynamic {dynamicScore}
+                    Static {staticScore ?? "Incomplete"} + Dynamic {dynamicScore}
                   </div>
-                  <div className="settings-summaryValue">{totalRisk}</div>
+                  <div className="settings-summaryValue">{totalRisk ?? "—"}</div>
                   <div className="settings-summaryMeta" style={{ color: riskMeta.color }}>
                     {riskMeta.level}
                   </div>
                   <p className="settings-summaryCopy">{riskMeta.recommendation}</p>
+                  <p className="settings-summaryCopy">Pilot scoring trial · decision aid only; not a go/no-go determination.</p>
                 </div>
+
+                {riskGates.length > 0 ? (
+                  <div className="flightbrief-gatesCard">
+                    <div className="flightbrief-gatesTitle">Mandatory Review Items</div>
+                    <ul className="flightbrief-gatesList">
+                      {riskGates.map((gate) => <li key={gate}>{gate}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
 
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">Risk Mitigation (RM)</h3>
@@ -3161,7 +3237,7 @@ ${riskComments}
                       <h3>Static Risk</h3>
                       <p>Pilot, instructor, recency.</p>
                     </div>
-                    <strong>{staticScore}</strong>
+                    <strong>{staticScore ?? "—"}</strong>
                   </div>
                   <div className="flightbrief-riskList">
                     {STATIC_RISKS.map((r) => (
@@ -3176,17 +3252,9 @@ ${riskComments}
                       </label>
                     ))}
                   </div>
-                  <div className="risk-item risk-item-number">
-                    <label htmlFor="imsafe-risk">Student Stress Factors (IMSAFE) - 1 for each</label>
-                    <input type="number" id="imsafe-risk" min="0" max="6" value={imsafe} onChange={(e) => setImsafe(e.target.value)} />
-                  </div>
-                  <div className="risk-item risk-item-number">
-                    <label htmlFor="cfi-stress-risk">CFI Stress Factors (IMSAFE) - 1 for each / NO FLIGHT if above 2</label>
-                    <input type="number" id="cfi-stress-risk" min="0" max="6" value={cfiStress} onChange={(e) => setCfiStress(e.target.value)} />
-                  </div>
                   <div className="flightbrief-riskSubtotal">
                     <span>Subtotal Static Risks</span>
-                    <strong>{staticScore}</strong>
+                    <strong>{staticScore ?? "Incomplete"}</strong>
                   </div>
                 </div>
 
@@ -3231,6 +3299,15 @@ ${riskComments}
                 </div>
               </div>
 
+              <HumanFactorQuestionnaire
+                answers={humanFactors}
+                onAnswer={setHumanFactorAnswer}
+                context={humanFactorContext}
+                onContextChange={setHumanFactorContextField}
+                assessment={humanAssessment}
+                legacyNotice={legacyHumanFactorsNotice}
+              />
+
               <div className="section inline-label-input">
                 <label className="label" htmlFor="riskComments"><strong>Risk Mitigation (RM)</strong></label>
                 <textarea id="riskComments" rows="4" className="input-field" value={riskComments} onChange={(e) => setRiskComments(e.target.value)} placeholder="List RM in place - required for approval" />
@@ -3239,11 +3316,12 @@ ${riskComments}
               <div className="flightbrief-riskSummary">
                 <div className="flightbrief-riskBadge">
                   <span>Total Risk</span>
-                  <strong>{totalRisk}</strong>
+                  <strong>{totalRisk ?? "—"}</strong>
                 </div>
                 <div className="flightbrief-riskMeta">
                   <strong style={{ color: riskMeta.color }}>{riskMeta.level}</strong>
                   <p>{riskMeta.recommendation}</p>
+                  <p>Pilot scoring trial · decision aid only; not a go/no-go determination.</p>
                 </div>
               </div>
 
