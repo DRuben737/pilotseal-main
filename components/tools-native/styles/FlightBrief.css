@@ -536,7 +536,9 @@
 .flightbrief-scoreContributions li b { font-variant-numeric: tabular-nums; }
 .flightbrief-scoreContributions li.is-significant { color: #991b1b; }
 .flightbrief-aiActions { display: grid; gap: 0.45rem; margin-top: 1.5rem; }
-.flightbrief-aiActions button { width: fit-content; min-height: 44px; }
+.flightbrief-aiActions .flightbrief-aiButton { width: fit-content; min-height: 46px; padding: 0.78rem 1.2rem; border-radius: 10px; background: #1d4ed8; color: #fff; box-shadow: 0 5px 14px rgba(29, 78, 216, 0.2); }
+.flightbrief-aiActions .flightbrief-aiButton:hover:not(:disabled) { background: #1e40af; }
+.flightbrief-aiActions .flightbrief-aiButton:focus-visible { outline: 3px solid rgba(37, 99, 235, 0.3); outline-offset: 2px; }
 .flightbrief-aiActions p, .flightbrief-aiActions small { margin: 0; max-width: 56rem; color: #64748b; font-size: 0.75rem; line-height: 1.45; }
 .flightbrief-aiActions .flightbrief-aiError { color: #b91c1c; font-weight: 700; }
 .flightbrief-aiResult, .flightbrief-aiSaved { margin-top: 1rem; padding: 1rem; border: 1px solid #bfdbfe; border-radius: 10px; background: #eff6ff; }

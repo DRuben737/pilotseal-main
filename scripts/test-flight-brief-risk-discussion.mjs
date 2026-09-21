@@ -46,6 +46,12 @@ test("validated output renders consequences, compounding risk, actions, and trig
   assert.match(text, /Reassess when/);
 });
 
+test("punctuation does not reject an otherwise valid short overview", () => {
+  const evidence = new Map([["weather.metar.KPAO", { value: "KPAO VFR" }]]);
+  const output = validateRiskDiscussionOutput({ overview: "Weather is changing. Workload may rise. Keep an alternate ready.", residual_risk: "Conditions can still change.", priorities: [{ title: "Weather margin", evidence_ids: ["weather.metar.KPAO"], possible_consequences: "A diversion may be needed.", compounding_effect: "Workload can rise.", mitigations: ["Set a divert trigger."], recheck_triggers: ["Ceiling drops."] }] }, evidence.keys());
+  assert.match(output.overview, /alternate ready/);
+});
+
 test("DeepSeek response extraction rejects empty output", () => {
   assert.equal(extractDeepSeekResponseText({ output_text: "{\"ok\":true}" }), "{\"ok\":true}");
   assert.throws(() => extractDeepSeekResponseText({ output: [] }), /empty response/i);

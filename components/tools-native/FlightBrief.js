@@ -1610,8 +1610,22 @@ export default function FlightBrief() {
           },
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || "Unable to generate the AI discussion.");
+      const rawResponse = await response.text();
+      let data = null;
+      try {
+        data = rawResponse ? JSON.parse(rawResponse) : null;
+      } catch {
+        data = null;
+      }
+      if (!response.ok) {
+        const fallback = response.status === 413
+          ? "The brief is too large for AI analysis. Shorten the notes or NOTAM list and try again."
+          : response.status >= 500
+            ? "The AI service is temporarily unavailable. Try again."
+            : "AI analysis could not start. Review the brief and try again.";
+        throw new Error(data?.error || fallback);
+      }
+      if (!data) throw new Error("The AI service returned an unreadable response. Try again.");
       if (data.score !== flightAssessment.totalRisk || data.level !== flightAssessment.category.level) {
         throw new Error("The server score no longer matches this assessment. Review the latest answers and retry.");
       }
@@ -3335,6 +3349,16 @@ ${aiRiskDiscussion || "AI discussion not generated"}
 
                     <FinalRiskScore assessment={flightAssessment} breakdown={scoreBreakdown} remaining={remainingRiskAnswers} />
 
+                    <div className="flightbrief-aiActions">
+                      <button className="flightbrief-aiButton" type="button" onClick={generateAiRiskDiscussion} disabled={!flightAssessment.complete || !session?.access_token || aiRiskLoading}>
+                        {aiRiskLoading ? "Analyzing flight risks…" : aiRiskDiscussion ? "Refresh AI flight risk analysis" : "Generate AI flight risk analysis"}
+                      </button>
+                      <p>Brief data may be processed by DeepSeek in China.</p>
+                      {!session?.access_token ? <small>Sign in to use AI analysis.</small> : null}
+                      {aiRiskError ? <p className="flightbrief-aiError" role="alert">{aiRiskError}</p> : null}
+                    </div>
+                    <AiRiskDiscussion result={aiRiskResult} savedText={aiRiskDiscussion} />
+
                     {flightAssessment.complete && hasSignificantConcern ? <p className="flightbrief-riskSignificant" role="alert">Significant concern recorded — review it independently of the total score.</p> : null}
                     {flightAssessment.complete && humanAssessment.roles.cfi.affectedCount > 2 ? <p className="flightbrief-riskSignificant" role="alert">CFI IMSAFE concerns in more than two areas — NO FLIGHT until reviewed and reduced.</p> : null}
 
@@ -3347,16 +3371,6 @@ ${aiRiskDiscussion || "AI discussion not generated"}
                       <label htmlFor="riskComments">Risk mitigation</label>
                       <textarea id="riskComments" rows="4" value={riskComments} onChange={(event) => setRiskComments(event.target.value)} placeholder="Record the discussion and mitigations" />
                     </div>
-
-                    <div className="flightbrief-aiActions">
-                      <button type="button" onClick={generateAiRiskDiscussion} disabled={!flightAssessment.complete || !session?.access_token || aiRiskLoading}>
-                        {aiRiskLoading ? "Generating discussion…" : aiRiskDiscussion ? "Regenerate AI risk discussion" : "Generate AI risk discussion"}
-                      </button>
-                      <p>Sends route, weather, NOTAMs and notes to DeepSeek. Names, account IDs, aircraft tail number and health details are excluded. DeepSeek may process and store data in China.</p>
-                      {!session?.access_token ? <small>Sign in to generate an AI discussion.</small> : null}
-                      {aiRiskError ? <p className="flightbrief-aiError" role="alert">{aiRiskError}</p> : null}
-                    </div>
-                    <AiRiskDiscussion result={aiRiskResult} savedText={aiRiskDiscussion} />
                   </div> : null}
                 </section>
                 </> : null}
