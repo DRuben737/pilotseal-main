@@ -521,13 +521,14 @@
 .flightbrief-finalScoreMain strong { color: #0f172a; font-size: 1.4rem; line-height: 1.15; }
 .flightbrief-finalScoreMain > div:first-child strong { font-size: 2.5rem; font-variant-numeric: tabular-nums; }
 .flightbrief-scoreBands { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.8rem; color: #64748b; font-size: 0.72rem; }
-.flightbrief-paveScores { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 1rem 0 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-.flightbrief-paveScores > div { padding: 0.65rem; border-right: 1px solid #e2e8f0; }
-.flightbrief-paveScores > div:last-child { border-right: 0; }
-.flightbrief-paveScores dt { color: #64748b; font-size: 0.7rem; line-height: 1.25; }
-.flightbrief-paveScores dd { margin: 0.2rem 0 0; color: #0f172a; font-size: 1.1rem; font-weight: 800; }
-.flightbrief-scoreContributions { margin-top: 1rem; }
-.flightbrief-body .flightbrief-scoreContributions h4 { margin: 0 0 0.35rem; font-size: 0.85rem; }
+.flightbrief-scoreEquation { display: grid; gap: 0.35rem; margin-top: 1rem; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+.flightbrief-scoreEquationLabel { color: #64748b; font-size: 0.72rem; font-weight: 700; }
+.flightbrief-scoreEquation > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.55rem; color: #475569; font-size: 0.84rem; }
+.flightbrief-scoreEquation strong { color: #0f172a; }
+.flightbrief-scoreEquation b { color: #0f172a; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.flightbrief-scoreContributions { margin-top: 0.75rem; }
+.flightbrief-scoreContributions summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.55rem 0; color: #0f172a; cursor: pointer; font-size: 0.84rem; font-weight: 750; }
+.flightbrief-scoreContributions summary span { color: #64748b; font-size: 0.72rem; font-weight: 600; }
 .flightbrief-scoreContributions ul { margin: 0; padding: 0; list-style: none; }
 .flightbrief-scoreContributions li { display: grid; grid-template-columns: 1fr auto; gap: 0.8rem; padding: 0.55rem 0; border-top: 1px solid #e2e8f0; }
 .flightbrief-scoreContributions li > div { display: grid; gap: 0.1rem; }
@@ -548,11 +549,11 @@
 .flightbrief-aiResult > p { margin: 0.45rem 0; color: #334155; font-size: 0.84rem; line-height: 1.5; }
 .flightbrief-aiResult article { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid #bfdbfe; }
 .flightbrief-body .flightbrief-aiResult h4 { margin: 0 0 0.45rem; font-size: 0.9rem; }
-.flightbrief-aiResult dl { display: grid; gap: 0.45rem; margin: 0; }
-.flightbrief-aiResult dl > div { display: grid; grid-template-columns: minmax(8rem, 0.3fr) minmax(0, 1fr); gap: 0.75rem; }
-.flightbrief-aiResult dt { color: #475569; font-size: 0.75rem; font-weight: 700; }
-.flightbrief-aiResult dd { margin: 0; color: #1e293b; font-size: 0.8rem; line-height: 1.45; }
-.flightbrief-aiResult dd span { display: block; }
+.flightbrief-aiResult article > p { margin: 0.3rem 0; color: #334155; font-size: 0.8rem; line-height: 1.45; }
+.flightbrief-aiResult article details { margin-top: 0.45rem; color: #475569; font-size: 0.75rem; }
+.flightbrief-aiResult article summary { width: fit-content; cursor: pointer; font-weight: 700; }
+.flightbrief-aiResult article details div { display: grid; gap: 0.25rem; margin-top: 0.35rem; }
+.flightbrief-aiResult article details span { display: block; }
 .flightbrief-aiResult small { color: #475569; line-height: 1.4; }
 
 .flightbrief-riskMitigation {
@@ -608,10 +609,7 @@
   }
 
   .flightbrief-finalScoreMain,
-  .flightbrief-aiResult dl > div { grid-template-columns: 1fr; }
 
-  .flightbrief-paveScores { grid-template-columns: 1fr 1fr; }
-  .flightbrief-paveScores > div { border-right: 0; border-bottom: 1px solid #e2e8f0; }
 
   .flightbrief-answerSummary {
     flex-direction: column;

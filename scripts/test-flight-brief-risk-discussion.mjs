@@ -31,9 +31,25 @@ test("AI context is whitelisted, capped, and excludes identities and health deta
   assert.ok(context.evidence.find((item) => item.id === "notes.weather").value.length <= 1200);
 });
 
+test("operational NOTAMs remain available as AI evidence", () => {
+  const values = assessment();
+  const context = buildRiskDiscussionContext({
+    flightNature: "solo",
+    context: { notamByIcao: { KTIX: { closures: [{ summary: "Runway 18/36 closed" }] } } },
+  }, values.flight, values.human, values.breakdown);
+  const notams = context.evidence.find((item) => item.id === "notam.summary");
+  assert.match(notams.value, /KTIX/);
+  assert.match(notams.value, /Runway 18\/36 closed/);
+});
+
 test("structured output rejects unknown evidence IDs", () => {
   const output = { overview: "Weather and fatigue may compound workload.", residual_risk: "Recheck after mitigation.", priorities: [{ title: "Weather margin", evidence_ids: ["made.up"], possible_consequences: "Reduced options.", compounding_effect: "Higher workload.", mitigations: ["Set a divert trigger."], recheck_triggers: ["Forecast worsens."] }] };
   assert.throws(() => validateRiskDiscussionOutput(output, ["score.dynamic-deteriorating-wx"]), /unknown evidence/i);
+});
+
+test("structured output rejects an overlong priority list", () => {
+  const priority = { title: "Weather margin", evidence_ids: ["weather.summary"], possible_consequences: "Reduced options.", compounding_effect: "Higher workload.", mitigations: ["Set a divert trigger."], recheck_triggers: ["Forecast worsens."] };
+  assert.throws(() => validateRiskDiscussionOutput({ overview: "Review the main risks.", residual_risk: "Conditions can change.", priorities: [priority, priority, priority, priority] }, ["weather.summary"]), /invalid priorities/i);
 });
 
 test("validated output renders consequences, compounding risk, actions, and triggers", () => {

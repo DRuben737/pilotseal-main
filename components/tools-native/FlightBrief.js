@@ -684,6 +684,10 @@ function FinalRiskScore({ assessment, breakdown, remaining }) {
       <p>Finish the assessment before relying on a score or AI discussion.</p>
     </section>;
   }
+  const scoreParts = [
+    ...PAVE_SECTIONS.map((section) => ({ label: section.id === "environment" ? "Environment" : section.title, score: breakdown.sections[section.id] })),
+    { label: "Additional risk", score: breakdown.additional },
+  ].filter((item) => item.score > 0);
   return (
     <section className="flightbrief-finalScore" aria-labelledby="final-risk-score-title" aria-live="polite">
       <div className="flightbrief-finalScoreMain">
@@ -691,16 +695,19 @@ function FinalRiskScore({ assessment, breakdown, remaining }) {
         <div><span>Risk level</span><strong style={{ color: assessment.category.color }}>{assessment.category.level}</strong></div>
       </div>
       <div className="flightbrief-scoreBands" aria-label="Risk score ranges"><span>0–12 Low risk</span><span>13–24 Mitigation required</span><span>25+ Further review</span></div>
-      <dl className="flightbrief-paveScores">
-        {PAVE_SECTIONS.map((section) => <div key={section.id}><dt>{section.letter} · {section.title}</dt><dd>{breakdown.sections[section.id]}</dd></div>)}
-        <div><dt>Additional risk</dt><dd>{breakdown.additional}</dd></div>
-      </dl>
-      <div className="flightbrief-scoreContributions">
-        <h4>Score details</h4>
+      <div className="flightbrief-scoreEquation" aria-label="Score calculation">
+        <span className="flightbrief-scoreEquationLabel">How the total is calculated</span>
+        <div>{scoreParts.length ? scoreParts.map((item, index) => <React.Fragment key={item.label}>
+          {index > 0 ? <span aria-hidden="true">+</span> : null}
+          <strong>{item.label} {item.score}</strong>
+        </React.Fragment>) : <strong>No scored concerns 0</strong>}<span aria-hidden="true">=</span><b>{assessment.totalRisk}</b></div>
+      </div>
+      <details className="flightbrief-scoreContributions">
+        <summary>Score details <span>{breakdown.contributions.length} scored {breakdown.contributions.length === 1 ? "factor" : "factors"}</span></summary>
         {breakdown.contributions.length ? <ul>{breakdown.contributions.map((item) => <li key={item.id} className={item.severity === 2 ? "is-significant" : ""}>
           <div><strong>{item.label}</strong><span>{item.answer}</span></div><b>+{item.score}</b>
         </li>)}</ul> : <p>No scored concerns.</p>}
-      </div>
+      </details>
     </section>
   );
 }
@@ -714,16 +721,14 @@ function AiRiskDiscussion({ result, savedText }) {
     <p>{result.discussion.overview}</p>
     {result.discussion.priorities.map((item, index) => <article key={`${item.title}-${index}`}>
       <h4>{index + 1}. {item.title}</h4>
-      <dl>
-        <div><dt>Evidence</dt><dd>{item.evidenceIds.map((id) => evidence.get(id)).filter(Boolean).map((entry) => <span key={entry.id}><strong>{entry.label}:</strong> {entry.value}</span>)}</dd></div>
-        <div><dt>Possible consequences</dt><dd>{item.possibleConsequences}</dd></div>
-        <div><dt>Compounding risk</dt><dd>{item.compoundingEffect}</dd></div>
-        <div><dt>Priority actions</dt><dd>{item.mitigations.join(" · ")}</dd></div>
-        <div><dt>Reassess when</dt><dd>{item.recheckTriggers.join(" · ")}</dd></div>
-      </dl>
+      <p><strong>Consequence:</strong> {item.possibleConsequences}</p>
+      <p><strong>Combined with:</strong> {item.compoundingEffect}</p>
+      <p><strong>Do now:</strong> {item.mitigations.join(" · ")}</p>
+      <p><strong>Reassess if:</strong> {item.recheckTriggers.join(" · ")}</p>
+      <details><summary>Evidence</summary><div>{item.evidenceIds.map((id) => evidence.get(id)).filter(Boolean).map((entry) => <span key={entry.id}><strong>{entry.label}:</strong> {entry.value}</span>)}</div></details>
     </article>)}
     <p><strong>Residual risk:</strong> {result.discussion.residualRisk}</p>
-    <small>Decision aid only — not a determination of regulatory compliance, weather safety, airworthiness, or go/no-go.</small>
+    <small>AI decision support only — not a go/no-go decision.</small>
   </section>;
 }
 
@@ -1544,15 +1549,6 @@ export default function FlightBrief() {
     gates.push("Destination/route reporting IFR/LIFR - evaluate alternate and minima.");
   }
 
-  const closureAirport = Object.entries(notamByIcao || {}).find(
-    ([, g]) => g?.closures?.length > 0
-  );
-  if (closureAirport) {
-    gates.push(
-      `Airport operational closure NOTAM present (${closureAirport[0]}) - verify runway/taxiway availability.`
-    );
-  }
-
   if (isAutorotation) {
     gates.push(
       "Full down autorotation selected - brief recovery altitude, entry/termination criteria, and go-around procedure."
@@ -1583,7 +1579,6 @@ export default function FlightBrief() {
   totalRisk,
   flightRules,
   metarByIcaoData,
-  notamByIcao,
 ]);
 
   const generateAiRiskDiscussion = useCallback(async () => {
@@ -3353,7 +3348,6 @@ ${aiRiskDiscussion || "AI discussion not generated"}
                       <button className="flightbrief-aiButton" type="button" onClick={generateAiRiskDiscussion} disabled={!flightAssessment.complete || !session?.access_token || aiRiskLoading}>
                         {aiRiskLoading ? "Analyzing flight risks…" : aiRiskDiscussion ? "Refresh AI flight risk analysis" : "Generate AI flight risk analysis"}
                       </button>
-                      <p>Brief data may be processed by DeepSeek in China.</p>
                       {!session?.access_token ? <small>Sign in to use AI analysis.</small> : null}
                       {aiRiskError ? <p className="flightbrief-aiError" role="alert">{aiRiskError}</p> : null}
                     </div>
