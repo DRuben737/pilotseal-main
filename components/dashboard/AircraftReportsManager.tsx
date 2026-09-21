@@ -599,6 +599,8 @@ export default function AircraftReportsManager() {
         id="aircraft-report-activity"
         title="Report activity"
         summary={loading ? "Loading…" : `${filteredReports.length}`}
+        className="dashboard-data-workspace"
+        defaultOpen
         helpContent={<p>Expand to search and filter report history. Select a row to review the full description, workflow and activity in a side drawer.</p>}
       >
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">

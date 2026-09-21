@@ -1829,7 +1829,7 @@ export default function AircraftAdminPanel() {
     <>
       <div className="grid gap-3">
         <AdminPageHeader eyebrow="Platform administration" title="Aircraft Library" />
-        <ManagementDisclosure id="platform-aircraft-models" title="Aircraft models" summary={`${models.length}`} actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} helpContent={<p>Platform models define reusable loading locations, fuel data and approved weight-and-balance envelopes.</p>}>
+        <ManagementDisclosure id="platform-aircraft-models" title="Aircraft models" summary={`${models.length}`} className="dashboard-data-workspace" defaultOpen actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} helpContent={<p>Platform models define reusable loading locations, fuel data and approved weight-and-balance envelopes.</p>}>
         <AdminDataTable label="Platform aircraft models">
           <thead>
             <tr><th colSpan={5} className="p-0 font-normal"><CompactToolbar resultLabel={`${models.length} models`} actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} /></th></tr>
@@ -1842,7 +1842,7 @@ export default function AircraftAdminPanel() {
         </AdminDataTable>
         </ManagementDisclosure>
 
-        <ManagementDisclosure id="platform-fleet-aircraft" title="Fleet aircraft" summary={`${aircraft.length}`} actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} helpContent={<p>Manage platform aircraft identity, visibility, weight-and-balance data and organization access.</p>}>
+        <ManagementDisclosure id="platform-fleet-aircraft" title="Fleet aircraft" summary={`${aircraft.length}`} className="dashboard-data-workspace" defaultOpen actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} helpContent={<p>Manage platform aircraft identity, visibility, weight-and-balance data and organization access.</p>}>
         <AdminDataTable label="Platform fleet aircraft">
           <thead>
             <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${aircraft.length} aircraft`} actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} /></th></tr>
@@ -1858,7 +1858,7 @@ export default function AircraftAdminPanel() {
         </AdminDataTable>
         </ManagementDisclosure>
 
-        <ManagementDisclosure id="pending-weight-balance-changes" title="Weight & balance change requests" summary={`${updateRequests.filter((request) => request.status === "pending").length} pending`} helpContent={<p>Review submitted changes before they replace the current aircraft weight-and-balance values.</p>}>
+        <ManagementDisclosure id="pending-weight-balance-changes" title="Weight & balance change requests" summary={`${updateRequests.filter((request) => request.status === "pending").length} pending`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Review submitted changes before they replace the current aircraft weight-and-balance values.</p>}>
         <AdminDataTable label="Pending weight and balance changes">
           <thead>
             <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${updateRequests.filter((request) => request.status === "pending").length} pending`} /></th></tr>

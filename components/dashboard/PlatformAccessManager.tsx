@@ -206,7 +206,7 @@ export default function PlatformAccessManager() {
       {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
       {status ? <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{status}</p> : null}
 
-      <ManagementDisclosure id="company-registration-requests" title="Company registration requests" summary={`${organizationRequests.filter((request) => request.status === "pending").length} pending`} helpContent={<p>Review verified company registration requests. Approval creates an organization and assigns the requester as its first Owner; rejection creates nothing.</p>}>
+      <ManagementDisclosure id="company-registration-requests" title="Company registration requests" summary={`${organizationRequests.filter((request) => request.status === "pending").length} pending`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Review verified company registration requests. Approval creates an organization and assigns the requester as its first Owner; rejection creates nothing.</p>}>
       <AdminDataTable label="Company registration requests">
         <thead>
           <tr><th colSpan={6} className="p-0 font-normal"><CompactToolbar resultLabel={`${organizationRequests.filter((request) => request.status === "pending").length} pending · ${organizationRequests.length} total`} /></th></tr>
@@ -228,7 +228,7 @@ export default function PlatformAccessManager() {
       </AdminDataTable>
       </ManagementDisclosure>
 
-      <ManagementDisclosure id="platform-organizations" title="Organizations" summary={`${organizations.length}`} helpContent={<p>Organizations are the tenant workspaces on PilotSeal. Add creates the workspace and assigns its first Owner in one audited step.</p>}>
+      <ManagementDisclosure id="platform-organizations" title="Organizations" summary={`${organizations.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Organizations are the tenant workspaces on PilotSeal. Add creates the workspace and assigns its first Owner in one audited step.</p>}>
       <AdminDataTable label="Organizations">
         <thead>
           <tr><th colSpan={5} className="p-0 font-normal"><CompactToolbar resultLabel={`${organizations.length} organizations`} /></th></tr>
@@ -255,7 +255,7 @@ export default function PlatformAccessManager() {
       </AdminDataTable>
       </ManagementDisclosure>
 
-      <ManagementDisclosure id="platform-administrators" title="Platform administrators" summary={`${admins.length}`} helpContent={<p>Platform administrators can review registrations and manage platform-wide resources. This role is independent from organization membership.</p>}>
+      <ManagementDisclosure id="platform-administrators" title="Platform administrators" summary={`${admins.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Platform administrators can review registrations and manage platform-wide resources. This role is independent from organization membership.</p>}>
       <AdminDataTable label="Platform administrators">
         <thead>
           <tr><th colSpan={4} className="p-0 font-normal"><CompactToolbar resultLabel={`${admins.length} accounts`} /></th></tr>
@@ -296,7 +296,7 @@ export default function PlatformAccessManager() {
       </AdminDataTable>
       </ManagementDisclosure>
 
-      <ManagementDisclosure id="platform-role-audit" title="Platform role audit trail" summary={`${auditLog.length}`} helpContent={<p>This immutable history records platform role grants and revocations, including the actor, target, reason and time.</p>}>
+      <ManagementDisclosure id="platform-role-audit" title="Platform role audit trail" summary={`${auditLog.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>This immutable history records platform role grants and revocations, including the actor, target, reason and time.</p>}>
       <AdminDataTable label="Platform role audit trail">
         <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
           <tr><th className="px-3 py-2">Changed by</th><th className="px-3 py-2">Action</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Reason</th><th className="px-3 py-2">When</th></tr>

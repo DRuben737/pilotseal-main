@@ -531,7 +531,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               </aside>
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="dashboard-content min-w-0 flex-1">
               <section ref={mobileNavigationRef} className="dashboard-mobile-navigation" aria-label="Dashboard navigation">
                 {workspaceLinks.length > 1 ? (
                   <nav className="dashboard-mobile-workspace-tabs" aria-label="Switch workspace">

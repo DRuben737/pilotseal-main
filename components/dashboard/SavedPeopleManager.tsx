@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
-import { ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
 import Badge from "@/components/ui/Badge";
@@ -1012,15 +1012,14 @@ export default function SavedPeopleManager() {
       id="saved-people"
       title="Saved People"
       summary={loading ? "Loading…" : `${people.length}`}
+      className="people-workspace"
       actions={<button type="button" className="secondary-button icon-button" aria-label="Add person" title="Add person" onClick={() => setShowPersonForm(true)}><ActionIcon kind="add" /></button>}
+      defaultOpen
       openOnAction
       helpContent={<><p>Saved People stores private student, instructor and passenger records used by your tools.</p><p>Expand a person to manage certificates or link the record to a verified PilotSeal account. Linking does not expose your private notes or certificates.</p></>}
     >
       <div className="people-toolbar">
-        <div>
-          <h3 className="saas-subsection-title">People</h3>
-          <p className="saas-meta-text">{people.length} saved</p>
-        </div>
+        <p className="saas-meta-text">{filteredPeople.length} of {people.length} people</p>
         <label className="people-search" aria-label="Search people">
           <ActionIcon kind="search" />
           <input
@@ -1066,8 +1065,14 @@ export default function SavedPeopleManager() {
         </section>
       ) : null}
 
-      {showPersonForm ? (
-        <div className="people-edit-row">
+      <DetailDrawer
+        open={showPersonForm}
+        title="Add person"
+        description="Add a private person record for endorsements and other PilotSeal tools."
+        compact
+        onClose={() => setShowPersonForm(false)}
+      >
+        <div className="people-edit-drawer-form">
           <label className="saas-field">
             <span>Name</span>
             <input
@@ -1128,21 +1133,27 @@ export default function SavedPeopleManager() {
             </button>
           </div>
         </div>
-      ) : null}
+      </DetailDrawer>
 
-      <div className="people-table">
-        <div className="people-table-head">
-          <span>Name</span>
-          <span>Certificates</span>
-          <span>Weight</span>
-          <span aria-hidden="true" />
-        </div>
-
+      <div className="people-data-grid">
+        <table aria-label="Saved people">
+          <thead>
+            <tr>
+              <th className="people-grid-expand" aria-label="Details" />
+              <th>Name</th>
+              <th>Account</th>
+              <th>Certificate</th>
+              <th>Certificate no.</th>
+              <th>Weight</th>
+              <th className="people-grid-actions" aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
         {people.length === 0 && !loading ? (
-          <p className="saas-empty-state">No people saved yet.</p>
+          <tr><td colSpan={7} className="people-grid-empty">No people saved yet.</td></tr>
         ) : null}
         {people.length > 0 && filteredPeople.length === 0 ? (
-          <p className="saas-empty-state">No people match your search.</p>
+          <tr><td colSpan={7} className="people-grid-empty">No people match your search.</td></tr>
         ) : null}
 
         {filteredPeople.map((person) => {
@@ -1162,8 +1173,9 @@ export default function SavedPeopleManager() {
           ));
 
           return (
-            <div key={person.id} className="people-row-group">
-              <div className="people-row">
+            <Fragment key={person.id}>
+              <tr>
+                <td className="people-grid-expand">
                 <button
                   type="button"
                   className={`people-expand-button ${isExpanded ? "people-expand-button-open" : ""}`}
@@ -1173,96 +1185,23 @@ export default function SavedPeopleManager() {
                 >
                   <ActionIcon kind="expand" />
                 </button>
-
-                {isEditing ? (
-                  <>
-                    <label className="saas-field">
-                      <span>Name</span>
-                      <input
-                        value={draft.display_name}
-                        onChange={(event) => updateDraft(person.id, "display_name", event.target.value)}
-                      />
-                    </label>
-                    <label className="saas-field">
-                      <span>Primary certificate number</span>
-                      <input
-                        value={draft.cert_number}
-                        onChange={(event) => updateDraft(person.id, "cert_number", event.target.value)}
-                      />
-                    </label>
-                    <label className="saas-field">
-                      <span>Weight</span>
-                      <input
-                        type="number"
-                        value={draft.weight_lbs}
-                        onChange={(event) => updateDraft(person.id, "weight_lbs", event.target.value)}
-                      />
-                    </label>
-                    <div className="saas-inline-actions people-row-actions">
-                      <button
-                        type="button"
-                        className="primary-button icon-button"
-                        aria-label={saving ? "Saving changes" : "Save changes"}
-                        title="Save changes"
-                        disabled={saving}
-                        onClick={() => void handleSavePerson(person)}
-                      >
-                        <ActionIcon kind="save" />
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button icon-button"
-                        aria-label="Cancel person edits"
-                        title="Cancel"
-                        disabled={saving}
-                        onClick={() => cancelEditing(person.id)}
-                      >
-                        <ActionIcon kind="cancel" />
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="people-name-cell">
-                      <div className="people-cert-title">
-                        <p className="saas-card-title">{person.display_name}</p>
-                        {accountLink ? <Badge tone="success">Platform linked</Badge> : null}
-                        {endorsementPerson?.certificate_source === "canonical_profile" || endorsementPerson?.certificate_source === "student_account" ? (
-                          <Badge tone="success">Student certificate used</Badge>
-                        ) : null}
-                        {endorsementPerson?.certificate_conflict ? (
-                          <Badge tone="warning">Certificate conflict</Badge>
-                        ) : null}
-                        {outgoingRequest ? <Badge tone="warning">Awaiting student</Badge> : null}
-                        {(accountLink?.shared_organization_names ?? []).map((organizationName) => (
-                          <Badge key={organizationName} tone="neutral">{organizationName}</Badge>
-                        ))}
-                      </div>
-                      <p className="saas-meta-text">
-                        {endorsementPerson?.effective_certificate_number || "No primary certificate number"}
-                        {endorsementPerson?.certificate_source === "canonical_profile" || endorsementPerson?.certificate_source === "student_account" ? " · shared student profile" : ""}
-                      </p>
-                      {endorsementPerson?.account_nickname ? (
-                        <p className="saas-meta-text">Linked account nickname: {endorsementPerson.account_nickname}</p>
-                      ) : null}
-                      {endorsementPerson?.certificate_conflict ? (
-                        <p className="saas-meta-text">The student must correct conflicting pilot certificate numbers before endorsement.</p>
-                      ) : null}
-                    </div>
-                    <div className="people-cert-summary">
-                      {personCertificates.length > 0 ? (
-                        personCertificates.map((certificate) => (
-                          <Badge key={certificate.id} tone="neutral">
-                            {CERTIFICATE_TYPE_LABELS[certificate.certificate_type]}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="saas-meta-text">No certificates</span>
-                      )}
-                    </div>
-                    <p className="saas-meta-text">
-                      {typeof person.weight_lbs === "number" ? `${person.weight_lbs} lbs` : "--"}
-                    </p>
+                </td>
+                <td className="people-grid-name">{person.display_name}</td>
+                <td>
+                  <span className={`people-grid-status ${endorsementPerson?.certificate_conflict ? "people-grid-status-warning" : accountLink ? "people-grid-status-success" : outgoingRequest ? "people-grid-status-pending" : ""}`}>
+                    {endorsementPerson?.certificate_conflict ? "Certificate conflict" : accountLink ? "Linked" : outgoingRequest ? "Pending" : "Private"}
+                  </span>
+                </td>
+                <td>
+                  {endorsementPerson?.certificate_source === "canonical_profile" || endorsementPerson?.certificate_source === "student_account"
+                    ? "Pilot certificate"
+                    : personCertificates.length > 0
+                      ? personCertificates.map((certificate) => CERTIFICATE_TYPE_LABELS[certificate.certificate_type]).join(", ")
+                      : "—"}
+                </td>
+                <td className="people-grid-mono">{endorsementPerson?.effective_certificate_number || "—"}</td>
+                <td>{typeof person.weight_lbs === "number" ? `${person.weight_lbs} lbs` : "—"}</td>
+                <td className="people-grid-actions">
                     <div className="saas-inline-actions people-row-actions">
                       <button
                         type="button"
@@ -1285,11 +1224,63 @@ export default function SavedPeopleManager() {
                         <ActionIcon kind="delete" />
                       </button>
                     </div>
-                  </>
-                )}
-              </div>
+                </td>
+              </tr>
 
-              {isExpanded ? (
+              <DetailDrawer
+                open={isEditing}
+                title={`Edit ${person.display_name}`}
+                description="Update the fields used across PilotSeal tools."
+                compact
+                onClose={() => cancelEditing(person.id)}
+              >
+                <div className="people-edit-drawer-form">
+                  <label className="saas-field">
+                    <span>Name</span>
+                    <input
+                      value={draft.display_name}
+                      onChange={(event) => updateDraft(person.id, "display_name", event.target.value)}
+                    />
+                  </label>
+                  <label className="saas-field">
+                    <span>Primary certificate number</span>
+                    <input
+                      value={draft.cert_number}
+                      onChange={(event) => updateDraft(person.id, "cert_number", event.target.value)}
+                    />
+                  </label>
+                  <label className="saas-field">
+                    <span>Weight</span>
+                    <input
+                      type="number"
+                      value={draft.weight_lbs}
+                      onChange={(event) => updateDraft(person.id, "weight_lbs", event.target.value)}
+                    />
+                  </label>
+                  <div className="saas-inline-actions people-form-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={saving || !draft.display_name.trim()}
+                      onClick={() => void handleSavePerson(person)}
+                    >
+                      {saving ? "Saving…" : "Save changes"}
+                    </button>
+                    <button type="button" className="secondary-button" disabled={saving} onClick={() => cancelEditing(person.id)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </DetailDrawer>
+
+              <DetailDrawer
+                open={isExpanded}
+                title={person.display_name}
+                description="Platform link and certificate details"
+                width="wide"
+                compact
+                onClose={() => toggleExpanded(person.id)}
+              >
                 <div className="people-detail-row">
                   <section className="people-account-link" aria-label={`Platform account for ${person.display_name}`}>
                     <div className="people-account-link-copy">
@@ -1493,10 +1484,12 @@ export default function SavedPeopleManager() {
                     </button>
                   ) : null}
                 </div>
-              ) : null}
-            </div>
+              </DetailDrawer>
+            </Fragment>
           );
         })}
+          </tbody>
+        </table>
       </div>
     </ManagementDisclosure>
     </>

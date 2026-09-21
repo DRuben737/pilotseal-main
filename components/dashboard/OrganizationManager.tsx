@@ -1779,7 +1779,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
       {view === "people" ? (
         <>
-          <ManagementDisclosure id="organization-people" title="People" summary={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite</CompactButton> : undefined} helpContent={<><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Student invitations create the assigned instructor relationship as soon as the verified student accepts. Role changes, removal and ownership transfer require confirmation.</p></>}>
+          <ManagementDisclosure id="organization-people" title="People" summary={`${members.length} linked · ${pendingPeople.length} pending`} className="dashboard-data-workspace" defaultOpen actions={canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite</CompactButton> : undefined} helpContent={<><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Student invitations create the assigned instructor relationship as soon as the verified student accepts. Role changes, removal and ownership transfer require confirmation.</p></>}>
           <div className="hidden md:block">
             <AdminDataTable label="Linked organization members">
               <thead>
@@ -1861,7 +1861,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
           </ul>
           </ManagementDisclosure>
 
-          <ManagementDisclosure id="organization-pending-invitations" title="Pending invitations" summary={`${pendingPeople.length}`} helpContent={<p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}>
+          <ManagementDisclosure id="organization-pending-invitations" title="Pending invitations" summary={`${pendingPeople.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}>
           <div className="hidden md:block">
             <AdminDataTable label="Pending organization invitations">
               <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>

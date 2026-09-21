@@ -104,12 +104,13 @@ test("saved assessment contains only severity categories and scores", () => {
   assert.equal(JSON.stringify(snapshot).includes("sleepHours"), false);
 });
 
-test("report lines explain the score and identify the leading human factor", () => {
+test("report lines identify concerns without exposing point values", () => {
   const assessment = scoreHumanFactors(completeAnswers({ fatigue: 2 }, { stress: 1 }));
   const report = humanFactorReportLines(assessment).join("\n");
-  assert.match(report, /Student IMSAFE Score: 2/);
-  assert.match(report, /CFI IMSAFE Score: 1/);
-  assert.match(report, /Student \/ Pilot: Fatigue \(significant concern\) \[2\]/);
+  assert.match(report, /Student IMSAFE: Complete/);
+  assert.match(report, /CFI IMSAFE: Complete/);
+  assert.doesNotMatch(report, /\[\d+\]|Score: \d+/);
+  assert.match(report, /Student \/ Pilot: Fatigue \(significant concern\)/);
 });
 
 test("a saved v2 assessment can be reopened without storing context details", () => {
@@ -130,4 +131,32 @@ test("a saved v3 draft keeps its IMSAFE levels while reopening", () => {
   const restored = loadHumanFactorsForDraft({ riskModelVersion: 3, humanFactors: answers });
   assert.equal(restored.requiresReassessment, false);
   assert.equal(restored.answers.student.fatigue, 1);
+});
+
+test("solo assessment needs only the pilot and omits stale CFI health levels", () => {
+  const answers = completeAnswers({ fatigue: 1 }, { illness: 2 });
+  const assessment = scoreHumanFactors(answers, 0, 0, { activeRoles: ["student"], roleLabels: { student: "Pilot" } });
+  assert.equal(assessment.complete, true);
+  assert.equal(assessment.totalRisk, 1);
+  assert.equal(assessment.roles.cfi.active, false);
+  assert.equal(assessment.drivers.some((driver) => driver.role === "cfi"), false);
+  assert.equal(persistedHumanFactors(assessment).cfi, null);
+  assert.match(humanFactorReportLines(assessment).join(" "), /Pilot IMSAFE: Complete/);
+  assert.match(humanFactorReportLines(assessment).join(" "), /CFI IMSAFE: Not aboard/);
+  assert.equal(humanFactorReviewItems(assessment).some((item) => item.includes("NO FLIGHT")), false);
+});
+
+test("v4 draft retains applicable pilot health levels", () => {
+  const restored = loadHumanFactorsForDraft({ riskModelVersion: 4, humanFactors: completeAnswers({ fatigue: 1 }) });
+  assert.equal(restored.requiresReassessment, false);
+  assert.equal(restored.answers.student.fatigue, 1);
+});
+
+test("v5 draft keeps IMSAFE levels and still omits private context", () => {
+  const answers = completeAnswers({ fatigue: 1 }, { stress: 2 });
+  const restored = loadHumanFactorsForDraft({ riskModelVersion: 5, humanFactors: answers });
+  assert.equal(restored.requiresReassessment, false);
+  assert.equal(restored.answers.student.fatigue, 1);
+  const saved = persistedHumanFactors(scoreHumanFactors(restored.answers));
+  assert.equal(JSON.stringify(saved).includes("sleepHours"), false);
 });

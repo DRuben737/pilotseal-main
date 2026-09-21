@@ -833,6 +833,8 @@ export default function AsrReportsManager() {
         id="asr-activity"
         title="ASR activity"
         summary={loading ? "Loading…" : `${filteredReports.length}`}
+        className="dashboard-data-workspace"
+        defaultOpen
         helpContent={<p>Expand to search ASR history. Rows show only the reference, aircraft, occurrence date, status and assigned reviewer context; open one for the full occurrence and review record.</p>}
       >
         <div className="flex flex-col gap-2 sm:flex-row">

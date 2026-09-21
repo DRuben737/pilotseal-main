@@ -10,5 +10,28 @@ const tasks = [
 ] as const;
 
 export default function Page() {
-  return <section className="space-y-5"><AdminPageHeader eyebrow="Platform administration" title="Platform Overview" description="Choose one administrative task. Each workspace keeps its filters, records, and actions focused." /><div className="grid gap-3 md:grid-cols-2">{tasks.map(([label, href, description]) => <Link key={href} href={href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition hover:border-blue-300 hover:shadow-md"><h2 className="font-semibold text-slate-950">{label}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{description}</p><p className="mt-4 text-sm font-semibold text-blue-700">Open workspace →</p></Link>)}</div></section>;
+  return (
+    <section className="space-y-3">
+      <AdminPageHeader
+        eyebrow="Platform administration"
+        title="Platform Overview"
+        description="Select an area to manage. Each page keeps its records and actions together."
+      />
+      <nav aria-label="Platform administration areas" className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        {tasks.map(([label, href, description]) => (
+          <Link
+            key={href}
+            href={href}
+            className="group grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-slate-100 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 sm:grid-cols-[13rem_minmax(0,1fr)_auto] sm:px-4"
+          >
+            <h2 className="text-sm font-semibold text-slate-950">{label}</h2>
+            <p className="col-span-2 row-start-2 text-xs leading-5 text-slate-500 sm:col-span-1 sm:row-start-auto sm:text-sm">
+              {description}
+            </p>
+            <span className="col-start-2 row-start-1 text-lg text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-700 sm:col-start-3" aria-hidden="true">→</span>
+          </Link>
+        ))}
+      </nav>
+    </section>
+  );
 }

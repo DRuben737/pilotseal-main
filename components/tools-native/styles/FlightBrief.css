@@ -13,6 +13,619 @@
   box-shadow: none;
 }
 
+/* Risk step: one flat reading surface instead of nested cards. */
+.flightbrief-riskFlow {
+  max-width: 940px;
+  margin: 0 auto;
+  color: #0f172a;
+}
+
+.flightbrief-riskHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 0.45rem 0 1rem;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.flightbrief-body .flightbrief-riskHeader h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.025em;
+}
+
+.flightbrief-riskHeader p,
+.flightbrief-riskHint,
+.flightbrief-riskFootnote {
+  margin: 0.25rem 0 0;
+  color: #475569;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.flightbrief-riskHint {
+  margin-top: 0.75rem;
+}
+
+.flightbrief-riskNature {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.9fr) minmax(0, 1.5fr);
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid #cbd5e1;
+  scroll-margin-top: 5rem;
+}
+
+.flightbrief-riskNature label {
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.flightbrief-riskNature select {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.flightbrief-body .flightbrief-riskNatureEdit {
+  width: 100%;
+  min-height: 2.7rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.flightbrief-riskNatureEdit span {
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.flightbrief-riskSignificant {
+  margin: 0.65rem 0 0;
+  color: #991b1b;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.flightbrief-riskGroup,
+.flightbrief-riskTabs button,
+#risk-section-review {
+  scroll-margin-top: 5rem;
+}
+
+.flightbrief-riskBlock {
+  margin-top: 1.75rem;
+}
+
+.flightbrief-paveBoard {
+  margin-top: 1.15rem;
+  padding: 0.8rem 0.95rem 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-left: 3px solid #1d4ed8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.flightbrief-paveBoardHead {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.flightbrief-body button.flightbrief-paveBoardHead {
+  width: 100%;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flightbrief-body button.flightbrief-paveBoardHead:hover {
+  background: #f8fafc;
+}
+
+.flightbrief-body button.flightbrief-paveBoardHead:focus-visible,
+.flightbrief-body .flightbrief-answerSummary:focus-visible,
+.flightbrief-body .flightbrief-riskNatureEdit:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.flightbrief-paveTitle {
+  display: block;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.flightbrief-guidedQuestions {
+  padding: 0.7rem 0 0.3rem;
+}
+
+.flightbrief-body .flightbrief-answerSummary {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.55rem 0.25rem;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.flightbrief-answerSummary strong {
+  max-width: 62%;
+  color: #0f172a;
+  font-weight: 600;
+  text-align: right;
+}
+
+.flightbrief-question {
+  min-width: 0;
+  margin: 0.8rem 0;
+  padding: 0;
+  border: 0;
+}
+
+.flightbrief-question legend {
+  width: 100%;
+  margin-bottom: 0.8rem;
+  color: #0f172a;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.flightbrief-question legend:focus {
+  outline: none;
+}
+
+.flightbrief-questionEyebrow {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.flightbrief-choiceList {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.flightbrief-choice {
+  display: block;
+  position: relative;
+  cursor: pointer;
+}
+
+.flightbrief-body .flightbrief-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  max-width: 1px;
+  padding: 0;
+  opacity: 0;
+}
+
+.flightbrief-choice span {
+  display: block;
+  min-height: 3rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #1e293b;
+  font-size: 0.87rem;
+  line-height: 1.35;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.flightbrief-choice:hover span,
+.flightbrief-choice input:focus-visible + span {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.flightbrief-choice input:focus-visible + span {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.flightbrief-choice input:checked + span {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.flightbrief-paveLetter {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+
+.flightbrief-body .flightbrief-paveBoardHead h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.flightbrief-paveBoardHead p {
+  margin: 0.2rem 0 0;
+  color: #475569;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.flightbrief-paveStatus {
+  color: #475569;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.flightbrief-paveBoard .flightbrief-riskBlock {
+  margin-top: 0.85rem;
+}
+
+.flightbrief-paveBoard .flightbrief-riskGroup:last-child {
+  border-bottom: 0;
+}
+
+.flightbrief-riskBlockHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #94a3b8;
+}
+
+.flightbrief-body .flightbrief-riskBlockHead h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.flightbrief-riskBlockHead h3 span,
+.flightbrief-riskBlockHead > span {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.flightbrief-riskGroups {
+  margin-top: 0.1rem;
+}
+
+.flightbrief-riskGroup {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.flightbrief-body .flightbrief-riskGroupToggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.82rem 0.15rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1e293b;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.flightbrief-body .flightbrief-riskGroupToggle:hover,
+.flightbrief-body .flightbrief-riskGroupToggle:focus-visible {
+  background: #f8fafc;
+}
+
+.flightbrief-body .flightbrief-riskGroupToggle:focus-visible,
+.flightbrief-body .flightbrief-riskTabs button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.flightbrief-riskGroupCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.flightbrief-riskGroupRows {
+  padding-bottom: 0.35rem;
+}
+
+.flightbrief-riskRow {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.9fr) minmax(0, 1.5fr);
+  gap: 1rem;
+  align-items: center;
+  min-height: 3.25rem;
+  padding: 0.42rem 0.15rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.flightbrief-riskRow:last-child {
+  border-bottom: 0;
+}
+
+.flightbrief-riskRow label {
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 550;
+  line-height: 1.25;
+}
+
+.flightbrief-body .flightbrief-riskRow select,
+.flightbrief-body .flightbrief-riskRow input,
+.flightbrief-body .flightbrief-riskContext select,
+.flightbrief-body .flightbrief-riskContext input {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.68rem;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 0.82rem;
+}
+
+.flightbrief-riskTabs {
+  display: flex;
+  gap: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.flightbrief-body .flightbrief-riskTabs button {
+  padding: 0.8rem 0.1rem 0.65rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.flightbrief-body .flightbrief-riskTabs button.active {
+  border-bottom-color: #1d4ed8;
+  color: #1e3a8a;
+}
+
+.flightbrief-riskTabs button span {
+  margin-left: 0.3rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.flightbrief-riskOptional {
+  margin-top: 0.55rem;
+  color: #334155;
+  font-size: 0.82rem;
+}
+
+.flightbrief-riskOptional summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.flightbrief-riskOptional summary span {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.flightbrief-riskContext {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  padding: 0.7rem 0 0;
+}
+
+.flightbrief-riskContext label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.flightbrief-riskNotice {
+  margin: 0.65rem 0;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.flightbrief-riskDrivers ul,
+.flightbrief-riskReview ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flightbrief-riskDrivers li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.48rem 0.1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.82rem;
+}
+
+.flightbrief-riskDrivers li strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.flightbrief-riskReview {
+  margin-top: 1.5rem;
+  padding: 0.1rem 0 0.1rem 0.85rem;
+  border-left: 3px solid #d97706;
+}
+
+.flightbrief-body .flightbrief-riskReview h3 {
+  margin: 0 0 0.4rem;
+  color: #92400e;
+  font-size: 0.9rem;
+}
+
+.flightbrief-riskReview li {
+  margin-top: 0.35rem;
+  color: #78350f;
+  font-size: 0.81rem;
+  line-height: 1.35;
+}
+
+.flightbrief-finalScore { margin-top: 1.5rem; padding: 1rem; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; }
+.flightbrief-finalScore.is-incomplete { display: grid; gap: 0.25rem; }
+.flightbrief-finalScore.is-incomplete > span { color: #64748b; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; }
+.flightbrief-finalScore.is-incomplete p, .flightbrief-scoreContributions p { margin: 0; color: #475569; font-size: 0.82rem; }
+.flightbrief-finalScoreMain { display: grid; grid-template-columns: 0.7fr 1.3fr; gap: 1rem; }
+.flightbrief-finalScoreMain > div { display: grid; gap: 0.2rem; }
+.flightbrief-finalScoreMain span { color: #64748b; font-size: 0.75rem; font-weight: 700; }
+.flightbrief-finalScoreMain strong { color: #0f172a; font-size: 1.4rem; line-height: 1.15; }
+.flightbrief-finalScoreMain > div:first-child strong { font-size: 2.5rem; font-variant-numeric: tabular-nums; }
+.flightbrief-scoreBands { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.8rem; color: #64748b; font-size: 0.72rem; }
+.flightbrief-paveScores { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 1rem 0 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.flightbrief-paveScores > div { padding: 0.65rem; border-right: 1px solid #e2e8f0; }
+.flightbrief-paveScores > div:last-child { border-right: 0; }
+.flightbrief-paveScores dt { color: #64748b; font-size: 0.7rem; line-height: 1.25; }
+.flightbrief-paveScores dd { margin: 0.2rem 0 0; color: #0f172a; font-size: 1.1rem; font-weight: 800; }
+.flightbrief-scoreContributions { margin-top: 1rem; }
+.flightbrief-body .flightbrief-scoreContributions h4 { margin: 0 0 0.35rem; font-size: 0.85rem; }
+.flightbrief-scoreContributions ul { margin: 0; padding: 0; list-style: none; }
+.flightbrief-scoreContributions li { display: grid; grid-template-columns: 1fr auto; gap: 0.8rem; padding: 0.55rem 0; border-top: 1px solid #e2e8f0; }
+.flightbrief-scoreContributions li > div { display: grid; gap: 0.1rem; }
+.flightbrief-scoreContributions li strong { font-size: 0.82rem; }
+.flightbrief-scoreContributions li span { color: #475569; font-size: 0.76rem; }
+.flightbrief-scoreContributions li b { font-variant-numeric: tabular-nums; }
+.flightbrief-scoreContributions li.is-significant { color: #991b1b; }
+.flightbrief-aiActions { display: grid; gap: 0.45rem; margin-top: 1.5rem; }
+.flightbrief-aiActions button { width: fit-content; min-height: 44px; }
+.flightbrief-aiActions p, .flightbrief-aiActions small { margin: 0; max-width: 56rem; color: #64748b; font-size: 0.75rem; line-height: 1.45; }
+.flightbrief-aiActions .flightbrief-aiError { color: #b91c1c; font-weight: 700; }
+.flightbrief-aiResult, .flightbrief-aiSaved { margin-top: 1rem; padding: 1rem; border: 1px solid #bfdbfe; border-radius: 10px; background: #eff6ff; }
+.flightbrief-aiSaved { white-space: pre-wrap; color: #1e293b; font: inherit; font-size: 0.82rem; line-height: 1.5; }
+.flightbrief-aiResult > span { color: #1d4ed8; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.flightbrief-body .flightbrief-aiResult h3 { margin: 0.2rem 0 0.5rem; font-size: 1rem; }
+.flightbrief-aiResult > p { margin: 0.45rem 0; color: #334155; font-size: 0.84rem; line-height: 1.5; }
+.flightbrief-aiResult article { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid #bfdbfe; }
+.flightbrief-body .flightbrief-aiResult h4 { margin: 0 0 0.45rem; font-size: 0.9rem; }
+.flightbrief-aiResult dl { display: grid; gap: 0.45rem; margin: 0; }
+.flightbrief-aiResult dl > div { display: grid; grid-template-columns: minmax(8rem, 0.3fr) minmax(0, 1fr); gap: 0.75rem; }
+.flightbrief-aiResult dt { color: #475569; font-size: 0.75rem; font-weight: 700; }
+.flightbrief-aiResult dd { margin: 0; color: #1e293b; font-size: 0.8rem; line-height: 1.45; }
+.flightbrief-aiResult dd span { display: block; }
+.flightbrief-aiResult small { color: #475569; line-height: 1.4; }
+
+.flightbrief-riskMitigation {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1.7rem;
+}
+
+.flightbrief-riskMitigation label {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.flightbrief-body .flightbrief-riskMitigation textarea {
+  border-radius: 8px;
+  background: #fff;
+}
+
+.flightbrief-riskFootnote {
+  margin-top: 0.7rem;
+}
+
+@media (max-width: 640px) {
+  .flightbrief-paveBoard {
+    padding: 0.75rem 0.65rem 0.25rem;
+  }
+
+  .flightbrief-paveBoardHead {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .flightbrief-paveStatus {
+    grid-column: 2;
+  }
+
+  .flightbrief-riskHeader {
+    gap: 0.55rem;
+  }
+
+  .flightbrief-riskRow {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    padding: 0.5rem 0.1rem;
+  }
+
+  .flightbrief-riskNature {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .flightbrief-riskContext {
+    grid-template-columns: 1fr;
+  }
+
+  .flightbrief-finalScoreMain,
+  .flightbrief-aiResult dl > div { grid-template-columns: 1fr; }
+
+  .flightbrief-paveScores { grid-template-columns: 1fr 1fr; }
+  .flightbrief-paveScores > div { border-right: 0; border-bottom: 1px solid #e2e8f0; }
+
+  .flightbrief-answerSummary {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .flightbrief-answerSummary strong {
+    max-width: 100%;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flightbrief-choice span { transition: none; }
+}
+
 .flightbrief-body h1,
 .flightbrief-body h2,
 .flightbrief-body h3 {
@@ -745,73 +1358,6 @@
   color: #0f172a;
 }
 
-.flightbrief-riskSubtotal {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.78rem 0.9rem;
-  border: 1px solid rgba(30, 41, 59, 0.16);
-  border-radius: 12px;
-  background: #eef2f7;
-  color: #0f172a;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.flightbrief-riskSubtotal span {
-  min-width: 0;
-}
-
-.flightbrief-riskSubtotal strong {
-  flex: 0 0 auto;
-  min-width: 2.4rem;
-  text-align: center;
-}
-
-.flightbrief-riskSummary {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1rem;
-  align-items: center;
-  padding: 0.95rem 1rem;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #eff6ff, #f8fafc);
-  border: 1px solid rgba(37, 99, 235, 0.16);
-}
-
-.flightbrief-riskBadge {
-  display: grid;
-  justify-items: center;
-  min-width: 68px;
-  padding: 0.52rem 0.62rem;
-  border-radius: 12px;
-  background: #2563eb;
-  color: #fff;
-}
-
-.flightbrief-riskBadge span {
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.flightbrief-riskBadge strong {
-  font-size: 1.2rem;
-  line-height: 1;
-}
-
-.flightbrief-riskMeta strong {
-  display: block;
-  font-size: 1rem;
-}
-
-.flightbrief-riskMeta p {
-  margin: 0.3rem 0 0;
-  color: #475569;
-  line-height: 1.5;
-}
-
 .flightbrief-riskColumnHead {
   display: flex;
   justify-content: space-between;
@@ -1028,10 +1574,6 @@
 
   .flightbrief-desktop-form {
     display: none;
-  }
-
-  .flightbrief-riskSummary {
-    grid-template-columns: 1fr;
   }
 
   .flightbrief-stepper {

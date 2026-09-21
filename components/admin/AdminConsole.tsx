@@ -16,11 +16,11 @@ export function AdminPageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-end sm:justify-between">
+    <header className="admin-page-header flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        {eyebrow ? <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">{eyebrow}</p> : null}
-        <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">{title}</h1>
-        {description ? <p className="mt-1 max-w-3xl text-sm leading-5 text-slate-600">{description}</p> : null}
+        {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{eyebrow}</p> : null}
+        <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-950">{title}</h1>
+        {description ? <p className="mt-1 max-w-3xl text-sm leading-5 text-slate-500">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </header>
@@ -47,10 +47,10 @@ export function AdminCollapsibleSection({
   const contentId = `${id}-content`;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+    <section className="admin-section overflow-hidden rounded-lg border border-slate-200 bg-white">
       <button
         type="button"
-        className="group flex min-h-20 w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 sm:px-5"
+        className="group flex min-h-14 w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 sm:px-4"
         aria-expanded={open}
         aria-controls={contentId}
         aria-label={`${open ? "Collapse" : "Expand"} ${title}`}
@@ -62,14 +62,14 @@ export function AdminCollapsibleSection({
           {description ? <span className="mt-1 block text-sm leading-5 text-slate-500">{description}</span> : null}
         </span>
         {summary ? <span className="hidden shrink-0 text-right text-xs font-semibold text-slate-500 sm:block">{summary}</span> : null}
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition group-hover:border-slate-300 group-hover:text-blue-700" aria-hidden="true">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition group-hover:border-slate-300 group-hover:text-blue-700" aria-hidden="true">
           <svg viewBox="0 0 20 20" fill="none" className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}>
             <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
       </button>
       {open ? (
-        <div id={contentId} className="border-t border-slate-200 bg-slate-50/35 p-4 sm:p-5">
+        <div id={contentId} className="border-t border-slate-200 bg-slate-50/35 p-3 sm:p-4">
           {children}
         </div>
       ) : null}
@@ -126,8 +126,8 @@ export function ManagementDisclosure({
   const [helpOpen, setHelpOpen] = useState(false);
 
   return (
-    <section className={`min-w-0 max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] ${className}`}>
-      <div className="flex min-h-16 flex-wrap items-center gap-2 px-3 py-3 sm:flex-nowrap sm:px-4">
+    <section className={`management-disclosure min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white ${className}`}>
+      <div className="management-disclosure-header flex min-h-12 flex-wrap items-center gap-2 px-3 py-2 sm:flex-nowrap">
         <button
           type="button"
           className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${actions ? "basis-full sm:basis-auto" : ""}`}
@@ -135,7 +135,7 @@ export function ManagementDisclosure({
           aria-controls={contentId}
           onClick={() => setOpen((value) => !value)}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition group-hover:border-slate-300 group-hover:text-blue-700" aria-hidden="true">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition group-hover:border-slate-300 group-hover:text-blue-700" aria-hidden="true">
             <svg viewBox="0 0 20 20" fill="none" className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}>
               <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -155,7 +155,7 @@ export function ManagementDisclosure({
           {actions ? <div onClick={() => { if (openOnAction) setOpen(true); }}>{actions}</div> : null}
         </div>
       </div>
-      {open ? <div id={contentId} className="min-w-0 border-t border-slate-200 bg-slate-50/35 p-3 sm:p-4">{children}</div> : null}
+      {open ? <div id={contentId} className="management-disclosure-content min-w-0 border-t border-slate-200 bg-slate-50/35 p-2 sm:p-3">{children}</div> : null}
       {helpContent ? (
         <HelpDrawer open={helpOpen} title={helpTitle ?? `${title} help`} onClose={() => setHelpOpen(false)}>
           {helpContent}
@@ -178,7 +178,7 @@ export function AdminSectionControls({
       onClick={onToggleAll}
       aria-label={expanded ? "Collapse all sections" : "Expand all sections"}
       title={expanded ? "Collapse all sections" : "Expand all sections"}
-      className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+      className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
     >
       {expanded ? (
         <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
@@ -224,7 +224,7 @@ export function CompactToolbar({
 
 export function AdminDataTable({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+    <div className="admin-data-table overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="overflow-x-auto">
         <table aria-label={label} className="w-full min-w-[820px] border-collapse text-left text-sm">
           {children}
@@ -318,9 +318,9 @@ export function StatusBadge({
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="px-6 py-14 text-center">
-      <div aria-hidden="true" className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">—</div>
-      <h2 className="mt-3 text-sm font-semibold text-slate-900">{title}</h2>
+    <div className="px-5 py-8 text-center">
+      <div aria-hidden="true" className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">—</div>
+      <h2 className="mt-2 text-sm font-semibold text-slate-900">{title}</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{description}</p>
     </div>
   );

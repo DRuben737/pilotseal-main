@@ -27,8 +27,6 @@ import {
 import WeightBalanceCalculator from "./WeightBalanceCalculator";
 import {
   HUMAN_FACTOR_FIELDS,
-  HUMAN_FACTOR_ROLES,
-  HUMAN_FACTOR_CHOICES,
   humanFactorReportLines,
   humanFactorReviewItems,
   humanFactorSnapshot,
@@ -37,18 +35,38 @@ import {
   scoreHumanFactors,
 } from "@/lib/flight-brief-human-factors.mjs";
 import {
-  FLIGHT_RISK_FACTORS,
-  FLIGHT_RISK_GROUPS,
+  FLIGHT_NATURES,
   FLIGHT_RISK_MODEL_VERSION,
+  answersForFlightNature,
   flightRiskSnapshot,
+  isFlightNature,
+  loadFlightRiskAnswersForDraft,
   normalizeFlightRiskAnswers,
   scoreFlightRisk,
 } from "@/lib/flight-brief-risk-model.mjs";
+import {
+  MANEUVER_FACTOR_IDS,
+  PAVE_SECTIONS,
+  firstIncompleteRiskQuestion,
+  isRiskSectionComplete,
+  isRiskQuestionAnswered,
+  maneuverScreenAnswer,
+  paveSectionForFactor,
+  riskScoreBreakdown,
+  riskQuestions,
+} from "@/lib/flight-brief-risk-flow.mjs";
 
 /** ------------------ constants ------------------ */
 const EMPTY_STOPS = Object.freeze([""]);
 const EMPTY_ARRAY = Object.freeze([]);
 const EMPTY_OBJECT = Object.freeze({});
+const AI_RISK_INPUT_KEYS = new Set([
+  "flightNature", "flightRules", "flightDate", "etd", "eta", "aircraftId", "fuel", "fuelTime",
+  "routeMode", "departure", "arrival", "stops", "lessonPractice", "fieldElevation", "outsideTemp",
+  "daResult", "weatherNotes", "metarByIcaoData", "tafByIcao", "airsigmetSummary", "airmets", "sigmets",
+  "pireps", "notamByIcao", "grossWeight", "wbCg", "withinLimitsConfirmed", "mxNow", "mxDue",
+  "humanFactors", "flightRiskAnswers", "otherRiskLabel", "otherRisks", "riskComments",
+]);
 
 /** ------------------ utils (pure functions) ------------------ */
 function normalizeICAO(s) {
@@ -614,126 +632,113 @@ function categorizeNotams(notams) {
   return result;
 }
 
-function HumanFactorQuestionnaire({ answers, onAnswer, context, onContextChange, assessment, legacyNotice }) {
+function RiskQuestionCard({ question, answer, onAnswer, roleLabel }) {
+  const prompt = question.type === "human" ? question.field.prompt
+    : question.type === "screen" ? "Special maneuvers planned?"
+    : question.factor.prompt ?? question.factor.label;
+  const choices = question.type === "human" ? question.field.choices
+    : question.type === "screen"
+      ? ["None planned", "Yes, some planned"]
+      : question.factor.choices;
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="IMSAFE guided assessment">
-      <div className="mb-4">
-        <h3 className="text-lg font-semibold text-slate-900">Pilot state · IMSAFE</h3>
-        <p className="mt-1 text-sm text-slate-600">
-          Pilot scoring trial · decision aid only. Each answer scores 0, 1, or 2 points; a low total never cancels a significant concern.
-        </p>
-        {legacyNotice && !assessment.complete ? (
-          <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
-            This draft used the earlier manual IMSAFE count. Complete the new assessment for both people before using the updated score.
-          </p>
+    <fieldset className="flightbrief-question" id="risk-active-question">
+      <legend tabIndex={-1} id="risk-question-title">
+        {question.type === "human" ? <span className="flightbrief-questionEyebrow">{roleLabel} · IMSAFE · {question.field.label}</span> : null}
+        {prompt}
+      </legend>
+      <div className="flightbrief-choiceList">
+        {choices.map((choice, index) => {
+          const value = question.type === "screen" ? index === 0 ? "none" : "planned" : index;
+          return (
+            <label key={value} className="flightbrief-choice">
+              <input type="radio" name={question.key} value={value} checked={answer === value} onChange={() => onAnswer(value)} />
+              <span>{choice}</span>
+            </label>
+          );
+        })}
+        {question.type === "factor" && question.factor.id === "static-inspection-under-20" ? (
+          <label className="flightbrief-choice">
+            <input type="radio" name={question.key} value="na" checked={answer === "na"} onChange={() => onAnswer("na")} />
+            <span>No hour-based inspection applies</span>
+          </label>
         ) : null}
       </div>
-      <div className="grid gap-5 xl:grid-cols-2">
-        {HUMAN_FACTOR_ROLES.map((role) => (
-          <fieldset key={role.id} className="min-w-0 rounded-xl border border-slate-200 p-3 sm:p-4">
-            <legend className="px-1 font-semibold text-slate-900">{role.label}</legend>
-            <p className="mb-3 text-xs text-slate-600">
-              {assessment.roles[role.id].score === null
-                ? `${assessment.roles[role.id].answered} of ${HUMAN_FACTOR_FIELDS.length} answered · score incomplete`
-                : `${assessment.roles[role.id].score} points from ${HUMAN_FACTOR_FIELDS.length} factors`}
-            </p>
-            <div className="space-y-3">
-              {HUMAN_FACTOR_FIELDS.map((field) => {
-                const severity = answers[role.id]?.[field.id];
-                const selectId = `human-${role.id}-${field.id}`;
-                return (
-                  <div key={field.id} className="rounded-lg bg-slate-50 p-3">
-                    <label htmlFor={selectId} className="block text-sm font-medium text-slate-900">
-                      {field.label} <span className="font-normal text-slate-600">· {field.prompt}</span>
-                    </label>
-                    <select
-                      id={selectId}
-                      className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                      value={severity ?? ""}
-                      onChange={(event) => onAnswer(role.id, field.id, event.target.value === "" ? null : Number(event.target.value))}
-                    >
-                      <option value="">Choose current state</option>
-                      {HUMAN_FACTOR_CHOICES.map((choice) => (
-                        <option key={choice.value} value={choice.value}>
-                          {field.choices?.[choice.value] ?? choice.label} · {choice.value} pt
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 rounded-lg border border-slate-200 p-3">
-              <p className="text-sm font-medium text-slate-900">Context for fatigue and stress</p>
-              <p className="mt-1 text-xs text-slate-600">Use these details to choose the two ratings above. No automatic safety cutoff; these details are not saved.</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <label className="text-xs text-slate-700">Hours slept
-                  <input type="number" min="0" max="24" inputMode="decimal" className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" value={context[role.id].sleepHours} onChange={(event) => onContextChange(role.id, "sleepHours", event.target.value)} />
-                </label>
-                <label className="text-xs text-slate-700">Hours awake
-                  <input type="number" min="0" max="48" inputMode="decimal" className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" value={context[role.id].awakeHours} onChange={(event) => onContextChange(role.id, "awakeHours", event.target.value)} />
-                </label>
-                <label className="text-xs text-slate-700">Time pressure
-                  <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" value={context[role.id].timePressure} onChange={(event) => onContextChange(role.id, "timePressure", event.target.value)}>
-                    <option value="">Choose</option><option value="none">None</option><option value="some">Some</option><option value="high">High</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-          </fieldset>
-        ))}
+    </fieldset>
+  );
+}
+
+function RiskAnsweredSummary({ question, answer, onEdit, roleLabel }) {
+  const title = question.type === "human" ? `${roleLabel} · ${question.field.label}`
+    : question.type === "screen" ? "Special training maneuvers" : question.factor.label;
+  const value = question.type === "human" ? question.field.choices[answer]
+    : question.type === "screen" ? answer === "none" ? "None planned" : "Some maneuvers planned"
+    : answer === "na" ? "No hour-based inspection applies" : question.factor.choices[answer];
+  return <button type="button" className="flightbrief-answerSummary" onClick={onEdit} aria-label={`Edit ${title}: ${value}`}><span>{title}</span><strong>{value}</strong></button>;
+}
+
+function FinalRiskScore({ assessment, breakdown, remaining }) {
+  if (!assessment.complete) {
+    return <section className="flightbrief-finalScore is-incomplete" aria-live="polite">
+      <span>INCOMPLETE</span>
+      <strong>{remaining} {remaining === 1 ? "answer" : "answers"} remaining</strong>
+      <p>Finish the assessment before relying on a score or AI discussion.</p>
+    </section>;
+  }
+  return (
+    <section className="flightbrief-finalScore" aria-labelledby="final-risk-score-title" aria-live="polite">
+      <div className="flightbrief-finalScoreMain">
+        <div><span>Total score</span><strong id="final-risk-score-title">{assessment.totalRisk}</strong></div>
+        <div><span>Risk level</span><strong style={{ color: assessment.category.color }}>{assessment.category.level}</strong></div>
       </div>
-      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" aria-live="polite">
-        <strong>{assessment.complete ? `Human factors: ${assessment.roles.student.score + assessment.roles.cfi.score} points` : "Human factors: incomplete"}</strong>
-        {assessment.drivers.length ? (
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            {assessment.drivers.map((driver) => (
-              <li key={`${driver.role}-${driver.field}`} className={driver.severity === 2 ? "font-semibold text-red-800" : ""}>
-                {driver.roleLabel}: {driver.label} · {driver.severity === 2 ? "significant concern" : "some concern"} (+{driver.severity})
-              </li>
-            ))}
-          </ul>
-        ) : <p className="mt-1">No concerns reported in answered items.</p>}
-        {assessment.drivers.some((driver) => driver.severity === 2) ? (
-          <p className="mt-2 font-semibold text-red-800">Pause and discuss significant concerns, even if the total score is low.</p>
-        ) : null}
+      <div className="flightbrief-scoreBands" aria-label="Risk score ranges"><span>0–12 Low risk</span><span>13–24 Mitigation required</span><span>25+ Further review</span></div>
+      <dl className="flightbrief-paveScores">
+        {PAVE_SECTIONS.map((section) => <div key={section.id}><dt>{section.letter} · {section.title}</dt><dd>{breakdown.sections[section.id]}</dd></div>)}
+        <div><dt>Additional risk</dt><dd>{breakdown.additional}</dd></div>
+      </dl>
+      <div className="flightbrief-scoreContributions">
+        <h4>Score details</h4>
+        {breakdown.contributions.length ? <ul>{breakdown.contributions.map((item) => <li key={item.id} className={item.severity === 2 ? "is-significant" : ""}>
+          <div><strong>{item.label}</strong><span>{item.answer}</span></div><b>+{item.score}</b>
+        </li>)}</ul> : <p>No scored concerns.</p>}
       </div>
     </section>
   );
 }
 
-function FlightRiskQuestionnaire({ answers, onAnswer, assessment, legacyNotice, idPrefix = "guided" }) {
+function AiRiskDiscussion({ result, savedText }) {
+  if (!result) return savedText ? <pre className="flightbrief-aiSaved">{savedText}</pre> : null;
+  const evidence = new Map(result.evidence.map((item) => [item.id, item]));
+  return <section className="flightbrief-aiResult" aria-labelledby="ai-risk-title">
+    <span>AI-generated decision support</span>
+    <h3 id="ai-risk-title">Risk discussion</h3>
+    <p>{result.discussion.overview}</p>
+    {result.discussion.priorities.map((item, index) => <article key={`${item.title}-${index}`}>
+      <h4>{index + 1}. {item.title}</h4>
+      <dl>
+        <div><dt>Evidence</dt><dd>{item.evidenceIds.map((id) => evidence.get(id)).filter(Boolean).map((entry) => <span key={entry.id}><strong>{entry.label}:</strong> {entry.value}</span>)}</dd></div>
+        <div><dt>Possible consequences</dt><dd>{item.possibleConsequences}</dd></div>
+        <div><dt>Compounding risk</dt><dd>{item.compoundingEffect}</dd></div>
+        <div><dt>Priority actions</dt><dd>{item.mitigations.join(" · ")}</dd></div>
+        <div><dt>Reassess when</dt><dd>{item.recheckTriggers.join(" · ")}</dd></div>
+      </dl>
+    </article>)}
+    <p><strong>Residual risk:</strong> {result.discussion.residualRisk}</p>
+    <small>Decision aid only — not a determination of regulatory compliance, weather safety, airworthiness, or go/no-go.</small>
+  </section>;
+}
+
+function PaveRiskBoard({ letter, title, detail, complete, active, onOpen, children }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Guided flight risk assessment">
-      <h3 className="text-lg font-semibold text-slate-900">Flight conditions · guided assessment</h3>
-      <p className="mt-1 text-sm text-slate-600">Pilot / aircraft / environment / mission / pressure. Choose the description that best fits this flight. No answer is not zero; use Not applicable when the factor does not apply.</p>
-      <p className="mt-1 text-xs text-slate-600">Trial scoring rule: no concern 0, some concern base weight, significant concern twice base weight; add both IMSAFE scores. Total 0–12 low, 13–24 mitigate, 25+ further review. Any significant concern is reviewed separately.</p>
-      {legacyNotice && !assessment.complete ? <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">This draft used the older checkbox score. Reassess all flight factors for the new score.</p> : null}
-      <p className="mt-2 text-sm font-medium text-slate-700" aria-live="polite">{assessment.answered} / {FLIGHT_RISK_FACTORS.length} factors answered</p>
-      <div className="mt-4 space-y-5">
-        {FLIGHT_RISK_GROUPS.map((group) => (
-          <div key={group.id} className="rounded-xl border border-slate-200 p-3 sm:p-4">
-            <h4 className="font-semibold text-slate-900">{group.label}</h4>
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              {FLIGHT_RISK_FACTORS.filter((factor) => factor.group === group.id).map((factor) => (
-                <label key={factor.id} className="block rounded-lg bg-slate-50 p-3 text-sm text-slate-900" htmlFor={`${idPrefix}-${factor.id}`}>
-                  <span className="font-medium">{factor.label}</span>
-                  <select id={`${idPrefix}-${factor.id}`} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600" value={answers[factor.id] ?? ""} onChange={(event) => onAnswer(factor.id, event.target.value === "na" ? "na" : event.target.value === "" ? null : Number(event.target.value))}>
-                    <option value="">Choose current condition</option>
-                    <option value="na">Not applicable · 0 pt</option>
-                    {factor.choices.map((choice, severity) => <option key={severity} value={severity}>{choice} · {severity * factor.weight} pt</option>)}
-                  </select>
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700" aria-live="polite">
-        <strong>{assessment.complete ? `Flight factors: ${assessment.factors.reduce((sum, factor) => sum + factor.score, 0)} pt` : "Flight factors: incomplete"}</strong>
-        {assessment.drivers.length ? <ul className="mt-2 list-disc pl-5">{assessment.drivers.slice(0, 6).map((factor) => <li key={factor.id} className={factor.severity === 2 ? "font-semibold text-red-800" : ""}>{factor.label}: {factor.choices[factor.severity]} (+{factor.score})</li>)}</ul> : null}
-        {assessment.significant.length ? <p className="mt-2 font-semibold text-red-800">Significant concerns need individual review, regardless of total score.</p> : null}
-      </div>
+    <section className="flightbrief-paveBoard" aria-label={`${letter} — ${title}`}>
+      <button type="button" className="flightbrief-paveBoardHead" aria-expanded={active} onClick={onOpen}>
+        <span className="flightbrief-paveLetter" aria-hidden="true">{letter}</span>
+        <div>
+          <span className="flightbrief-paveTitle">{title}</span>
+          <p>{detail}</p>
+        </div>
+        <span className="flightbrief-paveStatus">{complete ? "Done" : active ? "In progress" : "Open"}</span>
+      </button>
+      {active ? children : null}
     </section>
   );
 }
@@ -815,10 +820,17 @@ export default function FlightBrief() {
   const { session } = useAuthSession();
   const { activeOrganization } = useOrganization();
   const { brief, setBrief, briefWb, briefSelectedAircraft } = useToolState();
+  const [aiRiskResult, setAiRiskResult] = useState(null);
+  const [aiRiskLoading, setAiRiskLoading] = useState(false);
+  const [aiRiskError, setAiRiskError] = useState("");
   const stepperRef = useRef(null);
   const stepButtonRefs = useRef([]);
   const setBriefField = useCallback(
     (key, valueOrUpdater) => {
+      if (AI_RISK_INPUT_KEYS.has(key)) {
+        setAiRiskResult(null);
+        setAiRiskError("");
+      }
       setBrief((current) => {
         const previousValue = current?.[key];
         const nextValue =
@@ -826,6 +838,7 @@ export default function FlightBrief() {
         return {
           ...current,
           [key]: nextValue,
+          ...(AI_RISK_INPUT_KEYS.has(key) ? { aiRiskDiscussion: "" } : {}),
           ...(key !== "currentStep" &&
           key !== "flightBriefDraftId" &&
           key !== "finalizedFlightBriefId" &&
@@ -843,6 +856,8 @@ export default function FlightBrief() {
   const setStudentName = useCallback((value) => setBriefField("studentName", value), [setBriefField]);
   const instructorName = brief.instructorName ?? "";
   const setInstructorName = useCallback((value) => setBriefField("instructorName", value), [setBriefField]);
+  const flightNature = isFlightNature(brief.flightNature) ? brief.flightNature : "";
+  const flightNatureLabel = FLIGHT_NATURES.find((nature) => nature.id === flightNature)?.label ?? "Not set";
   const selectedStudentId = brief.selectedStudentId ?? "";
   const setSelectedStudentId = useCallback((value) => setBriefField("selectedStudentId", value), [setBriefField]);
   const selectedInstructorId = brief.selectedInstructorId ?? "";
@@ -887,7 +902,7 @@ export default function FlightBrief() {
   // store richer metar for category visualization
   const metarByIcaoData = brief.metarByIcaoData ?? EMPTY_OBJECT; // { ICAO: { raw, flight_rules } }
   const setMetarByIcaoData = useCallback((value) => setBriefField("metarByIcaoData", value), [setBriefField]);
-  const tafByIcao = brief.tafByIcao ?? {}; // { ICAO: "ICAO: raw" }
+  const tafByIcao = brief.tafByIcao ?? EMPTY_OBJECT; // { ICAO: "ICAO: raw" }
   const setTafByIcao = useCallback((value) => setBriefField("tafByIcao", value), [setBriefField]);
   const airsigmetSummary = brief.airsigmetSummary ?? "";
   const setAirsigmetSummary = useCallback((value) => setBriefField("airsigmetSummary", value), [setBriefField]);
@@ -977,18 +992,20 @@ export default function FlightBrief() {
         }
         if (!cancelled) {
           const savedAssessment = loadHumanFactorsForDraft(record.brief_data);
+          const savedFlightAssessment = loadFlightRiskAnswersForDraft(record.brief_data);
+          const draftFlightAnswers = savedFlightAssessment.answers;
           setBrief((current) => ({
             ...current,
             ...record.brief_data,
             humanFactors: savedAssessment.answers,
-            flightRiskAnswers: record.brief_data?.riskModelVersion === FLIGHT_RISK_MODEL_VERSION
-              ? normalizeFlightRiskAnswers(record.brief_data.flightRiskAnswers)
-              : normalizeFlightRiskAnswers(null),
-            otherRisks: record.brief_data?.riskModelVersion === FLIGHT_RISK_MODEL_VERSION ? record.brief_data.otherRisks ?? 0 : 0,
+            flightRiskAnswers: draftFlightAnswers,
+            otherRisks: record.brief_data?.riskModelVersion >= 3 ? record.brief_data.otherRisks ?? 0 : 0,
             flightBriefDraftId: record.id,
             finalizedFlightBriefId: "",
           }));
-          setLegacyHumanFactorsNotice(savedAssessment.requiresReassessment || record.brief_data?.riskModelVersion !== FLIGHT_RISK_MODEL_VERSION);
+          setPlannedManeuvers(maneuverScreenAnswer(draftFlightAnswers, record.brief_data?.flightNature) === "planned");
+          setActiveRiskQuestion(firstIncompleteRiskQuestion(draftFlightAnswers, savedAssessment.answers, record.brief_data?.flightNature ?? ""));
+          setLegacyHumanFactorsNotice(savedAssessment.requiresReassessment || savedFlightAssessment.requiresReassessment);
           setRecordStatus(`Editing revision ${record.revision_number}.`);
         }
       } catch (error) {
@@ -1131,17 +1148,45 @@ export default function FlightBrief() {
 
   /** ---- risk ---- */
   const humanFactors = useMemo(() => normalizeHumanFactors(brief.humanFactors), [brief.humanFactors]);
+  const flightRiskAnswers = useMemo(() => normalizeFlightRiskAnswers(brief.flightRiskAnswers), [brief.flightRiskAnswers]);
+  const [plannedManeuvers, setPlannedManeuvers] = useState(false);
+  const [editingRiskNature, setEditingRiskNature] = useState(false);
+  const [activeRiskQuestion, setActiveRiskQuestion] = useState(() => firstIncompleteRiskQuestion(
+    normalizeFlightRiskAnswers(brief.flightRiskAnswers),
+    normalizeHumanFactors(brief.humanFactors),
+    isFlightNature(brief.flightNature) ? brief.flightNature : ""
+  ));
   const [legacyHumanFactorsNotice, setLegacyHumanFactorsNotice] = useState(false);
   const [humanFactorContext, setHumanFactorContext] = useState(() => ({
     student: { sleepHours: "", awakeHours: "", timePressure: "" },
     cfi: { sleepHours: "", awakeHours: "", timePressure: "" },
   }));
+  const setFlightNature = useCallback((value) => {
+    const nextNature = isFlightNature(value) ? value : "";
+    const updatedFlightAnswers = answersForFlightNature(flightRiskAnswers, nextNature);
+    const updatedHumanAnswers = normalizeHumanFactors(humanFactors);
+    if (nextNature !== "dual_training") {
+      for (const field of HUMAN_FACTOR_FIELDS) updatedHumanAnswers.cfi[field.id] = null;
+    }
+    setBrief((current) => ({
+      ...current,
+      flightNature: nextNature,
+      flightRiskAnswers: updatedFlightAnswers,
+      humanFactors: updatedHumanAnswers,
+      aiRiskDiscussion: "",
+      ...(nextNature === "dual_training" ? {} : { instructorName: "", selectedInstructorId: "", lessonPractice: "" }),
+      ...(current.finalizedFlightBriefId ? { flightBriefDraftId: "", finalizedFlightBriefId: "" } : {}),
+    }));
+    setPlannedManeuvers(false);
+    setAiRiskResult(null);
+    setAiRiskError("");
+    setActiveRiskQuestion(firstIncompleteRiskQuestion(updatedFlightAnswers, updatedHumanAnswers, nextNature));
+  }, [flightRiskAnswers, humanFactors, setBrief]);
   const setHumanFactorAnswer = useCallback((role, field, severity) => {
-    setBriefField("humanFactors", (previous) => {
-      const normalized = normalizeHumanFactors(previous);
-      return { ...normalized, [role]: { ...normalized[role], [field]: severity } };
-    });
-  }, [setBriefField]);
+    const updated = { ...humanFactors, [role]: { ...humanFactors[role], [field]: severity } };
+    setBriefField("humanFactors", updated);
+    setActiveRiskQuestion(firstIncompleteRiskQuestion(flightRiskAnswers, updated, flightNature, plannedManeuvers));
+  }, [flightRiskAnswers, flightNature, humanFactors, plannedManeuvers, setBriefField]);
   const setHumanFactorContextField = useCallback((role, field, value) => {
     setHumanFactorContext((previous) => ({
       ...previous,
@@ -1154,6 +1199,7 @@ export default function FlightBrief() {
   const setOtherRiskLabel = useCallback((value) => setBriefField("otherRiskLabel", value), [setBriefField]);
   const riskComments = brief.riskComments ?? "";
   const setRiskComments = useCallback((value) => setBriefField("riskComments", value), [setBriefField]);
+  const aiRiskDiscussion = brief.aiRiskDiscussion ?? "";
   const currentStep = brief.currentStep ?? 0;
   const setCurrentStep = useCallback((value) => setBriefField("currentStep", value), [setBriefField]);
   const topRef = useRef(null);
@@ -1166,17 +1212,59 @@ export default function FlightBrief() {
     setMobileEditingField(null);
   }, [currentStep]);
 
-  const flightRiskAnswers = useMemo(() => normalizeFlightRiskAnswers(brief.flightRiskAnswers), [brief.flightRiskAnswers]);
   const setFlightRiskAnswer = useCallback((id, severity) => {
-    setBriefField("flightRiskAnswers", (previous) => ({ ...normalizeFlightRiskAnswers(previous), [id]: severity }));
-  }, [setBriefField]);
-  const humanAssessment = useMemo(() => scoreHumanFactors(humanFactors), [humanFactors]);
-  const flightAssessment = useMemo(() => scoreFlightRisk(flightRiskAnswers, humanAssessment, { label: otherRiskLabel, severity: Number(otherRisks) }), [flightRiskAnswers, humanAssessment, otherRiskLabel, otherRisks]);
+    const updated = { ...flightRiskAnswers, [id]: severity };
+    if (id === "dynamic-night-flight") {
+      updated["static-last-night-30"] = severity === 0 ? 0 : null;
+    }
+    setBriefField("flightRiskAnswers", updated);
+    setActiveRiskQuestion(firstIncompleteRiskQuestion(updated, humanFactors, flightNature, plannedManeuvers));
+  }, [flightRiskAnswers, flightNature, humanFactors, plannedManeuvers, setBriefField]);
+  const setManeuverScreen = useCallback((value) => {
+    const updated = { ...flightRiskAnswers };
+    for (const id of MANEUVER_FACTOR_IDS) updated[id] = value === "none" ? 0 : null;
+    setBriefField("flightRiskAnswers", updated);
+    setPlannedManeuvers(value === "planned");
+    setActiveRiskQuestion(firstIncompleteRiskQuestion(updated, humanFactors, flightNature, value === "planned"));
+  }, [flightRiskAnswers, flightNature, humanFactors, setBriefField]);
+  useEffect(() => {
+    if (currentStep !== 4 || !activeRiskQuestion || activeRiskQuestion === "nature") return undefined;
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(activeRiskQuestion === "review" ? "risk-section-review" : "risk-question-title");
+      if (!target) return;
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const bounds = target.getBoundingClientRect();
+      if (bounds.top < 80 || bounds.bottom > window.innerHeight - 80) {
+        target.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth", block: "center" });
+      }
+      if (activeRiskQuestion !== "review") target.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeRiskQuestion, currentStep]);
+  const humanAssessment = useMemo(() => scoreHumanFactors(humanFactors, 0, 0, {
+    activeRoles: flightNature === "dual_training" ? ["student", "cfi"] : ["student"],
+    roleLabels: { student: flightNature === "dual_training" ? "Student / Pilot" : "Pilot" },
+  }), [humanFactors, flightNature]);
+  const flightAssessment = useMemo(() => scoreFlightRisk(flightRiskAnswers, humanAssessment, { label: otherRiskLabel, severity: Number(otherRisks) }, flightNature), [flightRiskAnswers, humanAssessment, otherRiskLabel, otherRisks, flightNature]);
   const staticScore = flightAssessment.staticScore;
   const dynamicScore = flightAssessment.dynamicScore;
   const totalRisk = flightAssessment.totalRisk;
   const riskMeta = flightAssessment.category;
-  const selectedRisk = useCallback((id) => flightRiskAnswers[id] === 1 || flightRiskAnswers[id] === 2, [flightRiskAnswers]);
+  const hasSignificantConcern = flightAssessment.significant.length > 0 ||
+    flightAssessment.otherSeverity === 2 ||
+    humanAssessment.drivers.some((driver) => driver.severity === 2);
+  const guidedQuestions = useMemo(() => riskQuestions(flightNature, flightRiskAnswers, plannedManeuvers), [flightNature, flightRiskAnswers, plannedManeuvers]);
+  const activeGuidedQuestion = guidedQuestions.find((question) => question.key === activeRiskQuestion);
+  const activePaveSection = activeGuidedQuestion?.section ?? (activeRiskQuestion === "review" ? "review" : null);
+  const answeredGuidedCount = guidedQuestions.filter((question) =>
+    isRiskQuestionAnswered(question, flightRiskAnswers, humanFactors, flightNature, plannedManeuvers)
+  ).length;
+  const remainingRiskAnswers = Math.max(0, guidedQuestions.length - answeredGuidedCount);
+  const scoreBreakdown = useMemo(
+    () => riskScoreBreakdown(flightAssessment, humanAssessment, otherRiskLabel),
+    [flightAssessment, humanAssessment, otherRiskLabel]
+  );
+  const selectedRisk = useCallback((id) => flightAssessment.answers[id] === 1 || flightAssessment.answers[id] === 2, [flightAssessment.answers]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1404,13 +1492,16 @@ export default function FlightBrief() {
         typeof wbResult?.status === "string"
           ? wbResult.status === "within"
           : false,
+      aiRiskDiscussion: "",
     }));
+    setAiRiskResult(null);
+    setAiRiskError("");
   }, [briefSelectedAircraft, briefWb, calculatedFuelTime, setBrief]);
 
   const riskGates = useMemo(() => {
   const gates = [];
 
-  const isSolo = selectedRisk("static-solo-flight");
+  const isSolo = flightNature === "solo";
   const isPreSolo = selectedRisk("static-training-pre-solo");
   const isSVFR = selectedRisk("dynamic-svfr-dual");
   const isNight = selectedRisk("dynamic-night-flight");
@@ -1429,13 +1520,13 @@ export default function FlightBrief() {
   }
 
   if (totalRisk !== null && totalRisk > 24) {
-    gates.push("Trial risk score above 24 - adjust plan or obtain the appropriate review before release.");
+    gates.push("Trial risk level requires further review - adjust the plan or seek appropriate approval before release.");
   }
   for (const factor of flightAssessment.significant) {
-    gates.push(`${factor.label}: significant concern - ${factor.choices[2]}. Review separately from the total score.`);
+    gates.push(`${factor.label}: significant concern - ${factor.choices[2]}. Review independently of the overall risk level.`);
   }
   if (flightAssessment.otherSeverity === 2 && otherRiskLabel.trim()) {
-    gates.push(`Additional risk (${otherRiskLabel.trim()}): significant concern - review separately from the total score.`);
+    gates.push(`Additional risk (${otherRiskLabel.trim()}): significant concern - review independently of the overall risk level.`);
   }
   if (calculatedFuelTime !== null && Number.isFinite(Number(ete)) && calculatedFuelTime - Number(ete) < 0.5) {
     gates.push("Calculated fuel endurance leaves less than 30 minutes beyond ETE - verify legal reserve and fuel plan independently.");
@@ -1483,6 +1574,7 @@ export default function FlightBrief() {
   return gates;
 }, [
   selectedRisk,
+  flightNature,
   flightAssessment,
   otherRiskLabel,
   calculatedFuelTime,
@@ -1493,6 +1585,50 @@ export default function FlightBrief() {
   metarByIcaoData,
   notamByIcao,
 ]);
+
+  const generateAiRiskDiscussion = useCallback(async () => {
+    if (!flightAssessment.complete || !session?.access_token || aiRiskLoading) return;
+    setAiRiskLoading(true);
+    setAiRiskError("");
+    try {
+      const aircraftModel = [
+        briefSelectedAircraft?.model?.manufacturer,
+        briefSelectedAircraft?.model?.name ?? briefSelectedAircraft?.model?.model,
+      ].filter(Boolean).join(" ");
+      const response = await fetch("/api/brief/risk-discussion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          flightNature, humanFactors, flightRiskAnswers, otherRiskLabel, otherRisks,
+          context: {
+            flightRules, flightDate, etd, eta, routeMode, departure, arrival, stops, lessonPractice,
+            aircraftModel, fuel, fuelTime, grossWeight, wbCg, withinLimitsConfirmed, daResult,
+            mxRemaining: mxRemaining === null ? "" : `${mxRemaining.toFixed(1)} hours`,
+            maintenanceSummary: selectedAircraftDueMeta.report,
+            metarByIcaoData, tafByIcao, airsigmetSummary, airmets, sigmets, pireps, notamByIcao,
+            weatherNotes, riskComments,
+          },
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || "Unable to generate the AI discussion.");
+      if (data.score !== flightAssessment.totalRisk || data.level !== flightAssessment.category.level) {
+        throw new Error("The server score no longer matches this assessment. Review the latest answers and retry.");
+      }
+      setAiRiskResult({ discussion: data.discussion, evidence: data.evidence });
+      setBriefField("aiRiskDiscussion", data.renderedText);
+    } catch (error) {
+      setAiRiskError(error instanceof Error ? error.message : "Unable to generate the AI discussion.");
+    } finally {
+      setAiRiskLoading(false);
+    }
+  }, [
+    aiRiskLoading, airmets, airsigmetSummary, arrival, briefSelectedAircraft, daResult, departure, eta, etd,
+    flightAssessment, flightDate, flightNature, flightRiskAnswers, flightRules, fuel, fuelTime, grossWeight,
+    humanFactors, lessonPractice, metarByIcaoData, mxRemaining, notamByIcao, otherRiskLabel, otherRisks,
+    pireps, riskComments, routeMode, selectedAircraftDueMeta.report, session?.access_token, setBriefField,
+    sigmets, stops, tafByIcao, wbCg, weatherNotes, withinLimitsConfirmed,
+  ]);
 
   /** ---- route behavior (sync arrival in local mode) ---- */
   const onSetDeparture = useCallback(
@@ -1756,16 +1892,16 @@ export default function FlightBrief() {
     const arr = normalizeICAO(arrival);
     const humanLines = humanFactorReportLines(humanAssessment);
 
-    const staticLines = [
-      ...flightAssessment.drivers.filter((factor) => factor.id.startsWith("static-")).map((factor) => `- ${factor.label}: ${factor.choices[factor.severity]} [${factor.score}]`),
-      ...humanLines.slice(2),
-    ];
-    const dynamicLines = [
-      ...flightAssessment.drivers.filter((factor) => factor.id.startsWith("dynamic-")).map((factor) => `- ${factor.label}: ${factor.choices[factor.severity]} [${factor.score}]`),
-      ...(flightAssessment.otherSeverity > 0
-        ? [`- Other: ${otherRiskLabel} [${flightAssessment.otherSeverity * 2}]`]
-        : []),
-    ];
+    const riskLinesForSection = (section) => flightAssessment.drivers
+      .filter((factor) => paveSectionForFactor(factor) === section)
+      .map((factor) => `- ${factor.label}: ${factor.choices[factor.severity]}`);
+    const pilotRiskLines = [...riskLinesForSection("pilot"), ...humanLines.slice(2)];
+    const aircraftRiskLines = riskLinesForSection("aircraft");
+    const environmentRiskLines = riskLinesForSection("environment");
+    const pressureRiskLines = riskLinesForSection("pressure");
+    const additionalRiskLines = flightAssessment.otherSeverity > 0
+      ? [`- ${otherRiskLabel}: ${flightAssessment.otherSeverity === 2 ? "significant" : "some"} concern`]
+      : [];
 
     // Optional: include NOTAM summary counts
     const notamSummaryLines = Object.entries(notamByIcao)
@@ -1778,7 +1914,8 @@ export default function FlightBrief() {
     const reportText = `=== PilotSeal Flight Brief Report ===
 
 Pilot: ${studentName}
-Co-Pilot: ${instructorName}
+Flight type: ${flightNatureLabel}
+${flightNature === "dual_training" ? `Instructor: ${instructorName}` : ""}
 Date: ${flightDate}
 Aircraft: ${aircraftId}
 Fuel: ${fuel}
@@ -1791,7 +1928,7 @@ ETE: ${ete ? ete + " hours" : ""}
 
 Departure: ${dep}
 Arrival: ${arr}
-Lesson Practice: ${lessonPractice}
+${flightNature === "dual_training" ? `Lesson Practice: ${lessonPractice}` : ""}
 
 📝 Notes / NOTAMs:
 ${weatherNotes}
@@ -1807,24 +1944,36 @@ Mx Remaining: ${mxRemaining}
 Saved Aircraft Due: ${selectedAircraftDueMeta.label} - ${selectedAircraftDueMeta.report}
 Custom Inspections: ${customInspectionSummary.length ? customInspectionSummary.map((item) => `${item.label}: ${item.detail}`).join("; ") : "(none)"}
 
-🪨 Static Risk:
-${staticLines.length ? staticLines.join("\n") : "- None"}
+PAVE — P / Pilot:
+${pilotRiskLines.length ? pilotRiskLines.join("\n") : "- No concerns identified"}
 ${humanLines.slice(0, 2).join("\n")}
-Total Static Risk Score: ${staticScore ?? "Incomplete"}
 
-🌪️ Dynamic Risk:
-${dynamicLines.length ? dynamicLines.join("\n") : "- None"}
-Total Dynamic Risk Score: ${dynamicScore ?? "Incomplete"}
+PAVE — A / Aircraft:
+${aircraftRiskLines.length ? aircraftRiskLines.join("\n") : "- No concerns identified"}
 
-Total Risk Score: ${totalRisk ?? "Incomplete"}
-Category: ${riskMeta.level}
+PAVE — V / enVironment:
+${environmentRiskLines.length ? environmentRiskLines.join("\n") : "- No concerns identified"}
+
+PAVE — E / External pressures:
+${pressureRiskLines.length ? pressureRiskLines.join("\n") : "- No concerns identified"}
+
+Additional risk:
+${additionalRiskLines.length ? additionalRiskLines.join("\n") : "- None"}
+
+Risk assessment: ${flightAssessment.complete ? `${totalRisk} points — ${riskMeta.level}` : "INCOMPLETE — some questions were not answered"}
+${flightAssessment.complete ? `PAVE scores: Pilot ${scoreBreakdown.sections.pilot}; Aircraft ${scoreBreakdown.sections.aircraft}; enVironment ${scoreBreakdown.sections.environment}; External pressures ${scoreBreakdown.sections.pressure}; Additional risk ${scoreBreakdown.additional}
+Score details:
+${scoreBreakdown.contributions.length ? scoreBreakdown.contributions.map((item) => `- +${item.score} ${item.label}: ${item.answer}`).join("\n") : "- No scored concerns"}` : ""}
 Recommendation: ${riskMeta.recommendation}
-Scoring model: Pilot trial v${FLIGHT_RISK_MODEL_VERSION} - decision aid only, not a go/no-go determination. 0 / base weight / twice base weight; 0-12 low, 13-24 mitigation, 25+ further review. Significant concerns always require separate review.
+Scoring model: Pilot trial v${FLIGHT_RISK_MODEL_VERSION} - decision aid only, not a go/no-go determination. Significant concerns always require separate review.
 Mandatory Review Items:
 ${riskGates.length ? riskGates.map((item) => `- ${item}`).join("\n") : "- None"}
 
 Risk Mitigation (RM):
 ${riskComments}
+
+AI Risk Discussion:
+${aiRiskDiscussion || "AI discussion not generated"}
 `;
 
     const reportWindow = window.open("", "_blank");
@@ -1849,6 +1998,8 @@ ${riskComments}
     withinLimitsConfirmed,
     studentName,
     instructorName,
+    flightNature,
+    flightNatureLabel,
     flightDate,
     aircraftId,
     fuel,
@@ -1872,13 +2023,13 @@ ${riskComments}
     flightAssessment,
     humanAssessment,
     otherRiskLabel,
-    staticScore,
-    dynamicScore,
+    scoreBreakdown,
     totalRisk,
     riskMeta.level,
     riskMeta.recommendation,
     riskGates,
     riskComments,
+    aiRiskDiscussion,
   ]);
 
   /** ------------------ render helpers ------------------ */
@@ -1932,8 +2083,9 @@ ${riskComments}
     const missing = [];
 
     if (stepIndex === 0) {
+      if (!flightNature) missing.push("Flight type");
       if (!studentName.trim()) missing.push("Pilot name");
-      if (!instructorName.trim()) missing.push("Co-Pilot name");
+      if (flightNature === "dual_training" && !instructorName.trim()) missing.push("Instructor name");
       if (!flightDate) missing.push("Flight date");
       if (!etd) missing.push("ETD");
       if (!eta) missing.push("ETA");
@@ -1954,7 +2106,7 @@ ${riskComments}
     if (stepIndex === 2) {
       if (!departure.trim()) missing.push("Departure point");
       if (!arrival.trim()) missing.push("Arrival point");
-      if (!lessonPractice.trim()) missing.push("Lesson practice");
+      if (flightNature === "dual_training" && !lessonPractice.trim()) missing.push("Lesson practice");
       if (routeMode === "cross") {
         stops.forEach((stop, index) => {
           if (!String(stop ?? "").trim()) {
@@ -1965,8 +2117,9 @@ ${riskComments}
     }
 
     if (stepIndex === 4) {
-      if (!humanAssessment.complete) missing.push("Student and CFI IMSAFE assessments (risk score will be incomplete)");
-      if (!flightAssessment.complete) missing.push("Flight condition assessment (risk score will be incomplete)");
+      if (!flightNature) missing.push("Flight type (risk assessment will be incomplete)");
+      if (!humanAssessment.complete) missing.push("Pilot IMSAFE assessment (risk assessment will be incomplete)");
+      if (!flightAssessment.complete) missing.push("Flight condition assessment (risk assessment will be incomplete)");
       if (!riskComments.trim()) missing.push("Risk discussion / comments");
     }
 
@@ -1979,6 +2132,7 @@ ${riskComments}
     eta,
     etd,
     flightDate,
+    flightNature,
     instructorName,
     humanAssessment.complete,
     flightAssessment.complete,
@@ -2098,6 +2252,7 @@ ${riskComments}
         brief_data: {
           studentName,
           instructorName,
+          flightNature,
           selectedStudentId,
           selectedInstructorId,
           flightRules,
@@ -2134,6 +2289,7 @@ ${riskComments}
           totalRisk,
           riskLevel: riskMeta.level,
           riskRecommendation: riskMeta.recommendation,
+          aiRiskDiscussion,
         },
         weather_snapshot: {
           fetched_at: new Date().toISOString(),
@@ -2283,8 +2439,8 @@ ${riskComments}
                       />
                     )}
                   />
-                  <EditableInfoRow
-                    label="Co-Pilot"
+                  {flightNature === "dual_training" ? <EditableInfoRow
+                    label="Instructor"
                     value={formatDisplayValue(instructorName)}
                     rowKey="instructorName"
                     editingKey={mobileEditingField}
@@ -2299,7 +2455,7 @@ ${riskComments}
                         onBlur={close}
                       />
                     )}
-                  />
+                  /> : null}
                 </div>
 
                 <div className="settings-card">
@@ -2325,6 +2481,19 @@ ${riskComments}
 
                 <div className="settings-card">
                   <h3 className="settings-cardTitle">Flight</h3>
+                  <EditableInfoRow
+                    label="What kind of flight?"
+                    value={flightNatureLabel}
+                    rowKey="flightNature"
+                    editingKey={mobileEditingField}
+                    setEditingKey={setMobileEditingField}
+                    renderEditor={(close) => (
+                      <select autoFocus value={flightNature} onChange={(e) => { setFlightNature(e.target.value); close(); }}>
+                        <option value="">Select one</option>
+                        {FLIGHT_NATURES.map((nature) => <option key={nature.id} value={nature.id}>{nature.label}</option>)}
+                      </select>
+                    )}
+                  />
                   <EditableInfoRow
                     label="Flight Rules"
                     value={formatDisplayValue(flightRules)}
@@ -2399,6 +2568,13 @@ ${riskComments}
 
               <div className="flightbrief-desktop-form">
               <div className="inline-label-input">
+                <label className="label" htmlFor="flightNature">What kind of flight is this?</label>
+                <select id="flightNature" className="input-field" value={flightNature} onChange={(e) => setFlightNature(e.target.value)} required>
+                  <option value="">Select one</option>
+                  {FLIGHT_NATURES.map((nature) => <option key={nature.id} value={nature.id}>{nature.label}</option>)}
+                </select>
+              </div>
+              <div className="inline-label-input">
                 <label className="label" htmlFor="studentName">Pilot:</label>
                 <input
                   type="text"
@@ -2411,8 +2587,8 @@ ${riskComments}
                 />
               </div>
 
-              <div className="inline-label-input">
-                <label className="label" htmlFor="instructorName">Co-Pilot:</label>
+              {flightNature === "dual_training" ? <div className="inline-label-input">
+                <label className="label" htmlFor="instructorName">Instructor:</label>
                 <input
                   type="text"
                   id="instructorName"
@@ -2422,7 +2598,7 @@ ${riskComments}
                   onChange={(e) => handleInstructorNameChange(e.target.value)}
                   required
                 />
-              </div>
+              </div> : null}
 
               <div className="flightbrief-compact-grid">
                 <div className="inline-label-input inline-label-input-compact">
@@ -2567,7 +2743,7 @@ ${riskComments}
                   Cross Country
                 </button>
                 <button type="button" className={`btn-toggle ${routeMode === "local" ? "active" : ""}`} onClick={onSelectLocal}>
-                  Local Practice
+                  {flightNature === "dual_training" ? "Local Practice" : "Local Flight"}
                 </button>
               </div>
 
@@ -2582,10 +2758,10 @@ ${riskComments}
                   <input type="text" id="arrival" className="input-field" value={arrival} onChange={(e) => setArrival(e.target.value)} required readOnly={routeMode === "local"} />
                 </div>
 
-                <div className="section inline-label-input inline-label-input-compact">
+                {flightNature === "dual_training" ? <div className="section inline-label-input inline-label-input-compact">
                   <label className="label" htmlFor="lessonPractice"><strong>Lesson Practice:</strong></label>
                   <input type="text" id="lessonPractice" className="input-field" value={lessonPractice} onChange={(e) => setLessonPractice(e.target.value)} placeholder="e.g., Steep Turns, Slow Flight, Short Field Landing" />
-                </div>
+                </div> : null}
               </div>
 
               {routeMode === "cross" && (
@@ -3073,137 +3249,118 @@ ${riskComments}
           )}
 
           {currentStep === 4 && (
-            <section className="flightbrief-panel">
-              <div className="flightbrief-riskInstructions" aria-label="Flight risk assessment instructions">
-                <strong>Flight Risk Assessment Tool</strong>
-                <p>
-                  Complete before each flight. Any risk shall be mitigated as low as reasonably possible.
-                  If unable to mitigate risks at the pilot&apos;s level, adjust plan of action or seek the
-                  appropriate approval level for discussion and release.
-                </p>
-                  <p>Select a description for every factor, or mark it Not applicable. Trial weights are a discussion aid, not a go/no-go decision.</p>
-              </div>
-              <div className="flightbrief-mobile-settings">
-                <FlightRiskQuestionnaire answers={flightRiskAnswers} onAnswer={setFlightRiskAnswer} assessment={flightAssessment} legacyNotice={legacyHumanFactorsNotice} idPrefix="mobile-guided" />
-
-                <HumanFactorQuestionnaire
-                  answers={humanFactors}
-                  onAnswer={setHumanFactorAnswer}
-                  context={humanFactorContext}
-                  onContextChange={setHumanFactorContextField}
-                  assessment={humanAssessment}
-                  legacyNotice={legacyHumanFactorsNotice}
-                />
-
-                <div className="settings-card">
-                  <h3 className="settings-cardTitle">Additional risk</h3>
-                  <div className="settings-checklist">
-                    <EditableInfoRow
-                      label="Other:"
-                      value={formatDisplayValue(otherRiskLabel, "Not set")}
-                      rowKey="otherRiskLabel"
-                      editingKey={mobileEditingField}
-                      setEditingKey={setMobileEditingField}
-                      renderEditor={(close) => (
-                        <input
-                          autoFocus
-                          value={otherRiskLabel}
-                          onChange={(e) => setOtherRiskLabel(e.target.value)}
-                          onBlur={close}
-                        />
-                      )}
-                    />
-                    <EditableInfoRow
-                      label="Additional risk severity"
-                      value={otherRiskLabel ? formatDisplayValue(otherRisks, "0") : "Not applicable"}
-                      rowKey="otherRisks"
-                      editingKey={mobileEditingField}
-                      setEditingKey={setMobileEditingField}
-                      renderEditor={(close) => (
-                        <select autoFocus value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)} onBlur={close}><option value="0">No concern · 0</option><option value="1">Some concern · 2</option><option value="2">Significant concern · 4</option></select>
-                      )}
-                    />
+            <section className="flightbrief-panel flightbrief-panel-risk">
+              <div className="flightbrief-riskFlow">
+                <header className="flightbrief-riskHeader">
+                  <div>
+                    <h2>Risk assessment</h2>
+                    {flightNature ? <p>{answeredGuidedCount} of {guidedQuestions.length} answered</p> : null}
                   </div>
+                </header>
+                <div id="risk-section-nature" className="flightbrief-riskNature">
+                  <span>Flight type</span>
+                  {editingRiskNature || !flightNature ? (
+                    <select id="risk-flight-nature" aria-label="Flight type" value={flightNature} onChange={(event) => { setFlightNature(event.target.value); setEditingRiskNature(false); }}>
+                      <option value="">Select one</option>
+                      {FLIGHT_NATURES.map((nature) => <option key={nature.id} value={nature.id}>{nature.label}</option>)}
+                    </select>
+                  ) : <button type="button" className="flightbrief-riskNatureEdit" onClick={() => setEditingRiskNature(true)}>{flightNatureLabel} <span>Change</span></button>}
                 </div>
+                {legacyHumanFactorsNotice && !flightAssessment.complete ? <p className="flightbrief-riskNotice" role="status">Reassess the applicable PAVE factors and pilots aboard for this draft.</p> : null}
 
-                <div className="settings-card">
-                  <h3 className="settings-cardTitle">Summary</h3>
-                  <div className="settings-summaryCopy">
-                    Static {staticScore ?? "Incomplete"} + Dynamic {dynamicScore ?? "Incomplete"}
-                  </div>
-                  <div className="settings-summaryValue">{totalRisk ?? "—"}</div>
-                  <div className="settings-summaryMeta" style={{ color: riskMeta.color }}>
-                    {riskMeta.level}
-                  </div>
-                  <p className="settings-summaryCopy">{riskMeta.recommendation}</p>
-                  <p className="settings-summaryCopy">Pilot scoring trial · decision aid only; not a go/no-go determination.</p>
-                </div>
+                {flightNature ? <>
+                {PAVE_SECTIONS.map((section) => {
+                  const sectionQuestions = guidedQuestions.filter((question) => question.section === section.id);
+                  const sectionComplete = isRiskSectionComplete(section.id, flightRiskAnswers, humanFactors, flightNature, plannedManeuvers);
+                  return <PaveRiskBoard key={section.id} {...section} complete={sectionComplete} active={activePaveSection === section.id} onOpen={() => {
+                    const firstUnanswered = sectionQuestions.find((question) => !isRiskQuestionAnswered(question, flightRiskAnswers, humanFactors, flightNature, plannedManeuvers));
+                    setActiveRiskQuestion((firstUnanswered ?? sectionQuestions[0])?.key ?? "review");
+                  }}>
+                    <div className="flightbrief-guidedQuestions">
+                      {sectionQuestions.filter((question) => isRiskQuestionAnswered(question, flightRiskAnswers, humanFactors, flightNature, plannedManeuvers) && question.key !== activeRiskQuestion).map((question) => {
+                        const answer = question.type === "human" ? humanFactors[question.role]?.[question.field.id]
+                          : question.type === "screen" ? maneuverScreenAnswer(flightRiskAnswers, flightNature, plannedManeuvers)
+                          : flightRiskAnswers[question.factor.id];
+                        const roleLabel = question.role === "cfi" ? "CFI" : flightNature === "dual_training" ? "Student" : "Pilot";
+                        return <RiskAnsweredSummary key={question.key} question={question} answer={answer} roleLabel={roleLabel} onEdit={() => setActiveRiskQuestion(question.key)} />;
+                      })}
+                      {activeGuidedQuestion?.section === section.id ? <RiskQuestionCard
+                        key={activeGuidedQuestion.key}
+                        question={activeGuidedQuestion}
+                        roleLabel={activeGuidedQuestion.role === "cfi" ? "CFI" : flightNature === "dual_training" ? "Student" : "Pilot"}
+                        answer={activeGuidedQuestion.type === "human" ? humanFactors[activeGuidedQuestion.role]?.[activeGuidedQuestion.field.id]
+                          : activeGuidedQuestion.type === "screen" ? maneuverScreenAnswer(flightRiskAnswers, flightNature, plannedManeuvers)
+                          : flightRiskAnswers[activeGuidedQuestion.factor.id]}
+                        onAnswer={(value) => {
+                          if (activeGuidedQuestion.type === "human") setHumanFactorAnswer(activeGuidedQuestion.role, activeGuidedQuestion.field.id, value);
+                          else if (activeGuidedQuestion.type === "screen") setManeuverScreen(value);
+                          else setFlightRiskAnswer(activeGuidedQuestion.factor.id, value);
+                        }}
+                      /> : null}
+                      {section.id === "pilot" && humanAssessment.complete ? <details className="flightbrief-riskOptional">
+                        <summary>Sleep and time pressure <span>optional · not saved</span></summary>
+                        {flightNature === "dual_training" ? <p>Student</p> : null}
+                        <div className="flightbrief-riskContext">
+                          <label>Hours slept <input type="number" min="0" max="24" inputMode="decimal" value={humanFactorContext.student.sleepHours} onChange={(event) => setHumanFactorContextField("student", "sleepHours", event.target.value)} /></label>
+                          <label>Hours awake <input type="number" min="0" max="48" inputMode="decimal" value={humanFactorContext.student.awakeHours} onChange={(event) => setHumanFactorContextField("student", "awakeHours", event.target.value)} /></label>
+                          <label>Time pressure <select value={humanFactorContext.student.timePressure} onChange={(event) => setHumanFactorContextField("student", "timePressure", event.target.value)}><option value="">Select one</option><option value="none">None</option><option value="some">Some</option><option value="high">High</option></select></label>
+                        </div>
+                        {flightNature === "dual_training" ? <>
+                          <p>CFI</p>
+                          <div className="flightbrief-riskContext">
+                            <label>Hours slept <input type="number" min="0" max="24" inputMode="decimal" value={humanFactorContext.cfi.sleepHours} onChange={(event) => setHumanFactorContextField("cfi", "sleepHours", event.target.value)} /></label>
+                            <label>Hours awake <input type="number" min="0" max="48" inputMode="decimal" value={humanFactorContext.cfi.awakeHours} onChange={(event) => setHumanFactorContextField("cfi", "awakeHours", event.target.value)} /></label>
+                            <label>Time pressure <select value={humanFactorContext.cfi.timePressure} onChange={(event) => setHumanFactorContextField("cfi", "timePressure", event.target.value)}><option value="">Select one</option><option value="none">None</option><option value="some">Some</option><option value="high">High</option></select></label>
+                          </div>
+                        </> : null}
+                      </details> : null}
+                    </div>
+                  </PaveRiskBoard>;
+                })}
 
-                {riskGates.length > 0 ? (
-                  <div className="flightbrief-gatesCard">
-                    <div className="flightbrief-gatesTitle">Mandatory Review Items</div>
-                    <ul className="flightbrief-gatesList">
-                      {riskGates.map((gate) => <li key={gate}>{gate}</li>)}
-                    </ul>
-                  </div>
-                ) : null}
+                <section id="risk-section-review" className="flightbrief-riskBlock flightbrief-riskGroup" aria-label="Review and mitigation">
+                  <button type="button" className="flightbrief-riskGroupToggle" aria-expanded={activeRiskQuestion === "review"} onClick={() => setActiveRiskQuestion("review")}>
+                    <span>Review & mitigation</span><span className="flightbrief-riskGroupCount" aria-hidden="true">{activeRiskQuestion === "review" ? "−" : "+"}</span>
+                  </button>
+                  {activeRiskQuestion === "review" ? <div>
+                    <div className="flightbrief-riskBlockHead"><h3>Additional risk</h3><span>optional</span></div>
+                    <div className="flightbrief-riskRow">
+                      <label htmlFor="other-risk-label">Other factor</label>
+                      <input id="other-risk-label" value={otherRiskLabel} onChange={(event) => setOtherRiskLabel(event.target.value)} placeholder="Name a risk not listed above" />
+                    </div>
+                    {otherRiskLabel.trim() ? <div className="flightbrief-riskRow">
+                      <label htmlFor="other-risk">Concern level</label>
+                      <select id="other-risk" value={otherRisks} onChange={(event) => setOtherRisks(event.target.value)}><option value="0">No concern</option><option value="1">Some concern</option><option value="2">Significant concern</option></select>
+                    </div> : null}
 
-                <div className="settings-card">
-                  <h3 className="settings-cardTitle">Risk Mitigation (RM)</h3>
-                  <textarea
-                    rows="4"
-                    className="input-field"
-                    value={riskComments}
-                    onChange={(e) => setRiskComments(e.target.value)}
-                    placeholder="List RM in place - required for approval"
-                  />
-                </div>
-              </div>
+                    <FinalRiskScore assessment={flightAssessment} breakdown={scoreBreakdown} remaining={remainingRiskAnswers} />
 
-              <div className="flightbrief-desktop-form">
-              <FlightRiskQuestionnaire answers={flightRiskAnswers} onAnswer={setFlightRiskAnswer} assessment={flightAssessment} legacyNotice={legacyHumanFactorsNotice} />
-              <div className="section inline-label-input">
-                <label className="label" htmlFor="other-risk-label"><strong>Additional risk</strong></label>
-                <input id="other-risk-label" className="input-field" value={otherRiskLabel} onChange={(e) => setOtherRiskLabel(e.target.value)} placeholder="Optional additional factor" />
-                {otherRiskLabel.trim() ? <select id="other-risk" className="input-field" value={otherRisks} onChange={(e) => setOtherRisks(e.target.value)}><option value="0">No concern · 0 pt</option><option value="1">Some concern · 2 pt</option><option value="2">Significant concern · 4 pt</option></select> : null}
-              </div>
+                    {flightAssessment.complete && hasSignificantConcern ? <p className="flightbrief-riskSignificant" role="alert">Significant concern recorded — review it independently of the total score.</p> : null}
+                    {flightAssessment.complete && humanAssessment.roles.cfi.affectedCount > 2 ? <p className="flightbrief-riskSignificant" role="alert">CFI IMSAFE concerns in more than two areas — NO FLIGHT until reviewed and reduced.</p> : null}
 
-              <HumanFactorQuestionnaire
-                answers={humanFactors}
-                onAnswer={setHumanFactorAnswer}
-                context={humanFactorContext}
-                onContextChange={setHumanFactorContextField}
-                assessment={humanAssessment}
-                legacyNotice={legacyHumanFactorsNotice}
-              />
+                    {riskGates.length ? <div className="flightbrief-riskReview" aria-label="Review items">
+                      <h3>Review before flight</h3>
+                      <ul>{riskGates.map((gate) => <li key={gate}>{gate}</li>)}</ul>
+                    </div> : null}
 
-              <div className="section inline-label-input">
-                <label className="label" htmlFor="riskComments"><strong>Risk Mitigation (RM)</strong></label>
-                <textarea id="riskComments" rows="4" className="input-field" value={riskComments} onChange={(e) => setRiskComments(e.target.value)} placeholder="List RM in place - required for approval" />
-              </div>
+                    <div className="flightbrief-riskMitigation">
+                      <label htmlFor="riskComments">Risk mitigation</label>
+                      <textarea id="riskComments" rows="4" value={riskComments} onChange={(event) => setRiskComments(event.target.value)} placeholder="Record the discussion and mitigations" />
+                    </div>
 
-              <div className="flightbrief-riskSummary">
-                <div className="flightbrief-riskBadge">
-                  <span>Total Risk</span>
-                  <strong>{totalRisk ?? "—"}</strong>
-                </div>
-                <div className="flightbrief-riskMeta">
-                  <strong style={{ color: riskMeta.color }}>{riskMeta.level}</strong>
-                  <p>{riskMeta.recommendation}</p>
-                  <p>Pilot scoring trial · decision aid only; not a go/no-go determination.</p>
-                </div>
-              </div>
-
-              {riskGates.length > 0 && (
-                <div className="flightbrief-gatesCard">
-                  <div className="flightbrief-gatesTitle">Mandatory Review Items</div>
-                  <ul className="flightbrief-gatesList">
-                    {riskGates.map((g, idx) => (
-                      <li key={idx}>{g}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                    <div className="flightbrief-aiActions">
+                      <button type="button" onClick={generateAiRiskDiscussion} disabled={!flightAssessment.complete || !session?.access_token || aiRiskLoading}>
+                        {aiRiskLoading ? "Generating discussion…" : aiRiskDiscussion ? "Regenerate AI risk discussion" : "Generate AI risk discussion"}
+                      </button>
+                      <p>Sends route, weather, NOTAMs and notes to DeepSeek. Names, account IDs, aircraft tail number and health details are excluded. DeepSeek may process and store data in China.</p>
+                      {!session?.access_token ? <small>Sign in to generate an AI discussion.</small> : null}
+                      {aiRiskError ? <p className="flightbrief-aiError" role="alert">{aiRiskError}</p> : null}
+                    </div>
+                    <AiRiskDiscussion result={aiRiskResult} savedText={aiRiskDiscussion} />
+                  </div> : null}
+                </section>
+                </> : null}
+                <p className="flightbrief-riskFootnote">Trial assessment · decision aid, not a go/no-go determination. Significant concerns need separate review.</p>
               </div>
             </section>
           )}

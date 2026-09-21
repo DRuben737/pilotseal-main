@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { AdminDataTable, ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { formatUsDateTime } from "@/lib/date-format";
@@ -16,7 +16,6 @@ import {
 } from "@/lib/preflight";
 
 type PreflightStatusFilter = "all" | FlightBriefRecord["status"];
-const preflightStatusOrder: FlightBriefRecord["status"][] = ["draft", "finalized", "superseded"];
 
 export default function PreflightRecordsManager({ organizationOnly = false }: { organizationOnly?: boolean }) {
   const { session } = useAuthSession();
@@ -26,9 +25,6 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
   const [pendingDelete, setPendingDelete] = useState<FlightBriefRecord | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<PreflightStatusFilter>("all");
-  const [collapsedStatuses, setCollapsedStatuses] = useState<Set<FlightBriefRecord["status"]>>(
-    () => new Set(preflightStatusOrder)
-  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -86,25 +82,6 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
     );
   }, [query, records, statusFilter]);
 
-  const groupedRecords = useMemo(
-    () => preflightStatusOrder
-      .map((recordStatus) => ({
-        status: recordStatus,
-        records: filteredRecords.filter((record) => record.status === recordStatus),
-      }))
-      .filter((group) => group.records.length > 0),
-    [filteredRecords]
-  );
-
-  function toggleStatus(recordStatus: FlightBriefRecord["status"]) {
-    setCollapsedStatuses((current) => {
-      const next = new Set(current);
-      if (next.has(recordStatus)) next.delete(recordStatus);
-      else next.add(recordStatus);
-      return next;
-    });
-  }
-
   async function handleCreateRevision(record: FlightBriefRecord) {
     setBusy(true);
     setStatus("");
@@ -147,6 +124,8 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
       eyebrow="Preflight records"
       title={organizationOnly ? "Organization Flight Briefs" : "Flight Brief history"}
       summary={loading ? "Loading…" : `${records.length}`}
+      className="dashboard-data-workspace"
+      defaultOpen
       actions={<Link className="secondary-button" href="/tools/flight-brief">New Flight Brief</Link>}
       helpContent={
         <>
@@ -187,38 +166,23 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
         <p className="saas-empty-state mt-5">No matching preflight records.</p>
       ) : null}
 
-      <div className="mt-5 grid gap-3">
-        {groupedRecords.map((group) => {
-          const isCollapsed = collapsedStatuses.has(group.status);
-          return (
-          <section key={group.status} className="overflow-hidden rounded-2xl border border-slate-200 bg-white/70">
-            <button
-              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-              type="button"
-              aria-expanded={!isCollapsed}
-              onClick={() => toggleStatus(group.status)}
-            >
-              <span className="text-sm font-semibold text-slate-900">{formatStatus(group.status)}</span>
-              <span className="saas-pill">{group.records.length}</span>
-            </button>
-            {!isCollapsed ? <div className="grid gap-3 border-t border-slate-200 p-3">
-        {group.records.map((record) => {
+      {!loading && filteredRecords.length > 0 ? (
+        <div className="mt-3">
+        <AdminDataTable label="Flight Brief records">
+          <thead><tr><th>Status</th><th>Aircraft</th><th>Pilot</th><th>Date</th><th>Route</th><th>Revision</th><th>Scope</th><th aria-label="Actions" /></tr></thead>
+          <tbody>
+        {filteredRecords.map((record) => {
           const isOwn = record.created_by === session?.user?.id;
           return (
-            <article key={record.id} className="rounded-2xl border border-slate-200 bg-white/80 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">
-                    {record.aircraft_tail_number || "Aircraft not linked"} · {record.student_name || "Pilot"}
-                  </p>
-                  <p className="saas-meta-text">
-                    {record.flight_date || "No date"} · {record.route || "No route"} · Revision {record.revision_number}
-                  </p>
-                  <p className="saas-meta-text">
-                    {formatStatus(record.status)}{isOwn ? " · Your brief" : " · Organization flight brief"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
+            <tr key={record.id}>
+              <td><span className={`data-status data-status-${record.status}`}>{formatStatus(record.status)}</span></td>
+              <td className="font-semibold text-slate-900">{record.aircraft_tail_number || "—"}</td>
+              <td>{record.student_name || "Pilot"}</td>
+              <td>{record.flight_date || "—"}</td>
+              <td>{record.route || "—"}</td>
+              <td>{record.revision_number}</td>
+              <td>{isOwn ? "Personal" : "Organization"}</td>
+              <td><div className="data-row-actions">
                   <button className="ghost-button" type="button" onClick={() => setActiveRecord(record)}>Open</button>
                   {isOwn && record.status === "draft" ? (
                     <Link className="ghost-button" href={`/tools/flight-brief?briefId=${record.id}`}>Continue draft</Link>
@@ -229,16 +193,14 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
                   {isOwn && record.status !== "draft" ? (
                     <button className="ghost-button" type="button" disabled={busy} onClick={() => void handleCreateRevision(record)}>Create revision</button>
                   ) : null}
-                </div>
-              </div>
-            </article>
+              </div></td>
+            </tr>
           );
         })}
-            </div> : null}
-          </section>
-          );
-        })}
-      </div>
+          </tbody>
+        </AdminDataTable>
+        </div>
+      ) : null}
 
       <DetailDrawer
         open={Boolean(activeRecord)}

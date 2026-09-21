@@ -2806,6 +2806,58 @@ summary:focus-visible {
   box-shadow: none;
 }
 
+/* Dashboard content is an operational workspace, not a marketing surface. */
+.dashboard-content {
+  min-width: 0;
+  padding: 0.125rem 0 2rem;
+  color: #0f172a;
+}
+
+.dashboard-content :where(.space-y-5) > :not([hidden]) ~ :not([hidden]) {
+  margin-block-start: 0.875rem;
+}
+
+.dashboard-content :where(.space-y-4) > :not([hidden]) ~ :not([hidden]) {
+  margin-block-start: 0.75rem;
+}
+
+.dashboard-content :where(.grid.gap-6) {
+  gap: 1rem;
+}
+
+.dashboard-content :where(.rounded-2xl) {
+  border-radius: 0.625rem;
+}
+
+.dashboard-content :where(.rounded-xl) {
+  border-radius: 0.5rem;
+}
+
+.dashboard-content .admin-page-header {
+  min-height: 3.25rem;
+}
+
+.dashboard-content .management-disclosure .admin-data-table {
+  border: 0;
+  border-radius: 0;
+}
+
+.dashboard-content .admin-data-table :is(th, td) {
+  padding-block: 0.45rem;
+  padding-inline: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.dashboard-content .admin-data-table tbody tr:hover {
+  background: rgba(248, 250, 252, 0.9);
+}
+
+@media (min-width: 761px) {
+  .dashboard-content :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]) {
+    font-size: 0.8125rem;
+  }
+}
+
 .dashboard-mobile-top,
 .dashboard-mobile-workspaces,
 .dashboard-bottom-nav {
@@ -3403,6 +3455,232 @@ summary:focus-visible {
 .people-table {
   display: grid;
   border-top: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.people-data-grid {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.management-disclosure.people-workspace {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.management-disclosure.dashboard-data-workspace {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dashboard-data-workspace > .management-disclosure-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.32);
+  padding-inline: 0;
+}
+
+.dashboard-data-workspace > .management-disclosure-content {
+  border-top: 0;
+  background: transparent;
+  padding: 0.65rem 0 0;
+}
+
+.dashboard-data-workspace .admin-data-table {
+  border-radius: 6px;
+}
+
+.dashboard-data-workspace .admin-data-table table {
+  font-size: 0.75rem;
+}
+
+.dashboard-data-workspace :is(.saas-list-item, article.rounded-2xl, button.rounded-2xl) {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.55rem 0.65rem;
+  box-shadow: none;
+}
+
+.dashboard-data-workspace :is(.saas-list-item, article.rounded-2xl, button.rounded-2xl):hover {
+  background: #f8fafc;
+}
+
+.dashboard-data-workspace .admin-data-table thead tr {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.36);
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.67rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.data-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.data-row-actions :is(.ghost-button, .secondary-button, .danger-button) {
+  min-height: 1.75rem;
+  border-radius: 5px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.68rem;
+}
+
+.data-status {
+  font-size: 0.69rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.data-status-draft,
+.data-status-low,
+.data-status-normal { color: #64748b; }
+.data-status-finalized { color: #15803d; }
+.data-status-superseded { color: #a16207; }
+.data-status-high { color: #b45309; }
+.data-status-critical { color: #be123c; }
+
+.people-workspace > .management-disclosure-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.32);
+  padding-inline: 0;
+}
+
+.people-workspace > .management-disclosure-content {
+  border-top: 0;
+  background: transparent;
+  padding: 0.65rem 0 0;
+}
+
+.admin-detail-drawer-compact .people-detail-row {
+  padding: 0;
+}
+
+.people-data-grid table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #334155;
+  font-size: 0.78rem;
+}
+
+.people-data-grid th {
+  height: 2rem;
+  border-right: 1px solid rgba(148, 163, 184, 0.28);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.38);
+  background: #f1f5f9;
+  padding: 0.35rem 0.55rem;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.people-data-grid td {
+  height: 2.25rem;
+  overflow: hidden;
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 0.3rem 0.55rem;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.people-data-grid th:last-child,
+.people-data-grid td:last-child {
+  border-right: 0;
+}
+
+.people-data-grid tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.people-data-grid tbody tr:nth-child(even) td {
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.people-data-grid tbody tr:hover td {
+  background: #eff6ff;
+}
+
+.people-data-grid th:nth-child(2) { width: 18%; }
+.people-data-grid th:nth-child(3) { width: 13%; }
+.people-data-grid th:nth-child(4) { width: 18%; }
+.people-data-grid th:nth-child(5) { width: 15%; }
+.people-data-grid th:nth-child(6) { width: 10%; }
+
+.people-grid-expand {
+  width: 2.5rem;
+  padding-inline: 0.35rem !important;
+  text-align: center !important;
+}
+
+.people-grid-actions {
+  width: 5.25rem;
+  padding-inline: 0.3rem !important;
+  text-align: right !important;
+}
+
+.people-grid-name {
+  color: #0f172a;
+  font-weight: 650;
+}
+
+.people-grid-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.people-grid-status {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.people-grid-status-success { color: #15803d; }
+.people-grid-status-pending { color: #a16207; }
+.people-grid-status-warning { color: #be123c; }
+
+.people-grid-empty {
+  height: 5rem !important;
+  color: #64748b;
+  text-align: center;
+}
+
+.people-data-grid .people-expand-button {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 5px;
+}
+
+.people-data-grid .people-row-actions {
+  gap: 0.25rem;
+}
+
+.people-data-grid .people-row-actions .icon-button {
+  width: 1.7rem;
+  min-height: 1.7rem;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.people-edit-drawer-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.people-detail-row {
+  padding: 0;
 }
 
 .people-table-head,

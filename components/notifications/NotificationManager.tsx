@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { AdminDataTable, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import OrganizationNotificationPublisher from "@/components/notifications/OrganizationNotificationPublisher";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -338,7 +338,7 @@ export default function NotificationManager({
       ) : null}
 
       {!platformPublishingOnly && activeView === "inbox" ? <>
-      <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} actions={<button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
+      <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} className="dashboard-data-workspace" defaultOpen actions={<button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
             Mark all read ({unreadCount})
           </button>} helpContent={<p>Personal reminders, organization messages, schedule updates and platform notices appear in this unified inbox. Expand it to search or filter.</p>}>
 
@@ -375,23 +375,15 @@ export default function NotificationManager({
               </button>
             ))}
           </div>
-          {visibleInbox.length === 0 ? <p className="saas-empty-state">No notifications match this filter.</p> : visibleInbox.map((notification) => (
-            <article
-              key={notification.id}
-              className={`saas-list-item saas-list-item-stack ${notification.read_at ? "opacity-70" : "border-sky-200 bg-sky-50/40"}`}
-              onClick={() => void handleRead(notification)}
-            >
-              <div className="grid gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="saas-card-title">{notification.title}</h2>
-                  {!notification.read_at ? <span className="saas-pill saas-pill-high">New</span> : null}
-                  <span className="saas-pill">{formatKind(notification.kind)}</span>
-                  <span className={`saas-pill saas-pill-${notification.priority}`}>{notification.priority}</span>
-                </div>
-                {notification.source_label ? <p className="saas-list-meta">{notification.source_label}</p> : null}
-                <p className="saas-list-meta">{formatUsDateTime(notification.created_at)}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
+          {visibleInbox.length === 0 ? <p className="saas-empty-state">No notifications match this filter.</p> : <AdminDataTable label="Notifications"><thead><tr><th>Title</th><th>Type</th><th>Priority</th><th>Source</th><th>Date</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{visibleInbox.map((notification) => (
+            <tr key={notification.id} className={notification.read_at ? "opacity-70" : "bg-sky-50/40"}>
+              <td><button type="button" className="font-semibold text-slate-900 hover:text-blue-700" onClick={() => void handleRead(notification)}>{notification.title}</button></td>
+              <td>{formatKind(notification.kind)}</td>
+              <td><span className={`data-status data-status-${notification.priority}`}>{notification.priority}</span></td>
+              <td>{notification.source_label || "—"}</td>
+              <td>{formatUsDateTime(notification.created_at)}</td>
+              <td>{notification.read_at ? "Read" : "New"}</td>
+              <td><div className="data-row-actions">
                 {notification.action_url ? <Link className="secondary-button" href={notification.action_url} onClick={() => void handleRead(notification)}>Open</Link> : null}
                 <button
                   className="danger-button"
@@ -404,9 +396,9 @@ export default function NotificationManager({
                 >
                   Delete
                 </button>
-              </div>
-            </article>
-          ))}
+              </div></td>
+            </tr>
+          ))}</tbody></AdminDataTable>}
         </div>
       </ManagementDisclosure>
 
@@ -421,21 +413,21 @@ export default function NotificationManager({
             {savingPreferences ? "Saving..." : "Save settings"}
           </button>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
           {([
             ["personal_reminders_enabled", "Personal reminders", "Profile completion, certificates, medical dates, and personal aircraft due dates."],
             ["organization_messages_enabled", "Organization messages", "Messages, role changes, aircraft updates, and organization workflow events."],
             ["schedule_notifications_enabled", "Schedule notifications", "Lessons added, changed, or cancelled by an instructor."],
             ["platform_notices_enabled", "Platform notices", "General PilotSeal announcements and non-critical platform information."],
           ] as Array<[keyof Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled" | "schedule_notifications_enabled">, string, string]>).map(([key, label, description]) => (
-            <label key={key} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/70 p-4">
+            <label key={key} className="grid cursor-pointer grid-cols-[1fr_auto] items-center gap-4 px-1 py-3">
               <input
                 type="checkbox"
-                className="mt-1 h-4 w-4 accent-sky-600"
+                className="col-start-2 row-start-1 h-4 w-4 accent-sky-600"
                 checked={preferences[key]}
                 onChange={(event) => setPreferences((current) => ({ ...current, [key]: event.target.checked }))}
               />
-              <span>
+              <span className="col-start-1 row-start-1">
                 <span className="block text-sm font-semibold text-slate-900">{label}</span>
                 <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span>
               </span>

@@ -670,13 +670,13 @@ export default function MyAircraftManager() {
   return (
     <>
       {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
-      <ManagementDisclosure id="my-aircraft" title="My Aircraft" summary={`${myAircraft.length}`} actions={<CompactButton type="button" tone="primary" onClick={openAddForm}>Add aircraft</CompactButton>} helpContent={<><p>Manage aircraft attached to your account, including weight and balance data and personal maintenance reminders.</p><p>Eligible private aircraft can be shared with selected organizations without changing ownership.</p></>}>
+      <ManagementDisclosure id="my-aircraft" title="My Aircraft" summary={`${myAircraft.length}`} className="dashboard-data-workspace" defaultOpen actions={<CompactButton type="button" tone="primary" onClick={openAddForm}>Add aircraft</CompactButton>} helpContent={<><p>Manage aircraft attached to your account, including weight and balance data and personal maintenance reminders.</p><p>Eligible private aircraft can be shared with selected organizations without changing ownership.</p></>}>
         <div className="people-toolbar">
           <div>
             <h3 className="saas-subsection-title">My Aircraft</h3>
             <p className="saas-meta-text">{myAircraft.length} attached</p>
           </div>
-          <div className="rounded-[14px] border border-slate-200/80 bg-white px-3 py-2 text-right shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+          <div className="border-l border-slate-200 px-3 py-1 text-right">
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
               Shared registry
             </p>
@@ -773,7 +773,7 @@ export default function MyAircraftManager() {
       </ManagementDisclosure>
 
       {activeOrganization ? (
-        <ManagementDisclosure id="organization-fleet-personal" eyebrow="Organization fleet" title={activeOrganization.name} summary={`${organizationAircraft.length}`} helpContent={<p>These aircraft are shared with the selected organization. Access and editing depend on your organization role.</p>}>
+        <ManagementDisclosure id="organization-fleet-personal" eyebrow="Organization fleet" title={activeOrganization.name} summary={`${organizationAircraft.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>These aircraft are shared with the selected organization. Access and editing depend on your organization role.</p>}>
           <div className="people-toolbar">
             <div>
               <p className="saas-kicker">Organization fleet</p>

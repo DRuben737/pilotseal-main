@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { AdminDataTable, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
@@ -122,7 +122,6 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   const [query, setQuery] = useState("");
   const [activeRecord, setActiveRecord] = useState<EndorsementRecord | null>(null);
   const [activePdfUrl, setActivePdfUrl] = useState("");
-  const [expandedStudent, setExpandedStudent] = useState("");
   const [view, setView] = useState<"personal" | "received" | "organization">(
     organizationOnly ? "organization" : "personal"
   );
@@ -182,19 +181,6 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
     [query, records]
   );
 
-  const groupedRecords = useMemo(() => {
-    const groups = new Map<string, EndorsementRecord[]>();
-
-    filteredRecords.forEach((record) => {
-      const key = record.student_name.trim() || "Unknown student";
-      groups.set(key, [...(groups.get(key) ?? []), record]);
-    });
-
-    return Array.from(groups.entries()).sort(([leftName], [rightName]) =>
-      leftName.localeCompare(rightName)
-    );
-  }, [filteredRecords]);
-
   async function openRecord(record: EndorsementRecord) {
     setBusy(true);
     setStatus("");
@@ -242,6 +228,8 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
         id="endorsement-records"
         title={organizationOnly ? "Issued endorsements" : "Endorsement Records"}
         summary={loading ? "Loading…" : `${records.length}`}
+        className="dashboard-data-workspace"
+        defaultOpen
         helpContent={
           organizationOnly ? (
             <p>Shows endorsements issued while the instructor belonged to this organization. Students do not need to be organization members.</p>
@@ -287,60 +275,24 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
         </div>
 
         {loading ? <p className="saas-meta-text mt-5">Loading records...</p> : null}
-        {!loading && groupedRecords.length === 0 ? (
+        {!loading && filteredRecords.length === 0 ? (
           <p className="saas-empty-state mt-5">
             {query.trim() ? "No records match your search." : "No endorsement records saved yet."}
           </p>
         ) : null}
 
-        <div className="records-student-list mt-5">
-          {groupedRecords.map(([studentName, studentRecords]) => {
-            const isExpanded = expandedStudent === studentName;
-            return (
-              <section key={studentName} className="records-student-group">
-                <button
-                  type="button"
-                  className="records-student-row"
-                  aria-expanded={isExpanded}
-                  onClick={() => setExpandedStudent((current) => current === studentName ? "" : studentName)}
-                >
-                  <span className={`records-expand-icon ${isExpanded ? "records-expand-icon-open" : ""}`}>
-                    <ActionIcon kind="expand" />
-                  </span>
-                  <span className="saas-subsection-title">{studentName}</span>
-                  <span className="saas-pill">{studentRecords.length}</span>
-                </button>
-
-                {isExpanded ? (
-                  <div className="records-detail-list">
-                    {studentRecords.map((record) => (
-                      <article key={record.id} className="records-detail-row">
-                        <div className="saas-list-main">
-                          <div className="saas-list-header">
-                            <h4 className="saas-card-title">
-                              {record.template_titles.length > 0
-                                ? record.template_titles.join(", ")
-                                : "Endorsement PDF"}
-                            </h4>
-                            <span className="saas-pill">{formatRecordDate(record.endorsement_date)}</span>
-                            {record.scope_status === "pending_review" ? <span className="saas-pill">Pending legacy review</span> : null}
-                            {record.scope_status === "confirmed" ? <span className="saas-pill">Visible to organization</span> : null}
-                          </div>
-                          <p className="saas-meta-text">
-                            Instructor: {record.instructor_name}
-                            {record.instructor_cert_number
-                              ? ` | ${record.instructor_cert_number}`
-                              : ""}
-                          </p>
-                          <p className="saas-list-meta">
-                            Saved {formatCreatedAt(record.created_at)}
-                            {formatFileSize(record.file_size_bytes)
-                              ? ` | ${formatFileSize(record.file_size_bytes)}`
-                              : ""}
-                          </p>
-                        </div>
-
-                        <div className="saas-inline-actions">
+        {filteredRecords.length > 0 ? <div className="mt-3"><AdminDataTable label="Endorsement records">
+          <thead><tr><th>Student</th><th>Endorsement</th><th>Date</th><th>Instructor</th><th>Saved</th><th>Scope</th><th aria-label="Actions" /></tr></thead>
+          <tbody>
+          {filteredRecords.map((record) => (
+            <tr key={record.id}>
+              <td className="font-semibold text-slate-900">{record.student_name}</td>
+              <td>{record.template_titles.length ? record.template_titles.join(", ") : "Endorsement PDF"}</td>
+              <td>{formatRecordDate(record.endorsement_date)}</td>
+              <td>{record.instructor_name}{record.instructor_cert_number ? ` · ${record.instructor_cert_number}` : ""}</td>
+              <td>{formatCreatedAt(record.created_at)}{formatFileSize(record.file_size_bytes) ? ` · ${formatFileSize(record.file_size_bytes)}` : ""}</td>
+              <td>{record.scope_status === "pending_review" ? "Pending review" : record.scope_status === "confirmed" ? "Organization" : "Personal"}</td>
+              <td><div className="data-row-actions">
                           <button
                             type="button"
                             className="secondary-button icon-button"
@@ -366,15 +318,11 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
                           >
                             <ActionIcon kind="delete" />
                           </button> : null}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
-        </div>
+              </div></td>
+            </tr>
+          ))}
+          </tbody>
+        </AdminDataTable></div> : null}
       </ManagementDisclosure>
 
       <DetailDrawer open={Boolean(activeRecord)} title={activeRecord ? `Endorsement record · ${activeRecord.student_name}` : "Endorsement record"} width="wide" onClose={closeRecord}>
