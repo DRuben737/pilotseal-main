@@ -128,6 +128,7 @@ export default function CfiScheduleManager() {
   const [viewKey, setViewKey] = useState("cfi");
   const [publishedEntries, setEntries] = useState<ScheduleEntry[]>([]);
   const [operations, setOperations] = useState<ScheduleOperation[]>([]);
+  const [operationBatchSizes, setOperationBatchSizes] = useState<number[]>([]);
   const [revision, setRevision] = useState("0");
   const [loadedContext, setLoadedContext] = useState("");
   const [stale, setStale] = useState(false);
@@ -304,6 +305,7 @@ export default function CfiScheduleManager() {
   async function reload() {
     if (!userId) return;
     setOperations([]);
+    setOperationBatchSizes([]);
     setLoading(true);
     setError("");
     try {
@@ -368,9 +370,19 @@ export default function CfiScheduleManager() {
     setAgendaDays(14);
   }
 
-  function stageOperations(next: ScheduleOperation[]) {
+  function stageOperations(next: ScheduleOperation[], batchSize = 1) {
     ++loadGeneration.current;
     setOperations(next);
+    setOperationBatchSizes((current) => [...current, batchSize]);
+    batchId.current = crypto.randomUUID();
+    setPublishAcknowledged(false);
+  }
+
+  function undoLastDraftChange() {
+    const batchSize = operationBatchSizes[operationBatchSizes.length - 1] ?? 1;
+    ++loadGeneration.current;
+    setOperations((current) => current.slice(0, -batchSize));
+    setOperationBatchSizes((current) => current.slice(0, -1));
     batchId.current = crypto.randomUUID();
     setPublishAcknowledged(false);
   }
@@ -381,7 +393,7 @@ export default function CfiScheduleManager() {
   }
 
   async function swapLessons(sourceId: string, targetId: string) {
-    if (!isCfiView || hasDraft || saving || !sourceId || !targetId || sourceId === targetId) return;
+    if (!isCfiView || saving || !sourceId || !targetId || sourceId === targetId) return;
     setError("");
     try {
       const next = swapScheduleLessons(entries, sourceId, targetId);
@@ -390,19 +402,19 @@ export default function CfiScheduleManager() {
         setSwapTargetId("");
         return;
       }
-      const directChanges = scheduleChanges(entries, next).map((change) => change.after);
-      if (directChanges.length !== 2) throw new Error("The schedule changed before the swap could be prepared. Refresh and try again.");
-      const warningCount = directChanges.reduce((count, entry) => count + entryWarnings(entry, next).length, 0);
-      setSaving(true);
-      await publishScheduleDraft(revision, crypto.randomUUID(), directChanges);
+      const swappedEntries = scheduleChanges(entries, next).map((change) => change.after);
+      if (swappedEntries.length !== 2) throw new Error("The schedule changed before the swap could be prepared. Refresh and try again.");
+      const warningCount = swappedEntries.reduce((count, entry) => count + entryWarnings(entry, next).length, 0);
+      const swapOperations: ScheduleOperation[] = swappedEntries.map((entry) => ({
+        type: "edit",
+        id: entry.id,
+        values: { start_at: entry.start_at, end_at: entry.end_at, lesson_kind: entry.lesson_kind ?? "flight", note: entry.note, aircraft_id: entry.aircraft_id, aircraft_tail_number: entry.aircraft_tail_number, aircraft_status: entry.aircraft_status },
+      }));
+      stageOperations([...operations, ...swapOperations], swapOperations.length);
       resetLessonDrag();
-      setMessage(warningCount ? `Lessons swapped. ${warningCount} schedule issue${warningCount === 1 ? " is" : "s are"} marked on the calendar.` : "Lessons swapped. Affected linked students were notified according to their preferences.");
-      const { start, end } = weekRange();
-      adoptSnapshot(await fetchScheduleEditorSnapshot(start, end));
+      setMessage(warningCount ? `Swap added to draft · ${warningCount} issue${warningCount === 1 ? "" : "s"}.` : "Swap added to draft.");
     } catch (failure) {
       setError(getErrorMessage(failure, "Unable to swap these lessons."));
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -428,6 +440,7 @@ export default function CfiScheduleManager() {
       const { start, end } = weekRange();
       const snapshot = await fetchScheduleEditorSnapshot(start, end);
       setOperations([]);
+      setOperationBatchSizes([]);
       adoptSnapshot(snapshot);
       setDiscardOpen(false);
       setDrawer(null);
@@ -694,41 +707,19 @@ export default function CfiScheduleManager() {
       }
       const warnings = calculateLessonWarnings();
       if (warnings.length && !force) { setLessonWarnings(warnings); return; }
-      if (hasDraft) {
-        stageOperations([...operations, operation]);
-        if (resumeLessons.length) { setLesson(resumeLessons[resumeLessons.length - 1]); setResumeLessons(resumeLessons.slice(0, -1)); setLessonWarnings([]); setError(""); }
-        else { setDrawer(null); setLessonWarnings([]); setError(""); }
-        setMessage("Changes added to the current automatic-schedule draft.");
-        return;
-      }
-      setSaving(true);
-      const directChanges = scheduleChanges(entries, next).map((change) => change.after);
-      await publishScheduleDraft(revision, crypto.randomUUID(), directChanges);
+      stageOperations([...operations, operation]);
       if (resumeLessons.length) { setLesson(resumeLessons[resumeLessons.length - 1]); setResumeLessons(resumeLessons.slice(0, -1)); setLessonWarnings([]); setError(""); }
       else { setDrawer(null); setLessonWarnings([]); setError(""); }
-      setMessage("Lesson saved and the student was notified.");
-      const { start, end } = weekRange();
-      adoptSnapshot(await fetchScheduleEditorSnapshot(start, end));
+      setMessage("Lesson change added to draft.");
     } catch (failure) { setError(getErrorMessage(failure, "Unable to update the draft.")); }
-    finally { setSaving(false); }
   }
 
   async function confirmCancelLesson(id: string) {
     if (!id) return;
-    if (hasDraft) {
-      stageOperations([...operations, { type: "cancel", id }]);
-      setDrawer(null); setMessage("Cancellation added to the current draft.");
-      return;
-    }
-    const target = entries.find((entry) => entry.id === id);
-    if (!target) return;
-    setSaving(true); setError("");
-    try {
-      await publishScheduleDraft(revision, crypto.randomUUID(), [{ ...target, status: "cancelled" }]);
-      setDrawer(null); setMessage("Lesson cancelled and the student was notified.");
-      const { start, end } = weekRange(); adoptSnapshot(await fetchScheduleEditorSnapshot(start, end));
-    } catch (failure) { setError(getErrorMessage(failure,"Unable to cancel the lesson.")); }
-    finally { setSaving(false); }
+    stageOperations([...operations, { type: "cancel", id }]);
+    setDrawer(null);
+    setResumeLessons([]);
+    setMessage("Cancellation added to draft.");
   }
 
   async function openPublishDrawer() {
@@ -744,6 +735,7 @@ export default function CfiScheduleManager() {
     try {
       const nextRevision = await publishScheduleDraft(revision, batchId.current, changes.map((change) => change.after));
       setOperations([]);
+      setOperationBatchSizes([]);
       setEntries(entries);
       setRevision(nextRevision);
       setDrawer(null);
@@ -846,7 +838,12 @@ export default function CfiScheduleManager() {
 
   async function confirmTeachingRules() {
     setError("");
-    const normalized = { ...ruleForm, cfi_user_id: userId, weekdays: [...new Set(ruleForm.weekdays)].sort((a, b) => a - b) };
+    const normalized = {
+      ...ruleForm,
+      cfi_user_id: userId,
+      latest_start_minute: Math.max(ruleForm.start_minute, ruleForm.end_minute - 1),
+      weekdays: [...new Set(ruleForm.weekdays)].sort((a, b) => a - b),
+    };
     if (!normalized.weekdays.length || normalized.latest_start_minute < normalized.start_minute || normalized.end_minute <= normalized.latest_start_minute || normalized.end_minute - normalized.start_minute < 120 || normalized.max_daily_teaching_min < 30 || normalized.max_daily_teaching_min > 480) {
       setError("Choose valid start/end times and at least one day. Daily total can be 0.5–8 hours.");
       return;
@@ -950,7 +947,7 @@ export default function CfiScheduleManager() {
         aircraft_status_note: null, aircraft_conflict: false, unavailable_kind: null, start_at: draft.start_at,
         end_at: draft.end_at, note: draft.note, auto_generated: true, status: "scheduled", is_own: false,
       } }));
-      stageOperations([...operations, ...additions]);
+      stageOperations([...operations, ...additions], additions.length);
       setDrawer(null);
       setMessage(`${autoDrafts.length} lessons added to the draft. Review and publish when ready.`);
     } catch (autoError) {
@@ -1100,7 +1097,7 @@ export default function CfiScheduleManager() {
             ]),
             { label: "Refresh", onSelect: () => { void loadWeekData().catch((failure) => setError(getErrorMessage(failure, "Unable to refresh."))); } },
             ...(hasDraft ? [
-              { label: "Undo last edit", onSelect: () => stageOperations(operations.slice(0, -1)) },
+              { label: "Undo last edit", onSelect: undoLastDraftChange },
               { label: "Discard draft", danger: true, onSelect: () => setDiscardOpen(true) },
             ] : []),
             ...(studentViews.length ? [
@@ -1151,7 +1148,7 @@ export default function CfiScheduleManager() {
                 const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${entry.lesson_kind === "flight" ? aircraftLabel : "Ground"}` : entry.unavailable_kind === "aircraft" ? `${aircraftLabel} unavailable${entry.block_owner_name && !entry.is_own ? ` · ${entry.block_owner_name}` : ""}` : entry.unavailable_kind === "instructor" ? `My unavailable time${entry.note ? ` · ${entry.note}` : ""}` : "Busy"}</span>{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ {warnings.length} issue{warnings.length === 1 ? "" : "s"}</span> : null}</>;
                 const targetedForSwap = swapTargetId === entry.id;
                 const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${targetedForSwap ? styles.swapTarget : ""}`;
-                const canSwapEntry = isCfiView && entry.entry_type === "lesson" && entry.status === "scheduled" && !hasDraft;
+                const canSwapEntry = isCfiView && entry.entry_type === "lesson" && entry.status === "scheduled";
                 const canManageEntry = entry.entry_type === "lesson" || entry.is_own;
                 return (isCfiView && canManageEntry) || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving} draggable={canSwapEntry && !saving}
                   title={canSwapEntry ? "Drag onto another student's lesson to swap" : undefined}
@@ -1295,7 +1292,7 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex flex-wrap justify-end gap-2">{availabilityScope === "date" && overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === availabilityDate) ? <button className="ghost-button" type="button" disabled={saving} onClick={() => void clearDateOverride()}>Use general rule</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAvailability()}>{saving ? "Saving…" : "Apply"}</button></div>
       </DetailDrawer>
 
-      <DetailDrawer compact open={drawer === "lesson"} onClose={() => { setDrawer(null); setResumeLessons([]); }} title={lesson.id ? "Edit lesson" : "Add lesson"} description={hasDraft ? "This change joins the current automatic-schedule draft." : "Only this lesson changes. If another lesson overlaps, edit it before saving."}>
+      <DetailDrawer compact open={drawer === "lesson"} onClose={() => { setDrawer(null); setResumeLessons([]); }} title={lesson.id ? "Edit lesson" : "Add lesson"} description="Changes stay unpublished until Review & publish.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         <div className="grid gap-3"><label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={lesson.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" step={900} value={lesson.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind, aircraftId: event.target.value === "ground" ? "" : current.aircraftId })); }}><option value="flight">Flight</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div>{lesson.kind === "flight" ? <label className="saas-field"><span>Aircraft</span><select value={lesson.aircraftId} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, aircraftId: event.target.value })); }}><option value="">Not assigned</option>{aircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? ` · ${item.operational_status.replace("_", " ")}` : ""}</option>)}</select></label> : null}<label className="saas-field"><span>Note</span><textarea rows={3} maxLength={500} value={lesson.note} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, note: event.target.value })); }} /></label>{previewChanges.length ? <div><p className="mb-2 text-sm font-semibold">Changes in this edit · {previewChanges.length} lesson(s)</p>{renderChangePreview(previewChanges, lessonPreviewEntries)}</div> : null}{lessonWarnings.length ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900"><p className="font-semibold">Schedule issues</p><ul className="mt-1 list-disc pl-5">{lessonWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><p className="mt-2 text-xs">These are warnings only. You can still save.</p></div> : null}</div>
         {resumeLessons.length ? <p className="mt-3 text-xs text-slate-600">Save this lesson to return to the time change you were making.</p> : null}
@@ -1306,7 +1303,7 @@ export default function CfiScheduleManager() {
             <button type="button" className="text-sm font-semibold text-blue-800 underline underline-offset-2" onClick={() => { const pending = lesson; const previous = resumeLessons; openEditLesson(conflict); setResumeLessons([...previous, pending]); setError(""); }}>Edit</button>
           </div>)}
         </div> : null}
-        <div className="mt-5 flex flex-wrap justify-end gap-2">{lesson.id ? <button className="danger-button mr-auto" type="button" disabled={saving} onClick={() => void confirmCancelLesson(lesson.id)}>Cancel lesson</button> : null}<button className="ghost-button" type="button" onClick={() => { setDrawer(null); setResumeLessons([]); }}>Close</button><button className="primary-button" type="button" disabled={saving || !lesson.studentUserId || lessonConflicts.length > 0} onClick={() => void saveLesson(lessonWarnings.length > 0)}>{saving ? "Saving…" : lessonWarnings.length ? "Save anyway" : "Save lesson"}</button></div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">{lesson.id ? <button className="danger-button mr-auto" type="button" disabled={saving} onClick={() => void confirmCancelLesson(lesson.id)}>Cancel lesson</button> : null}<button className="ghost-button" type="button" onClick={() => { setDrawer(null); setResumeLessons([]); }}>Close</button><button className="primary-button" type="button" disabled={saving || !lesson.studentUserId || lessonConflicts.length > 0} onClick={() => void saveLesson(lessonWarnings.length > 0)}>{lessonWarnings.length ? lesson.id ? "Update anyway" : "Add anyway" : lesson.id ? "Update draft" : "Add to draft"}</button></div>
       </DetailDrawer>
 
       <DetailDrawer compact open={drawer === "publish"} onClose={() => { if (!saving) setDrawer(null); }} title="Review & publish schedule" description="Review the final changes, not intermediate edits. Each affected student receives at most one notification, according to their preferences.">
@@ -1324,12 +1321,12 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex flex-wrap justify-end gap-2">{editingBlockId ? <button className="ghost-button mr-auto text-rose-700" type="button" disabled={saving} onClick={() => setDeleteBlockId(editingBlockId)}>Remove block</button> : null}<button className="ghost-button" type="button" disabled={saving} onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving || !blockForm.aircraftId} onClick={() => void saveBlock()}>{saving ? "Saving…" : editingBlockId ? "Save changes" : "Add block"}</button></div>
       </DetailDrawer>
 
-      <DetailDrawer compact open={drawer === "teaching"} onClose={() => { if (!saving) setDrawer(null); }} title="My teaching time" description="Set your usual hours and exceptions. Automatic scheduling follows these rules; published lessons do not move.">
+      <DetailDrawer compact open={drawer === "teaching"} onClose={() => { if (!saving) setDrawer(null); }} title="My teaching time" description="Usual hours and unavailable time.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         <section className={styles.formSection}>
           <h3 className="text-sm font-semibold text-slate-900">Usual week</h3>
           <div className={styles.compactChecks} role="group" aria-label="Teaching days">{weekdayLabels.map((label, index) => <label key={label}><input type="checkbox" checked={ruleForm.weekdays.includes(index + 1)} onChange={(event) => setRuleForm((current) => ({ ...current, weekdays: event.target.checked ? [...current.weekdays, index + 1] : current.weekdays.filter((day) => day !== index + 1) }))} />{label.slice(0, 3)}</label>)}</div>
-          <div className="mt-3 grid grid-cols-2 gap-3"><label className="saas-field"><span>Earliest start</span><input className={styles.nativePicker} type="time" value={minutesToTime(ruleForm.start_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setRuleForm((current) => ({ ...current, start_minute: timeToMinutes(event.target.value) }))} /></label><label className="saas-field"><span>Latest start</span><input className={styles.nativePicker} type="time" value={minutesToTime(ruleForm.latest_start_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setRuleForm((current) => ({ ...current, latest_start_minute: timeToMinutes(event.target.value) }))} /></label><label className="saas-field col-span-2"><span>Latest end (00:00 = midnight)</span><input className={styles.nativePicker} type="time" value={minutesToAvailabilityEnd(ruleForm.end_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setRuleForm((current) => ({ ...current, end_minute: availabilityEndToMinutes(event.target.value) }))} /></label></div>
+          <div className="mt-3 grid grid-cols-2 gap-3"><label className="saas-field"><span>Start</span><input className={styles.nativePicker} type="time" value={minutesToTime(ruleForm.start_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setRuleForm((current) => ({ ...current, start_minute: timeToMinutes(event.target.value) }))} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} type="time" value={minutesToAvailabilityEnd(ruleForm.end_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { const endMinute = availabilityEndToMinutes(event.target.value); setRuleForm((current) => ({ ...current, end_minute: endMinute, latest_start_minute: Math.max(current.start_minute, endMinute - 1) })); }} /></label></div>
           <label className="saas-field mt-3"><span>Total teaching hours per day</span><input type="number" min={0.5} max={8} step={0.5} value={ruleForm.max_daily_teaching_min / 60} onChange={(event) => setRuleForm((current) => ({ ...current, max_daily_teaching_min: Math.round(Number(event.target.value) * 60) }))} /></label>
           <div className="mt-3 flex justify-end"><button className="primary-button" type="button" disabled={saving} onClick={() => void confirmTeachingRules()}>{saving ? "Saving…" : "Save usual week"}</button></div>
         </section>
@@ -1400,7 +1397,7 @@ function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => v
   return <DetailDrawer compact open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
     <div className={styles.helpContent}>
       <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
-      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use Student availability in the options menu to scan everyone’s week. Tap any available time to start a lesson for that student.</li><li>Set your teaching days, start and end times, and maximum total lesson time per day in My teaching time. Add a full-day vacation or a short break there too. Auto scheduling avoids this time; existing lessons only receive conflict warnings.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling shows only Available aircraft and lets you choose separate Flight and Ground totals for each student.</li><li>Every unavailable aircraft block identifies one aircraft. Blocks for organization aircraft are shared across the organization; only the instructor who created one can change or remove it.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. Away, Grounded, and Maintenance aircraft remain visible on the calendar but are excluded from automatic scheduling.</li><li>Drag one lesson onto another student’s lesson to swap them.</li><li>Manual edits change only the selected lesson. If it overlaps another lesson, edit the affected lesson first; linked students are notified according to their preferences.</li></ol></section>
+      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use Student availability in the options menu to scan everyone’s week. Tap any available time to start a lesson for that student.</li><li>Set your teaching days, start and end times, and maximum total lesson time per day in My teaching time. Add a full-day vacation or a short break there too. Auto scheduling avoids this time; existing lessons only receive conflict warnings.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling shows only Available aircraft and lets you choose separate Flight and Ground totals for each student.</li><li>Every unavailable aircraft block identifies one aircraft. Blocks for organization aircraft are shared across the organization; only the instructor who created one can change or remove it.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. Away, Grounded, and Maintenance aircraft remain visible on the calendar but are excluded from automatic scheduling.</li><li>Drag lessons to swap them, including while a draft is open.</li><li>Add, edit, cancel, and swap changes stay in the draft until Review &amp; publish.</li></ol></section>
       <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson never moves another automatically. Overlapping lessons are listed with a quick Edit action; availability and aircraft conflicts remain warnings.</p></section>
     </div>
   </DetailDrawer>;

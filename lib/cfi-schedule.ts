@@ -812,7 +812,7 @@ export function generateAutomaticSchedule(input: {
   ];
 
   const findBestPlacement = (setting: (typeof settings)[number]) => {
-    let best: { start: Date; end: Date; aircraft?: ScheduleAircraft; dayIndex: number; joinsExistingDay: number; gapMs: number } | null = null;
+    let best: { start: Date; end: Date; aircraft?: ScheduleAircraft; dayIndex: number; dayLessonCount: number; dayTeachingMinutes: number; gapMs: number } | null = null;
     for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
       const date = addCalendarDays(input.weekStart, dayIndex);
       const dateKey = localDateKey(date);
@@ -848,11 +848,17 @@ export function generateAutomaticSchedule(input: {
             if (!aircraft) continue;
           }
           const gapMs = items.length ? Math.min(...items.map((item) => item.end <= start ? start.getTime() - item.end.getTime() : item.start.getTime() - end.getTime())) : 0;
-          const candidate = { start, end, aircraft, dayIndex, joinsExistingDay: items.length ? 0 : 1, gapMs };
-          if (!best || candidate.joinsExistingDay < best.joinsExistingDay
-            || candidate.joinsExistingDay === best.joinsExistingDay && candidate.gapMs < best.gapMs
-            || candidate.joinsExistingDay === best.joinsExistingDay && candidate.gapMs === best.gapMs && candidate.dayIndex < best.dayIndex
-            || candidate.joinsExistingDay === best.joinsExistingDay && candidate.gapMs === best.gapMs && candidate.dayIndex === best.dayIndex && candidate.start < best.start) best = candidate;
+          const candidate = {
+            start, end, aircraft, dayIndex,
+            dayLessonCount: items.length,
+            dayTeachingMinutes: items.reduce((total, item) => total + (item.end.getTime() - item.start.getTime()) / 60_000, 0),
+            gapMs,
+          };
+          if (!best || candidate.dayLessonCount < best.dayLessonCount
+            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes < best.dayTeachingMinutes
+            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes === best.dayTeachingMinutes && candidate.gapMs < best.gapMs
+            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes === best.dayTeachingMinutes && candidate.gapMs === best.gapMs && candidate.dayIndex < best.dayIndex
+            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes === best.dayTeachingMinutes && candidate.gapMs === best.gapMs && candidate.dayIndex === best.dayIndex && candidate.start < best.start) best = candidate;
         }
       }
     }
@@ -868,7 +874,8 @@ export function generateAutomaticSchedule(input: {
       const aWeeklyTotal = a.setting.existing + (a.setting.requested - a.setting.remaining);
       const bWeeklyTotal = b.setting.existing + (b.setting.requested - b.setting.remaining);
       return aWeeklyTotal - bWeeklyTotal
-        || a.placement!.joinsExistingDay - b.placement!.joinsExistingDay
+        || a.placement!.dayLessonCount - b.placement!.dayLessonCount
+        || a.placement!.dayTeachingMinutes - b.placement!.dayTeachingMinutes
         || a.placement!.gapMs - b.placement!.gapMs
         || a.placement!.dayIndex - b.placement!.dayIndex
         || a.placement!.start.getTime() - b.placement!.start.getTime()

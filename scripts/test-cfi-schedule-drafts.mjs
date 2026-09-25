@@ -113,7 +113,11 @@ const compactSlots=[
 ];
 const compactResult=generateAutomaticSchedule({...autoInput,access:compactAccess,slots:compactSlots,blocks:[],requests:compactAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:1,groundSessions:0}))});
 assert.deepEqual(compactResult.drafts.map((draft)=>draft.student_user_id),['compact-a','compact-c','compact-b'],'an available student who closes the current gap is selected before a later start');
-assert.deepEqual(compactResult.drafts.map((draft)=>new Date(draft.start_at).getHours()),[7,9,11],'automatic lessons run back-to-back when availability and aircraft permit');
+assert.deepEqual(compactResult.drafts.map((draft)=>new Date(draft.start_at).getHours()),[7,9,11],'automatic lessons run back-to-back when only one day is available');
+const balancedSlots=compactAccess.flatMap((student)=>[1,2,3].map((weekday)=>({student_user_id:student.student_user_id,scope:'weekly',weekday,start_minute:420,end_minute:900,timezone:'America/New_York'})));
+const balancedResult=generateAutomaticSchedule({...autoInput,access:compactAccess,slots:balancedSlots,blocks:[],requests:compactAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:1,groundSessions:0}))});
+assert.deepEqual(balancedResult.drafts.map((draft)=>draft.start_at.slice(0,10)),['2026-09-14','2026-09-15','2026-09-16'],'equally available lessons fill separate days in order');
+assert(balancedResult.drafts.every((draft)=>new Date(draft.start_at).getHours()===7),'the earliest compact time is still preferred within each selected day');
 const cappedTotal=generateAutomaticSchedule({...autoInput,access:compactAccess,slots:compactSlots,blocks:[],teachingRules:{...defaultTeachingRules,max_daily_teaching_min:240},requests:compactAccess.map((student)=>({studentUserId:student.student_user_id,flightSessions:1,groundSessions:0}))});
 assert.equal(cappedTotal.drafts.length,2,'daily total teaching minutes cap actual lesson durations');
 const existingCap=generateAutomaticSchedule({...autoInput,access:[secondAccess],slots:[{student_user_id:'b',scope:'weekly',weekday:1,start_minute:540,end_minute:660,timezone:'America/New_York'}],blocks:[],existingEntries:[a],teachingRules:{...defaultTeachingRules,max_daily_teaching_min:120},requests:[{studentUserId:'b',flightSessions:1,groundSessions:0}]});
@@ -131,6 +135,8 @@ assert.equal(new Date(generateAutomaticSchedule({...autoInput,slots:[laterSlot],
 const taught=generateAutomaticSchedule({...autoInput,blocks:[],teachingRules}).drafts;
 assert.equal(new Date(taught[0].start_at).getHours(),8,'instructor start time limits automatic scheduling');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,end_minute:540}}).drafts.length,0,'instructor end time must accommodate the whole lesson');
+const fourPmEnd=generateAutomaticSchedule({...autoInput,slots:[{...laterSlot,start_minute:960,end_minute:1080}],blocks:[],teachingRules:{...defaultTeachingRules,latest_start_minute:1439,end_minute:960}});
+assert.equal(fourPmEnd.drafts.length,0,'a 16:00 teaching end never allows a 16:00–18:00 lesson even if the legacy latest-start value is later');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,weekdays:[2]}}).drafts.length,0,'disabled teaching days are not used');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,latest_start_minute:420}}).drafts.length,0,'latest start time limits automatic scheduling');
 const wideWindowRules={...defaultTeachingRules,start_minute:420,latest_start_minute:960,end_minute:1080,max_daily_teaching_min:240,weekdays:[1]};
