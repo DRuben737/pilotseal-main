@@ -1,7 +1,7 @@
 ---
 title: "Site Log"
 summary: "Ongoing development notes and history of PilotSeal."
-updated: "2026-08-31"
+updated: "2026-09-25"
 ---
 
 
@@ -293,6 +293,42 @@ Organization updates included:
 - Review tools for confirming legacy endorsement ownership and evidence
 - More consistent student profile management across personal and organization workflows
 - Restored personal saved-people access and endorsement autofill behavior
+
+</details>
+
+<details>
+<summary>September 2026 — CFI Scheduling, Mobile Workflows, and Flight Risk Review</summary>
+
+Added an optional personal scheduling system for flight instructors.
+
+The Schedule workflow now supports private instructor availability, weekly calendar planning, draft schedules, and publication when the instructor is ready. It can also help build schedules automatically while accounting for existing lessons, student availability, daily limits, time off, and a more balanced distribution of teaching days.
+
+Scheduling updates included:
+
+- Existing People records and invited students in the scheduling workflow
+- Full-week calendar and guided instructor setup
+- Automatic scheduling with instructor-selected lesson counts
+- One-flight-per-student-per-day limits and fairer lesson distribution
+- Aircraft-aware bookings and shared organization aircraft blocks
+- Student availability summaries
+- Quick lesson swaps and clearer overlap warnings
+- Schedule review before publication
+- More compact desktop controls and native mobile date and time inputs
+
+Improved Flight Brief risk review with guided IMSAFE scoring, clearer risk questions, automatic score guidance, and an optional AI-assisted discussion of identified risks. Weight and balance results also received clearer envelope details.
+
+Additional updates included:
+
+- Redesigned mobile navigation and tool layouts
+- More compact management collections and organization member screens
+- Automatic organization visibility for eligible records
+- Instructor assignment during organization invitations
+- Improved organization role, fleet, and endorsement permissions
+- Editing and deletion controls for endorsements issued by the current instructor
+- Better pilot certificate level and additional privilege entry
+- Confirmation dialogs before aircraft report submission
+- One-week retention for saved Flight Brief records
+- A new state-indexed reference listing public-use airports without published instrument approaches
 
 </details>
 
