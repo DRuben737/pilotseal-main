@@ -70,3 +70,15 @@ export function swapScheduleLessons(entries: ScheduleEntry[], sourceId: string, 
   return entries.map((entry) => entry.id === sourceId ? moveTo(entry, target.start_at) : entry.id === targetId ? moveTo(entry, source.start_at) : { ...entry })
     .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
 }
+
+export function moveScheduleLesson(entries: ScheduleEntry[], sourceId: string, startAt: string) {
+  const source = entries.find((entry) => entry.id === sourceId && entry.entry_type === "lesson" && entry.status === "scheduled");
+  const start = Date.parse(startAt);
+  if (!source || !Number.isFinite(start)) throw new Error("This lesson is no longer available. Refresh and try again.");
+  const duration = Date.parse(source.end_at) - Date.parse(source.start_at);
+  if (duration <= 0) throw new Error("This lesson has an invalid duration.");
+  return entries.map((entry) => entry.id === sourceId
+    ? { ...entry, start_at: new Date(start).toISOString(), end_at: new Date(start + duration).toISOString() }
+    : { ...entry })
+    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
+}

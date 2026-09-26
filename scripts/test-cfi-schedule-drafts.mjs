@@ -5,7 +5,7 @@ import ts from 'typescript';
 process.env.TZ = 'America/New_York';
 const source = await readFile(new URL('../lib/cfi-schedule-drafts.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { applyScheduleOperations, scheduleChanges, scheduleConflictsForLesson, scheduleHasOverlap, swapScheduleLessons } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { applyScheduleOperations, moveScheduleLesson, scheduleChanges, scheduleConflictsForLesson, scheduleHasOverlap, swapScheduleLessons } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const lesson = (id, start, end, day = '2026-09-14') => ({ id, entry_type: 'lesson', student_user_id: id, student_name: id, lesson_kind: 'flight', aircraft_id:null, aircraft_tail_number:null, aircraft_status:null, aircraft_status_note:null, aircraft_conflict:false, start_at: `${day}T${start}:00-04:00`, end_at: `${day}T${end}:00-04:00`, status: 'scheduled', note: '', auto_generated: false, is_own: false });
 const a = lesson('a', '07:00', '09:00');
 const b = lesson('b', '09:30', '11:30');
@@ -54,6 +54,12 @@ assert.equal(swapped.find(e => e.id === 'a').lesson_kind, a.lesson_kind, 'lesson
 assert.equal(scheduleChanges(original, swapped).length, 2, 'a swap publishes exactly two edits');
 assert.throws(() => swapScheduleLessons(original, 'a', 'a'), /different lessons/);
 assert.throws(() => swapScheduleLessons([...original, { ...c, id:'same-student', student_user_id:'a' }], 'a', 'same-student'), /different students/);
+const movedToNextDay=moveScheduleLesson(original,'a','2026-09-15T13:00:00.000Z');
+assert.equal(movedToNextDay.find(e=>e.id==='a').start_at,'2026-09-15T13:00:00.000Z','a lesson can move to another date');
+assert.equal(Date.parse(movedToNextDay.find(e=>e.id==='a').end_at)-Date.parse(movedToNextDay.find(e=>e.id==='a').start_at),Date.parse(a.end_at)-Date.parse(a.start_at),'moving keeps the lesson duration');
+assert.equal(scheduleChanges(original,movedToNextDay).length,1,'moving stages only the dragged lesson');
+assert.equal(moveScheduleLesson(original,'c',b.end_at).find(e=>e.id==='c').start_at,new Date(b.end_at).toISOString(),'a lesson can be placed directly after another lesson');
+assert.throws(()=>moveScheduleLesson(original,'missing',a.start_at),/no longer available/);
 // Pure scheduling checks: no database or network calls.
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');
@@ -129,17 +135,16 @@ const unavailable=generateAutomaticSchedule({...autoInput,slots:[],blocks:[],req
 assert.equal(unavailable.studentUserId,'a');
 assert.equal(unavailable.scheduled,0);
 assert.match(unavailable.reason,/No availability/);
-const teachingRules={cfi_user_id:'cfi',start_minute:480,latest_start_minute:600,end_minute:720,max_daily_teaching_min:480,weekdays:[1]};
+const teachingRules={cfi_user_id:'cfi',start_minute:480,latest_start_minute:719,end_minute:720,max_daily_teaching_min:480,weekdays:[1]};
 const laterSlot={student_user_id:'a',scope:'weekly',weekday:1,start_minute:540,end_minute:1020,timezone:'America/New_York'};
 assert.equal(new Date(generateAutomaticSchedule({...autoInput,slots:[laterSlot],blocks:[]}).drafts[0].start_at).getHours(),9,'default rules keep later student start times available');
 const taught=generateAutomaticSchedule({...autoInput,blocks:[],teachingRules}).drafts;
 assert.equal(new Date(taught[0].start_at).getHours(),8,'instructor start time limits automatic scheduling');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,end_minute:540}}).drafts.length,0,'instructor end time must accommodate the whole lesson');
-const fourPmEnd=generateAutomaticSchedule({...autoInput,slots:[{...laterSlot,start_minute:960,end_minute:1080}],blocks:[],teachingRules:{...defaultTeachingRules,latest_start_minute:1439,end_minute:960}});
-assert.equal(fourPmEnd.drafts.length,0,'a 16:00 teaching end never allows a 16:00–18:00 lesson even if the legacy latest-start value is later');
+const fourPmEnd=generateAutomaticSchedule({...autoInput,slots:[{...laterSlot,start_minute:960,end_minute:1080}],blocks:[],teachingRules:{...defaultTeachingRules,end_minute:960}});
+assert.equal(fourPmEnd.drafts.length,0,'a 16:00 teaching end never allows a 16:00–18:00 lesson');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,weekdays:[2]}}).drafts.length,0,'disabled teaching days are not used');
-assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,latest_start_minute:420}}).drafts.length,0,'latest start time limits automatic scheduling');
-const wideWindowRules={...defaultTeachingRules,start_minute:420,latest_start_minute:960,end_minute:1080,max_daily_teaching_min:240,weekdays:[1]};
+const wideWindowRules={...defaultTeachingRules,start_minute:420,latest_start_minute:1079,end_minute:1080,max_daily_teaching_min:240,weekdays:[1]};
 const wideWindow=generateAutomaticSchedule({...autoInput,access:[compactAccess[0],compactAccess[1]],slots:[compactSlots[0],{...compactSlots[1],start_minute:960,end_minute:1080}],blocks:[],teachingRules:wideWindowRules,requests:[{studentUserId:'compact-a',flightSessions:1,groundSessions:0},{studentUserId:'compact-b',flightSessions:1,groundSessions:0}]});
 assert.equal(wideWindow.drafts.length,2,'the configured teaching window does not add a separate first-to-last span limit');
 const ownTimeOff={id:'time-off',cfi_user_id:'cfi',start_at:a.start_at,end_at:a.end_at,note:'Vacation'};

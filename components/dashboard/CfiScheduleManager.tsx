@@ -60,7 +60,7 @@ import {
   defaultTeachingRules,
   type WeekOverride,
 } from "@/lib/cfi-schedule";
-import { applyScheduleOperations, scheduleChanges, scheduleConflictsForLesson, scheduleHasOverlap, swapScheduleLessons, type ScheduleOperation, type ScheduleChange } from "@/lib/cfi-schedule-drafts";
+import { applyScheduleOperations, moveScheduleLesson, scheduleChanges, scheduleConflictsForLesson, scheduleHasOverlap, swapScheduleLessons, type ScheduleOperation, type ScheduleChange } from "@/lib/cfi-schedule-drafts";
 import { fetchEnabledFeatureIds, fetchScheduleEligibility, updateEnabledFeatureIds, type ScheduleEligibility } from "@/lib/dashboard-preferences";
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
 
@@ -114,6 +114,14 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function lessonDropMode(clientY: number, top: number, height: number, allowSwap: boolean): "before" | "swap" | "after" {
+  const ratio = height > 0 ? (clientY - top) / height : 0.5;
+  if (!allowSwap) return ratio < 0.5 ? "before" : "after";
+  if (ratio < 0.3) return "before";
+  if (ratio > 0.7) return "after";
+  return "swap";
+}
+
 export default function CfiScheduleManager() {
   const { session } = useAuthSession();
   const userId = session?.user?.id ?? "";
@@ -160,7 +168,8 @@ export default function CfiScheduleManager() {
   const [aircraft, setAircraft] = useState<ScheduleAircraft[]>([]);
   const [aircraftReservations, setAircraftReservations] = useState<AircraftReservation[]>([]);
   const [drawer, setDrawer] = useState<DrawerMode>(null);
-  const [swapTargetId, setSwapTargetId] = useState("");
+  const [lessonDropTarget, setLessonDropTarget] = useState<{ id: string; mode: "before" | "swap" | "after" } | null>(null);
+  const [dayDropTarget, setDayDropTarget] = useState("");
   const dragSourceId = useRef("");
   const suppressEntryClick = useRef(false);
 
@@ -388,8 +397,53 @@ export default function CfiScheduleManager() {
   }
 
   function resetLessonDrag() {
-    setSwapTargetId("");
+    setLessonDropTarget(null);
+    setDayDropTarget("");
     dragSourceId.current = "";
+  }
+
+  function lessonEditOperation(entry: ScheduleEntry): ScheduleOperation {
+    return {
+      type: "edit",
+      id: entry.id,
+      values: { start_at: entry.start_at, end_at: entry.end_at, lesson_kind: entry.lesson_kind ?? "flight", note: entry.note, aircraft_id: entry.aircraft_id, aircraft_tail_number: entry.aircraft_tail_number, aircraft_status: entry.aircraft_status },
+    };
+  }
+
+  function stageMovedLesson(sourceId: string, startAt: string, message: string) {
+    const source = entries.find((entry) => entry.id === sourceId && entry.entry_type === "lesson");
+    if (source && Date.parse(source.start_at) === Date.parse(startAt)) {
+      resetLessonDrag();
+      return;
+    }
+    const next = moveScheduleLesson(entries, sourceId, startAt);
+    if (scheduleConflictsForLesson(next, sourceId).length) {
+      setError("That position overlaps another lesson. Move it before or after a different lesson.");
+      resetLessonDrag();
+      return;
+    }
+    const moved = next.find((entry) => entry.id === sourceId);
+    if (!moved) return;
+    stageOperations([...operations, lessonEditOperation(moved)]);
+    resetLessonDrag();
+    setError("");
+    setMessage(message);
+  }
+
+  function moveLessonToDate(sourceId: string, date: string) {
+    const source = entries.find((entry) => entry.id === sourceId && entry.entry_type === "lesson");
+    if (!source) return;
+    const sourceStart = new Date(source.start_at);
+    const time = `${String(sourceStart.getHours()).padStart(2, "0")}:${String(sourceStart.getMinutes()).padStart(2, "0")}`;
+    stageMovedLesson(sourceId, localDateTimeToIso(date, time), "Lesson moved to draft.");
+  }
+
+  function moveLessonRelative(sourceId: string, target: ScheduleEntry, position: "before" | "after") {
+    const source = entries.find((entry) => entry.id === sourceId && entry.entry_type === "lesson");
+    if (!source) return;
+    const duration = Date.parse(source.end_at) - Date.parse(source.start_at);
+    const startAt = position === "before" ? Date.parse(target.start_at) - duration : Date.parse(target.end_at);
+    stageMovedLesson(sourceId, new Date(startAt).toISOString(), `Lesson moved ${position} ${target.student_name ?? "the selected time"} in draft.`);
   }
 
   async function swapLessons(sourceId: string, targetId: string) {
@@ -399,17 +453,13 @@ export default function CfiScheduleManager() {
       const next = swapScheduleLessons(entries, sourceId, targetId);
       if (scheduleHasOverlap(next)) {
         setError("These lesson lengths do not fit cleanly in each other's positions. Edit one lesson first, then try the swap again.");
-        setSwapTargetId("");
+        setLessonDropTarget(null);
         return;
       }
       const swappedEntries = scheduleChanges(entries, next).map((change) => change.after);
       if (swappedEntries.length !== 2) throw new Error("The schedule changed before the swap could be prepared. Refresh and try again.");
       const warningCount = swappedEntries.reduce((count, entry) => count + entryWarnings(entry, next).length, 0);
-      const swapOperations: ScheduleOperation[] = swappedEntries.map((entry) => ({
-        type: "edit",
-        id: entry.id,
-        values: { start_at: entry.start_at, end_at: entry.end_at, lesson_kind: entry.lesson_kind ?? "flight", note: entry.note, aircraft_id: entry.aircraft_id, aircraft_tail_number: entry.aircraft_tail_number, aircraft_status: entry.aircraft_status },
-      }));
+      const swapOperations = swappedEntries.map(lessonEditOperation);
       stageOperations([...operations, ...swapOperations], swapOperations.length);
       resetLessonDrag();
       setMessage(warningCount ? `Swap added to draft · ${warningCount} issue${warningCount === 1 ? "" : "s"}.` : "Swap added to draft.");
@@ -678,7 +728,7 @@ export default function CfiScheduleManager() {
     if (isCfiView) {
       const endMinute = end.getHours() * 60 + end.getMinutes();
       const weekday = (start.getDay() + 6) % 7 + 1;
-      if (!teachingRules.weekdays.includes(weekday) || startMinute < teachingRules.start_minute || startMinute > teachingRules.latest_start_minute || endMinute > teachingRules.end_minute) warnings.push("Outside your teaching days or hours.");
+      if (!teachingRules.weekdays.includes(weekday) || startMinute < teachingRules.start_minute || endMinute > teachingRules.end_minute) warnings.push("Outside your teaching days or hours.");
       if (instructorTimeOff.some((item) => start < new Date(item.end_at) && end > new Date(item.start_at))) warnings.push("Overlaps your unavailable time.");
     }
     if (localDateKey(start) !== localDateKey(end)) warnings.push("This lesson crosses into another calendar day.");
@@ -844,7 +894,7 @@ export default function CfiScheduleManager() {
       latest_start_minute: Math.max(ruleForm.start_minute, ruleForm.end_minute - 1),
       weekdays: [...new Set(ruleForm.weekdays)].sort((a, b) => a - b),
     };
-    if (!normalized.weekdays.length || normalized.latest_start_minute < normalized.start_minute || normalized.end_minute <= normalized.latest_start_minute || normalized.end_minute - normalized.start_minute < 120 || normalized.max_daily_teaching_min < 30 || normalized.max_daily_teaching_min > 480) {
+    if (!normalized.weekdays.length || normalized.end_minute - normalized.start_minute < 120 || normalized.max_daily_teaching_min < 30 || normalized.max_daily_teaching_min > 480) {
       setError("Choose valid start/end times and at least one day. Daily total can be 0.5–8 hours.");
       return;
     }
@@ -1130,7 +1180,7 @@ export default function CfiScheduleManager() {
           const date = localDateKey(day);
           const isToday = date === localDateKey(new Date());
           const dayEntries = visibleEntriesForDate(day);
-          return <section key={date} data-schedule-date={date} aria-label={formatDate(day)} className={`${styles.day} ${isToday ? styles.today : ""}`}>
+          return <section key={date} data-schedule-date={date} aria-label={formatDate(day)} className={`${styles.day} ${isToday ? styles.today : ""} ${dayDropTarget === date ? styles.dayDropTarget : ""}`}>
             <div className={styles.dayHeader}>
               <div className={styles.dayHeading}><span>{isToday ? "Today" : new Intl.DateTimeFormat(undefined,{weekday:"short"}).format(day)}</span><strong>{new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric"}).format(day)}</strong><small>{day.getFullYear()}</small></div>
               {isCfiView ? <ScheduleMenu label={`Add on ${date}`} icon="＋" disabled={!weekReady || saving} actions={[
@@ -1138,7 +1188,24 @@ export default function CfiScheduleManager() {
                 { label: "Aircraft unavailable", onSelect: () => openBlockDrawer(date) },
               ]} /> : null}
             </div>
-            <div className={styles.dayEntries}>
+            <div className={styles.dayEntries}
+              onDragOver={(event) => {
+                if (!isCfiView || !dragSourceId.current) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setLessonDropTarget(null);
+                setDayDropTarget(date);
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDayDropTarget((current) => current === date ? "" : current);
+              }}
+              onDrop={(event) => {
+                if (!isCfiView) return;
+                event.preventDefault();
+                const sourceId = event.dataTransfer.getData("text/plain") || dragSourceId.current;
+                suppressEntryClick.current = true;
+                moveLessonToDate(sourceId, date);
+              }}>
               {!weekReady ? null : !isCfiView && studentTab === "availability" ? <button type="button" className={styles.availability} aria-label={`Edit availability on ${date}`} disabled={date < localDateKey(new Date()) || date > maxAvailabilityDate} onClick={() => openAvailabilityDrawer("date", 1, date)}>
                 {availabilityForDate({date:day,studentUserId:activeStudent?.student_user_id ?? userId,slots,overrideDates}).map((period) => `${formatTime(period.start.toISOString())}–${formatTime(period.end.toISOString())}`).join(", ") || "Not available"}
                 <span className={styles.entryMeta}>{date >= localDateKey(new Date()) && date <= maxAvailabilityDate ? "Tap to edit" : "Outside the four-week window"}</span>
@@ -1146,12 +1213,13 @@ export default function CfiScheduleManager() {
                 const warnings = entryWarnings(entry);
                 const aircraftLabel = entry.aircraft_tail_number || (entry.aircraft_id ? "Aircraft" : "Aircraft not specified");
                 const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${entry.lesson_kind === "flight" ? aircraftLabel : "Ground"}` : entry.unavailable_kind === "aircraft" ? `${aircraftLabel} unavailable${entry.block_owner_name && !entry.is_own ? ` · ${entry.block_owner_name}` : ""}` : entry.unavailable_kind === "instructor" ? `My unavailable time${entry.note ? ` · ${entry.note}` : ""}` : "Busy"}</span>{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ {warnings.length} issue{warnings.length === 1 ? "" : "s"}</span> : null}</>;
-                const targetedForSwap = swapTargetId === entry.id;
-                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${targetedForSwap ? styles.swapTarget : ""}`;
+                const dropMode = lessonDropTarget?.id === entry.id ? lessonDropTarget.mode : null;
+                const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${dropMode === "swap" ? styles.swapTarget : dropMode === "before" ? styles.dropBefore : dropMode === "after" ? styles.dropAfter : ""}`;
                 const canSwapEntry = isCfiView && entry.entry_type === "lesson" && entry.status === "scheduled";
                 const canManageEntry = entry.entry_type === "lesson" || entry.is_own;
                 return (isCfiView && canManageEntry) || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving} draggable={canSwapEntry && !saving}
-                  title={canSwapEntry ? "Drag onto another student's lesson to swap" : undefined}
+                  data-drop-label={dropMode ? dropMode === "swap" ? "Swap" : dropMode === "before" ? "Place before" : "Place after" : undefined}
+                  title={canSwapEntry ? "Drag to another day, or before, onto, or after an entry" : undefined}
                   onDragStart={(event) => {
                     if (!canSwapEntry) { event.preventDefault(); return; }
                     dragSourceId.current = entry.id;
@@ -1160,21 +1228,26 @@ export default function CfiScheduleManager() {
                     event.dataTransfer.setData("text/plain", entry.id);
                   }}
                   onDragOver={(event) => {
-                    if (!canSwapEntry || !dragSourceId.current || dragSourceId.current === entry.id) return;
+                    if (!isCfiView || !dragSourceId.current || dragSourceId.current === entry.id) return;
+                    event.stopPropagation();
                     event.preventDefault();
                     event.dataTransfer.dropEffect = "move";
-                    setSwapTargetId(entry.id);
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setDayDropTarget("");
+                    setLessonDropTarget({ id: entry.id, mode: lessonDropMode(event.clientY, rect.top, rect.height, entry.entry_type === "lesson") });
                   }}
                   onDrop={(event) => {
+                    event.stopPropagation();
                     event.preventDefault();
                     const sourceId = event.dataTransfer.getData("text/plain") || dragSourceId.current;
-                    setSwapTargetId("");
                     suppressEntryClick.current = true;
-                    void swapLessons(sourceId, entry.id);
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const mode = lessonDropMode(event.clientY, rect.top, rect.height, entry.entry_type === "lesson");
+                    if (mode === "swap" && entry.entry_type === "lesson") void swapLessons(sourceId, entry.id);
+                    else moveLessonRelative(sourceId, entry, mode === "before" ? "before" : "after");
                   }}
                   onDragEnd={() => {
-                    dragSourceId.current = "";
-                    setSwapTargetId("");
+                    resetLessonDrag();
                     window.setTimeout(() => { suppressEntryClick.current = false; }, 0);
                   }}
                   onClick={() => {

@@ -97,7 +97,7 @@ export type InstructorTimeOff = {
   note: string;
 };
 
-export const defaultTeachingRules = { start_minute: 420, latest_start_minute: 960, end_minute: 1440, max_daily_teaching_min: 480, weekdays: [1, 2, 3, 4, 5] };
+export const defaultTeachingRules = { start_minute: 420, latest_start_minute: 959, end_minute: 960, max_daily_teaching_min: 480, weekdays: [1, 2, 3, 4, 5] };
 
 export async function fetchInstructorScheduleSettings(cfiUserId: string, rangeStart: Date, rangeEnd: Date) {
   const supabase = getSupabaseClient();
@@ -830,7 +830,7 @@ export function generateAutomaticSchedule(input: {
           const end = new Date(startMs + setting.durationMin * 60_000);
           const localStartMinute = start.getHours() * 60 + start.getMinutes();
           const localEndMinute = end.getHours() * 60 + end.getMinutes();
-          if (localDateKey(end) !== dateKey || localStartMinute < rules.start_minute || localStartMinute > rules.latest_start_minute || localEndMinute > rules.end_minute) continue;
+          if (localDateKey(end) !== dateKey || localStartMinute < rules.start_minute || localEndMinute > rules.end_minute) continue;
           if (input.instructorTimeOff?.some((item) => overlaps(start, end, new Date(item.start_at), new Date(item.end_at)))) continue;
           const items = dailyItems(date);
           if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;

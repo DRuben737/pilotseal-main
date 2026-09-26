@@ -8,8 +8,9 @@ select set_config('teaching.other',(select id::text from public.profiles where e
 select set_config('request.jwt.claim.sub',current_setting('teaching.cfi'),true);
 set local role authenticated;
 select lives_ok($$insert into public.cfi_schedule_teaching_rules(cfi_user_id,start_minute,latest_start_minute,end_minute,max_daily_span_min,weekdays)
-  values(auth.uid(),480,840,900,360,array[1,3,5]::smallint[])$$,'instructor can customize teaching days and hours');
+  values(auth.uid(),480,899,900,360,array[1,3,5]::smallint[])$$,'instructor can customize teaching days and hours');
 select is((select start_minute from public.cfi_schedule_teaching_rules where cfi_user_id=auth.uid()),480::smallint,'saved instructor start time is readable');
+select is((select end_minute from public.cfi_schedule_teaching_rules where cfi_user_id=auth.uid()),900::smallint,'saved instructor end time is a hard cutoff');
 select throws_ok($$update public.cfi_schedule_teaching_rules set max_daily_span_min=540 where cfi_user_id=auth.uid()$$,'23514',null,'daily teaching span cannot exceed eight hours');
 select throws_ok($$update public.cfi_schedule_teaching_rules set max_daily_teaching_min=540 where cfi_user_id=auth.uid()$$,'23514',null,'daily teaching total cannot exceed eight hours');
 select lives_ok($$insert into public.cfi_schedule_time_off(cfi_user_id,start_at,end_at,note)
