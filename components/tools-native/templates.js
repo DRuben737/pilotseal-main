@@ -1,7 +1,8 @@
 // src/templates.js
 
-const SIGNATURE_BLOCK = `Date: {date}           *
-{instructorName}           {instructorCertNumber}          Exp. {instructorCertExpDate}`;
+import { ENDORSEMENT_SIGNATURE_BLOCK } from "../../lib/endorsement-wording.js";
+
+const SIGNATURE_BLOCK = ENDORSEMENT_SIGNATURE_BLOCK;
 
 export const endorsementTemplateDataVersion = {
   source: "AC 61-65K Appendix A",
@@ -162,11 +163,6 @@ const FIELD_LIBRARY = {
       "Flight Instructor certificate with Sport Pilot rating",
       "Airline Transport Pilot certificate with Airplane Multi-Engine Land rating"
     ]
-  },
-  "cfiCertificateNumber": {
-    "label": "CFI certificate number",
-    "type": "text",
-    "required": true
   },
   "cfiKnowledgeParagraph": {
     "label": "14 CFR § 61.185(a) paragraph",
@@ -1173,7 +1169,7 @@ ${SIGNATURE_BLOCK}`,
     referenceNumber: "A63",
     category: "Robinson Helicopter SFAR 73",
     sortOrder: 63,
-    text: `I certify that {studentName}, holder of CFI Certificate No. {cfiCertificateNumber}, meets the experience requirements and has completed the flight training specified by SFAR 73, section 2(b)(5)(i)–(ii) and (iii)(A)–(D), and has demonstrated an ability to provide instruction on the general subject areas of SFAR 73, section 2(a)(3) and the flight training identified in SFAR 73, section 2(b)(5)(iii) in a Robinson R-22 helicopter.
+    text: `I certify that {studentName}, holder of CFI Certificate No. {studentCertNumber}, meets the experience requirements and has completed the flight training specified by SFAR 73, section 2(b)(5)(i)–(ii) and (iii)(A)–(D), and has demonstrated an ability to provide instruction on the general subject areas of SFAR 73, section 2(a)(3) and the flight training identified in SFAR 73, section 2(b)(5)(iii) in a Robinson R-22 helicopter.
 ${SIGNATURE_BLOCK}`,
   },
   {
@@ -1209,7 +1205,7 @@ ${SIGNATURE_BLOCK}`,
     referenceNumber: "A67",
     category: "Robinson Helicopter SFAR 73",
     sortOrder: 67,
-    text: `I certify that {studentName}, holder of CFI Certificate No. {cfiCertificateNumber}, meets the experience requirements and has completed the flight training specified by SFAR 73, section 2(b)(5)(i)–(ii) and (iii)(A)–(D), and has demonstrated an ability to provide instruction on the general subject areas of SFAR 73, section 2(a)(3) and the flight training identified in SFAR 73, section 2(b)(5)(iii) in a Robinson R-44 helicopter.
+    text: `I certify that {studentName}, holder of CFI Certificate No. {studentCertNumber}, meets the experience requirements and has completed the flight training specified by SFAR 73, section 2(b)(5)(i)–(ii) and (iii)(A)–(D), and has demonstrated an ability to provide instruction on the general subject areas of SFAR 73, section 2(a)(3) and the flight training identified in SFAR 73, section 2(b)(5)(iii) in a Robinson R-44 helicopter.
 ${SIGNATURE_BLOCK}`,
   },
   {
@@ -1416,7 +1412,7 @@ ${SIGNATURE_BLOCK}`,
     referenceNumber: "A90",
     category: "NVG, EFVS & Special Systems",
     sortOrder: 90,
-    text: `I certify that {studentName}, holder of CFI Certificate No. {cfiCertificateNumber}, meets the night vision goggle instructor requirements of 14 CFR § 61.195(k) and is authorized to perform the night vision goggle pilot-in-command qualification and recent flight experience requirements under 14 CFR §§ 61.31(k) and 61.57(f) and (g). This endorsement does not provide the authority to endorse another flight instructor as a night vision goggle instructor.
+    text: `I certify that {studentName}, holder of CFI Certificate No. {studentCertNumber}, meets the night vision goggle instructor requirements of 14 CFR § 61.195(k) and is authorized to perform the night vision goggle pilot-in-command qualification and recent flight experience requirements under 14 CFR §§ 61.31(k) and 61.57(f) and (g). This endorsement does not provide the authority to endorse another flight instructor as a night vision goggle instructor.
 ${SIGNATURE_BLOCK}`,
   },
   {

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
+import EndorsementWordingEditor from "@/components/dashboard/EndorsementWordingEditor";
 import { endorsementTemplateDataVersion } from "@/components/tools-native/templates";
 import {
   ENDORSEMENT_TEMPLATE_CATEGORY_ORDER,
@@ -19,10 +20,20 @@ import {
   updateEndorsementTemplate,
   updateEndorsementTemplateSettings,
   type EndorsementTemplate,
+  type EndorsementTemplateField,
   type EndorsementTemplateSettings,
   type EndorsementTemplateChangeRequest,
   type EndorsementTemplateStatus,
 } from "@/lib/endorsement-templates";
+import {
+  ENDORSEMENT_BASE_FILL_INS,
+  appendEndorsementSignatureBlock,
+  getEndorsementStatementTokens,
+  normalizeEndorsementAutomaticFieldKey,
+  parseEndorsementWording,
+  serializeEndorsementStatement,
+  stripEndorsementSignatureBlock,
+} from "@/lib/endorsement-wording";
 import { fetchCurrentProfile } from "@/lib/profile";
 
 type TemplateFormState = {
@@ -31,7 +42,7 @@ type TemplateFormState = {
   reference_number: string;
   title: string;
   body: string;
-  fieldsJson: string;
+  fields: EndorsementTemplateField[];
   category: string;
   status: EndorsementTemplateStatus;
   sort_order: string;
@@ -49,8 +60,8 @@ const emptyForm: TemplateFormState = {
   reference_number: "",
   title: "",
   body: "",
-  fieldsJson: "[]",
-  category: "",
+  fields: [],
+  category: ENDORSEMENT_TEMPLATE_CATEGORY_ORDER[0],
   status: "inactive",
   sort_order: "0",
 };
@@ -128,6 +139,18 @@ function slugifyTemplateKey(title: string) {
     .slice(0, 80);
 }
 
+function createUniqueTemplateKey(title: string, templates: EndorsementTemplate[]) {
+  const base = slugifyTemplateKey(title) || "endorsement";
+  const usedKeys = new Set(templates.map((template) => template.key));
+  if (!usedKeys.has(base)) return base;
+
+  let suffix = 2;
+  while (usedKeys.has(`${base.slice(0, 76)}-${suffix}`)) {
+    suffix += 1;
+  }
+  return `${base.slice(0, 76)}-${suffix}`;
+}
+
 function getVisibilityLabel(status: EndorsementTemplateStatus) {
   if (status === "active") {
     return "Shown in generator";
@@ -165,32 +188,63 @@ function createFormFromTemplate(template: EndorsementTemplate): TemplateFormStat
     key: template.key,
     reference_number: template.reference_number ?? "",
     title: template.title,
-    body: template.body,
-    fieldsJson: JSON.stringify(template.fields, null, 2),
+    body: stripEndorsementSignatureBlock(template.body),
+    fields: template.fields,
     category: template.category ?? "",
     status: template.status,
     sort_order: String(template.sort_order),
   };
 }
 
-function parseFieldsJson(fieldsJson: string) {
-  try {
-    return JSON.parse(fieldsJson);
-  } catch {
-    throw new Error("The fill-in questions list is not valid. Check the brackets, commas, and quotes.");
-  }
+function getAutomaticSortOrder(form: TemplateFormState, templates: EndorsementTemplate[]) {
+  const referenceMatch = form.reference_number.trim().toUpperCase().match(/^A([1-9][0-9]?)$/);
+  if (referenceMatch) return Number(referenceMatch[1]);
+  if (form.id) return Number.parseInt(form.sort_order, 10) || 0;
+
+  const categoryOrders = templates
+    .filter((template) => (template.category ?? "") === form.category)
+    .map((template) => template.sort_order);
+  return (categoryOrders.length > 0 ? Math.max(...categoryOrders) : 0) + 10;
 }
 
-function getFormInput(form: TemplateFormState, userId: string | null | undefined) {
+function getFormInput(
+  form: TemplateFormState,
+  userId: string | null | undefined,
+  templates: EndorsementTemplate[]
+) {
+  if (!form.body.trim()) {
+    throw new Error("Enter the endorsement wording before saving.");
+  }
+
+  const bodyTokens = new Set(getEndorsementStatementTokens(form.body));
+  const baseFieldKeys = new Set(
+    (ENDORSEMENT_BASE_FILL_INS as EndorsementTemplateField[]).map((field) => field.key)
+  );
+  const configuredFieldKeys = new Set(
+    form.fields.map((field) => normalizeEndorsementAutomaticFieldKey(field.key))
+  );
+  const missingField = Array.from(bodyTokens).find(
+    (key) => !baseFieldKeys.has(key) && !configuredFieldKeys.has(key)
+  );
+  if (missingField) {
+    throw new Error("One of the fill-ins needs a question before this endorsement can be saved.");
+  }
+
   return {
-    key: form.key,
+    key: form.key || createUniqueTemplateKey(form.title, templates),
     reference_number: form.reference_number,
     title: form.title,
-    body: form.body,
-    fields: parseFieldsJson(form.fieldsJson),
+    body: appendEndorsementSignatureBlock(
+      serializeEndorsementStatement(parseEndorsementWording(form.body))
+    ),
+    fields: form.fields.filter((field, index, allFields) =>
+      bodyTokens.has(normalizeEndorsementAutomaticFieldKey(field.key)) &&
+      !baseFieldKeys.has(normalizeEndorsementAutomaticFieldKey(field.key)) &&
+      allFields.findIndex((candidate) => candidate.key === field.key) === index
+    ),
     category: form.category,
     status: form.status,
-    sort_order: Number.parseInt(form.sort_order, 10),
+    sort_order: getAutomaticSortOrder(form, templates),
     userId,
   };
 }
@@ -198,31 +252,24 @@ function getFormInput(form: TemplateFormState, userId: string | null | undefined
 function getPreviewState(form: TemplateFormState) {
   const tokenMatches = Array.from(new Set(form.body.match(/\{([^}]+)\}/g) ?? []))
     .map((token) => token.slice(1, -1))
+    .map(normalizeEndorsementAutomaticFieldKey)
     .filter(Boolean);
-  let fieldKeys = new Set<string>();
-  let fieldsError = "";
-
-  try {
-    const parsedFields = parseFieldsJson(form.fieldsJson);
-    fieldKeys = new Set(
-      Array.isArray(parsedFields)
-        ? parsedFields
-            .map((field) => (field && typeof field === "object" ? String(field.key ?? "") : ""))
-            .filter(Boolean)
-        : []
-    );
-  } catch (error) {
-    fieldsError = getErrorMessage(error, "The fill-in questions list is not valid.");
-  }
+  const baseFields = ENDORSEMENT_BASE_FILL_INS as EndorsementTemplateField[];
+  const availableFields = new Map(
+    [...baseFields, ...form.fields].map((field) => [normalizeEndorsementAutomaticFieldKey(field.key), field])
+  );
 
   const rendered = tokenMatches.reduce(
-    (content, token) => content.replaceAll(`{${token}}`, sampleValues[token] ?? `[${token}]`),
-    form.body
+    (content, token) =>
+      content.replaceAll(
+        `{${token}}`,
+        sampleValues[token] ?? `[${availableFields.get(token)?.label ?? "Fill-in"}]`
+      ),
+    serializeEndorsementStatement(parseEndorsementWording(form.body))
   );
-  const missingFields = tokenMatches.filter((token) => !sampleValues[token] && !fieldKeys.has(token));
-  const unusedFields = Array.from(fieldKeys).filter((key) => !tokenMatches.includes(key));
+  const missingFields = tokenMatches.filter((token) => !availableFields.has(token));
 
-  return { fieldsError, missingFields, rendered, tokenMatches, unusedFields };
+  return { missingFields, rendered, tokenMatches };
 }
 
 function getDisplayCategory(template: EndorsementTemplate) {
@@ -265,6 +312,15 @@ export default function EndorsementTemplateAdminPanel() {
 
   const isAdmin = profileRole === "admin";
   const previewState = useMemo(() => getPreviewState(form), [form]);
+  const fillInSuggestions = useMemo(() => {
+    const byKey = new Map<string, EndorsementTemplateField>();
+    for (const template of templates) {
+      for (const field of template.fields) {
+        if (!byKey.has(field.key)) byKey.set(field.key, field);
+      }
+    }
+    return Array.from(byKey.values());
+  }, [templates]);
   const filteredTemplates = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
@@ -374,13 +430,29 @@ export default function EndorsementTemplateAdminPanel() {
     };
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    if (!editorOpen && !sourceEditorOpen && !previewTemplate) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || document.querySelector("[data-endorsement-child-dialog]")) return;
+      if (editorOpen) {
+        setForm(emptyForm);
+        setEditorOpen(false);
+      } else if (sourceEditorOpen) {
+        setSourceEditorOpen(false);
+      } else {
+        setPreviewTemplate(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [editorOpen, previewTemplate, sourceEditorOpen]);
+
   function updateForm<K extends keyof TemplateFormState>(key: K, value: TemplateFormState[K]) {
     setForm((current) => ({
       ...current,
       [key]: value,
-      ...(key === "title" && !current.id && !current.key
-        ? { key: slugifyTemplateKey(String(value)) }
-        : {}),
     }));
   }
 
@@ -400,7 +472,7 @@ export default function EndorsementTemplateAdminPanel() {
     setStatus("");
 
     try {
-      const input = getFormInput(form, session?.user?.id);
+      const input = getFormInput(form, session?.user?.id, templates);
       if (form.id) {
         await updateEndorsementTemplate(form.id, input);
         setStatus("Saved.");
@@ -507,7 +579,7 @@ export default function EndorsementTemplateAdminPanel() {
           </button>
         </div>}
       openOnAction
-      helpContent={<><p>Add or edit the official endorsement wording, fill-in questions, visibility and list order. Use placeholders such as {"{studentName}"} for blanks and provide a matching fill-in question.</p><p>Hide a template while it is being prepared; archive it when it should no longer appear in the generator. Organization proposals require platform approval before they affect live wording.</p></>}
+      helpContent={<><p>Add or edit the official wording, then insert fill-ins wherever users need to provide information. The generator adds signature details automatically.</p><p>Hide an endorsement while it is being prepared; archive it when it should no longer appear in the generator. Organization proposals require platform approval before they affect live wording.</p></>}
     >
 
       <input
@@ -565,7 +637,6 @@ export default function EndorsementTemplateAdminPanel() {
                             {template.reference_number ? <span className="saas-pill">{template.reference_number}</span> : null}
                             <p className="text-sm font-semibold text-slate-950">{template.title}</p>
                           </div>
-                          <p className="mt-1 text-xs text-slate-500">Template ID: {template.key}</p>
                         </div>
                         <span className="saas-pill">{getVisibilityLabel(template.status)}</span>
                       </div>
@@ -607,7 +678,6 @@ export default function EndorsementTemplateAdminPanel() {
                 </div>
 
                 <div className="mt-4 grid gap-2 text-sm text-slate-600">
-                  <span>Template ID: {previewTemplate.key}</span>
                   {previewTemplate.reference_number ? <span>AC number: {previewTemplate.reference_number}</span> : null}
                   <span>Where it appears: {getVisibilityLabel(previewTemplate.status)}</span>
                 </div>
@@ -655,23 +725,12 @@ export default function EndorsementTemplateAdminPanel() {
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="grid gap-1 text-sm font-medium text-slate-700">
-                Name shown in the list
+                Name
                 <input
                   value={form.title}
                   onChange={(event) => updateForm("title", event.target.value)}
                   className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium text-slate-700">
-                Unique short name
-                <input
-                  value={form.key}
-                  onChange={(event) => updateForm("key", event.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
-                />
-                <span className="text-xs font-normal text-slate-500">
-                  Used to keep this endorsement separate from the others. Lowercase letters, numbers, and hyphens only.
-                </span>
               </label>
               <label className="grid gap-1 text-sm font-medium text-slate-700">
                 AC number
@@ -682,16 +741,20 @@ export default function EndorsementTemplateAdminPanel() {
                   className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
                 />
                 <span className="text-xs font-normal text-slate-500">
-                  Use A1 through A96. Leave empty only for archived older copies.
+                  Use A1 through A96, or leave it blank for wording outside Appendix A.
                 </span>
               </label>
               <label className="grid gap-1 text-sm font-medium text-slate-700">
                 Group
-                <input
+                <select
                   value={form.category}
                   onChange={(event) => updateForm("category", event.target.value)}
                   className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
-                />
+                >
+                  {ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
               </label>
               <label className="grid gap-1 text-sm font-medium text-slate-700">
                 Where it appears
@@ -705,55 +768,30 @@ export default function EndorsementTemplateAdminPanel() {
                   <option value="archived">Archive</option>
                 </select>
               </label>
-              <label className="grid gap-1 text-sm font-medium text-slate-700">
-                List order
-                <input
-                  type="number"
-                  value={form.sort_order}
-                  onChange={(event) => updateForm("sort_order", event.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
-                />
-              </label>
             </div>
 
-            <label className="mt-3 grid gap-1 text-sm font-medium text-slate-700">
-              Endorsement wording
-              <textarea
-                value={form.body}
-                onChange={(event) => updateForm("body", event.target.value)}
-                rows={8}
-                className="rounded-xl border border-slate-200 px-3 py-2 font-mono text-xs font-normal"
-              />
-            </label>
-
-            <label className="mt-3 grid gap-1 text-sm font-medium text-slate-700">
-              Fill-in questions
-              <textarea
-                value={form.fieldsJson}
-                onChange={(event) => updateForm("fieldsJson", event.target.value)}
-                rows={8}
-                className="rounded-xl border border-slate-200 px-3 py-2 font-mono text-xs font-normal"
-              />
-              <span className="text-xs font-normal text-slate-500">
-                These control the questions a user answers before printing. Keep the existing format unless you are adding a new blank.
-              </span>
-            </label>
+            <EndorsementWordingEditor
+              body={form.body}
+              fields={form.fields}
+              suggestions={fillInSuggestions}
+              onChange={(body, fields) => setForm((current) => ({ ...current, body, fields }))}
+            />
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-900">Preview</p>
               <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">
                 {previewState.rendered || "Add endorsement wording to see a preview."}
               </p>
+              <div className="mt-4 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-600">
+                <p>Date: 07/16/2026</p>
+                <p>Alex Instructor · 9876543CFI · Exp. 12/31/2027</p>
+              </div>
               <div className="mt-3 grid gap-1 text-xs text-slate-500">
                 <span>Fill-in blanks: {previewState.tokenMatches.length || 0}</span>
-                {previewState.fieldsError ? <span className="text-red-600">{previewState.fieldsError}</span> : null}
                 {previewState.missingFields.length > 0 ? (
                   <span className="text-amber-700">
-                    These blanks need a fill-in question: {previewState.missingFields.join(", ")}
+                    Some fill-ins need a question before this endorsement can be saved.
                   </span>
-                ) : null}
-                {previewState.unusedFields.length > 0 ? (
-                  <span>Questions not used in the wording: {previewState.unusedFields.join(", ")}</span>
                 ) : null}
               </div>
             </div>
@@ -847,15 +885,15 @@ export default function EndorsementTemplateAdminPanel() {
               <section>
                 <h3 className="font-semibold text-slate-900">Add</h3>
                 <p>
-                  Click Add endorsement, then fill in the name, unique short name, group, wording, fill-in questions,
-                  visibility, and list order. Choose Show in the generator when it is ready for users.
+                  Click Add endorsement, choose its group, then enter the wording. Insert fill-ins wherever users
+                  need to provide information. Choose Show in the generator when it is ready.
                 </p>
               </section>
               <section>
                 <h3 className="font-semibold text-slate-900">Edit</h3>
                 <p>
-                  Click an endorsement card to preview it, then click Edit. Use placeholders like {"{studentName}"}
-                  for blanks. If you add a new blank, also add a matching question under Fill-in questions.
+                  Click an endorsement card to preview it, then click Edit. Each fill-in can be moved, changed or
+                  removed without editing any code.
                 </p>
               </section>
               <section>

@@ -10,13 +10,17 @@ const generatorPath = path.join(root, "components", "tools-native", "Endorsement
 const templateLibPath = path.join(root, "lib", "endorsement-templates.ts");
 const templateSqlPath = path.join(root, "supabase", "endorsement_templates.sql");
 const seedExporterPath = path.join(root, "scripts", "export-endorsement-template-seed.mjs");
+const wordingEditorPath = path.join(root, "lib", "endorsement-wording.js");
+const adminPanelPath = path.join(root, "components", "dashboard", "EndorsementTemplateAdminPanel.tsx");
 
 const templatesSource = fs.readFileSync(templatesPath, "utf8");
 const generatorSource = fs.readFileSync(generatorPath, "utf8");
 const templateLibSource = fs.readFileSync(templateLibPath, "utf8");
 const templateSqlSource = fs.readFileSync(templateSqlPath, "utf8");
 const seedExporterSource = fs.readFileSync(seedExporterPath, "utf8");
+const adminPanelSource = fs.readFileSync(adminPanelPath, "utf8");
 const templateModule = await import(pathToFileURL(templatesPath).href);
+const wordingModule = await import(pathToFileURL(wordingEditorPath).href);
 const fallbackTemplates = templateModule.default;
 const fallbackTemplateRows = Object.values(fallbackTemplates);
 const fallbackReferenceNumbers = fallbackTemplateRows
@@ -24,6 +28,10 @@ const fallbackReferenceNumbers = fallbackTemplateRows
   .filter(Boolean)
   .sort((left, right) => Number(left.slice(1)) - Number(right.slice(1)));
 const expectedReferenceNumbers = Array.from({ length: 96 }, (_, index) => `A${index + 1}`);
+const automaticFieldKeys = new Set(
+  wordingModule.ENDORSEMENT_AUTOMATIC_FIELDS.map((field) => field.key)
+);
+const legacyAutomaticFieldKeys = Object.keys(wordingModule.ENDORSEMENT_AUTOMATIC_FIELD_ALIASES);
 
 const checks = [
   {
@@ -139,6 +147,59 @@ const checks = [
       seedExporterSource.includes("components\", \"tools-native\", \"templates.js") &&
       seedExporterSource.includes("reference_number") &&
       seedExporterSource.includes("on conflict (key) do update set"),
+  },
+  {
+    name: "Visual wording parser round-trips every fallback template",
+    pass: fallbackTemplateRows.every((template) =>
+      wordingModule.serializeEndorsementWording(
+        wordingModule.parseEndorsementWording(template.text)
+      ) === template.text
+    ),
+  },
+  {
+    name: "Visual wording parser keeps repeated fill-ins unique for questions",
+    pass:
+      wordingModule.getEndorsementStatementTokens(
+        "I certify {studentName} and {studentName} completed {trainingType}."
+      ).join(",") === "studentName,trainingType",
+  },
+  {
+    name: "Automatic endorsement information uses one six-field registry",
+    pass:
+      automaticFieldKeys.size === 6 &&
+      [
+        "studentName",
+        "studentCertNumber",
+        "instructorName",
+        "instructorCertNumber",
+        "instructorCertExpDate",
+        "date",
+      ].every((key) => automaticFieldKeys.has(key)),
+  },
+  {
+    name: "Fallback templates do not ask users for automatic information",
+    pass: fallbackTemplateRows.every((template) =>
+      (template.fields ?? []).every(
+        (field) => !automaticFieldKeys.has(field.key) && !legacyAutomaticFieldKeys.includes(field.key)
+      )
+    ),
+  },
+  {
+    name: "Legacy pilot certificate tokens are normalized",
+    pass:
+      legacyAutomaticFieldKeys.every((key) => !templatesSource.includes(`{${key}}`)) &&
+      wordingModule.normalizeEndorsementAutomaticFieldKey("cfiCertificateNumber") ===
+        "studentCertNumber" &&
+      wordingModule.normalizeEndorsementAutomaticFieldKey("pilotCertificateNumber") ===
+        "studentCertNumber",
+  },
+  {
+    name: "Admin endorsement form hides implementation fields",
+    pass:
+      !adminPanelSource.includes("fieldsJson") &&
+      !adminPanelSource.includes("Unique short name") &&
+      !adminPanelSource.includes("List order") &&
+      adminPanelSource.includes("EndorsementWordingEditor"),
   },
 ];
 
