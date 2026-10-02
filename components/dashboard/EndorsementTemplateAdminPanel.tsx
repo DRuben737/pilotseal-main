@@ -703,7 +703,7 @@ export default function EndorsementTemplateAdminPanel() {
       {editorOpen
         ? renderOverlay(
         <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/50">
-          <div role="dialog" aria-modal="true" className="h-full w-full max-w-4xl overflow-auto bg-white p-5 shadow-2xl">
+          <div role="dialog" aria-modal="true" className="h-full w-full max-w-3xl overflow-auto bg-white p-4 shadow-2xl sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="eyebrow">{form.id ? "Edit endorsement" : "New endorsement"}</p>
@@ -713,7 +713,7 @@ export default function EndorsementTemplateAdminPanel() {
               </div>
               <button
                 type="button"
-                className="secondary-button"
+                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                 onClick={() => {
                   setForm(emptyForm);
                   setEditorOpen(false);
@@ -723,33 +723,30 @@ export default function EndorsementTemplateAdminPanel() {
               </button>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-x-3 gap-y-2 md:grid-cols-2">
               <label className="grid gap-1 text-sm font-medium text-slate-700">
                 Name
                 <input
                   value={form.title}
                   onChange={(event) => updateForm("title", event.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
+                  className="rounded-md border border-slate-200 px-3 py-1.5 font-normal"
                 />
               </label>
               <label className="grid gap-1 text-sm font-medium text-slate-700">
-                AC number
+                AC number <span className="text-xs font-normal text-slate-400">A1-A96</span>
                 <input
                   value={form.reference_number}
                   onChange={(event) => updateForm("reference_number", event.target.value)}
                   placeholder="A1"
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
+                  className="rounded-md border border-slate-200 px-3 py-1.5 font-normal"
                 />
-                <span className="text-xs font-normal text-slate-500">
-                  Use A1 through A96, or leave it blank for wording outside Appendix A.
-                </span>
               </label>
               <label className="grid gap-1 text-sm font-medium text-slate-700">
-                Group
+                Type
                 <select
                   value={form.category}
                   onChange={(event) => updateForm("category", event.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
+                  className="rounded-md border border-slate-200 px-3 py-1.5 font-normal"
                 >
                   {ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.map((category) => (
                     <option key={category} value={category}>{category}</option>
@@ -761,7 +758,7 @@ export default function EndorsementTemplateAdminPanel() {
                 <select
                   value={form.status}
                   onChange={(event) => updateForm("status", event.target.value as EndorsementTemplateStatus)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 font-normal"
+                  className="rounded-md border border-slate-200 px-3 py-1.5 font-normal"
                 >
                   <option value="active">Show in the generator</option>
                   <option value="inactive">Hide for now</option>
@@ -777,27 +774,32 @@ export default function EndorsementTemplateAdminPanel() {
               onChange={(body, fields) => setForm((current) => ({ ...current, body, fields }))}
             />
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">Preview</p>
-              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-slate-600">Preview</p>
+                <span className="text-xs text-slate-400">{previewState.tokenMatches.length || 0} fill-ins</span>
+              </div>
+              <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">
                 {previewState.rendered || "Add endorsement wording to see a preview."}
               </p>
-              <div className="mt-4 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-600">
+              <div className="mt-2 text-xs leading-5 text-slate-500">
                 <p>Date: 07/16/2026</p>
                 <p>Alex Instructor · 9876543CFI · Exp. 12/31/2027</p>
               </div>
-              <div className="mt-3 grid gap-1 text-xs text-slate-500">
-                <span>Fill-in blanks: {previewState.tokenMatches.length || 0}</span>
-                {previewState.missingFields.length > 0 ? (
-                  <span className="text-amber-700">
-                    Some fill-ins need a question before this endorsement can be saved.
-                  </span>
-                ) : null}
-              </div>
+              {previewState.missingFields.length > 0 ? (
+                <p className="mt-1 text-xs text-amber-700">
+                  Some fill-ins need a question before this endorsement can be saved.
+                </p>
+              ) : null}
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button type="button" className="primary-button" onClick={handleSave} disabled={saving}>
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3">
+              <button
+                type="button"
+                className="rounded-md bg-blue-800 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleSave}
+                disabled={saving}
+              >
                 {saving ? "Saving..." : form.id ? "Save changes" : "Create endorsement"}
               </button>
             </div>
@@ -885,7 +887,7 @@ export default function EndorsementTemplateAdminPanel() {
               <section>
                 <h3 className="font-semibold text-slate-900">Add</h3>
                 <p>
-                  Click Add endorsement, choose its group, then enter the wording. Insert fill-ins wherever users
+                  Click Add endorsement, choose its type, then enter the wording. Insert fill-ins wherever users
                   need to provide information. Choose Show in the generator when it is ready.
                 </p>
               </section>

@@ -12,6 +12,7 @@ const templateSqlPath = path.join(root, "supabase", "endorsement_templates.sql")
 const seedExporterPath = path.join(root, "scripts", "export-endorsement-template-seed.mjs");
 const wordingEditorPath = path.join(root, "lib", "endorsement-wording.js");
 const adminPanelPath = path.join(root, "components", "dashboard", "EndorsementTemplateAdminPanel.tsx");
+const wordingEditorComponentPath = path.join(root, "components", "dashboard", "EndorsementWordingEditor.tsx");
 
 const templatesSource = fs.readFileSync(templatesPath, "utf8");
 const generatorSource = fs.readFileSync(generatorPath, "utf8");
@@ -19,6 +20,7 @@ const templateLibSource = fs.readFileSync(templateLibPath, "utf8");
 const templateSqlSource = fs.readFileSync(templateSqlPath, "utf8");
 const seedExporterSource = fs.readFileSync(seedExporterPath, "utf8");
 const adminPanelSource = fs.readFileSync(adminPanelPath, "utf8");
+const wordingEditorComponentSource = fs.readFileSync(wordingEditorComponentPath, "utf8");
 const templateModule = await import(pathToFileURL(templatesPath).href);
 const wordingModule = await import(pathToFileURL(wordingEditorPath).href);
 const fallbackTemplates = templateModule.default;
@@ -200,6 +202,26 @@ const checks = [
       !adminPanelSource.includes("Unique short name") &&
       !adminPanelSource.includes("List order") &&
       adminPanelSource.includes("EndorsementWordingEditor"),
+  },
+  {
+    name: "Endorsement wording uses one inline editing canvas",
+    pass:
+      wordingEditorComponentSource.includes("contentEditable") &&
+      wordingEditorComponentSource.includes('data-fill-in') &&
+      wordingEditorComponentSource.includes("serializeEditor") &&
+      !wordingEditorComponentSource.includes("Paragraph {paragraphIndex + 1}") &&
+      !wordingEditorComponentSource.includes("Insert fill-in here") &&
+      !wordingEditorComponentSource.includes(">Earlier<") &&
+      !wordingEditorComponentSource.includes(">Later<"),
+  },
+  {
+    name: "Inline fill-ins support editing, deletion, and drag placement",
+    pass:
+      wordingEditorComponentSource.includes('setAttribute("draggable", "true")') &&
+      wordingEditorComponentSource.includes("removeFillIn") &&
+      wordingEditorComponentSource.includes("moveElement") &&
+      wordingEditorComponentSource.includes("getRangeAtPoint") &&
+      wordingEditorComponentSource.includes("onPointerDown"),
   },
 ];
 
