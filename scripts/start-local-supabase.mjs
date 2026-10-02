@@ -38,7 +38,7 @@ const result = spawnSync(
     "--network-id",
     networkName,
     "-x",
-    "logflare,imgproxy,realtime,storage-api,vector",
+    "logflare,imgproxy,realtime,vector",
   ],
   {
     cwd: root,
@@ -54,5 +54,5 @@ if (result.status !== 0) {
 }
 
 console.log(
-  "Local Supabase is running on the localhost-only pilotseal-local network with Analytics, Vector, Realtime, Storage, and Imgproxy disabled.",
+  "Local Supabase is running on the localhost-only pilotseal-local network with Analytics, Vector, Realtime, and Imgproxy disabled; Storage is enabled.",
 );

@@ -113,9 +113,14 @@ port = 54324
 # sender_name = "Admin"
 
 [storage]
-enabled = false
+enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
+
+[storage.buckets.student-record-files]
+public = false
+file_size_limit = "5MiB"
+allowed_mime_types = ["application/pdf", "image/jpeg", "image/png"]
 
 # Uncomment to configure local storage buckets
 # [storage.buckets.images]
