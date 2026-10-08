@@ -25,6 +25,7 @@ import {
   type OrganizationAircraftMaintenanceInput,
 } from "@/lib/aircraft";
 import {
+  addOrganizationMemberByEmail,
   archivePendingOrganizationPerson,
   canManageOrganization,
   canManageOrganizationAdmins,
@@ -434,6 +435,28 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       }
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to create a new invitation link."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAddRegisteredAccount(person: OrganizationPerson) {
+    if (!activeOrganization?.id) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await addOrganizationMemberByEmail(activeOrganization.id, person.email);
+      const [nextMembers, nextPeople, nextInvitations] = await Promise.all([
+        fetchOrganizationMembers(activeOrganization.id),
+        fetchOrganizationPeople(activeOrganization.id),
+        fetchOrganizationMemberInvitations(activeOrganization.id),
+      ]);
+      setMembers(nextMembers);
+      setOrganizationPeople(nextPeople);
+      setMemberInvitations(nextInvitations);
+      setStatus(`${person.email} was added to the organization.`);
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Unable to add this registered account."));
     } finally {
       setSaving(false);
     }
@@ -1866,7 +1889,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             <AdminDataTable label="Pending organization invitations">
               <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {!pendingPeople.length ? <tr><td colSpan={5}><EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /></td></tr> : null}
+                {!pendingPeople.length ? <tr><td colSpan={5}><EmptyState title="No pending invitations" description="Open email invitations will appear here." /></td></tr> : null}
                 {pendingPeople.map((person) => {
                   const invitation = memberInvitations.find(
                     (item) => item.organization_person_id === person.id && item.status === "pending",
@@ -1875,15 +1898,15 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                     <td className="px-3 py-2 font-semibold text-slate-950">{person.organization_display_name || "—"}</td>
                     <td className="px-3 py-2 text-xs text-slate-600">{person.email}</td>
                     <td className="px-3 py-2 text-xs text-slate-600">{invitation?.assigned_instructor_name || "—"}</td>
-                    <td className="px-3 py-2"><StatusBadge tone="warning">Awaiting registration</StatusBadge></td>
-                    <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
+                    <td className="px-3 py-2"><StatusBadge tone="warning">Awaiting acceptance</StatusBadge></td>
+                    <td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" disabled={saving} onClick={() => void handleAddRegisteredAccount(person)}>Add account</CompactButton><CompactButton type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton></div></td>
                   </tr>;
                 })}
               </tbody>
             </AdminDataTable>
           </div>
           <div className="md:hidden">
-            {!pendingPeople.length ? <EmptyState title="No pending invitations" description="Unregistered email invitations will appear here." /> : (
+            {!pendingPeople.length ? <EmptyState title="No pending invitations" description="Open email invitations will appear here." /> : (
               <ul className="grid gap-2" aria-label="Pending organization invitations">
                 {pendingPeople.map((person) => {
                   const invitation = memberInvitations.find(
@@ -1903,6 +1926,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
                         <dd className="mt-1 break-words text-slate-800">{invitation?.assigned_instructor_name || "Not assigned"}</dd>
                       </dl>
                       <div className="mt-3 grid grid-cols-2 gap-2">
+                        <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => void handleAddRegisteredAccount(person)}>Add account</CompactButton>
                         <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => void handleRegenerateInvitation(person)}>Resend email</CompactButton>
                         <CompactButton className="min-h-11 w-full" type="button" tone="danger" disabled={saving} onClick={() => void handleRevokeInvitation(person)}>Revoke</CompactButton>
                       </div>
