@@ -988,7 +988,7 @@ export default function AccountSettingsPanel() {
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">
             <p className="saas-subsection-title">Nickname</p>
-            <p className="saas-meta-text">{displayName.trim() || "未设置"}</p>
+            <p className="saas-meta-text">{displayName.trim() || "Not set"}</p>
           </div>
           <button
             type="button"
