@@ -79,3 +79,45 @@ button { font: inherit; cursor: pointer; }
   .schedule-day>div { grid-template-columns:1fr; }
   .head-actions { display:none; }
 }
+
+/* Readability scale: dense enough for operations, large enough for sustained use. */
+.demo-banner { overflow:hidden; padding:0 10px; font-size:12.5px; white-space:nowrap; }
+.demo-banner span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.breadcrumbs { font-size:13px; }
+.recent-tabs,.tab { font-size:12px; }
+.side-nav button,.sidebar-footer button { font-size:13px; }
+.workspace-switcher button { font-size:11px; }
+.eyebrow { font-size:10.5px; line-height:1.4; }
+.page-head h1 { font-size:22px; line-height:1.18; }
+.page-head small { font-size:12.5px; line-height:1.45; }
+.role-chip,.badge { font-size:12px; line-height:1.35; }
+.section-head h2 { font-size:14px; }
+.section-head span,.toolbar .count { font-size:12px; }
+.task { min-height:62px; }
+.task-copy strong { font-size:14px; line-height:1.3; }
+.task-copy small { font-size:12px; line-height:1.35; }
+.module-list button { min-height:62px; }
+.module-list strong { font-size:13.5px; line-height:1.3; }
+.module-list small { font-size:12px; line-height:1.35; }
+.toolbar :is(input,select),input,select { font-size:13px; }
+table { font-size:13px; }
+th { font-size:12px; letter-spacing:.01em; }
+.row-action,.compact-action,.text-action { font-size:12.5px; }
+.date-nav strong { font-size:13px; }
+.segments button { font-size:12px; }
+.schedule-status { font-size:11.5px; }
+.schedule-day>header span { font-size:11px; }
+.schedule-day>header strong { font-size:13px; }
+.schedule-event time,.schedule-event small { font-size:10.5px; line-height:1.3; }
+.schedule-event strong { font-size:12px; line-height:1.3; }
+.schedule-empty { font-size:11.5px; }
+:is(button,a,input,select):focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
+@media(max-width:760px) {
+  .breadcrumbs { display:none; }
+  .demo-banner { justify-content:flex-start; font-size:11.5px; }
+  .page-head h1 { font-size:20px; }
+  .page-head small { font-size:12px; }
+  .task-copy strong { font-size:13.5px; }
+  .module-list strong { font-size:13px; }
+  .module-list small { font-size:11.5px; }
+}
