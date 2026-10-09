@@ -7,16 +7,17 @@ import {
   AdminDataTable,
   AdminPageHeader,
   CompactButton,
-  CompactToolbar,
   DetailDrawer,
   EmptyState,
-  ManagementDisclosure,
+  ManagementTabs,
   StatusBadge,
   WorksheetCell,
   WorksheetGrid,
   WorksheetHeader,
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
+import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
+import AircraftAssignmentsManager from "@/components/dashboard/AircraftAssignmentsManager";
 import {
   approveAircraftUpdateRequest,
   createAircraft,
@@ -561,6 +562,11 @@ export default function AircraftAdminPanel() {
   const [status, setStatus] = useState("");
   const [showModelForm, setShowModelForm] = useState(false);
   const [showAircraftForm, setShowAircraftForm] = useState(false);
+  const [activeLibraryTab, setActiveLibraryTab] = usePersistentDashboardView({
+    defaultValue: "aircraft",
+    storageKey: "platform-aircraft",
+    values: ["models", "aircraft", "requests", "assignments"] as const,
+  });
 
   const isAdmin = profileRole === "admin";
 
@@ -1828,11 +1834,32 @@ export default function AircraftAdminPanel() {
   return (
     <>
       <div className="grid gap-3">
-        <AdminPageHeader eyebrow="Platform administration" title="Aircraft Library" />
-        <ManagementDisclosure id="platform-aircraft-models" title="Aircraft models" summary={`${models.length}`} className="dashboard-data-workspace" defaultOpen actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} helpContent={<p>Platform models define reusable loading locations, fuel data and approved weight-and-balance envelopes.</p>}>
+        <AdminPageHeader eyebrow="Platform administration" title="Aircraft" />
+        <ManagementTabs
+          id="platform-aircraft-library"
+          label="Aircraft library sections"
+          items={[
+            { id: "models", label: "Aircraft models" },
+            { id: "aircraft", label: "Fleet aircraft" },
+            { id: "requests", label: "W&B requests" },
+            { id: "assignments", label: "Assignments" },
+          ]}
+          activeId={activeLibraryTab}
+          onChange={(id) => setActiveLibraryTab(id as typeof activeLibraryTab)}
+          actions={activeLibraryTab === "models"
+            ? <CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>
+            : activeLibraryTab === "aircraft"
+              ? <CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>
+              : undefined}
+          helpContent={activeLibraryTab === "models"
+            ? <p>Platform models define reusable loading locations, fuel data and approved weight-and-balance envelopes.</p>
+            : activeLibraryTab === "aircraft"
+              ? <p>Manage platform aircraft identity, visibility, weight-and-balance data and organization access.</p>
+              : <p>Review submitted changes before they replace the current aircraft weight-and-balance values.</p>}
+        >
+        {activeLibraryTab === "models" ? (
         <AdminDataTable label="Platform aircraft models">
           <thead>
-            <tr><th colSpan={5} className="p-0 font-normal"><CompactToolbar resultLabel={`${models.length} models`} actions={<CompactButton type="button" tone="primary" onClick={() => openModelEditor()}>Add model</CompactButton>} /></th></tr>
             <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Model</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Envelope</th><th className="px-3 py-2">Fuel burn</th><th className="px-3 py-2 text-right">Actions</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1840,12 +1867,11 @@ export default function AircraftAdminPanel() {
             {models.map((model) => <tr key={model.id} className="hover:bg-blue-50/40"><td className="px-3 py-2 font-semibold text-slate-950">{model.name}</td><td className="px-3 py-2 text-xs text-slate-600">{model.category === "helicopter" ? "Helicopter" : "Airplane"}</td><td className="px-3 py-2 text-xs text-slate-600">{model.chart_type ?? "1d1p"}</td><td className="px-3 py-2 text-xs text-slate-600">{typeof model.avg_fuel_burn_rate === "number" ? `${model.avg_fuel_burn_rate} gph` : "—"}</td><td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" onClick={() => openModelEditor(normalizeModelForm(model))}>Edit</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleDeleteModel(model.id)}>Delete</CompactButton></div></td></tr>)}
           </tbody>
         </AdminDataTable>
-        </ManagementDisclosure>
+        ) : null}
 
-        <ManagementDisclosure id="platform-fleet-aircraft" title="Fleet aircraft" summary={`${aircraft.length}`} className="dashboard-data-workspace" defaultOpen actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} helpContent={<p>Manage platform aircraft identity, visibility, weight-and-balance data and organization access.</p>}>
+        {activeLibraryTab === "aircraft" ? (
         <AdminDataTable label="Platform fleet aircraft">
           <thead>
-            <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${aircraft.length} aircraft`} actions={<CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>} /></th></tr>
             <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Tail</th><th className="px-3 py-2">Model</th><th className="px-3 py-2">Visibility</th><th className="px-3 py-2">Empty weight</th><th className="px-3 py-2">Empty arm</th><th className="px-3 py-2">Organizations</th><th className="px-3 py-2 text-right">Actions</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1856,12 +1882,11 @@ export default function AircraftAdminPanel() {
             })}
           </tbody>
         </AdminDataTable>
-        </ManagementDisclosure>
+        ) : null}
 
-        <ManagementDisclosure id="pending-weight-balance-changes" title="Weight & balance change requests" summary={`${updateRequests.filter((request) => request.status === "pending").length} pending`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Review submitted changes before they replace the current aircraft weight-and-balance values.</p>}>
+        {activeLibraryTab === "requests" ? (
         <AdminDataTable label="Pending weight and balance changes">
           <thead>
-            <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${updateRequests.filter((request) => request.status === "pending").length} pending`} /></th></tr>
             <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Aircraft</th><th className="px-3 py-2">Submitted by</th><th className="px-3 py-2">Empty weight</th><th className="px-3 py-2">Arm</th><th className="px-3 py-2">Lat arm</th><th className="px-3 py-2">Note</th><th className="px-3 py-2 text-right">Review</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1869,7 +1894,9 @@ export default function AircraftAdminPanel() {
             {updateRequests.filter((request) => request.status === "pending").map((request) => <tr key={request.id} className="hover:bg-blue-50/40"><td className="px-3 py-2 font-semibold text-slate-950">{request.aircraft_tail_number}</td><td className="px-3 py-2 text-xs text-slate-600">{request.submitted_by_label}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_weight ?? "—"} → {request.proposed_empty_weight ?? "—"}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_arm ?? "—"} → {request.proposed_empty_arm ?? "—"}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-600">{request.current_empty_lat_arm ?? "—"} → {request.proposed_empty_lat_arm ?? "—"}</td><td className="max-w-48 truncate px-3 py-2 text-xs text-slate-600">{request.note || "—"}</td><td className="px-3 py-2"><div className="flex justify-end gap-1"><CompactButton type="button" tone="primary" disabled={saving} onClick={() => void handleApproveRequest(request)}>Approve</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleRejectRequest(request)}>Reject</CompactButton></div></td></tr>)}
           </tbody>
         </AdminDataTable>
-        </ManagementDisclosure>
+        ) : null}
+        {activeLibraryTab === "assignments" ? <AircraftAssignmentsManager embedded /> : null}
+        </ManagementTabs>
       </div>
 
       {status ? <p className="saas-meta-text">{status}</p> : null}

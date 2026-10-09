@@ -1010,10 +1010,10 @@ export default function SavedPeopleManager() {
     {!certificatesAvailable ? <p className="saas-feedback saas-feedback-warning">Certificate management is temporarily unavailable.</p> : null}
     <ManagementDisclosure
       id="saved-people"
-      title="Saved People"
+      title="People"
       summary={loading ? "Loading…" : `${people.length}`}
       className="people-workspace"
-      actions={<button type="button" className="secondary-button icon-button" aria-label="Add person" title="Add person" onClick={() => setShowPersonForm(true)}><ActionIcon kind="add" /></button>}
+      actions={<button type="button" className="primary-button" onClick={() => setShowPersonForm(true)}>Add person</button>}
       defaultOpen
       openOnAction
       helpContent={<><p>Saved People stores private student, instructor and passenger records used by your tools.</p><p>Expand a person to manage certificates or link the record to a verified PilotSeal account. Linking does not expose your private notes or certificates.</p></>}

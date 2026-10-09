@@ -12,30 +12,31 @@ export type DashboardNavItem = {
 };
 
 export const dashboardPrimaryNavigation: DashboardNavItem[] = [
+  { href: "/dashboard", label: "Home", access: "all" },
   { href: "/dashboard/schedule", label: "Schedule", access: "all", featureId: "cfi_schedule" },
-  { href: "/dashboard/saved-people", label: "People", access: "all" },
-  { href: "/dashboard/my-aircraft", label: "Aircraft", access: "all" },
-  { href: "/dashboard/reports", label: "Safety Reports", access: "all" },
-  { href: "/dashboard/records", label: "Records", access: "all" },
+  { href: "/dashboard/people", label: "People", access: "all" },
+  { href: "/dashboard/aircraft", label: "Aircraft", access: "all" },
+  { href: "/dashboard/reports", label: "Reports", access: "all" },
+  { href: "/dashboard/flight-briefs", label: "Flight Briefs", access: "all" },
+  { href: "/dashboard/endorsements", label: "Endorsements", access: "all" },
   { href: "/dashboard/notifications", label: "Notifications", access: "all" },
   { href: "/dashboard/account-settings", label: "Account", access: "all" },
 ];
 
 export const dashboardOrganizationNavigation: DashboardNavItem[] = [
-  { href: "/dashboard/organization/fleet", label: "Aircraft records", access: "organization" },
-  { href: "/dashboard/organization/people", label: "Members", access: "organization-manager", organizationPermission: "members" },
+  { href: "/dashboard/organization/people", label: "People", access: "organization-manager", organizationPermission: "members" },
+  { href: "/dashboard/organization/aircraft", label: "Aircraft", access: "organization" },
+  { href: "/dashboard/organization/reports", label: "Reports", access: "organization" },
   { href: "/dashboard/organization/endorsements", label: "Endorsements", access: "organization-manager", organizationPermission: "endorsements" },
-  { href: "/dashboard/organization/audit", label: "Audit Log", access: "organization-manager", organizationPermission: "audit" },
+  { href: "/dashboard/organization/activity", label: "Activity", access: "organization-manager", organizationPermission: "audit" },
 ];
 
 export const dashboardPlatformNavigation: DashboardNavItem[] = [
-  { href: "/dashboard/admin/overview", label: "Platform Overview", access: "platform" },
-  { href: "/dashboard/admin/access", label: "Organizations & Access", access: "platform" },
-  { href: "/dashboard/admin/aircraft", label: "Aircraft Library", access: "platform" },
-  { href: "/dashboard/admin/aircraft-assignments", label: "Aircraft Assignments", access: "platform" },
-  { href: "/dashboard/admin/endorsements", label: "Endorsement Approvals", access: "platform" },
-  { href: "/dashboard/admin/notifications", label: "Platform Notices", access: "platform" },
-  { href: "/dashboard/admin/audit", label: "Audit Log", access: "platform" },
+  { href: "/dashboard/admin/organizations", label: "Organizations", access: "platform" },
+  { href: "/dashboard/admin/aircraft", label: "Aircraft", access: "platform" },
+  { href: "/dashboard/admin/endorsements", label: "Endorsements", access: "platform" },
+  { href: "/dashboard/admin/notices", label: "Notices", access: "platform" },
+  { href: "/dashboard/admin/activity", label: "Activity", access: "platform" },
 ];
 
 export function isDashboardDestinationActive(pathname: string, href: string) {
@@ -51,9 +52,8 @@ export function getDashboardWorkspace(pathname: string): DashboardWorkspace {
 }
 
 export function getPersonalDashboardHref(enabledFeatureIds: readonly string[]) {
-  return enabledFeatureIds.includes("cfi_schedule")
-    ? "/dashboard/schedule"
-    : "/dashboard/account-settings";
+  void enabledFeatureIds;
+  return "/dashboard";
 }
 
 export type DashboardWorkspaceLink = {
@@ -83,7 +83,7 @@ export function getDashboardWorkspaceLinks(input: {
       : []),
     ...(input.isPlatformAdmin
       ? [{
-          href: "/dashboard/admin/overview",
+          href: "/dashboard/admin/organizations",
           label: "Platform",
           workspace: "platform" as const,
         }]
@@ -110,5 +110,5 @@ export function getDashboardLinksForWorkspace(input: {
 export function getOrganizationDashboardHref(permissions: readonly OrganizationPermission[]) {
   return dashboardOrganizationNavigation.find(
     (item) => item.organizationPermission && permissions.includes(item.organizationPermission)
-  )?.href ?? "/dashboard/organization/fleet";
+  )?.href ?? "/dashboard/organization/aircraft";
 }

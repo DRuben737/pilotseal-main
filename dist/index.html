@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#102f47" />
+  <title>PilotSeal Dashboard Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="demo-banner"><strong>Private demo</strong><span>Synthetic data · changes reset when this page reloads</span></div>
+  <main class="app-shell">
+    <aside class="sidebar" data-expanded="true" aria-label="Dashboard navigation">
+      <div class="brand"><span class="mark">PS</span><span class="brand-copy"><strong>PilotSeal</strong><small>Alex Morgan</small></span></div>
+      <div class="workspace-switcher" role="tablist" aria-label="Switch workspace">
+        <button type="button" data-workspace="personal" aria-selected="true">Personal</button>
+        <button type="button" data-workspace="organization">Organization</button>
+        <button type="button" data-workspace="platform">Platform</button>
+      </div>
+      <p class="section-label" id="workspace-label">Personal</p>
+      <nav class="side-nav" id="side-nav"></nav>
+      <div class="sidebar-footer">
+        <button type="button" id="collapse"><span aria-hidden="true">‹</span><span class="nav-copy">Collapse</span></button>
+        <button type="button"><span aria-hidden="true">＋</span><span class="nav-copy">New endorsement</span></button>
+        <button type="button"><span aria-hidden="true">↪</span><span class="nav-copy">Sign out</span></button>
+      </div>
+    </aside>
+    <section class="content">
+      <header class="mobile-header"><button type="button" id="mobile-menu" aria-expanded="false">☰</button><strong id="mobile-title">Home</strong></header>
+      <div class="breadcrumbs"><span id="crumb-workspace">Personal</span><span>/</span><strong id="crumb-page">Home</strong></div>
+      <div class="recent-tabs" id="recent-tabs" aria-label="Open dashboard pages"></div>
+      <div class="page" id="page"></div>
+    </section>
+  </main>
+  <div class="overlay" id="overlay" hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+    <header><div><p>PEOPLE</p><h2 id="drawer-title">Person details</h2></div><button type="button" id="drawer-close" aria-label="Close">×</button></header>
+    <form id="drawer-form"><label>Name<input name="name" /></label><label>Role<select name="role"><option>Student</option><option>Instructor</option></select></label><label>Email<input name="email" type="email" /></label><label>Certificate<input name="certificate" /></label><div class="drawer-actions"><button type="button" id="drawer-cancel">Cancel</button><button type="submit" class="primary">Apply changes</button></div></form>
+  </aside>
+  <script src="app.js"></script>
+</body>
+</html>

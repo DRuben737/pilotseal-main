@@ -5,7 +5,6 @@ import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import {
   AdminDataTable,
   CompactButton,
-  CompactToolbar,
   DetailDrawer,
   EmptyState,
   ManagementDisclosure,
@@ -128,14 +127,6 @@ export default function OrganizationEndorsementRequests({ organizationId, embedd
       <ManagementDisclosure id="organization-endorsement-requests" title="Endorsement change requests" summary={`${requests.length}`} actions={<CompactButton type="button" tone="primary" onClick={() => { setForm(emptyForm); setOpen(true); }}>Request change</CompactButton>} helpContent={<p>Propose a new endorsement or a change to existing wording. Platform review is required before a proposal affects live templates.</p>}>
       <AdminDataTable label="Endorsement template change requests">
         <thead>
-          <tr>
-            <th colSpan={5} className="p-0 font-normal">
-              <CompactToolbar
-                resultLabel={`${requests.length} requests`}
-                actions={<CompactButton type="button" tone="primary" onClick={() => { setForm(emptyForm); setOpen(true); }}>Request change</CompactButton>}
-              />
-            </th>
-          </tr>
           <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
             <th className="px-3 py-2">Endorsement</th>
             <th className="px-3 py-2">Change</th>

@@ -564,6 +564,156 @@
   }
 }
 
+.dashboard-task-center {
+  min-width: 0;
+}
+
+.dashboard-task-section {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0 0 1.25rem;
+}
+
+.dashboard-task-section + .dashboard-task-section {
+  padding-top: 1rem;
+}
+
+.dashboard-task-section-heading {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dashboard-task-section-heading h2 {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-task-section-heading span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.dashboard-task-list,
+.dashboard-module-list {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.dashboard-task-row {
+  display: flex;
+  min-height: 3.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid #eef2f7;
+  padding: 0.55rem 0.75rem;
+  transition: background-color 140ms ease;
+}
+
+.dashboard-task-row:last-child,
+.dashboard-module-list a:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-task-row:hover,
+.dashboard-task-row:focus-visible,
+.dashboard-module-list a:hover,
+.dashboard-module-list a:focus-visible {
+  background: #f8fafc;
+  outline: none;
+}
+
+.dashboard-task-priority {
+  width: 0.22rem;
+  min-height: 2rem;
+  flex: none;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.dashboard-task-priority-critical { background: #dc2626; }
+.dashboard-task-priority-high { background: #d97706; }
+.dashboard-task-priority-normal { background: #2563eb; }
+.dashboard-task-priority-low { background: #94a3b8; }
+
+.dashboard-task-title,
+.dashboard-task-detail {
+  display: block;
+}
+
+.dashboard-task-title {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.dashboard-task-detail {
+  margin-top: 0.12rem;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-task-arrow {
+  flex: none;
+  color: #94a3b8;
+}
+
+.dashboard-task-feedback {
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.dashboard-task-feedback-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.dashboard-module-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-module-list a {
+  display: flex;
+  min-height: 3.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-right: 1px solid #eef2f7;
+  border-bottom: 1px solid #eef2f7;
+  padding: 0.6rem 0.75rem;
+  color: #0f172a;
+}
+
+.dashboard-module-list a:nth-child(2n) { border-right: 0; }
+.dashboard-module-list a:nth-last-child(-n + 2) { border-bottom: 0; }
+.dashboard-module-list strong,
+.dashboard-module-list small { display: block; }
+.dashboard-module-list strong { font-size: 0.8rem; }
+.dashboard-module-list small { margin-top: 0.15rem; color: #64748b; font-size: 0.72rem; }
+
+@media (max-width: 600px) {
+  .dashboard-task-row { align-items: flex-start; flex-wrap: wrap; }
+  .dashboard-task-row .dashboard-task-priority { align-self: stretch; }
+  .dashboard-task-row .dashboard-task-arrow { margin-left: auto; }
+  .dashboard-module-list { grid-template-columns: 1fr; }
+  .dashboard-module-list a,
+  .dashboard-module-list a:nth-child(2n),
+  .dashboard-module-list a:nth-last-child(-n + 2) { border-right: 0; border-bottom: 1px solid #eef2f7; }
+  .dashboard-module-list a:last-child { border-bottom: 0; }
+}
+
 @media print {
   @page {
     size: landscape;
@@ -694,6 +844,114 @@ summary:focus-visible {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* Dashboard shell v2: explicit persistent navigation and compact operations workspace. */
+@media (min-width: 761px) {
+  .dashboard-sidebar-slot {
+    flex-basis: 15.75rem;
+    width: 15.75rem;
+  }
+
+  .dashboard-sidebar-slot[data-expanded="false"] {
+    flex-basis: 3.625rem;
+    width: 3.625rem;
+  }
+
+  .dashboard-sidebar[data-expanded="false"],
+  .dashboard-sidebar[data-expanded="false"]:hover,
+  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) {
+    width: 3.625rem;
+    padding: 0.25rem;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-sidebar-copy,
+  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-sidebar-copy {
+    width: 0;
+    flex: 0 0 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-workspace-switcher,
+  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-workspace-switcher {
+    max-height: 0;
+    margin-top: 0;
+    border-color: transparent;
+    padding-top: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-sidebar-section-label,
+  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-sidebar-section-label {
+    min-width: 0;
+    max-height: 0;
+    padding-block: 0;
+    opacity: 0;
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-sidebar-link,
+  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-sidebar-link {
+    width: 3rem;
+    min-width: 0;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+}
+
+.dashboard-sidebar {
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, #102f47 0%, #0b2235 100%);
+}
+
+.dashboard-sidebar-toggle svg {
+  pointer-events: none;
+}
+
+.dashboard-content {
+  min-height: calc(100dvh - 2rem);
+}
+
+.dashboard-content .admin-page-header {
+  margin-bottom: 0.75rem;
+}
+
+.dashboard-content .admin-data-table :is(th, td) {
+  height: 36px;
+  padding-block: 0.25rem;
+}
+
+.admin-dialog {
+  border-left: 1px solid #e2e8f0;
+  animation: dashboard-drawer-in 180ms ease-out;
+}
+
+@keyframes dashboard-drawer-in {
+  from { transform: translateX(1.5rem); opacity: 0.75; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 760px) {
+  .dashboard-visited-tabs {
+    display: none;
+  }
+
+  .dashboard-breadcrumbs span:first-child,
+  .dashboard-breadcrumbs span[aria-hidden="true"] {
+    display: none;
+  }
+
+  .admin-dialog {
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
   }
 }
 
@@ -8811,10 +9069,6 @@ summary:focus-visible {
     transition: transform 150ms ease;
   }
 
-  .dashboard-mobile-page-menu > button > .dashboard-mobile-chevron-open {
-    transform: rotate(180deg);
-  }
-
   .dashboard-mobile-page-menu > nav {
     position: absolute;
     top: calc(100% + 0.4rem);
@@ -8904,5 +9158,347 @@ summary:focus-visible {
     width: 100%;
     max-width: none;
     min-height: 44px;
+  }
+}
+
+/* vue-element-admin inspired content workspace; the PilotSeal sidebar remains unchanged. */
+.dashboard-content {
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 0;
+  background: #fff;
+  padding: 0 1rem 2rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-admin-chrome {
+  margin: 0 -1rem 1rem;
+  background: #fff;
+}
+
+.dashboard-breadcrumbs {
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  gap: 0.6rem;
+  overflow-x: auto;
+  border-bottom: 1px solid #ebeef5;
+  padding: 0 1rem;
+  color: #909399;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.dashboard-breadcrumbs span:nth-last-child(1) {
+  color: #606266;
+}
+
+.dashboard-visited-tabs {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 0.35rem;
+  overflow-x: auto;
+  border-bottom: 1px solid #d8dce5;
+  padding: 0.3rem 0.75rem;
+  background: #fff;
+  white-space: nowrap;
+}
+
+.dashboard-visited-tabs > span {
+  display: inline-flex;
+  height: 26px;
+  flex: none;
+  align-items: center;
+  border: 1px solid #d8dce5;
+  background: #fff;
+  color: #495060;
+  font-size: 0.72rem;
+}
+
+.dashboard-visited-tabs a {
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  padding: 0 0.55rem;
+}
+
+.dashboard-visited-tabs button {
+  display: grid;
+  width: 24px;
+  height: 100%;
+  cursor: pointer;
+  place-items: center;
+  color: inherit;
+  transition: background-color 160ms ease;
+}
+
+.dashboard-visited-tabs button:hover,
+.dashboard-visited-tabs button:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  outline: none;
+}
+
+.dashboard-visited-tabs > .dashboard-visited-tab-active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.dashboard-content .dashboard-surface,
+.dashboard-content .management-disclosure,
+.dashboard-content .management-disclosure.dashboard-data-workspace,
+.dashboard-content .management-disclosure.people-workspace,
+.dashboard-content .saas-panel,
+.dashboard-content .saas-subpanel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dashboard-content .management-disclosure > .management-disclosure-header {
+  border-bottom: 1px solid #ebeef5;
+  padding: 0.35rem 0;
+}
+
+.dashboard-content .management-disclosure > .management-disclosure-content {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.dashboard-content .management-disclosure.embedded-workspace > .management-disclosure-header,
+.dashboard-content .management-tabs .management-disclosure > .management-disclosure-header {
+  display: none;
+}
+
+.dashboard-content .management-tabs {
+  background: #fff;
+}
+
+.dashboard-content .admin-data-table {
+  max-width: 100%;
+  border: 1px solid #ebeef5;
+  border-radius: 0;
+}
+
+.dashboard-content .admin-data-table :is(th, td) {
+  height: 44px;
+  border-right: 1px solid #ebeef5;
+  border-bottom: 1px solid #ebeef5;
+  padding: 0.4rem 0.75rem;
+  line-height: 1.2rem;
+  vertical-align: middle;
+}
+
+.dashboard-content .admin-data-table :is(th, td):last-child {
+  border-right: 0;
+}
+
+.dashboard-content .admin-data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dashboard-content .admin-data-table thead tr,
+.dashboard-content .admin-data-table thead tr[class] {
+  background: #f5f7fa;
+  color: #606266;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.dashboard-content .admin-data-table tbody tr:hover {
+  background: #f5f7fa;
+}
+
+.dashboard-content .admin-toolbar :is(input, select),
+.dashboard-content .people-search input {
+  height: 36px;
+  border: 1px solid #dcdfe6;
+  border-radius: 2px;
+  background: #fff;
+  padding: 0 0.75rem;
+  font-size: 0.8rem;
+}
+
+.dashboard-content :is(.primary-button, .secondary-button, .ghost-button, .danger-button) {
+  min-height: 32px;
+  border-radius: 2px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.dashboard-content .people-toolbar {
+  min-height: 48px;
+  border-bottom: 1px solid #ebeef5;
+  padding: 0.45rem 0;
+}
+
+.dashboard-content .people-toolbar > .saas-meta-text:first-child {
+  display: none;
+}
+
+.dashboard-content .people-search {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.dashboard-content .people-table,
+.dashboard-content .people-data-grid {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dashboard-content .saas-empty-state {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 1rem 0;
+}
+
+.dashboard-content :is(.rounded-xl, .rounded-2xl) {
+  border-radius: 2px;
+}
+
+.admin-dialog :is(.rounded-lg, .rounded-xl, .rounded-2xl) {
+  border-radius: 2px;
+}
+
+.admin-dialog article {
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .dashboard-mobile-navigation {
+    position: relative;
+    top: auto;
+  }
+
+  .dashboard-content {
+    border: 0;
+    padding: 0 0.75rem 1.5rem;
+  }
+
+  .dashboard-admin-chrome {
+    margin-inline: -0.75rem;
+  }
+
+  .dashboard-breadcrumbs {
+    min-height: 42px;
+    padding-inline: 0.75rem;
+  }
+
+  .dashboard-visited-tabs {
+    padding-inline: 0.5rem;
+  }
+
+  .dashboard-content .admin-data-table > div {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .dashboard-content .admin-toolbar {
+    align-items: stretch;
+  }
+
+  .admin-dialog {
+    inset: auto 0 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: calc(100dvh - 1rem) !important;
+    translate: none !important;
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shell *,
+  .dashboard-shell *::before,
+  .dashboard-shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Final dashboard shell overrides must remain after legacy responsive rules. */
+@media (min-width: 761px) {
+  .dashboard-sidebar-slot[data-expanded="true"] {
+    width: 15.75rem;
+    flex: 0 0 15.75rem;
+  }
+
+  .dashboard-sidebar-slot[data-expanded="false"] {
+    width: 3.625rem;
+    flex: 0 0 3.625rem;
+  }
+
+  .dashboard-sidebar[data-expanded="false"],
+  .dashboard-sidebar[data-expanded="false"]:hover,
+  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) {
+    width: 3.625rem;
+    padding: 0.25rem;
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-sidebar-copy {
+    width: 0;
+    flex: 0 0 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-workspace-switcher {
+    max-height: 0;
+    margin-top: 0;
+    padding-top: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-sidebar-section-label {
+    min-width: 0;
+    max-height: 0;
+    padding-block: 0;
+    opacity: 0;
+  }
+
+  .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-sidebar-link {
+    width: 3rem;
+    min-width: 0;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-visited-tabs {
+    display: none;
+  }
+
+  .dashboard-breadcrumbs span:first-child,
+  .dashboard-breadcrumbs span[aria-hidden="true"] {
+    display: none;
+  }
+
+  .admin-dialog {
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
   }
 }

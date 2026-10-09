@@ -28,7 +28,7 @@ import { formatUsDateTime } from "@/lib/date-format";
 
 const PAGE_SIZE = 25;
 
-export default function AircraftAssignmentsManager() {
+export default function AircraftAssignmentsManager({ embedded = false }: { embedded?: boolean }) {
   const { session } = useAuthSession();
   const [aircraft, setAircraft] = useState<AircraftRecord[]>([]);
   const [organizations, setOrganizations] = useState<PlatformOrganization[]>([]);
@@ -171,12 +171,12 @@ export default function AircraftAssignmentsManager() {
   const selectedCount = selectedIds.size;
 
   return (
-    <section className="space-y-5 pb-24">
-      <AdminPageHeader eyebrow="Platform administration" title="Aircraft Assignments" />
+    <section className={`${embedded ? "" : "space-y-5"} pb-24`}>
+      {!embedded ? <AdminPageHeader eyebrow="Platform administration" title="Aircraft Assignments" /> : null}
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {notice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p> : null}
 
-      <ManagementDisclosure id="aircraft-assignments" title="Aircraft organization assignments" summary={loading ? "Loading…" : `${aircraft.length}`} helpContent={<><p>Grant one or more organizations access to eligible private aircraft owned by your Platform Super Admin account.</p><p>Assignments never change aircraft ownership or private visibility. Removing access leaves unrelated organization access unchanged.</p></>}>
+      <ManagementDisclosure id="aircraft-assignments" title="Aircraft organization assignments" summary={loading ? "Loading…" : `${aircraft.length}`} className={embedded ? "embedded-workspace" : ""}>
       <div className="hidden md:block"><AdminDataTable label="Aircraft organization assignments">
         <caption className="sr-only">Private aircraft owned by the signed-in Platform Super Admin</caption>
         <thead>
@@ -215,11 +215,11 @@ export default function AircraftAssignmentsManager() {
           <select aria-label="Filter by organization" value={organizationFilter} onChange={(event) => setOrganizationFilter(event.target.value)} className={inputClass}><option value="">All organizations</option>{organizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           <select aria-label="Filter by assignment status" value={assignmentFilter} onChange={(event) => setAssignmentFilter(event.target.value as typeof assignmentFilter)} className={inputClass}><option value="">Any access status</option><option value="assigned">Assigned</option><option value="unassigned">Unassigned</option></select>
         </FilterToolbar>
-        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><label className="flex min-h-10 items-center gap-2 font-semibold text-slate-700"><input type="checkbox" checked={pageSelected} onChange={togglePage} /> Select page</label>{filtered.length <= 200 ? <button type="button" onClick={selectAllFiltered} className="min-h-10 font-semibold text-blue-700">Select all filtered</button> : null}</div>
-        {!loading && !pageRows.length ? <div className="rounded-2xl border border-slate-200 bg-white"><EmptyState title="No eligible aircraft" description="Only private aircraft owned by this Platform Super Admin account appear here." /></div> : null}
+        <div className="flex items-center justify-between border-y border-slate-200 bg-white px-3 py-2 text-sm"><label className="flex min-h-10 items-center gap-2 font-semibold text-slate-700"><input type="checkbox" checked={pageSelected} onChange={togglePage} /> Select page</label>{filtered.length <= 200 ? <button type="button" onClick={selectAllFiltered} className="min-h-10 font-semibold text-blue-700">Select all filtered</button> : null}</div>
+        {!loading && !pageRows.length ? <EmptyState title="No eligible aircraft" description="Only private aircraft owned by this Platform Super Admin account appear here." /> : null}
         {pageRows.map((item) => {
           const organizationIds = assignmentMap.get(item.id) ?? [];
-          return <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start gap-3"><input className="mt-1" type="checkbox" aria-label={`Select ${item.tail_number}`} checked={selectedIds.has(item.id)} onChange={() => toggleAircraft(item.id)} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><h2 className="font-semibold text-slate-950">{item.tail_number}</h2><p className="text-sm text-slate-500">{item.model?.name ?? "Unknown model"}</p></div><StatusBadge tone={item.operational_status === "grounded" ? "danger" : item.operational_status === "in_maintenance" ? "warning" : "success"}>● {formatStatus(item.operational_status ?? "available")}</StatusBadge></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-slate-400">Organizations</dt><dd className="mt-1 font-semibold text-slate-800">{organizationIds.length}</dd></div><div><dt className="text-xs text-slate-400">Updated</dt><dd className="mt-1 text-slate-700">{formatDate(item.updated_at)}</dd></div></dl><p className="mt-3 truncate text-xs text-slate-500">{organizationIds.length ? organizationIds.map((id) => organizationMap.get(id) ?? "Unknown").join(", ") : "No organization access"}</p><button type="button" onClick={() => { setSelectedIds(new Set([item.id])); setDrawerMode("add"); }} className="mt-3 min-h-11 w-full rounded-xl border border-blue-200 text-sm font-semibold text-blue-700">Manage</button></div></div></article>;
+          return <article key={item.id} className="border-b border-slate-200 bg-white px-1 py-4"><div className="flex items-start gap-3"><input className="mt-1" type="checkbox" aria-label={`Select ${item.tail_number}`} checked={selectedIds.has(item.id)} onChange={() => toggleAircraft(item.id)} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><h2 className="font-semibold text-slate-950">{item.tail_number}</h2><p className="text-sm text-slate-500">{item.model?.name ?? "Unknown model"}</p></div><StatusBadge tone={item.operational_status === "grounded" ? "danger" : item.operational_status === "in_maintenance" ? "warning" : "success"}>● {formatStatus(item.operational_status ?? "available")}</StatusBadge></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-slate-400">Organizations</dt><dd className="mt-1 font-semibold text-slate-800">{organizationIds.length}</dd></div><div><dt className="text-xs text-slate-400">Updated</dt><dd className="mt-1 text-slate-700">{formatDate(item.updated_at)}</dd></div></dl><p className="mt-3 truncate text-xs text-slate-500">{organizationIds.length ? organizationIds.map((id) => organizationMap.get(id) ?? "Unknown").join(", ") : "No organization access"}</p><button type="button" onClick={() => { setSelectedIds(new Set([item.id])); setDrawerMode("add"); }} className="mt-3 min-h-9 w-full border border-blue-200 text-sm font-semibold text-blue-700">Manage</button></div></div></article>;
         })}
         <div className="flex items-center justify-between text-sm text-slate-600"><button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => value - 1)} className="min-h-10 rounded-xl border border-slate-200 px-3 disabled:opacity-40">Previous</button><span>{currentPage} / {pageCount}</span><button type="button" disabled={currentPage >= pageCount} onClick={() => setPage((value) => value + 1)} className="min-h-10 rounded-xl border border-slate-200 px-3 disabled:opacity-40">Next</button></div>
       </div>
@@ -231,7 +231,6 @@ export default function AircraftAssignmentsManager() {
       </BulkActionBar>
 
       <DetailDrawer open={drawerMode !== null} onClose={() => setDrawerMode(null)} title={drawerMode === "remove" ? "Remove organization access" : "Add organization access"} description="Choose one or more organizations. Existing unrelated access remains unchanged.">
-        <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-4 text-center"><Metric label="Aircraft" value={selectedCount} /><Metric label="Organizations" value={selectedOrganizationIds.size} /><Metric label="Max changes" value={selectedCount * selectedOrganizationIds.size} /></div>
         <fieldset className="mt-5"><legend className="text-sm font-semibold text-slate-900">Organizations</legend><div className="mt-2 divide-y divide-slate-100 rounded-2xl border border-slate-200">{organizations.map((item) => <label key={item.id} className="flex min-h-12 cursor-pointer items-center gap-3 px-4 hover:bg-slate-50"><input type="checkbox" checked={selectedOrganizationIds.has(item.id)} onChange={() => toggleOrganization(item.id)} /><span className="flex-1 text-sm font-medium text-slate-800">{item.name}</span><span className="text-xs text-slate-400">{item.member_count} members</span></label>)}</div></fieldset>
         <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setDrawerMode(null)} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold">Cancel</button><button type="button" disabled={!selectedOrganizationIds.size} onClick={() => setConfirmOpen(true)} className="min-h-11 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-40">Save</button></div>
       </DetailDrawer>
@@ -240,6 +239,5 @@ export default function AircraftAssignmentsManager() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) { return <div><p className="text-xl font-semibold text-slate-950">{value}</p><p className="text-xs text-slate-500">{label}</p></div>; }
 function formatDate(value?: string | null) { return formatUsDateTime(value); }
 function formatStatus(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }

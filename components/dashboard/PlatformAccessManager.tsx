@@ -6,17 +6,17 @@ import {
   AdminDataTable,
   AdminPageHeader,
   CompactButton,
-  CompactToolbar,
   ConfirmDialog,
   DetailDrawer,
   EmptyState,
-  ManagementDisclosure,
+  ManagementTabs,
   StatusBadge,
   WorksheetCell,
   WorksheetGrid,
   WorksheetHeader,
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
+import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { formatUsDateTime } from "@/lib/date-format";
 import Panel from "@/components/ui/Panel";
@@ -36,8 +36,9 @@ import {
 import { fetchCurrentProfile } from "@/lib/profile";
 
 type DrawerMode = "organization" | "admin" | "revoke" | "request" | null;
+type AccessTab = "requests" | "organizations" | "admins" | "audit";
 
-export default function PlatformAccessManager() {
+export default function PlatformAccessManager({ activityOnly = false, embedded = false }: { activityOnly?: boolean; embedded?: boolean }) {
   const { loading: authLoading, session } = useAuthSession();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [admins, setAdmins] = useState<PlatformAdminAccount[]>([]);
@@ -59,6 +60,17 @@ export default function PlatformAccessManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [storedAccessTab, setStoredAccessTab] = usePersistentDashboardView({
+    defaultValue: "organizations",
+    enabled: !activityOnly,
+    storageKey: "platform-organizations",
+    values: ["requests", "organizations", "admins"] as const,
+  });
+  const activeAccessTab: AccessTab = activityOnly ? "audit" : storedAccessTab;
+
+  function setActiveAccessTab(id: AccessTab) {
+    if (id !== "audit") setStoredAccessTab(id);
+  }
 
   const loadData = useCallback(async () => {
     const userId = session?.user?.id;
@@ -193,23 +205,42 @@ export default function PlatformAccessManager() {
 
   return (
     <div className="grid gap-3">
-      <AdminPageHeader
+      {!embedded ? <AdminPageHeader
         eyebrow="Platform administration"
-        title="Platform Access"
-        action={(
+        title={activityOnly ? "Activity" : "Organizations"}
+        action={!activityOnly ? (
           <div className="flex gap-2">
             <CompactButton type="button" onClick={() => setDrawerMode("admin")}>Grant access</CompactButton>
             <CompactButton type="button" tone="primary" onClick={() => setDrawerMode("organization")}>Add organization</CompactButton>
           </div>
-        )}
-      />
+        ) : undefined}
+      /> : null}
       {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
       {status ? <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{status}</p> : null}
 
-      <ManagementDisclosure id="company-registration-requests" title="Company registration requests" summary={`${organizationRequests.filter((request) => request.status === "pending").length} pending`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Review verified company registration requests. Approval creates an organization and assigns the requester as its first Owner; rejection creates nothing.</p>}>
+      <ManagementTabs
+        id="platform-access-sections"
+        label="Platform access sections"
+        items={activityOnly ? [
+          { id: "audit", label: "Access activity", summary: auditLog.length },
+        ] : [
+          { id: "requests", label: "Registration requests" },
+          { id: "organizations", label: "Organizations" },
+          { id: "admins", label: "Administrators" },
+        ]}
+        activeId={activeAccessTab}
+        onChange={(id) => setActiveAccessTab(id as AccessTab)}
+        helpContent={activeAccessTab === "requests"
+          ? <p>Review verified company registration requests. Approval creates an organization and assigns the requester as its first Owner; rejection creates nothing.</p>
+          : activeAccessTab === "organizations"
+            ? <p>Organizations are the tenant workspaces on PilotSeal. Add creates the workspace and assigns its first Owner in one audited step.</p>
+            : activeAccessTab === "admins"
+              ? <p>Platform administrators can review registrations and manage platform-wide resources. This role is independent from organization membership.</p>
+              : <p>This immutable history records platform role grants and revocations, including the actor, target, reason and time.</p>}
+      >
+      {activeAccessTab === "requests" ? (
       <AdminDataTable label="Company registration requests">
         <thead>
-          <tr><th colSpan={6} className="p-0 font-normal"><CompactToolbar resultLabel={`${organizationRequests.filter((request) => request.status === "pending").length} pending · ${organizationRequests.length} total`} /></th></tr>
           <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Company</th><th className="px-3 py-2">Requester</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Submitted</th><th className="px-3 py-2 text-right">Actions</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -226,12 +257,11 @@ export default function PlatformAccessManager() {
           ))}
         </tbody>
       </AdminDataTable>
-      </ManagementDisclosure>
+      ) : null}
 
-      <ManagementDisclosure id="platform-organizations" title="Organizations" summary={`${organizations.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Organizations are the tenant workspaces on PilotSeal. Add creates the workspace and assigns its first Owner in one audited step.</p>}>
+      {activeAccessTab === "organizations" ? (
       <AdminDataTable label="Organizations">
         <thead>
-          <tr><th colSpan={5} className="p-0 font-normal"><CompactToolbar resultLabel={`${organizations.length} organizations`} /></th></tr>
           <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
             <th className="px-3 py-2">Organization</th>
             <th className="px-3 py-2">Owner</th>
@@ -253,12 +283,11 @@ export default function PlatformAccessManager() {
           ))}
         </tbody>
       </AdminDataTable>
-      </ManagementDisclosure>
+      ) : null}
 
-      <ManagementDisclosure id="platform-administrators" title="Platform administrators" summary={`${admins.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Platform administrators can review registrations and manage platform-wide resources. This role is independent from organization membership.</p>}>
+      {activeAccessTab === "admins" ? (
       <AdminDataTable label="Platform administrators">
         <thead>
-          <tr><th colSpan={4} className="p-0 font-normal"><CompactToolbar resultLabel={`${admins.length} accounts`} /></th></tr>
           <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
             <th className="px-3 py-2">Name</th>
             <th className="px-3 py-2">Email</th>
@@ -294,9 +323,9 @@ export default function PlatformAccessManager() {
           })}
         </tbody>
       </AdminDataTable>
-      </ManagementDisclosure>
+      ) : null}
 
-      <ManagementDisclosure id="platform-role-audit" title="Platform role audit trail" summary={`${auditLog.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>This immutable history records platform role grants and revocations, including the actor, target, reason and time.</p>}>
+      {activeAccessTab === "audit" ? (
       <AdminDataTable label="Platform role audit trail">
         <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
           <tr><th className="px-3 py-2">Changed by</th><th className="px-3 py-2">Action</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Reason</th><th className="px-3 py-2">When</th></tr>
@@ -314,7 +343,8 @@ export default function PlatformAccessManager() {
           ))}
         </tbody>
       </AdminDataTable>
-      </ManagementDisclosure>
+      ) : null}
+      </ManagementTabs>
 
       <DetailDrawer open={drawerMode === "organization"} onClose={() => setDrawerMode(null)} title="Add organization" description="Create the organization and assign its first Owner in one step.">
         <form onSubmit={handleCreateOrganization}>

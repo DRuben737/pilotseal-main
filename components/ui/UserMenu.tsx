@@ -7,8 +7,8 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 const accountLinks = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/saved-people", label: "People" },
-  { href: "/dashboard/records", label: "Records" },
+  { href: "/dashboard/people", label: "People" },
+  { href: "/dashboard/flight-briefs", label: "Flight Briefs" },
   { href: "/dashboard/account-settings", label: "Profile" },
 ];
 

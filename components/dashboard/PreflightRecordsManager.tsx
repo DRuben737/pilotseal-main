@@ -122,7 +122,7 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
     <ManagementDisclosure
       id={organizationOnly ? "organization-flight-briefs" : "flight-brief-history"}
       eyebrow="Preflight records"
-      title={organizationOnly ? "Organization Flight Briefs" : "Flight Brief history"}
+      title={organizationOnly ? "Organization Flight Briefs" : "Flight Briefs"}
       summary={loading ? "Loading…" : `${records.length}`}
       className="dashboard-data-workspace"
       defaultOpen

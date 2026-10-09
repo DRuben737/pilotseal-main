@@ -54,14 +54,15 @@ import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
 import {
   AdminDataTable,
   CompactButton,
-  CompactToolbar,
   ConfirmDialog,
   DetailDrawer,
   EmptyState,
   ManagementDisclosure,
+  ManagementTabs,
   QuickEditPopover,
   StatusBadge,
 } from "@/components/admin/AdminConsole";
+import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import { formatUsMonthYear } from "@/lib/date-format";
 import { fetchSavedPeople, type SavedPerson } from "@/lib/saved-people";
 
@@ -213,7 +214,13 @@ const emptyAircraftForm: AircraftForm = {
   meter_change_reason: "",
 };
 
-export default function OrganizationManager({ view = "overview" }: { view?: OrganizationManagerView }) {
+export default function OrganizationManager({
+  view = "overview",
+  endorsementView = "records",
+}: {
+  view?: OrganizationManagerView;
+  endorsementView?: "records" | "requests";
+}) {
   const { session } = useAuthSession();
   const { activeOrganization, loading: organizationsLoading, refreshOrganizations } = useOrganization();
   const role = activeOrganization?.member_role;
@@ -264,12 +271,23 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const [showModelForm, setShowModelForm] = useState(false);
   const [modelForm, setModelForm] = useState<ModelForm>(emptyModelForm);
   const [modelError, setModelError] = useState("");
-  const [fleetWorkspace, setFleetWorkspace] = useState<FleetWorkspace>("aircraft");
   const [statusEditorAircraftId, setStatusEditorAircraftId] = useState("");
   const [statusEditorValue, setStatusEditorValue] = useState<AircraftOperationalStatus>("available");
   const [statusEditorNote, setStatusEditorNote] = useState("");
   const [statusEditorError, setStatusEditorError] = useState("");
   const [memberConfirmation, setMemberConfirmation] = useState<MemberConfirmation | null>(null);
+  const [activePeopleTab, setActivePeopleTab] = usePersistentDashboardView({
+    defaultValue: "people",
+    enabled: view === "people",
+    storageKey: "organization-people",
+    values: ["people", "invitations"] as const,
+  });
+  const [storedFleetWorkspace, setFleetWorkspace] = usePersistentDashboardView({
+    defaultValue: "aircraft",
+    enabled: view === "fleet" && canManageFleet,
+    storageKey: "organization-aircraft",
+    values: ["aircraft", "records", "models", "inspections"] as const,
+  });
 
   const modelNames = useMemo(
     () => new Map(models.map((model) => [model.id, model.name])),
@@ -287,9 +305,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
   const organizationInstructors = members.filter(
     (member) => member.teaching_role === "instructor",
   );
-  const activeFleetWorkspace: FleetWorkspace = canManageFleet
-    ? fleetWorkspace
-    : "records";
+  const activeFleetWorkspace: FleetWorkspace = canManageFleet ? storedFleetWorkspace : "records";
   const editingAircraft = aircraft.find((item) => item.id === editingAircraftId) ?? null;
   const editingAssignedAircraft = editingAircraft?.organization_access === "assigned";
 
@@ -1398,7 +1414,7 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
       {view === "fleet" ? (
         <nav
           aria-label="Fleet workspace"
-          className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
+          className="flex min-h-12 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-1"
         >
           {(canManageFleet
             ? [
@@ -1412,10 +1428,10 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
             <button
               key={key}
               type="button"
-              className={`min-h-8 shrink-0 cursor-pointer rounded-lg px-3 text-xs font-semibold transition-colors ${
+              className={`shrink-0 cursor-pointer border-b-2 px-3 text-sm font-semibold transition-colors ${
                 activeFleetWorkspace === key
-                  ? "bg-blue-700 text-white"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"
               }`}
               aria-current={activeFleetWorkspace === key ? "page" : undefined}
               onClick={() => setFleetWorkspace(key as FleetWorkspace)}
@@ -1802,11 +1818,24 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
       {view === "people" ? (
         <>
-          <ManagementDisclosure id="organization-people" title="People" summary={`${members.length} linked · ${pendingPeople.length} pending`} className="dashboard-data-workspace" defaultOpen actions={canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite</CompactButton> : undefined} helpContent={<><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Student invitations create the assigned instructor relationship as soon as the verified student accepts. Role changes, removal and ownership transfer require confirmation.</p></>}>
+          <ManagementTabs
+            id="organization-people-sections"
+            label="Organization people sections"
+            items={[
+              { id: "people", label: "People", summary: members.length },
+              { id: "invitations", label: "Pending invitations", summary: pendingPeople.length },
+            ]}
+            activeId={activePeopleTab}
+            onChange={(id) => setActivePeopleTab(id as typeof activePeopleTab)}
+            actions={activePeopleTab === "people" && canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite</CompactButton> : undefined}
+            helpContent={activePeopleTab === "people"
+              ? <><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Student invitations create the assigned instructor relationship as soon as the verified student accepts. Role changes, removal and ownership transfer require confirmation.</p></>
+              : <p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}
+          >
+          {activePeopleTab === "people" ? <>
           <div className="hidden md:block">
             <AdminDataTable label="Linked organization members">
               <thead>
-                <tr><th colSpan={7} className="p-0 font-normal"><CompactToolbar resultLabel={`${members.length} linked · ${pendingPeople.length} pending`} actions={canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite by email</CompactButton> : undefined} /></th></tr>
                 <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
                   <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
                 </tr>
@@ -1882,9 +1911,9 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               );
             })}
           </ul>
-          </ManagementDisclosure>
+          </> : null}
 
-          <ManagementDisclosure id="organization-pending-invitations" title="Pending invitations" summary={`${pendingPeople.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}>
+          {activePeopleTab === "invitations" ? <>
           <div className="hidden md:block">
             <AdminDataTable label="Pending organization invitations">
               <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
@@ -1936,7 +1965,8 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
               </ul>
             )}
           </div>
-          </ManagementDisclosure>
+          </> : null}
+          </ManagementTabs>
 
           <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="For a student, choose the instructor now. Accepting the verified invitation creates both membership and the instructor link.">
             {inviteLink ? (
@@ -2219,8 +2249,8 @@ export default function OrganizationManager({ view = "overview" }: { view?: Orga
 
       {view === "endorsements" ? (
         <>
-          <EndorsementRecordsManager organizationOnly />
-          <OrganizationEndorsementRequests organizationId={activeOrganization.id} embedded />
+          {endorsementView === "records" ? <EndorsementRecordsManager organizationOnly /> : null}
+          {endorsementView === "requests" ? <OrganizationEndorsementRequests organizationId={activeOrganization.id} embedded /> : null}
         </>
       ) : null}
     </div>

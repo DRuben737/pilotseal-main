@@ -292,7 +292,7 @@ function renderOverlay(content: ReactNode) {
   return createPortal(content, document.body);
 }
 
-export default function EndorsementTemplateAdminPanel() {
+export default function EndorsementTemplateAdminPanel({ view = "templates" }: { view?: "templates" | "requests" }) {
   const { session } = useAuthSession();
   const [profileRole, setProfileRole] = useState("");
   const [templates, setTemplates] = useState<EndorsementTemplate[]>([]);
@@ -548,6 +548,25 @@ export default function EndorsementTemplateAdminPanel() {
     );
   }
 
+  if (view === "requests") {
+    const pendingRequests = changeRequests.filter((request) => request.status === "pending");
+    return (
+      <ManagementDisclosure id="endorsement-template-requests" title="Requests" summary={`${pendingRequests.length} pending`}>
+        <div className="divide-y divide-slate-100">
+          {!pendingRequests.length ? <p className="px-4 py-8 text-center text-sm text-slate-500">No pending organization proposals.</p> : pendingRequests.map((request) => (
+            <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</p>
+                <p className="mt-1 text-xs text-slate-500">{request.action === "create" ? "Create" : "Update"} · Organization {request.organization_id}</p>
+              </div>
+              <div className="flex gap-2"><button type="button" className="primary-button" disabled={saving} onClick={() => void handleReview(request, true)}>Approve</button><button type="button" className="danger-button-compact" disabled={saving} onClick={() => void handleReview(request, false)}>Reject</button></div>
+            </div>
+          ))}
+        </div>
+      </ManagementDisclosure>
+    );
+  }
+
   return (
     <ManagementDisclosure
       id="endorsement-templates"
@@ -591,64 +610,49 @@ export default function EndorsementTemplateAdminPanel() {
       />
       {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
 
-      <ManagementDisclosure id="endorsement-template-requests" title="Template change requests" summary={`${changeRequests.filter((request) => request.status === "pending").length} pending`} helpContent={<p>Approval applies the proposed wording atomically to the live templates. Rejection requires a reason.</p>}>
-        <div className="mt-3 grid gap-3">
-          {changeRequests.filter((request) => request.status === "pending").length === 0 ? <p className="text-sm text-slate-500">No pending organization proposals.</p> : changeRequests.filter((request) => request.status === "pending").map((request) => (
-            <div key={request.id} className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-950">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</p><p className="mt-1 text-xs text-slate-500">{request.action === "create" ? "Create" : "Update"} · Organization {request.organization_id}</p></div><span className="saas-pill">Pending</span></div>
-              <div className="mt-3 flex gap-2"><button type="button" className="primary-button" disabled={saving} onClick={() => void handleReview(request, true)}>Approve & publish</button><button type="button" className="danger-button-compact" disabled={saving} onClick={() => void handleReview(request, false)}>Reject</button></div>
-            </div>
-          ))}
+      <div className="mt-4 overflow-hidden border border-slate-200 bg-white">
+        <div className="overflow-x-auto border-b border-slate-200 bg-slate-50/70" role="tablist" aria-label="Endorsement categories">
+          <div className="flex min-w-max items-stretch px-1">
+            {groupedTemplates.map(([category, categoryTemplates]) => {
+              const isOpen = openCategory === category;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  role="tab"
+                  aria-selected={isOpen}
+                  className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap transition-colors ${isOpen ? "border-blue-600 bg-white text-blue-700" : "border-transparent text-slate-600 hover:bg-white/70 hover:text-slate-950"}`}
+                  onClick={() => setOpenCategory((current) => (current === category ? null : category))}
+                >
+                  <span>{category}</span>
+                  <span className="text-xs font-medium text-slate-400">{categoryTemplates.length}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </ManagementDisclosure>
-
-      <div className="mt-4 grid gap-3">
-        {groupedTemplates.map(([category, categoryTemplates]) => {
-          const isOpen = openCategory === category;
-
-          return (
-            <section key={category} className="rounded-xl border border-slate-200 bg-white">
+        {openCategory ? (
+          <div className="grid gap-3 bg-slate-50/35 p-3 md:grid-cols-2 xl:grid-cols-3" role="tabpanel">
+            {(groupedTemplates.find(([category]) => category === openCategory)?.[1] ?? []).map((template) => (
               <button
+                key={template.id}
                 type="button"
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-                onClick={() => setOpenCategory((current) => (current === category ? null : category))}
+                className="rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300"
+                onClick={() => setPreviewTemplate(template)}
               >
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-950">{category}</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {categoryTemplates.length} endorsement{categoryTemplates.length === 1 ? "" : "s"}
-                  </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {template.reference_number ? <span className="saas-pill">{template.reference_number}</span> : null}
+                    <p className="text-sm font-semibold text-slate-950">{template.title}</p>
+                  </div>
+                  <span className="saas-pill">{getVisibilityLabel(template.status)}</span>
                 </div>
-                <span className="text-sm text-slate-500">{isOpen ? "Hide" : "Show"}</span>
               </button>
-
-              {isOpen ? (
-                <div className="grid gap-3 border-t border-slate-100 p-3 md:grid-cols-2 xl:grid-cols-3">
-                  {categoryTemplates.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300"
-                      onClick={() => setPreviewTemplate(template)}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {template.reference_number ? <span className="saas-pill">{template.reference_number}</span> : null}
-                            <p className="text-sm font-semibold text-slate-950">{template.title}</p>
-                          </div>
-                        </div>
-                        <span className="saas-pill">{getVisibilityLabel(template.status)}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
+            ))}
+          </div>
+        ) : null}
         {filteredTemplates.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+          <p className="p-4 text-sm text-slate-500">
             No endorsements match the current search.
           </p>
         ) : null}

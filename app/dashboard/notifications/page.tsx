@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import NotificationManager from "@/components/notifications/NotificationManager";
 
 export const metadata = {
@@ -11,5 +12,5 @@ export default async function DashboardNotificationsPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const { view } = await searchParams;
-  return <NotificationManager initialView={view === "organization" ? "organization" : "inbox"} />;
+  return <Suspense fallback={null}><NotificationManager initialView={view === "organization" ? "organization" : "inbox"} /></Suspense>;
 }

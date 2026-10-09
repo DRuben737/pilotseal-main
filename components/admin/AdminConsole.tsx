@@ -16,64 +16,14 @@ export function AdminPageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="admin-page-header flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-end sm:justify-between">
+    <header className="admin-page-header flex min-h-14 flex-col gap-2 border-b border-slate-200 bg-white py-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{eyebrow}</p> : null}
-        <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-950">{title}</h1>
-        {description ? <p className="mt-1 max-w-3xl text-sm leading-5 text-slate-500">{description}</p> : null}
+        {eyebrow ? <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{eyebrow}</p> : null}
+        <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950">{title}</h1>
+        {description ? <p className="mt-0.5 max-w-3xl text-xs leading-5 text-slate-500">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </header>
-  );
-}
-
-export function AdminCollapsibleSection({
-  id,
-  title,
-  description,
-  summary,
-  open,
-  onToggle,
-  children,
-}: {
-  id: string;
-  title: string;
-  description?: string;
-  summary?: ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  const contentId = `${id}-content`;
-
-  return (
-    <section className="admin-section overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <button
-        type="button"
-        className="group flex min-h-14 w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 sm:px-4"
-        aria-expanded={open}
-        aria-controls={contentId}
-        aria-label={`${open ? "Collapse" : "Expand"} ${title}`}
-        title={open ? `Collapse ${title}` : `Expand ${title}`}
-        onClick={onToggle}
-      >
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-slate-950 sm:text-base">{title}</span>
-          {description ? <span className="mt-1 block text-sm leading-5 text-slate-500">{description}</span> : null}
-        </span>
-        {summary ? <span className="hidden shrink-0 text-right text-xs font-semibold text-slate-500 sm:block">{summary}</span> : null}
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition group-hover:border-slate-300 group-hover:text-blue-700" aria-hidden="true">
-          <svg viewBox="0 0 20 20" fill="none" className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}>
-            <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
-      </button>
-      {open ? (
-        <div id={contentId} className="border-t border-slate-200 bg-slate-50/35 p-3 sm:p-4">
-          {children}
-        </div>
-      ) : null}
-    </section>
   );
 }
 
@@ -101,11 +51,7 @@ export function ManagementDisclosure({
   title,
   summary,
   actions,
-  helpTitle,
-  helpContent,
   children,
-  defaultOpen = false,
-  openOnAction = false,
   className = "",
 }: {
   id?: string;
@@ -122,80 +68,111 @@ export function ManagementDisclosure({
 }) {
   const generatedId = useId();
   const contentId = id ? `${id}-content` : `${generatedId}-content`;
-  const [open, setOpen] = useState(defaultOpen);
-  const [helpOpen, setHelpOpen] = useState(false);
 
   return (
-    <section className={`management-disclosure min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white ${className}`}>
-      <div className="management-disclosure-header flex min-h-12 flex-wrap items-center gap-2 px-3 py-2 sm:flex-nowrap">
-        <button
-          type="button"
-          className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${actions ? "basis-full sm:basis-auto" : ""}`}
-          aria-expanded={open}
-          aria-controls={contentId}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition group-hover:border-slate-300 group-hover:text-blue-700" aria-hidden="true">
-            <svg viewBox="0 0 20 20" fill="none" className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}>
-              <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <span className="min-w-0 flex-1">
-            {eyebrow ? <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-600">{eyebrow}</span> : null}
-            <span className="block text-sm font-semibold leading-5 text-slate-950 sm:text-base">{title}</span>
-          </span>
-          {summary ? <span className="shrink-0 text-right text-xs font-semibold text-slate-500">{summary}</span> : null}
-        </button>
-        <div className={`flex shrink-0 items-center gap-2 ${actions ? "ml-11 sm:ml-0" : ""}`}>
-          {helpContent ? (
-            <CompactButton type="button" aria-label={`Help for ${title}`} onClick={() => setHelpOpen(true)}>
-              Help
-            </CompactButton>
-          ) : null}
-          {actions ? <div onClick={() => { if (openOnAction) setOpen(true); }}>{actions}</div> : null}
-        </div>
-      </div>
-      {open ? <div id={contentId} className="management-disclosure-content min-w-0 border-t border-slate-200 bg-slate-50/35 p-2 sm:p-3">{children}</div> : null}
-      {helpContent ? (
-        <HelpDrawer open={helpOpen} title={helpTitle ?? `${title} help`} onClose={() => setHelpOpen(false)}>
-          {helpContent}
-        </HelpDrawer>
-      ) : null}
+    <section className={`management-disclosure min-w-0 max-w-full ${className}`} aria-label={title}>
+      {actions ? <div className="management-disclosure-header admin-flat-actions flex min-h-10 items-center justify-end border-b border-slate-200 bg-white px-3 py-1.5">{actions}</div> : null}
+      <span className="sr-only">{eyebrow ? `${eyebrow}: ` : ""}{title}{summary ? `, ${summary}` : ""}</span>
+      <div id={contentId} className="management-disclosure-content min-w-0">{children}</div>
     </section>
   );
 }
 
-export function AdminSectionControls({
-  expanded,
-  onToggleAll,
+export function ManagementTabs({
+  id,
+  label,
+  items,
+  activeId,
+  onChange,
+  actions,
+  children,
 }: {
-  expanded: boolean;
-  onToggleAll: () => void;
+  id: string;
+  label: string;
+  items: ReadonlyArray<{ id: string; label: string; summary?: ReactNode }>;
+  activeId: string;
+  onChange: (id: string) => void;
+  actions?: ReactNode;
+  helpTitle?: string;
+  helpContent?: ReactNode;
+  children: ReactNode;
 }) {
+  const activeIndex = Math.max(0, items.findIndex((item) => item.id === activeId));
+  const activeItem = items[activeIndex] ?? items[0];
+
+  function focusTab(index: number) {
+    const item = items[index];
+    if (!item) return;
+    onChange(item.id);
+    requestAnimationFrame(() => document.getElementById(`${id}-tab-${item.id}`)?.focus());
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onToggleAll}
-      aria-label={expanded ? "Collapse all sections" : "Expand all sections"}
-      title={expanded ? "Collapse all sections" : "Expand all sections"}
-      className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-    >
-      {expanded ? (
-        <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
-          <path d="m6 8 4-4 4 4M6 12l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
-          <path d="m6 4 4 4 4-4M6 16l4-4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-    </button>
+    <section className="management-tabs min-w-0">
+      <div className="flex min-h-10 flex-col border-b border-slate-200 bg-white sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1 overflow-x-auto" role="tablist" aria-label={label}>
+          <div className="flex min-w-max items-stretch">
+            {items.map((item, index) => {
+              const selected = item.id === activeItem?.id;
+              return (
+                <button
+                  key={item.id}
+                  id={`${id}-tab-${item.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls={`${id}-panel`}
+                  tabIndex={selected ? 0 : -1}
+                  className={`flex min-h-10 items-center gap-2 border-b-2 px-3 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 ${
+                    selected
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                  onClick={() => onChange(item.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowRight") {
+                      event.preventDefault();
+                      focusTab((index + 1) % items.length);
+                    } else if (event.key === "ArrowLeft") {
+                      event.preventDefault();
+                      focusTab((index - 1 + items.length) % items.length);
+                    } else if (event.key === "Home") {
+                      event.preventDefault();
+                      focusTab(0);
+                    } else if (event.key === "End") {
+                      event.preventDefault();
+                      focusTab(items.length - 1);
+                    }
+                  }}
+                >
+                  <span>{item.label}</span>
+                  {item.summary ? <span className="sr-only">{item.summary}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 px-3 py-1 sm:border-t-0 sm:border-l">
+            {actions}
+          </div>
+        ) : null}
+      </div>
+      <div
+        id={`${id}-panel`}
+        role="tabpanel"
+        aria-labelledby={activeItem ? `${id}-tab-${activeItem.id}` : undefined}
+        className="min-w-0 bg-white pt-3"
+      >
+        {children}
+      </div>
+    </section>
   );
 }
 
 export function FilterToolbar({ children, resultLabel }: { children: ReactNode; resultLabel?: string }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 p-3 lg:flex-row lg:items-center">
+    <div className="admin-toolbar flex flex-col gap-2 border-b border-slate-200 bg-white py-3 lg:flex-row lg:items-center">
       <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">{children}</div>
       {resultLabel ? <p className="shrink-0 text-xs font-medium text-slate-500">{resultLabel}</p> : null}
     </div>
@@ -212,7 +189,7 @@ export function CompactToolbar({
   resultLabel?: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50/70 px-3 py-2 sm:flex-row sm:items-center">
+    <div className="admin-toolbar flex flex-col gap-2 border-b border-slate-200 bg-white py-2 sm:flex-row sm:items-center">
       {children ? <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{children}</div> : <div className="flex-1" />}
       <div className="flex shrink-0 items-center justify-between gap-2">
         {resultLabel ? <p className="text-xs font-medium text-slate-500">{resultLabel}</p> : null}
@@ -224,7 +201,7 @@ export function CompactToolbar({
 
 export function AdminDataTable({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="admin-data-table overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <div className="admin-data-table overflow-hidden border border-slate-200 bg-white">
       <div className="overflow-x-auto">
         <table aria-label={label} className="w-full min-w-[820px] border-collapse text-left text-sm">
           {children}
@@ -240,17 +217,18 @@ export function CompactButton({
   className = "",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  tone?: "neutral" | "primary" | "danger";
+  tone?: "neutral" | "primary" | "success" | "danger";
 }) {
   const tones = {
     neutral: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
     primary: "border-blue-700 bg-blue-700 text-white hover:bg-blue-800",
+    success: "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
     danger: "border-rose-200 bg-white text-rose-700 hover:bg-rose-50",
   };
   return (
     <button
       {...props}
-      className={`min-h-8 cursor-pointer rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]} ${className}`}
+      className={`min-h-8 cursor-pointer rounded-sm border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]} ${className}`}
     >
       {children}
     </button>
@@ -313,7 +291,7 @@ export function StatusBadge({
   children: ReactNode;
   tone?: keyof typeof badgeStyles;
 }) {
-  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ${badgeStyles[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium ${badgeStyles[tone]}`}>{children}</span>;
 }
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
@@ -410,13 +388,13 @@ export function DetailDrawer({
   return createPortal(
     <div className="fixed inset-0 z-[90]" role="presentation">
       <button aria-label="Close details" className="absolute inset-0 cursor-default bg-slate-950/35" onClick={onClose} />
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-2xl ${width === "wide" ? "max-w-4xl" : "max-w-xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`admin-dialog absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden bg-white shadow-2xl ${width === "wide" ? "max-w-5xl" : "max-w-2xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
         <header className={`flex items-start justify-between border-b border-slate-200 ${compact ? "gap-3 px-4 py-3" : "gap-4 px-5 py-4"}`}>
           <div>
             <h2 id={titleId} className="text-lg font-semibold text-slate-950">{title}</h2>
             {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
           </div>
-          <button autoFocus type="button" onClick={onClose} className={`flex items-center justify-center border border-slate-200 text-xl text-slate-600 hover:bg-slate-50 ${compact ? "h-9 w-9 rounded-md" : "h-10 w-10 rounded-xl"}`} aria-label="Close">×</button>
+          <button autoFocus type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-sm border border-slate-200 text-lg text-slate-600 hover:bg-slate-50" aria-label="Close">×</button>
         </header>
         <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? "p-4" : "p-5"}`}>{children}</div>
       </section>

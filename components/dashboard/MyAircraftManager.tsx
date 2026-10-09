@@ -5,12 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CompactButton,
   DetailDrawer,
-  ManagementDisclosure,
+  ManagementTabs,
   WorksheetCell,
   WorksheetGrid,
   WorksheetHeader,
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
+import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { UsDateInput } from "@/components/forms/UsDateInput";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -21,7 +22,6 @@ import {
   fetchMyAircraft,
   fetchOrganizationAircraft,
   fetchPersonalAircraftInspections,
-  fetchSharedAircraft,
   removeMyAircraft,
   saveCurrentAircraftForUser,
   savePersonalAircraftInspections,
@@ -146,7 +146,6 @@ export default function MyAircraftManager() {
   const [status, setStatus] = useState("");
   const [models, setModels] = useState<AircraftModelRecord[]>([]);
   const [myAircraft, setMyAircraft] = useState<AircraftRecord[]>([]);
-  const [sharedAircraft, setSharedAircraft] = useState<AircraftRecord[]>([]);
   const [organizationAircraft, setOrganizationAircraft] = useState<AircraftRecord[]>([]);
   const [platformOrganizations, setPlatformOrganizations] = useState<PlatformOrganization[]>([]);
   const [organizationAssignments, setOrganizationAssignments] = useState<AircraftOrganizationAssignment[]>([]);
@@ -158,6 +157,12 @@ export default function MyAircraftManager() {
   const [editingAircraftId, setEditingAircraftId] = useState("");
   const [conflict, setConflict] = useState<AttachAircraftConflict | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [storedAircraftTab, setStoredAircraftTab] = usePersistentDashboardView({
+    defaultValue: "mine",
+    storageKey: "personal-aircraft",
+    values: ["mine", "organization"] as const,
+  });
+  const activeAircraftTab = storedAircraftTab === "organization" && activeOrganization ? "organization" : "mine";
   const isPlatformAdmin = profileRole === "admin";
 
   useEffect(() => {
@@ -178,10 +183,9 @@ export default function MyAircraftManager() {
       setStatus("");
 
       try {
-        const [profile, modelList, sharedList, attachedList, organizationList, personalInspectionList] = await Promise.all([
+        const [profile, modelList, attachedList, organizationList, personalInspectionList] = await Promise.all([
           fetchCurrentProfile(session.user.id),
           fetchAircraftModels(),
-          fetchSharedAircraft(),
           fetchMyAircraft(session.user.id),
           activeOrganization?.id
             ? fetchOrganizationAircraft(activeOrganization.id)
@@ -204,7 +208,6 @@ export default function MyAircraftManager() {
         if (!cancelled) {
           setProfileRole(nextProfileRole);
           setModels(modelList);
-          setSharedAircraft(sharedList);
           setMyAircraft(attachedList);
           setOrganizationAircraft(organizationList);
           setPlatformOrganizations(availableOrganizations);
@@ -320,8 +323,7 @@ export default function MyAircraftManager() {
       return;
     }
 
-    const [sharedList, attachedList, organizationList, personalInspectionList] = await Promise.all([
-      fetchSharedAircraft(),
+    const [attachedList, organizationList, personalInspectionList] = await Promise.all([
       fetchMyAircraft(session.user.id),
       activeOrganization?.id
         ? fetchOrganizationAircraft(activeOrganization.id)
@@ -329,7 +331,6 @@ export default function MyAircraftManager() {
       fetchPersonalAircraftInspections(session.user.id),
     ]);
 
-    setSharedAircraft(sharedList);
     setMyAircraft(attachedList);
     setOrganizationAircraft(organizationList);
     setPersonalInspections(personalInspectionList);
@@ -670,21 +671,22 @@ export default function MyAircraftManager() {
   return (
     <>
       {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
-      <ManagementDisclosure id="my-aircraft" title="My Aircraft" summary={`${myAircraft.length}`} className="dashboard-data-workspace" defaultOpen actions={<CompactButton type="button" tone="primary" onClick={openAddForm}>Add aircraft</CompactButton>} helpContent={<><p>Manage aircraft attached to your account, including weight and balance data and personal maintenance reminders.</p><p>Eligible private aircraft can be shared with selected organizations without changing ownership.</p></>}>
-        <div className="people-toolbar">
-          <div>
-            <h3 className="saas-subsection-title">My Aircraft</h3>
-            <p className="saas-meta-text">{myAircraft.length} attached</p>
-          </div>
-          <div className="border-l border-slate-200 px-3 py-1 text-right">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
-              Shared registry
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-700">{sharedAircraft.length} aircraft</p>
-          </div>
-        </div>
-
-        <div className="my-aircraft-table mt-4">
+      <ManagementTabs
+        id="personal-aircraft-sections"
+        label="Aircraft sections"
+        items={[
+          { id: "mine", label: "My Aircraft", summary: myAircraft.length },
+          ...(activeOrganization ? [{ id: "organization", label: activeOrganization.name, summary: organizationAircraft.length }] : []),
+        ]}
+        activeId={activeAircraftTab}
+        onChange={(id) => setStoredAircraftTab(id as typeof storedAircraftTab)}
+        actions={activeAircraftTab === "mine" ? <CompactButton type="button" tone="primary" onClick={openAddForm}>Add aircraft</CompactButton> : undefined}
+        helpContent={activeAircraftTab === "mine"
+          ? <><p>Manage aircraft attached to your account, including weight and balance data and personal maintenance reminders.</p><p>Eligible private aircraft can be shared with selected organizations without changing ownership.</p></>
+          : <p>These aircraft are shared with the selected organization. Access and editing depend on your organization role.</p>}
+      >
+      {activeAircraftTab === "mine" ? (
+        <div className="my-aircraft-table">
           <div className="my-aircraft-table-head">
             <span>Tail number</span>
             <span>Model</span>
@@ -770,19 +772,10 @@ export default function MyAircraftManager() {
             ))
           )}
         </div>
-      </ManagementDisclosure>
+      ) : null}
 
-      {activeOrganization ? (
-        <ManagementDisclosure id="organization-fleet-personal" eyebrow="Organization fleet" title={activeOrganization.name} summary={`${organizationAircraft.length}`} className="dashboard-data-workspace" defaultOpen helpContent={<p>These aircraft are shared with the selected organization. Access and editing depend on your organization role.</p>}>
-          <div className="people-toolbar">
-            <div>
-              <p className="saas-kicker">Organization fleet</p>
-              <h3 className="saas-subsection-title">{activeOrganization.name}</h3>
-              <p className="saas-meta-text">{organizationAircraft.length} shared with this organization</p>
-            </div>
-          </div>
-
-          <div className="my-aircraft-table mt-4">
+      {activeAircraftTab === "organization" && activeOrganization ? (
+          <div className="my-aircraft-table">
             <div className="my-aircraft-table-head">
               <span>Tail number</span>
               <span>Model</span>
@@ -819,8 +812,8 @@ export default function MyAircraftManager() {
               ))
             )}
           </div>
-        </ManagementDisclosure>
       ) : null}
+      </ManagementTabs>
 
       <DetailDrawer
         open={showForm}

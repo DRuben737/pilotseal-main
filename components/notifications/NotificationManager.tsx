@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminDataTable, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import OrganizationNotificationPublisher from "@/components/notifications/OrganizationNotificationPublisher";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -67,12 +68,15 @@ export default function NotificationManager({
   const [inboxQuery, setInboxQuery] = useState("");
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => defaultNotificationPreferences(userId));
   const [savingPreferences, setSavingPreferences] = useState(false);
-  const [activeView, setActiveView] = useState<NotificationView>(initialView);
   const canPublishOrganization = organizations.some((organization) => hasOrganizationPermission(organization, "notifications"));
-
-  useEffect(() => {
-    setActiveView(initialView === "organization" && canPublishOrganization ? "organization" : "inbox");
-  }, [canPublishOrganization, initialView]);
+  const [storedView, setStoredView] = usePersistentDashboardView({
+    defaultValue: initialView,
+    enabled: !platformPublishingOnly,
+    storageKey: "notifications",
+    values: ["inbox", "organization"] as const,
+  });
+  const activeView: NotificationView = storedView === "organization" && canPublishOrganization ? "organization" : "inbox";
+  const setActiveView = (value: NotificationView) => setStoredView(value);
 
   const unreadCount = useMemo(
     () => inbox.filter((notification) => !notification.read_at).length,
@@ -443,7 +447,7 @@ export default function NotificationManager({
 
       {platformPublishingOnly && isAdmin ? (
         <>
-        <ManagementDisclosure id="platform-notices" eyebrow="Platform administration" title="Platform notice history" summary={`${adminHistory.length}`} actions={<button className="primary-button" type="button" onClick={() => { resetForm(); setShowComposer(true); }}>New notice</button>} openOnAction helpContent={<p>Create, schedule and manage notices sent across PilotSeal. Notice message bodies are shown only while editing or reviewing an individual notice.</p>}>
+        <ManagementDisclosure id="platform-notices" eyebrow="Platform administration" title="Notices" summary={`${adminHistory.length}`} actions={<button className="primary-button" type="button" onClick={() => { resetForm(); setShowComposer(true); }}>New notice</button>}>
           <div className="grid gap-3">
             <DetailDrawer open={showComposer} title={form.id ? "Edit platform notice" : "Create platform notice"} onClose={() => setShowComposer(false)}>
           <article>

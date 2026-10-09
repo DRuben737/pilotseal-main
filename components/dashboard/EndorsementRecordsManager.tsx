@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminDataTable, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
@@ -120,7 +121,13 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   const { session } = useAuthSession();
   const { activeOrganization } = useOrganization();
   const canViewOrganizationRecords = canManageOrganization(activeOrganization?.member_role);
-  const [view, setView] = useState<RecordView>(organizationOnly ? "organization" : "personal");
+  const [storedView, setStoredView] = usePersistentDashboardView({
+    defaultValue: "personal",
+    enabled: !organizationOnly,
+    storageKey: "personal-endorsements",
+    values: ["personal", "received", "organization"] as const,
+  });
+  const view: RecordView = organizationOnly ? "organization" : storedView;
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -290,20 +297,20 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
 
   return <>
     {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
-    <ManagementDisclosure id="endorsement-records" title={organizationOnly ? "Issued endorsements" : "Student Records"}
+    <ManagementDisclosure id="endorsement-records" title={organizationOnly ? "Issued endorsements" : "Endorsements"}
       summary={loading ? "Loading…" : isOrganizationView ? `${records.length}` : `${groups.length} students`}
       className="dashboard-data-workspace" defaultOpen
       actions={personalOwnerView ? <button className="primary-button" type="button" onClick={() => setFolderFormOpen(true)}>Add student record</button> : null}
       helpContent={organizationOnly ? <p>Shows endorsements issued while the instructor belonged to this organization.</p>
         : <p>Each student has one record containing issued endorsements, notes, and private files shared with that student account.</p>}>
-      {!organizationOnly ? <nav className="mt-2 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Student record views">
+      {!organizationOnly ? <nav className="flex min-h-10 gap-0 overflow-x-auto border-b border-slate-200 bg-white" aria-label="Student record views">
         {([ ["personal", "My student records"], ["received", "Shared with me"], ["organization", "Organization activity"] ] as const).map(([key, label]) =>
           <button key={key} type="button" aria-current={view === key ? "page" : undefined}
-            className={`min-h-8 shrink-0 rounded-lg px-3 text-xs font-semibold ${view === key ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-white"}`}
-            onClick={() => { setView(key); setActiveGroupKey(null); }}>{label}</button>)}
+            className={`shrink-0 border-b-2 px-3 text-xs font-medium transition-colors ${view === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+            onClick={() => { setStoredView(key); setActiveGroupKey(null); }}>{label}</button>)}
       </nav> : null}
-      <div className="mt-4 flex flex-col items-end gap-2 sm:flex-row">
-        <label className="saas-field min-w-0 flex-1"><span>Search</span><input type="search" value={query}
+      <div className="admin-toolbar flex flex-col items-end gap-2 border-b border-slate-200 py-3 sm:flex-row">
+        <label className="min-w-0 flex-1"><span className="sr-only">Search</span><input className="h-9 w-full rounded-sm border border-slate-300 px-3 text-sm" type="search" value={query}
           onChange={(event) => setQuery(event.target.value)} placeholder="Search student or record content" /></label>
         {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
       </div>

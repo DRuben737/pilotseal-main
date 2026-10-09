@@ -29,6 +29,7 @@ function DashboardIcon({ kind }: { kind: string }) {
 
   switch (kind) {
     case "Overview":
+    case "Home":
     case "Dashboard":
     case "Platform Overview":
       return (
@@ -51,7 +52,7 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="M15.5 18c.5-1.6 1.8-2.8 3.7-3.2" />
         </svg>
       );
-    case "Records":
+    case "Flight Briefs":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M3.8 7.5h6l1.6 2H20v9.2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.7V5.3A1.5 1.5 0 0 1 5.5 3.8h4.2l1.6 2h7.2" />
@@ -64,7 +65,7 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="M8 3.5v4M16 3.5v4M4 10h16M8 14h3M13 14h3M8 17h3" />
         </svg>
       );
-    case "Safety Reports":
+    case "Reports":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M12 3.5 19 6v5.2c0 4.1-2.8 7.6-7 9.3-4.2-1.7-7-5.2-7-9.3V6l7-2.5Z" />
@@ -81,7 +82,7 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="m15.2 15.6 5.2-1.8-3.4-2.5-1.8-5-1.2.4.5 4.8-4.1 2.7.7 1 4.1-1.6Z" />
         </svg>
       );
-    case "Audit Log":
+    case "Activity":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M6 4h12v16H6z" />
@@ -89,7 +90,7 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Notifications":
-    case "Platform Notices":
+    case "Notices":
     case "Messages":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
@@ -105,19 +106,14 @@ function DashboardIcon({ kind }: { kind: string }) {
         </svg>
       );
     case "Aircraft":
-    case "Aircraft records":
     case "Fleet management":
     case "Aircraft & Maintenance":
-    case "Aircraft Library":
-    case "Aircraft Assignments":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M2 13.5h7l5.2-7.2c.5-.7 1.5-.8 2.1-.3.5.4.7 1.1.4 1.7L15 13.5h5.2c.9 0 1.8.5 2.2 1.3l-.9.7H15l-1.4 4.1h-1.7l.2-4.1H8.7L7 18H5.4l.5-2.5H2v-2Z" />
         </svg>
       );
     case "Endorsements":
-    case "Endorsement Approvals":
-    case "Endorsement approvals":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M6 3.8h12v16.4H6z" />
@@ -126,7 +122,7 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="m13.7 18.3-.5 2.2 1.6-.8 1.6.8-.5-2.2" />
         </svg>
       );
-    case "Access":
+    case "Organizations":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
           <path d="M12 3.5 19 6v5.4c0 4.2-2.8 7.7-7 9.1-4.2-1.4-7-4.9-7-9.1V6l7-2.5Z" />
@@ -184,11 +180,13 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [profileRole, setProfileRole] = useState("");
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [visitedPages, setVisitedPages] = useState<Array<{ href: string; label: string }>>([]);
+  const visitedPagesReadyRef = useRef(false);
   const mobileNavigationRef = useRef<HTMLElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const sidebarExpanded = sidebarHovered;
+  const sidebarStorageKey = `pilotseal:dashboard-sidebar:${session?.user?.id ?? "anonymous"}`;
 
   useEffect(() => {
     if (!loading && !session?.user) {
@@ -197,9 +195,21 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }, [loading, pathname, router, session]);
 
   useEffect(() => {
-    setSidebarHovered(false);
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    setSidebarExpanded(window.localStorage.getItem(sidebarStorageKey) !== "collapsed");
+  }, [session?.user?.id, sidebarStorageKey]);
+
+  function toggleSidebar() {
+    setSidebarExpanded((expanded) => {
+      const next = !expanded;
+      window.localStorage.setItem(sidebarStorageKey, next ? "expanded" : "collapsed");
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -354,10 +364,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       ? "Platform administration"
       : "Personal";
   const currentLink = visibleDashboardLinks.find((item) => isDashboardDestinationActive(pathname, item.href));
+  const canonicalPageHref = currentLink?.href ?? pathname;
+  const currentPageLabel = currentLink?.label ?? "Dashboard";
+  const visitedPagesStorageKey = `pilotseal:visited-dashboard-pages:${session?.user?.id ?? "anonymous"}`;
   const showOrganizationContext = !organizationsLoading && organizations.length > 1 && (
     pathname.startsWith("/dashboard/organization")
-    || pathname.startsWith("/dashboard/my-aircraft")
-    || pathname.startsWith("/dashboard/records")
+    || pathname.startsWith("/dashboard/aircraft")
+    || pathname.startsWith("/dashboard/flight-briefs")
+    || pathname.startsWith("/dashboard/endorsements")
     || pathname.startsWith("/dashboard/reports")
   );
   const organizationContextOptions = workspace === "organization" ? managedOrganizations : organizations;
@@ -386,6 +400,40 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     workspace,
   ]);
 
+  useEffect(() => {
+    if (!session?.user?.id || !currentLink) return;
+    setVisitedPages((current) => {
+      let base = current;
+      if (!visitedPagesReadyRef.current) {
+        visitedPagesReadyRef.current = true;
+        try {
+          const stored = JSON.parse(window.sessionStorage.getItem(visitedPagesStorageKey) ?? "[]") as Array<{ href?: string; label?: string }>;
+          base = stored.filter((item): item is { href: string; label: string } => Boolean(item.href && item.label));
+        } catch {
+          base = [];
+        }
+      }
+      const next = base.some((item) => item.href === canonicalPageHref)
+        ? base.map((item) => item.href === canonicalPageHref ? { href: canonicalPageHref, label: currentPageLabel } : item)
+        : [...base, { href: canonicalPageHref, label: currentPageLabel }];
+      window.sessionStorage.setItem(visitedPagesStorageKey, JSON.stringify(next));
+      return next;
+    });
+  }, [canonicalPageHref, currentLink, currentPageLabel, session?.user?.id, visitedPagesStorageKey]);
+
+  function closeVisitedPage(href: string) {
+    setVisitedPages((current) => {
+      const index = current.findIndex((item) => item.href === href);
+      const next = current.filter((item) => item.href !== href);
+      window.sessionStorage.setItem(visitedPagesStorageKey, JSON.stringify(next));
+      if (href === canonicalPageHref) {
+        const destination = next[Math.max(0, index - 1)] ?? next.at(-1) ?? visibleDashboardLinks[0];
+        if (destination?.href) router.push(destination.href);
+      }
+      return next;
+    });
+  }
+
   async function handleSignOut() {
     setSigningOut(true);
 
@@ -406,13 +454,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <div className="site-shell page-stack">
         {loading || !session?.user ? null : (
           <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
-            <div className="dashboard-sidebar-slot">
+            <div className="dashboard-sidebar-slot" data-expanded={sidebarExpanded}>
               <aside
                 className="dashboard-sidebar"
                 data-expanded={sidebarExpanded}
                 aria-label={`${workspaceLabel} navigation`}
-                onPointerEnter={() => setSidebarHovered(true)}
-                onPointerLeave={() => setSidebarHovered(false)}
                 onClickCapture={(event) => {
                   if (event.detail <= 0) return;
 
@@ -420,12 +466,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   if (!control) return;
 
                   requestAnimationFrame(() => control.blur());
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setSidebarHovered(false);
-                    (event.currentTarget.querySelector(":focus") as HTMLElement | null)?.blur();
-                  }
                 }}
               >
                 <header className="dashboard-sidebar-header">
@@ -464,7 +504,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                               }
                             }}
                           >
-                            <DashboardIcon kind={item.workspace === "platform" ? "Access" : item.workspace === "organization" ? "Organization" : "Overview"} />
+                            <DashboardIcon kind={item.workspace === "platform" ? "Organizations" : item.workspace === "organization" ? "Organization" : "Overview"} />
                             <span>{item.label}</span>
                           </Link>
                         ))}
@@ -501,6 +541,21 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 </nav>
 
                 <footer className="dashboard-sidebar-footer">
+                  <button
+                    type="button"
+                    className="dashboard-sidebar-link dashboard-sidebar-toggle"
+                    aria-label={sidebarExpanded ? "Collapse navigation" : "Expand navigation"}
+                    aria-pressed={!sidebarExpanded}
+                    title={sidebarExpanded ? "Collapse navigation" : "Expand navigation"}
+                    onClick={toggleSidebar}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="h-[18px] w-[18px]">
+                        <path d={sidebarExpanded ? "m12.5 4-6 6 6 6" : "m7.5 4 6 6-6 6"} />
+                      </svg>
+                    </span>
+                    <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">{sidebarExpanded ? "Collapse" : "Expand"}</span>
+                  </button>
                   <Link
                     href="/tools/endorsement-generator"
                     aria-label="New endorsement"
@@ -564,8 +619,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                       <DashboardIcon kind={currentLink?.label ?? "Overview"} />
                       <span className="truncate">{currentLink?.label ?? workspaceLabel}</span>
                     </span>
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className={mobileMenuOpen ? "dashboard-mobile-chevron-open" : ""}>
-                      <path d="m5 7.5 5 5 5-5" />
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" />
                     </svg>
                   </button>
                   {mobileMenuOpen ? (
@@ -599,6 +654,23 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   ) : null}
                 </div>
               </section>
+
+              <div className="dashboard-admin-chrome">
+                <nav className="dashboard-breadcrumbs" aria-label="Breadcrumb">
+                  <span>{workspace === "platform" ? "Platform" : workspace === "organization" ? "Organization" : "Personal"}</span>
+                  <span aria-hidden="true">/</span>
+                  <span>{currentPageLabel}</span>
+                </nav>
+                <nav className="dashboard-visited-tabs" aria-label="Open dashboard pages">
+                  {visitedPages.map((item) => {
+                    const active = item.href === canonicalPageHref;
+                    return <span key={item.href} className={active ? "dashboard-visited-tab-active" : ""}>
+                      <Link href={item.href} scroll={false}>{item.label}</Link>
+                      {visitedPages.length > 1 ? <button type="button" aria-label={`Close ${item.label}`} onClick={() => closeVisitedPage(item.href)}>×</button> : null}
+                    </span>;
+                  })}
+                </nav>
+              </div>
 
               {showOrganizationContext ? (
                 <div className="dashboard-organization-context">

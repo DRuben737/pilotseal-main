@@ -1,10 +1,11 @@
 import AircraftAdminPanel from "@/components/dashboard/AircraftAdminPanel";
+import { Suspense } from "react";
 
 export const metadata = {
-  title: "Aircraft Admin | PilotSeal",
+  title: "Aircraft | PilotSeal",
   description: "Create, edit, and remove aircraft definitions for PilotSeal tools.",
 };
 
 export default function DashboardAircraftAdminPage() {
-  return <AircraftAdminPanel />;
+  return <Suspense fallback={null}><AircraftAdminPanel /></Suspense>;
 }

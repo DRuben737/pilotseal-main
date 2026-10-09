@@ -1,2 +1,2 @@
-import AssignmentAuditLog from "@/components/dashboard/AssignmentAuditLog";
-export default function Page() { return <AssignmentAuditLog platform />; }
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/admin/activity"); }

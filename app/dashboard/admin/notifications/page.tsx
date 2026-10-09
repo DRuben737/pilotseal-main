@@ -1,10 +1,2 @@
-import NotificationManager from "@/components/notifications/NotificationManager";
-
-export const metadata = {
-  title: "Platform Notices | PilotSeal",
-  description: "Create, schedule, and manage PilotSeal platform notices.",
-};
-
-export default function DashboardPlatformNotificationsPage() {
-  return <NotificationManager platformPublishingOnly />;
-}
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/admin/notices"); }

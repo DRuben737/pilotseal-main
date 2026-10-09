@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import { CompactButton, ConfirmDialog, DetailDrawer } from "@/components/admin/AdminConsole";
+import {
+  CompactButton,
+  ConfirmDialog,
+  DetailDrawer,
+} from "@/components/admin/AdminConsole";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import {
   canManageOrganizationAdmins,
@@ -42,6 +46,7 @@ export default function OrganizationRolePermissions() {
   const [savingRole, setSavingRole] = useState<ConfigurableRole | "">("");
   const [editingRole, setEditingRole] = useState<ConfigurableRole | "">("");
   const [confirmingRole, setConfirmingRole] = useState<ConfigurableRole | "">("");
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -108,6 +113,7 @@ export default function OrganizationRolePermissions() {
     if (!editingRole || savingRole) return;
     setDrafts((current) => ({ ...current, [editingRole]: saved[editingRole] }));
     setEditingRole("");
+    setPermissionsOpen(false);
   }
 
   const selectedRole = editingRole || null;
@@ -116,39 +122,24 @@ export default function OrganizationRolePermissions() {
     : false;
 
   return (
-    <section className="saas-panel min-w-0" aria-labelledby="role-permissions-title">
-      <header>
-        <h2 id="role-permissions-title" className="text-base font-semibold text-slate-950">Role permissions</h2>
-        <p className="mt-1 text-xs leading-5 text-slate-600">Choose the management areas available to each organization role. Owner always has full access.</p>
-      </header>
-      {status ? <p className="mt-3 text-sm text-slate-600" role="status">{status}</p> : null}
-      <div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
-        {(["organization_admin", "member"] as const).map((role) => {
-          const enabledLabels = ORGANIZATION_PERMISSIONS
-            .filter((permission) => saved[role].includes(permission))
-            .map((permission) => permissionLabels[permission].label);
-          return (
-            <div key={role} className="flex min-h-16 items-center gap-3 px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-semibold text-slate-950">{roleLabels[role]}</h3>
-                <p className="mt-0.5 truncate text-xs text-slate-500">
-                  {loading ? "Loading permissions…" : enabledLabels.length ? enabledLabels.join(" · ") : "No optional permissions"}
-                </p>
-              </div>
-              <CompactButton type="button" disabled={loading || Boolean(savingRole)} onClick={() => setEditingRole(role)}>
-                Edit
-              </CompactButton>
-            </div>
-          );
-        })}
-      </div>
+    <>
+      <CompactButton type="button" onClick={() => { setPermissionsOpen(true); setEditingRole("organization_admin"); }}>
+        Permissions
+      </CompactButton>
 
       <DetailDrawer
-        open={Boolean(selectedRole)}
+        open={permissionsOpen}
         onClose={closeEditor}
-        title={selectedRole ? `${roleLabels[selectedRole]} permissions` : "Role permissions"}
-        description="Choose which organization areas this role can manage. Required permissions cannot be removed."
+        title="Role permissions"
       >
+        <div className="mb-4 flex border-b border-slate-200" role="tablist" aria-label="Organization roles">
+          {(["organization_admin", "member"] as const).map((role) => (
+            <button key={role} type="button" role="tab" aria-selected={selectedRole === role} className={`border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${selectedRole === role ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:text-slate-950"}`} onClick={() => setEditingRole(role)}>
+              {roleLabels[role]}
+            </button>
+          ))}
+        </div>
+        {status ? <p className="mb-3 text-sm text-slate-600" role="status">{status}</p> : null}
         {selectedRole ? (
           <fieldset className="grid gap-1" disabled={loading || Boolean(savingRole)}>
             <legend className="sr-only">{roleLabels[selectedRole]} permissions</legend>
@@ -189,6 +180,6 @@ export default function OrganizationRolePermissions() {
           void saveRole(role);
         }}
       />
-    </section>
+    </>
   );
 }

@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import ReportsManager from "@/components/dashboard/ReportsManager";
 
 export const metadata = {
-  title: "ASR & Aircraft Discrepancy Reports | PilotSeal",
+  title: "Reports | PilotSeal",
   description:
     "Submit and manage organization aircraft discrepancy and aviation safety reports.",
 };

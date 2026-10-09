@@ -1,4 +1,4 @@
-import DashboardIndexRedirect from "@/components/dashboard/DashboardIndexRedirect";
+import DashboardTaskCenter from "@/components/dashboard/DashboardTaskCenter";
 
 export const metadata = {
   title: "Dashboard | PilotSeal",
@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function DashboardPage() {
-  return <DashboardIndexRedirect />;
+  return <DashboardTaskCenter />;
 }

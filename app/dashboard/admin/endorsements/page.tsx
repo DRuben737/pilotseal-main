@@ -1,16 +1,8 @@
-import EndorsementTemplateAdminPanel from "@/components/dashboard/EndorsementTemplateAdminPanel";
-import LegacyEndorsementReviewPanel from "@/components/dashboard/LegacyEndorsementReviewPanel";
+import { Suspense } from "react";
+import PlatformEndorsementsWorkspace from "@/components/dashboard/PlatformEndorsementsWorkspace";
 
-export const metadata = {
-  title: "Endorsement Templates Admin | PilotSeal",
-  description: "Create, edit, and publish endorsement generator templates.",
-};
+export const metadata = { title: "Endorsements | PilotSeal" };
 
-export default function DashboardEndorsementsAdminPage() {
-  return (
-    <>
-      <LegacyEndorsementReviewPanel />
-      <EndorsementTemplateAdminPanel />
-    </>
-  );
+export default function Page() {
+  return <Suspense fallback={null}><PlatformEndorsementsWorkspace /></Suspense>;
 }
