@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#102f47" />
   <title>PilotSeal Dashboard Demo</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="refinements.css" />
 </head>
 <body>
   <div class="demo-banner"><strong>Private demo</strong><span>Synthetic data · changes reset when this page reloads</span></div>
@@ -13,16 +14,16 @@
     <aside class="sidebar" data-expanded="true" aria-label="Dashboard navigation">
       <div class="brand"><span class="mark">PS</span><span class="brand-copy"><strong>PilotSeal</strong><small>Alex Morgan</small></span></div>
       <div class="workspace-switcher" role="tablist" aria-label="Switch workspace">
-        <button type="button" data-workspace="personal" aria-selected="true">Personal</button>
-        <button type="button" data-workspace="organization">Organization</button>
-        <button type="button" data-workspace="platform">Platform</button>
+        <button type="button" data-workspace="personal" data-short="P" aria-label="Personal workspace" aria-selected="true">Personal</button>
+        <button type="button" data-workspace="organization" data-short="O" aria-label="Organization workspace">Organization</button>
+        <button type="button" data-workspace="platform" data-short="A" aria-label="Platform administration">Platform</button>
       </div>
       <p class="section-label" id="workspace-label">Personal</p>
       <nav class="side-nav" id="side-nav"></nav>
       <div class="sidebar-footer">
-        <button type="button" id="collapse"><span aria-hidden="true">‹</span><span class="nav-copy">Collapse</span></button>
-        <button type="button"><span aria-hidden="true">＋</span><span class="nav-copy">New endorsement</span></button>
-        <button type="button"><span aria-hidden="true">↪</span><span class="nav-copy">Sign out</span></button>
+        <button type="button" id="collapse" title="Collapse navigation"><span class="nav-copy">Collapse</span></button>
+        <button type="button" title="New endorsement"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="nav-copy">New endorsement</span></button>
+        <button type="button" title="Sign out"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M10 6H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4M14 16l4-4-4-4M18 12H9"/></svg><span class="nav-copy">Sign out</span></button>
       </div>
     </aside>
     <section class="content">

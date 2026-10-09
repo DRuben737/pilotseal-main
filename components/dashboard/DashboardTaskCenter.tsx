@@ -14,16 +14,20 @@ import {
   type DashboardTaskPriority,
   type DashboardTaskRole,
 } from "@/lib/dashboard-tasks";
-import { fetchScheduleEligibility } from "@/lib/dashboard-preferences";
+import { fetchEnabledFeatureIds, fetchScheduleEligibility, type OptionalFeatureId } from "@/lib/dashboard-preferences";
 import { fetchScheduleAccess, fetchScheduleEntries, type ScheduleEntry } from "@/lib/cfi-schedule";
 import { fetchInboxNotifications, type NotificationPriority } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
 
 const moduleLinks = [
+  ["Schedule", "/dashboard/schedule", "Week calendar, availability, and lesson planning", "cfi_schedule"],
   ["People", "/dashboard/people", "Students, instructors, and certificates"],
   ["Aircraft", "/dashboard/aircraft", "Aircraft details and due items"],
+  ["Reports", "/dashboard/reports", "Safety and aircraft reports"],
   ["Flight Briefs", "/dashboard/flight-briefs", "Recent preflight records"],
   ["Endorsements", "/dashboard/endorsements", "Issued and received records"],
+  ["Notifications", "/dashboard/notifications", "Requests, reminders, and updates"],
+  ["Account", "/dashboard/account-settings", "Profile, certificates, and preferences"],
 ] as const;
 
 function notificationPriority(priority: NotificationPriority): DashboardTaskPriority {
@@ -79,6 +83,7 @@ export default function DashboardTaskCenter() {
   const { organizations } = useOrganization();
   const [tasks, setTasks] = useState<DashboardTask[]>([]);
   const [roles, setRoles] = useState<DashboardTaskRole[]>([]);
+  const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -92,12 +97,13 @@ export default function DashboardTaskCenter() {
       setLoading(true);
       setError("");
       try {
-        const [profile, notifications, eligibility, aircraft, access] = await Promise.all([
+        const [profile, notifications, eligibility, aircraft, access, features] = await Promise.all([
           fetchCurrentProfile(currentUserId),
           fetchInboxNotifications(currentUserId),
           fetchScheduleEligibility().catch(() => ({ can_instruct: false, invited_student: false })),
           fetchMyAircraft(currentUserId).catch(() => []),
           fetchScheduleAccess().catch(() => []),
+          fetchEnabledFeatureIds(currentUserId).catch(() => []),
         ]);
         const nextRoles = new Set<DashboardTaskRole>();
         if (eligibility.can_instruct || organizations.some((item) => item.teaching_role === "instructor")) nextRoles.add("instructor");
@@ -165,6 +171,7 @@ export default function DashboardTaskCenter() {
 
         if (!cancelled) {
           setRoles(Array.from(nextRoles));
+          setEnabledFeatureIds(features);
           setTasks(sortDashboardTasks(next).slice(0, 12));
         }
       } catch (loadError) {
@@ -209,7 +216,7 @@ export default function DashboardTaskCenter() {
       <div className="dashboard-task-section">
         <div className="dashboard-task-section-heading"><h2>Workspace</h2></div>
         <nav className="dashboard-module-list" aria-label="Personal workspace modules">
-          {moduleLinks.map(([label, href, detail]) => (
+          {moduleLinks.filter(([, , , featureId]) => !featureId || enabledFeatureIds.includes(featureId)).map(([label, href, detail]) => (
             <Link key={href} href={href}><span><strong>{label}</strong><small>{detail}</small></span><span aria-hidden="true">→</span></Link>
           ))}
         </nav>
