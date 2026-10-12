@@ -325,7 +325,8 @@ export default function OrganizationManager({
         items: [...group.items].sort((left, right) => compareAircraftLabels(left.name, right.name)),
       })),
   [models]);
-  const selectedFamilyKey = searchParams.get("family") ?? "";
+  const familyKeyFromUrl = searchParams.get("family") ?? "";
+  const [selectedFamilyKey, setSelectedFamilyKey] = useState(familyKeyFromUrl);
   const aircraftFamilyGroups = useMemo(() =>
     groupByAircraftFamily(aircraft, (item) => modelNames.get(item.model_id ?? "") ?? item.model?.name)
       .map((group) => ({
@@ -420,11 +421,17 @@ export default function OrganizationManager({
   const editingAssignedAircraft = editingAircraft?.organization_access === "assigned";
 
   useEffect(() => {
+    setSelectedFamilyKey(familyKeyFromUrl);
+    setFamilyAircraftPage(1);
+  }, [familyKeyFromUrl]);
+
+  useEffect(() => {
     if (view !== "fleet" || loading || !selectedFamilyKey) return;
     if (
       activeFleetWorkspace !== "aircraft" ||
       !aircraftFamilyGroups.some((group) => group.key === selectedFamilyKey)
     ) {
+      setSelectedFamilyKey("");
       const next = new URLSearchParams(searchParams.toString());
       next.delete("family");
       const query = next.toString();
@@ -833,6 +840,7 @@ export default function OrganizationManager({
   }
 
   function selectAircraftFamily(familyKey: string) {
+    setSelectedFamilyKey(familyKey);
     const next = new URLSearchParams(searchParams.toString());
     if (familyKey) next.set("family", familyKey);
     else next.delete("family");
@@ -2177,7 +2185,7 @@ export default function OrganizationManager({
         </CompactToolbar>
 
         <DetailDrawer
-          open={showAircraftForm || Boolean(selectedAircraftFamily)}
+          open={showAircraftForm}
           width="wide"
           title={showAircraftForm
             ? editingAssignedAircraft
@@ -2185,7 +2193,7 @@ export default function OrganizationManager({
               : editingAircraftId
                 ? `${selectedAircraftFamily?.label ? `${selectedAircraftFamily.label} / ` : ""}${aircraftForm.tail_number}`
                 : "Add aircraft"
-            : selectedAircraftFamily?.label ?? "Aircraft"}
+            : "Aircraft"}
           onClose={closeAircraftWorkspaceDialog}
         >
           {showAircraftForm ? (
@@ -2307,51 +2315,6 @@ export default function OrganizationManager({
               </div>
             </div>
           </form>
-          ) : selectedAircraftFamily ? (
-            <div className="grid gap-3">
-              <div className="grid border-x border-t border-slate-200 bg-white md:hidden">
-                {visibleFamilyAircraft.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="grid min-h-12 gap-0.5 border-b border-slate-200 px-3 py-2 text-left hover:bg-slate-50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
-                    onClick={() => startEditAircraft(item)}
-                  >
-                    <span className="text-sm font-semibold text-slate-950">{item.tail_number}</span>
-                    <span className="text-xs text-slate-500">
-                      {modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"} · {formatOperationalStatus(item.operational_status)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div className="hidden md:block">
-                <AdminDataTable label={`${selectedAircraftFamily.label} aircraft`}>
-                  <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
-                    <tr>
-                      <th className="border-b border-slate-200 px-3 py-2">Tail number</th>
-                      <th className="border-b border-slate-200 px-3 py-2">Exact model</th>
-                      <th className="border-b border-slate-200 px-3 py-2">Status</th>
-                      <th className="border-b border-slate-200 px-3 py-2">Next due</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {visibleFamilyAircraft.map((item) => (
-                      <tr key={item.id} className="bg-white hover:bg-blue-50/40">
-                        <td className="px-3 py-2">
-                          <button type="button" className="font-semibold text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={() => startEditAircraft(item)}>
-                            {item.tail_number}
-                          </button>
-                        </td>
-                        <td className="px-3 py-2 text-xs text-slate-700">{modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</td>
-                        <td className="px-3 py-2"><StatusBadge tone={aircraftStatusTone(item.operational_status)}>{formatOperationalStatus(item.operational_status)}</StatusBadge></td>
-                        <td className="px-3 py-2 text-xs text-slate-600">{nextAircraftDue(item)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </AdminDataTable>
-              </div>
-              <AdminPagination page={safeFamilyAircraftPage} pageSize={familyPageSize} total={selectedAircraftFamily.items.length} onPageChange={setFamilyAircraftPage} />
-            </div>
           ) : null}
         </DetailDrawer>
         <ConfirmDialog
@@ -2367,17 +2330,76 @@ export default function OrganizationManager({
           }}
         />
 
-        <AdminNameList
-          label="Aircraft families"
-          emptyLabel={aircraft.length === 0 ? "No organization aircraft yet." : "No aircraft match these filters."}
-          items={visibleAircraftFamilyGroups.map((group) => ({
-            id: group.key,
-            name: group.label,
-            meta: `${group.items.length} aircraft`,
-          }))}
-          onSelect={(item) => selectAircraftFamily(item.id)}
-        />
-        <AdminPagination page={safeAircraftFamilyPage} pageSize={familyPageSize} total={filteredAircraftFamilyGroups.length} onPageChange={setAircraftFamilyPage} />
+        {selectedAircraftFamily ? (
+          <div className="grid gap-0">
+            <div className="flex min-h-10 items-center justify-between gap-3 border border-slate-200 bg-slate-50 px-3">
+              <button
+                type="button"
+                className="text-xs font-semibold text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                onClick={() => selectAircraftFamily("")}
+              >
+                ← All aircraft families
+              </button>
+              <span className="text-xs text-slate-600">{selectedAircraftFamily.label} · {selectedAircraftFamily.items.length} aircraft</span>
+            </div>
+            <div className="grid border-x border-t border-slate-200 bg-white md:hidden">
+              {visibleFamilyAircraft.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="grid min-h-12 gap-0.5 border-b border-slate-200 px-3 py-2 text-left hover:bg-slate-50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
+                  onClick={() => startEditAircraft(item)}
+                >
+                  <span className="text-sm font-semibold text-slate-950">{item.tail_number}</span>
+                  <span className="text-xs text-slate-500">
+                    {modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"} · {formatOperationalStatus(item.operational_status)}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="hidden md:block">
+              <AdminDataTable label={`${selectedAircraftFamily.label} aircraft`}>
+                <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+                  <tr>
+                    <th className="border-b border-slate-200 px-3 py-2">Tail number</th>
+                    <th className="border-b border-slate-200 px-3 py-2">Exact model</th>
+                    <th className="border-b border-slate-200 px-3 py-2">Status</th>
+                    <th className="border-b border-slate-200 px-3 py-2">Next due</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visibleFamilyAircraft.map((item) => (
+                    <tr key={item.id} className="bg-white hover:bg-blue-50/40">
+                      <td className="px-3 py-2">
+                        <button type="button" className="font-semibold text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={() => startEditAircraft(item)}>
+                          {item.tail_number}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-700">{modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</td>
+                      <td className="px-3 py-2"><StatusBadge tone={aircraftStatusTone(item.operational_status)}>{formatOperationalStatus(item.operational_status)}</StatusBadge></td>
+                      <td className="px-3 py-2 text-xs text-slate-600">{nextAircraftDue(item)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </AdminDataTable>
+            </div>
+            <AdminPagination page={safeFamilyAircraftPage} pageSize={familyPageSize} total={selectedAircraftFamily.items.length} onPageChange={setFamilyAircraftPage} />
+          </div>
+        ) : (
+          <>
+            <AdminNameList
+              label="Aircraft families"
+              emptyLabel={aircraft.length === 0 ? "No organization aircraft yet." : "No aircraft match these filters."}
+              items={visibleAircraftFamilyGroups.map((group) => ({
+                id: group.key,
+                name: group.label,
+                meta: `${group.items.length} aircraft`,
+              }))}
+              onSelect={(item) => selectAircraftFamily(item.id)}
+            />
+            <AdminPagination page={safeAircraftFamilyPage} pageSize={familyPageSize} total={filteredAircraftFamilyGroups.length} onPageChange={setAircraftFamilyPage} />
+          </>
+        )}
       </FleetWorkspacePanel>) : null}
 
       {view === "fleet" && canManageFleet && activeFleetWorkspace === "inspections" ? (

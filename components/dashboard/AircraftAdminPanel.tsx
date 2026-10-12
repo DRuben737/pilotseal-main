@@ -2087,20 +2087,90 @@ export default function AircraftAdminPanel() {
               }}
             />
           </CompactToolbar>
-          <AdminNameList
-            label="Platform aircraft families"
-            emptyLabel={aircraft.length === 0 ? "No fleet aircraft." : "No aircraft match this search."}
-            items={aircraftFamilyGroups.slice((safeAircraftFamilyPage - 1) * 20, safeAircraftFamilyPage * 20).map((group) => ({
-              id: group.key,
-              name: group.label,
-              meta: `${group.items.length} aircraft`,
-            }))}
-            onSelect={(item) => {
-              setSelectedAircraftFamilyKey(item.id);
-              setSelectedFamilyAircraftPage(1);
-            }}
-          />
-          <AdminPagination page={safeAircraftFamilyPage} pageSize={20} total={aircraftFamilyGroups.length} onPageChange={setAircraftFamilyPage} />
+          {selectedAircraftFamily ? (
+            <div className="grid gap-0">
+              <div className="flex min-h-10 items-center justify-between gap-3 border border-slate-200 bg-slate-50 px-3">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  onClick={() => setSelectedAircraftFamilyKey("")}
+                >
+                  ← All aircraft families
+                </button>
+                <span className="text-xs text-slate-600">{selectedAircraftFamily.label} · {selectedAircraftFamily.items.length} aircraft</span>
+              </div>
+              <div className="grid border-x border-t border-slate-200 bg-white md:hidden">
+                {selectedAircraftFamily.items
+                  .slice((safeSelectedFamilyAircraftPage - 1) * 20, safeSelectedFamilyAircraftPage * 20)
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="grid min-h-12 gap-0.5 border-b border-slate-200 px-3 py-2 text-left hover:bg-slate-50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
+                      onClick={() => openAircraftEditor(normalizeAircraftForm(item))}
+                    >
+                      <span className="text-sm font-semibold text-slate-950">{item.tail_number}</span>
+                      <span className="text-xs text-slate-500">{modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</span>
+                    </button>
+                  ))}
+              </div>
+              <div className="hidden md:block">
+                <AdminDataTable label={`${selectedAircraftFamily.label} platform aircraft`}>
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+                      <th className="px-3 py-2">Tail</th>
+                      <th className="px-3 py-2">Exact model</th>
+                      <th className="px-3 py-2">Visibility</th>
+                      <th className="px-3 py-2">Organizations</th>
+                      <th className="px-3 py-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedAircraftFamily.items
+                      .slice((safeSelectedFamilyAircraftPage - 1) * 20, safeSelectedFamilyAircraftPage * 20)
+                      .map((item) => {
+                        const assignmentCount = organizationAssignments.filter((assignment) => assignment.aircraft_id === item.id).length;
+                        return (
+                          <tr key={item.id} className="hover:bg-blue-50/40">
+                            <td className="px-3 py-2">
+                              <button type="button" className="font-semibold text-blue-700 hover:underline" onClick={() => openAircraftEditor(normalizeAircraftForm(item))}>{item.tail_number}</button>
+                            </td>
+                            <td className="px-3 py-2 text-xs text-slate-600">{modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</td>
+                            <td className="px-3 py-2"><StatusBadge tone={item.visibility === "private" ? "warning" : "info"}>{item.visibility === "private" ? "Private" : "Shared"}</StatusBadge></td>
+                            <td className="px-3 py-2 text-center text-xs tabular-nums text-slate-600">{assignmentCount}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex justify-end gap-1">
+                                {item.visibility === "private" && item.owner_user_id === session?.user?.id ? <CompactButton type="button" onClick={() => openOrganizationAssignments(item)}>Organizations</CompactButton> : null}
+                                <CompactButton type="button" onClick={() => openAircraftEditor(normalizeAircraftForm(item))}>Edit</CompactButton>
+                                <CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleDeleteAircraft(item.id)}>Delete</CompactButton>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </AdminDataTable>
+              </div>
+              <AdminPagination page={safeSelectedFamilyAircraftPage} pageSize={20} total={selectedAircraftFamily.items.length} onPageChange={setSelectedFamilyAircraftPage} />
+            </div>
+          ) : (
+            <>
+              <AdminNameList
+                label="Platform aircraft families"
+                emptyLabel={aircraft.length === 0 ? "No fleet aircraft." : "No aircraft match this search."}
+                items={aircraftFamilyGroups.slice((safeAircraftFamilyPage - 1) * 20, safeAircraftFamilyPage * 20).map((group) => ({
+                  id: group.key,
+                  name: group.label,
+                  meta: `${group.items.length} aircraft`,
+                }))}
+                onSelect={(item) => {
+                  setSelectedAircraftFamilyKey(item.id);
+                  setSelectedFamilyAircraftPage(1);
+                }}
+              />
+              <AdminPagination page={safeAircraftFamilyPage} pageSize={20} total={aircraftFamilyGroups.length} onPageChange={setAircraftFamilyPage} />
+            </>
+          )}
         </div>
         ) : null}
 
@@ -2120,74 +2190,6 @@ export default function AircraftAdminPanel() {
       </div>
 
       {status ? <p className="saas-meta-text">{status}</p> : null}
-
-      <DetailDrawer
-        open={Boolean(selectedAircraftFamily)}
-        width="wide"
-        title={selectedAircraftFamily?.label ?? "Aircraft"}
-        onClose={() => setSelectedAircraftFamilyKey("")}
-      >
-        {selectedAircraftFamily ? (
-          <div className="grid gap-3">
-            <div className="grid border-x border-t border-slate-200 bg-white md:hidden">
-              {selectedAircraftFamily.items
-                .slice((safeSelectedFamilyAircraftPage - 1) * 20, safeSelectedFamilyAircraftPage * 20)
-                .map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="grid min-h-12 gap-0.5 border-b border-slate-200 px-3 py-2 text-left hover:bg-slate-50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
-                    onClick={() => {
-                      setSelectedAircraftFamilyKey("");
-                      openAircraftEditor(normalizeAircraftForm(item));
-                    }}
-                  >
-                    <span className="text-sm font-semibold text-slate-950">{item.tail_number}</span>
-                    <span className="text-xs text-slate-500">{modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</span>
-                  </button>
-                ))}
-            </div>
-            <div className="hidden md:block">
-              <AdminDataTable label={`${selectedAircraftFamily.label} platform aircraft`}>
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
-                    <th className="px-3 py-2">Tail</th>
-                    <th className="px-3 py-2">Exact model</th>
-                    <th className="px-3 py-2">Visibility</th>
-                    <th className="px-3 py-2">Organizations</th>
-                    <th className="px-3 py-2 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {selectedAircraftFamily.items
-                    .slice((safeSelectedFamilyAircraftPage - 1) * 20, safeSelectedFamilyAircraftPage * 20)
-                    .map((item) => {
-                      const assignmentCount = organizationAssignments.filter((assignment) => assignment.aircraft_id === item.id).length;
-                      return (
-                        <tr key={item.id} className="hover:bg-blue-50/40">
-                          <td className="px-3 py-2">
-                            <button type="button" className="font-semibold text-blue-700 hover:underline" onClick={() => { setSelectedAircraftFamilyKey(""); openAircraftEditor(normalizeAircraftForm(item)); }}>{item.tail_number}</button>
-                          </td>
-                          <td className="px-3 py-2 text-xs text-slate-600">{modelNameById.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</td>
-                          <td className="px-3 py-2"><StatusBadge tone={item.visibility === "private" ? "warning" : "info"}>{item.visibility === "private" ? "Private" : "Shared"}</StatusBadge></td>
-                          <td className="px-3 py-2 text-center text-xs tabular-nums text-slate-600">{assignmentCount}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex justify-end gap-1">
-                              {item.visibility === "private" && item.owner_user_id === session?.user?.id ? <CompactButton type="button" onClick={() => { setSelectedAircraftFamilyKey(""); openOrganizationAssignments(item); }}>Organizations</CompactButton> : null}
-                              <CompactButton type="button" onClick={() => { setSelectedAircraftFamilyKey(""); openAircraftEditor(normalizeAircraftForm(item)); }}>Edit</CompactButton>
-                              <CompactButton type="button" tone="danger" disabled={saving} onClick={() => void handleDeleteAircraft(item.id)}>Delete</CompactButton>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </AdminDataTable>
-            </div>
-            <AdminPagination page={safeSelectedFamilyAircraftPage} pageSize={20} total={selectedAircraftFamily.items.length} onPageChange={setSelectedFamilyAircraftPage} />
-          </div>
-        ) : null}
-      </DetailDrawer>
 
       <ConfirmDialog
         open={Boolean(deleteModelId)}
