@@ -82,6 +82,7 @@ type ModelFormState = {
   max_weight: string;
   stations: ModelStationDraft[];
   envelope: EnvelopePointDraft[];
+  utilityEnvelope: EnvelopePointDraft[];
   topView: PolygonPointDraft[];
   sideView: PolygonPointDraft[];
 };
@@ -121,6 +122,11 @@ const emptyModelForm: ModelFormState = {
     { clientKey: "new-envelope-1", cg: "", weight: "" },
     { clientKey: "new-envelope-2", cg: "", weight: "" },
     { clientKey: "new-envelope-3", cg: "", weight: "" },
+  ],
+  utilityEnvelope: [
+    { clientKey: "new-utility-envelope-1", cg: "", weight: "" },
+    { clientKey: "new-utility-envelope-2", cg: "", weight: "" },
+    { clientKey: "new-utility-envelope-3", cg: "", weight: "" },
   ],
   topView: [
     { clientKey: "new-top-view-1", x: "", y: "" },
@@ -190,6 +196,14 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
             weight: String(point.weight),
           }))
         : emptyModelForm.envelope,
+    utilityEnvelope:
+      envelopeSet.utility.length > 0
+        ? envelopeSet.utility.map((point, index) => ({
+            clientKey: `utility-envelope-${model.id}-${index}`,
+            cg: String(point.cg),
+            weight: String(point.weight),
+          }))
+        : emptyModelForm.utilityEnvelope,
     topView:
       envelopeSet.topView.length > 0
         ? envelopeSet.topView.map((point, index) => ({
@@ -452,6 +466,16 @@ function validateModelForm(modelForm: ModelFormState) {
       ],
       3,
       true
+    );
+    validatePoints(
+      modelForm.utilityEnvelope,
+      "utilityEnvelope",
+      [
+        { key: "cg", label: "CG position" },
+        { key: "weight", label: "aircraft weight" },
+      ],
+      3,
+      false
     );
   }
 
@@ -798,6 +822,28 @@ export default function AircraftAdminPanel() {
     }
   }
 
+  function updateUtilityEnvelope(
+    index: number,
+    key: keyof EnvelopePointDraft,
+    value: string
+  ) {
+    const pointKey = modelForm.utilityEnvelope[index]?.clientKey;
+    setModelForm((current) => ({
+      ...current,
+      utilityEnvelope: current.utilityEnvelope.map((point, pointIndex) =>
+        pointIndex === index ? { ...point, [key]: value } : point
+      ),
+    }));
+    if (pointKey) {
+      setModelErrors((current) => {
+        const next = { ...current };
+        delete next[`utilityEnvelope.${pointKey}.${String(key)}`];
+        delete next.utilityEnvelope;
+        return next;
+      });
+    }
+  }
+
   function updateTopView(index: number, key: keyof PolygonPointDraft, value: string) {
     const pointKey = modelForm.topView[index]?.clientKey;
     setModelForm((current) => ({
@@ -893,6 +939,13 @@ export default function AircraftAdminPanel() {
         weight: toNumber(point.weight),
       }));
 
+    const utilityEnvelope = modelForm.utilityEnvelope
+      .filter((point) => point.cg.trim() && point.weight.trim())
+      .map((point) => ({
+        cg: toNumber(point.cg),
+        weight: toNumber(point.weight),
+      }));
+
     const topView = modelForm.topView
       .filter((point) => point.x.trim() && point.y.trim())
       .map((point) => ({
@@ -917,7 +970,10 @@ export default function AircraftAdminPanel() {
           ? {
               polygon: topView,
             }
-          : envelope;
+          : {
+              normal: envelope,
+              utility: utilityEnvelope,
+            };
 
     if (modelForm.category === "helicopter" && (topView.length > 0 || sideView.length > 0)) {
       if (topView.length < 3) {
@@ -1514,6 +1570,7 @@ export default function AircraftAdminPanel() {
         })}
 
         {modelForm.category === "airplane" ? (
+          <div className="grid gap-3 xl:grid-cols-2">
           <section className="border border-slate-300 bg-white">
             <div className="flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-800 px-2 py-1 text-white">
               <div>
@@ -1595,6 +1652,92 @@ export default function AircraftAdminPanel() {
               </tbody>
             </WorksheetGrid>
           </section>
+          <section className="border border-slate-300 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-800 px-2 py-1 text-white">
+              <div>
+                <h3 className="text-[11px] font-bold uppercase tracking-wide">
+                  Utility CG envelope
+                </h3>
+                <p className="text-[10px] text-slate-300">Optional · minimum 3 boundary points</p>
+              </div>
+              <CompactButton
+                type="button"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                onClick={() =>
+                  updateModelField("utilityEnvelope", [
+                    ...modelForm.utilityEnvelope,
+                    { clientKey: crypto.randomUUID(), cg: "", weight: "" },
+                  ])
+                }
+              >
+                Add point
+              </CompactButton>
+            </div>
+            <WorksheetGrid label="Utility CG envelope points" minWidth={520}>
+              <thead>
+                <tr>
+                  <WorksheetHeader>#</WorksheetHeader>
+                  <WorksheetHeader>CG (in)</WorksheetHeader>
+                  <WorksheetHeader>Weight (lb)</WorksheetHeader>
+                  <WorksheetHeader className="w-20 text-right">Action</WorksheetHeader>
+                </tr>
+              </thead>
+              <tbody>
+                {modelForm.utilityEnvelope.map((point, index) => {
+                  const prefix = `utilityEnvelope.${point.clientKey}`;
+                  return (
+                    <tr key={point.clientKey}>
+                      <WorksheetCell className="px-2 text-slate-500">{index + 1}</WorksheetCell>
+                      <WorksheetCell>
+                        <input
+                          aria-label={`Utility envelope point ${index + 1} CG`}
+                          aria-invalid={Boolean(modelErrors[`${prefix}.cg`])}
+                          className={controlClass(modelErrors[`${prefix}.cg`])}
+                          type="number"
+                          step="any"
+                          value={point.cg}
+                          onChange={(event) =>
+                            updateUtilityEnvelope(index, "cg", event.target.value)
+                          }
+                        />
+                      </WorksheetCell>
+                      <WorksheetCell>
+                        <input
+                          aria-label={`Utility envelope point ${index + 1} weight`}
+                          aria-invalid={Boolean(modelErrors[`${prefix}.weight`])}
+                          className={controlClass(modelErrors[`${prefix}.weight`])}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={point.weight}
+                          onChange={(event) =>
+                            updateUtilityEnvelope(index, "weight", event.target.value)
+                          }
+                        />
+                      </WorksheetCell>
+                      <WorksheetCell className="px-1 text-right">
+                        <button
+                          type="button"
+                          className="h-7 px-1 text-xs font-semibold text-rose-700"
+                          onClick={() =>
+                            updateModelField(
+                              "utilityEnvelope",
+                              modelForm.utilityEnvelope.filter(
+                                (item) => item.clientKey !== point.clientKey
+                              )
+                            )
+                          }
+                        >
+                          Remove
+                        </button>
+                      </WorksheetCell>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </WorksheetGrid>
+          </section>
+          </div>
         ) : (
           <div className="grid gap-3 xl:grid-cols-2">
             {(["topView", "sideView"] as const).map((section) => {
