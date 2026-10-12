@@ -21,8 +21,12 @@ const permissionLabels: Record<OrganizationPermission, { label: string; descript
   fleet: { label: "Aircraft", description: "Manage aircraft, models, inspections, and maintenance." },
   endorsements: { label: "Endorsements", description: "Review organization endorsement requests." },
   notifications: { label: "Notifications", description: "Publish notifications to organization members." },
-  audit: { label: "Assignment history", description: "View aircraft assignment and removal history." },
+  audit: { label: "Audit access", description: "Reserved for compatibility with existing organization roles." },
 };
+
+const configurablePermissions = ORGANIZATION_PERMISSIONS.filter(
+  (permission) => permission !== "audit",
+);
 
 type ConfigurableRole = "organization_admin" | "member";
 
@@ -118,7 +122,7 @@ export default function OrganizationRolePermissions() {
 
   const selectedRole = editingRole || null;
   const selectedRoleChanged = selectedRole
-    ? ORGANIZATION_PERMISSIONS.some((permission) => drafts[selectedRole].includes(permission) !== saved[selectedRole].includes(permission))
+    ? configurablePermissions.some((permission) => drafts[selectedRole].includes(permission) !== saved[selectedRole].includes(permission))
     : false;
 
   return (
@@ -143,7 +147,7 @@ export default function OrganizationRolePermissions() {
         {selectedRole ? (
           <fieldset className="grid gap-1" disabled={loading || Boolean(savingRole)}>
             <legend className="sr-only">{roleLabels[selectedRole]} permissions</legend>
-            {ORGANIZATION_PERMISSIONS.map((permission) => (
+            {configurablePermissions.map((permission) => (
               <label key={permission} className={`flex min-h-12 items-start gap-3 border-b border-slate-200 px-1 py-2.5 ${isFixedPermission(selectedRole, permission) ? "cursor-not-allowed bg-slate-50" : "cursor-pointer hover:bg-slate-50"}`}>
                 <input className="mt-0.5 h-4 w-4 accent-blue-600" type="checkbox" checked={drafts[selectedRole].includes(permission)} disabled={isFixedPermission(selectedRole, permission)} onChange={() => togglePermission(selectedRole, permission)} />
                 <span>

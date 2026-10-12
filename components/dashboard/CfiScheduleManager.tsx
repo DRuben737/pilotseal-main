@@ -63,6 +63,7 @@ import {
 import { applyScheduleOperations, moveScheduleLesson, scheduleChanges, scheduleConflictsForLesson, scheduleHasOverlap, swapScheduleLessons, type ScheduleOperation, type ScheduleChange } from "@/lib/cfi-schedule-drafts";
 import { fetchEnabledFeatureIds, fetchScheduleEligibility, updateEnabledFeatureIds, type ScheduleEligibility } from "@/lib/dashboard-preferences";
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
+import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 
 type DrawerMode = "review" | "students" | "availability-overview" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "teaching" | "settings" | "publish" | null;
 type AvailabilityRow = { start: string; end: string };
@@ -201,6 +202,13 @@ export default function CfiScheduleManager() {
   const [settingsForm, setSettingsForm] = useState({ weeklySessions: 3, durationMin: 120, color: "#2563eb", useWeekOverride: false, weekSessions: 3, weekDurationMin: 120 });
 
   const studentViews = useMemo(() => access.filter((item) => item.caller_role === "student" && item.access_enabled), [access]);
+  const aircraftOptionGroups = useMemo(() =>
+    groupByAircraftFamily(aircraft, (item) => item.model_name)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)),
+      })),
+  [aircraft]);
   const isCfiView = viewKey === "cfi";
   const activeCfiId = isCfiView ? userId : viewKey;
   const calendarView = layout === "calendar";
@@ -1378,7 +1386,15 @@ export default function CfiScheduleManager() {
 
       <DetailDrawer compact open={drawer === "lesson"} onClose={() => { setDrawer(null); setResumeLessons([]); }} title={lesson.id ? "Edit lesson" : "Add lesson"} description="Changes stay unpublished until Review & publish.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
-        <div className="grid gap-3"><label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={lesson.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" step={900} value={lesson.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind, aircraftId: event.target.value === "ground" ? "" : current.aircraftId })); }}><option value="flight">Flight</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div>{lesson.kind === "flight" ? <label className="saas-field"><span>Aircraft</span><select value={lesson.aircraftId} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, aircraftId: event.target.value })); }}><option value="">Not assigned</option>{aircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? ` · ${item.operational_status.replace("_", " ")}` : ""}</option>)}</select></label> : null}<label className="saas-field"><span>Note</span><textarea rows={3} maxLength={500} value={lesson.note} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, note: event.target.value })); }} /></label>{previewChanges.length ? <div><p className="mb-2 text-sm font-semibold">Changes in this edit · {previewChanges.length} lesson(s)</p>{renderChangePreview(previewChanges, lessonPreviewEntries)}</div> : null}{lessonWarnings.length ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900"><p className="font-semibold">Schedule issues</p><ul className="mt-1 list-disc pl-5">{lessonWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><p className="mt-2 text-xs">These are warnings only. You can still save.</p></div> : null}</div>
+        <div className="grid gap-3">
+          <label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label>
+          <div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={lesson.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" step={900} value={lesson.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div>
+          <div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind, aircraftId: event.target.value === "ground" ? "" : current.aircraftId })); }}><option value="flight">Flight</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div>
+          {lesson.kind === "flight" ? <label className="saas-field"><span>Aircraft</span><select value={lesson.aircraftId} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, aircraftId: event.target.value })); }}><option value="">Not assigned</option>{aircraftOptionGroups.map((group) => <optgroup key={group.key} label={group.label}>{group.items.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? ` · ${item.operational_status.replace("_", " ")}` : ""}</option>)}</optgroup>)}</select></label> : null}
+          <label className="saas-field"><span>Note</span><textarea rows={3} maxLength={500} value={lesson.note} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, note: event.target.value })); }} /></label>
+          {previewChanges.length ? <div><p className="mb-2 text-sm font-semibold">Changes in this edit · {previewChanges.length} lesson(s)</p>{renderChangePreview(previewChanges, lessonPreviewEntries)}</div> : null}
+          {lessonWarnings.length ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900"><p className="font-semibold">Schedule issues</p><ul className="mt-1 list-disc pl-5">{lessonWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><p className="mt-2 text-xs">These are warnings only. You can still save.</p></div> : null}
+        </div>
         {resumeLessons.length ? <p className="mt-3 text-xs text-slate-600">Save this lesson to return to the time change you were making.</p> : null}
         {lessonConflicts.length ? <div role="alert" className="mt-3 border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           <p className="font-semibold">Overlaps {lessonConflicts.length} other lesson{lessonConflicts.length === 1 ? "" : "s"}</p>
@@ -1474,5 +1490,26 @@ function InfoHint({ label, children }: { label: string; children: string }) {
 }
 
 function BlockForm({ value, aircraft, onChange }: { value: { date: string; start: string; end: string; note: string; aircraftId: string }; aircraft: ScheduleAircraft[]; onChange: (value: { date: string; start: string; end: string; note: string; aircraftId: string }) => void }) {
-  return <div className="grid gap-3"><label className="saas-field"><span>Aircraft</span><select required value={value.aircraftId} onChange={(event) => onChange({ ...value, aircraftId: event.target.value })}><option value="" disabled>Choose aircraft</option>{aircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="saas-field col-span-2"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={value.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, date: event.target.value })} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={value.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={value.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, end: event.target.value })} /></label></div><label className="saas-field"><span>Reason (private)</span><input maxLength={300} value={value.note} placeholder="Reserved, maintenance, or other" onChange={(event) => onChange({ ...value, note: event.target.value })} /></label></div>;
+  const aircraftGroups = groupByAircraftFamily(aircraft, (item) => item.model_name)
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)),
+    }));
+  return (
+    <div className="grid gap-3">
+      <label className="saas-field">
+        <span>Aircraft</span>
+        <select required value={value.aircraftId} onChange={(event) => onChange({ ...value, aircraftId: event.target.value })}>
+          <option value="" disabled>Choose aircraft</option>
+          {aircraftGroups.map((group) => (
+            <optgroup key={group.key} label={group.label}>
+              {group.items.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <div className="grid grid-cols-2 gap-3"><label className="saas-field col-span-2"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={value.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, date: event.target.value })} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={value.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={value.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => onChange({ ...value, end: event.target.value })} /></label></div>
+      <label className="saas-field"><span>Reason (private)</span><input maxLength={300} value={value.note} placeholder="Reserved, maintenance, or other" onChange={(event) => onChange({ ...value, note: event.target.value })} /></label>
+    </div>
+  );
 }

@@ -21,6 +21,7 @@ import {
   type TriState,
 } from "@/lib/aircraft-reports";
 import { fetchOrganizationAircraft, type AircraftRecord } from "@/lib/aircraft";
+import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import { formatUsDateTime } from "@/lib/date-format";
 import { canManageOrganization } from "@/lib/organizations";
 
@@ -90,6 +91,13 @@ export default function AircraftReportsManager() {
     () => new Map(aircraft.map((item) => [item.id, item])),
     [aircraft]
   );
+  const aircraftOptionGroups = useMemo(() =>
+    groupByAircraftFamily(aircraft, (item) => item.model?.name)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)),
+      })),
+  [aircraft]);
   const activeAircraft = activeReport ? aircraftById.get(activeReport.aircraft_id) ?? null : null;
   const selectedReportAircraft = form.aircraftId
     ? aircraftById.get(form.aircraftId) ?? null
@@ -394,10 +402,14 @@ export default function AircraftReportsManager() {
                 }
               >
                 <option value="">Select aircraft</option>
-                {aircraft.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.tail_number} · {formatAircraftStatus(item.operational_status)}
-                  </option>
+                {aircraftOptionGroups.map((group) => (
+                  <optgroup key={group.key} label={group.label}>
+                    {group.items.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.tail_number} · {formatAircraftStatus(item.operational_status)}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </Field>

@@ -51,6 +51,7 @@ import {
   type OrganizationReportPerson,
 } from "@/lib/aircraft-reports";
 import { fetchOrganizationAircraft, type AircraftRecord } from "@/lib/aircraft";
+import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import {
   canManageOrganization,
   fetchOrganizationMembers,
@@ -137,6 +138,13 @@ export default function AsrReportsManager() {
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const activeReport = reports.find((report) => report.id === activeReportId) ?? null;
+  const aircraftOptionGroups = useMemo(() =>
+    groupByAircraftFamily(aircraft, (item) => item.model?.name)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)),
+      })),
+  [aircraft]);
   const currentCapabilities = assignments
     .filter((assignment) => assignment.user_id === session?.user?.id)
     .map((assignment) => assignment.capability);
@@ -726,7 +734,11 @@ export default function AsrReportsManager() {
               <Field label="Organization aircraft" error={formErrors.aircraft}>
                 <select value={draftData.aircraft_id} onChange={(event) => selectAircraft(event.target.value)} disabled={draftData.no_aircraft}>
                   <option value="">External / not selected</option>
-                  {aircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number} · {item.model?.name ?? "Unknown type"}</option>)}
+                  {aircraftOptionGroups.map((group) => (
+                    <optgroup key={group.key} label={group.label}>
+                      {group.items.map((item) => <option key={item.id} value={item.id}>{item.tail_number} · {item.model?.name ?? "Unknown type"}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               </Field>
               <Field label="Aircraft type (if not in fleet)"><input value={draftData.aircraft_type} disabled={Boolean(draftData.aircraft_id) || draftData.no_aircraft} onChange={(event) => updateDraft("aircraft_type", event.target.value)} /></Field>

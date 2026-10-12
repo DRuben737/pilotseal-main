@@ -39,6 +39,7 @@ import {
   type PersonalAircraftInspectionRecord,
   type SavedAircraftDueInput,
 } from "@/lib/aircraft";
+import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import { formatUsDate, formatUsMonthYear, monthToLastIsoDate } from "@/lib/date-format";
 import {
   fetchPlatformOrganizations,
@@ -236,6 +237,13 @@ export default function MyAircraftManager() {
     () => new Map(models.map((model) => [model.id, model.name])),
     [models]
   );
+  const modelFamilyGroups = useMemo(() =>
+    groupByAircraftFamily(models, (model) => model.name)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => compareAircraftLabels(left.name, right.name)),
+      })),
+  [models]);
   const organizationNameById = useMemo(
     () => new Map(platformOrganizations.map((organization) => [organization.id, organization.name])),
     [platformOrganizations]
@@ -862,8 +870,10 @@ export default function MyAircraftManager() {
                     onChange={(event) => updateField("model_id", event.target.value)}
                   >
                     <option value="">Select model</option>
-                    {models.map((model) => (
-                      <option key={model.id} value={model.id}>{model.name}</option>
+                    {modelFamilyGroups.map((group) => (
+                      <optgroup key={group.key} label={group.label}>
+                        {group.items.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                      </optgroup>
                     ))}
                   </select>
                 </WorksheetCell>

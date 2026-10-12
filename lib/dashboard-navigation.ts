@@ -59,7 +59,6 @@ export const dashboardOrganizationNavigation: DashboardNavItem[] = [
     { label: "Aircraft records", value: "records" },
     { label: "Models", value: "models", organizationManagerOnly: true },
     { label: "Maintenance items", value: "inspections", organizationManagerOnly: true },
-    { label: "Assignment history", value: "history", organizationPermission: "audit" },
   ] },
   { href: "/console/organization/reports", label: "Reports", access: "organization", children: [
     { label: "Aircraft reports", param: "type", value: "aircraft", default: true },

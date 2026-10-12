@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { DetailDrawer } from "@/components/admin/AdminConsole";
 import type { AircraftModelRecord, AircraftRecord } from "@/lib/aircraft";
+import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import { formatUsDate, formatUsMonthYear } from "@/lib/date-format";
 import {
   fetchAircraftInspectionAssignments,
@@ -171,6 +172,13 @@ function FleetReportPreview({
   assignments: AircraftInspectionAssignment[];
 }) {
   const modelNames = new Map(models.map((model) => [model.id, model.name]));
+  const aircraftGroups = groupByAircraftFamily(
+    aircraft,
+    (item) => modelNames.get(item.model_id ?? "") ?? item.model?.name,
+  ).map((group) => ({
+    ...group,
+    items: [...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)),
+  }));
   return (
     <div className="fleet-report-print-preview overflow-x-auto rounded-lg border border-slate-300 bg-slate-200 p-2">
       <section className="mx-auto min-w-[820px] bg-white p-4 shadow-sm">
@@ -194,23 +202,26 @@ function FleetReportPreview({
               </tr>
             </thead>
             <tbody>
-              {aircraft.map((item) => {
-                const other = assignments.find((assignment) => assignment.aircraft_id === item.id && assignment.is_active);
-                return (
-                  <tr key={item.id} className={item.operational_status === "grounded" ? "bg-rose-100" : ""}>
-                    <td className="border border-slate-800 px-1.5 py-1 font-bold">{item.tail_number}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{modelNames.get(item.model_id ?? "") ?? "Unknown"}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.hundred_hour_due_hours)}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.annual_due_date)}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.static_due_date)}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.transponder_due_date)}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.elt_due_date)}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{other ? `${other.definition?.name ?? "Inspection"} ${formatPreviewDate(other.due_date)}` : "—"}</td>
-                    <td className="border border-slate-800 px-1.5 py-1">{item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${formatPreviewValue(item.current_meter_value)}` : "—"}</td>
-                    <td className="border border-slate-800 px-1.5 py-1 font-semibold">{formatPreviewStatus(item.operational_status)}</td>
-                  </tr>
-                );
-              })}
+              {aircraftGroups.flatMap((group) => [
+                <tr key={`family-${group.key}`}><td colSpan={10} className="border border-slate-800 bg-slate-200 px-1.5 py-1 font-bold">{group.label}</td></tr>,
+                ...group.items.map((item) => {
+                  const other = assignments.find((assignment) => assignment.aircraft_id === item.id && assignment.is_active);
+                  return (
+                    <tr key={item.id} className={item.operational_status === "grounded" ? "bg-rose-100" : ""}>
+                      <td className="border border-slate-800 px-1.5 py-1 font-bold">{item.tail_number}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{modelNames.get(item.model_id ?? "") ?? "Unknown"}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.hundred_hour_due_hours)}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.annual_due_date)}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.static_due_date)}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.transponder_due_date)}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.elt_due_date)}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{other ? `${other.definition?.name ?? "Inspection"} ${formatPreviewDate(other.due_date)}` : "—"}</td>
+                      <td className="border border-slate-800 px-1.5 py-1">{item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${formatPreviewValue(item.current_meter_value)}` : "—"}</td>
+                      <td className="border border-slate-800 px-1.5 py-1 font-semibold">{formatPreviewStatus(item.operational_status)}</td>
+                    </tr>
+                  );
+                }),
+              ])}
             </tbody>
           </table>
         ) : (
@@ -223,18 +234,21 @@ function FleetReportPreview({
               </tr>
             </thead>
             <tbody>
-              {aircraft.map((item) => (
-                <tr key={item.id}>
-                  <td className="border border-slate-800 px-1.5 py-1 font-bold">{item.tail_number}</td>
-                  <td className="border border-slate-800 px-1.5 py-1">{modelNames.get(item.model_id ?? "") ?? "Unknown"}</td>
-                  <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.empty_weight)}</td>
-                  <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.empty_arm)}</td>
-                  <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(multiply(item.empty_weight, item.empty_arm))}</td>
-                  <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.empty_lat_arm)}</td>
-                  <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(multiply(item.empty_weight, item.empty_lat_arm))}</td>
-                  <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.registration_due_date)}</td>
-                </tr>
-              ))}
+              {aircraftGroups.flatMap((group) => [
+                <tr key={`family-${group.key}`}><td colSpan={8} className="border border-slate-800 bg-slate-200 px-1.5 py-1 font-bold">{group.label}</td></tr>,
+                ...group.items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="border border-slate-800 px-1.5 py-1 font-bold">{item.tail_number}</td>
+                    <td className="border border-slate-800 px-1.5 py-1">{modelNames.get(item.model_id ?? "") ?? "Unknown"}</td>
+                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.empty_weight)}</td>
+                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.empty_arm)}</td>
+                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(multiply(item.empty_weight, item.empty_arm))}</td>
+                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(item.empty_lat_arm)}</td>
+                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewValue(multiply(item.empty_weight, item.empty_lat_arm))}</td>
+                    <td className="border border-slate-800 px-1.5 py-1">{formatPreviewDate(item.registration_due_date)}</td>
+                  </tr>
+                )),
+              ])}
             </tbody>
           </table>
         )}

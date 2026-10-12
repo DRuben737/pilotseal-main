@@ -13,6 +13,7 @@ import {
 } from "@/components/admin/AdminConsole";
 import { UsDateInput } from "@/components/forms/UsDateInput";
 import type { AircraftModelRecord, AircraftRecord } from "@/lib/aircraft";
+import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import {
   deleteAircraftInspectionAssignment,
   deleteOrganizationInspectionDefinition,
@@ -63,6 +64,7 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [activeDrawer, setActiveDrawer] = useState<"definition" | "assignment" | null>(null);
+  const [aircraftFamilyFilter, setAircraftFamilyFilter] = useState("all");
 
   const aircraftById = useMemo(
     () => new Map(aircraft.map((item) => [item.id, item])),
@@ -72,6 +74,19 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
     () => new Map(models.map((item) => [item.id, item])),
     [models]
   );
+  const aircraftFamilyGroups = useMemo(() =>
+    groupByAircraftFamily(aircraft, (item) => modelById.get(item.model_id ?? "")?.name ?? item.model?.name)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)),
+      })),
+  [aircraft, modelById]);
+  const visibleAssignments = aircraftFamilyFilter === "all"
+    ? assignments
+    : assignments.filter((assignment) =>
+        aircraftFamilyGroups.find((group) => group.key === aircraftFamilyFilter)?.items
+          .some((item) => item.id === assignment.aircraft_id)
+      );
   const activeDefinitions = useMemo(
     () => definitions.filter((definition) => definition.is_active),
     [definitions]
@@ -257,7 +272,17 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
         </div>
       ) : null}
 
-      <div className="mt-2 flex flex-wrap justify-end gap-2">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <select
+          aria-label="Aircraft family"
+          className="h-8 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-900"
+          value={aircraftFamilyFilter}
+          onChange={(event) => setAircraftFamilyFilter(event.target.value)}
+        >
+          <option value="all">All aircraft families</option>
+          {aircraftFamilyGroups.map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}
+        </select>
+        <div className="flex flex-wrap justify-end gap-2">
         <button
           className="cursor-pointer rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
           type="button"
@@ -273,6 +298,7 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
         >
           Assign to aircraft
         </button>
+        </div>
       </div>
 
       <div className="mt-2 grid gap-3">
@@ -316,9 +342,9 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
             </tr>
           </thead>
           <tbody>
-            {assignments.length === 0 ? (
+            {visibleAssignments.length === 0 ? (
               <tr><td className="px-3 py-4 text-sm text-slate-500" colSpan={5}>No aircraft due limits.</td></tr>
-            ) : assignments.map((assignment) => {
+            ) : visibleAssignments.map((assignment) => {
               const definition = definitions.find((item) => item.id === assignment.definition_id);
               return (
                 <tr key={assignment.id} className="hover:bg-blue-50/40">
@@ -412,7 +438,11 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
                 <WorksheetCell>
                   <select required aria-label="Aircraft" className={worksheetInputClass} disabled={!selectedDefinition} value={assignmentForm.aircraft_id} onChange={(event) => setAssignmentForm((current) => ({ ...current, aircraft_id: event.target.value }))}>
                     <option value="">{selectedDefinition ? "Choose aircraft" : "Choose item first"}</option>
-                    {applicableAircraft.map((item) => <option key={item.id} value={item.id}>{item.tail_number}</option>)}
+                    {groupByAircraftFamily(applicableAircraft, (item) => modelById.get(item.model_id ?? "")?.name ?? item.model?.name).map((group) => (
+                      <optgroup key={group.key} label={group.label}>
+                        {[...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)).map((item) => <option key={item.id} value={item.id}>{item.tail_number}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                 </WorksheetCell>
                 <WorksheetCell>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { UsDateInput, UsDateTimeInput } from "@/components/forms/UsDateInput";
@@ -14,7 +15,6 @@ import {
   parseAircraftEnvelopeSet,
   parseAircraftStations,
   saveOrganizationAircraftAtomic,
-  updateOrganizationAircraftStatus,
   updateAircraftModel,
   type AircraftChartType,
   type AircraftMeterType,
@@ -51,25 +51,25 @@ import OrganizationEndorsementRequests from "@/components/dashboard/Organization
 import EndorsementRecordsManager from "@/components/dashboard/EndorsementRecordsManager";
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
 import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
-import AssignmentAuditLog from "@/components/dashboard/AssignmentAuditLog";
 import {
   AdminDataTable,
   AdminNameList,
+  AdminPagination,
   CompactButton,
+  CompactToolbar,
   ConfirmDialog,
   DetailDrawer,
   EmptyState,
-  ManagementDisclosure,
   ManagementTabs,
-  QuickEditPopover,
   StatusBadge,
 } from "@/components/admin/AdminConsole";
 import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
+import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import { formatUsMonthYear } from "@/lib/date-format";
 import { fetchSavedPeople, type SavedPerson } from "@/lib/saved-people";
 
 export type OrganizationManagerView = "overview" | "people" | "fleet" | "endorsements";
-type FleetWorkspace = "aircraft" | "records" | "models" | "inspections" | "history";
+type FleetWorkspace = "aircraft" | "records" | "models" | "inspections";
 type MemberConfirmation =
   | { action: "remove" | "transfer"; member: OrganizationMember }
   | { action: "pending"; person: OrganizationPerson };
@@ -233,6 +233,9 @@ export default function OrganizationManager({
   endorsementView?: "records" | "requests";
   peopleActions?: ReactNode;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { session } = useAuthSession();
   const { activeOrganization, loading: organizationsLoading, refreshOrganizations } = useOrganization();
   const role = activeOrganization?.member_role;
@@ -240,12 +243,11 @@ export default function OrganizationManager({
   const canManageMembers = hasOrganizationPermission(activeOrganization, "members");
   const canEditStudents = canManageMembers || activeOrganization?.teaching_role === "instructor";
   const canManageFleet = canManageOrganization(role);
-  const canViewAircraftHistory = hasOrganizationPermission(activeOrganization, "audit");
   const canManageAdmins = canManageOrganizationAdmins(role);
-  const fleetWorkspaceValues = useMemo<FleetWorkspace[]>(() => [
-    ...(canManageFleet ? ["aircraft", "records", "models", "inspections"] as FleetWorkspace[] : ["records"] as FleetWorkspace[]),
-    ...(canViewAircraftHistory ? ["history"] as FleetWorkspace[] : []),
-  ], [canManageFleet, canViewAircraftHistory]);
+  const fleetWorkspaceValues = useMemo<FleetWorkspace[]>(
+    () => canManageFleet ? ["aircraft", "records", "models", "inspections"] : ["records"],
+    [canManageFleet],
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -283,16 +285,17 @@ export default function OrganizationManager({
   const [showAircraftForm, setShowAircraftForm] = useState(false);
   const [aircraftForm, setAircraftForm] = useState<AircraftForm>(emptyAircraftForm);
   const [aircraftError, setAircraftError] = useState("");
+  const [deleteAircraftTarget, setDeleteAircraftTarget] = useState<AircraftRecord | null>(null);
   const [editingModelId, setEditingModelId] = useState("");
   const [showModelForm, setShowModelForm] = useState(false);
   const [selectedModel, setSelectedModel] = useState<AircraftModelRecord | null>(null);
   const [deleteModel, setDeleteModel] = useState<AircraftModelRecord | null>(null);
   const [modelForm, setModelForm] = useState<ModelForm>(emptyModelForm);
   const [modelError, setModelError] = useState("");
-  const [statusEditorAircraftId, setStatusEditorAircraftId] = useState("");
-  const [statusEditorValue, setStatusEditorValue] = useState<AircraftOperationalStatus>("available");
-  const [statusEditorNote, setStatusEditorNote] = useState("");
-  const [statusEditorError, setStatusEditorError] = useState("");
+  const [aircraftQuery, setAircraftQuery] = useState("");
+  const [aircraftStatusFilter, setAircraftStatusFilter] = useState<"all" | AircraftOperationalStatus>("all");
+  const [aircraftFamilyPage, setAircraftFamilyPage] = useState(1);
+  const [familyAircraftPage, setFamilyAircraftPage] = useState(1);
   const [memberConfirmation, setMemberConfirmation] = useState<MemberConfirmation | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [memberAccessDraft, setMemberAccessDraft] = useState<MemberAccessDraft | null>(null);
@@ -315,6 +318,64 @@ export default function OrganizationManager({
     () => new Map(models.map((model) => [model.id, model.name])),
     [models]
   );
+  const modelFamilyGroups = useMemo(() =>
+    groupByAircraftFamily(models, (model) => model.name)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => compareAircraftLabels(left.name, right.name)),
+      })),
+  [models]);
+  const selectedFamilyKey = searchParams.get("family") ?? "";
+  const aircraftFamilyGroups = useMemo(() =>
+    groupByAircraftFamily(aircraft, (item) => modelNames.get(item.model_id ?? "") ?? item.model?.name)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => {
+          const modelComparison = compareAircraftLabels(
+            modelNames.get(left.model_id ?? "") ?? left.model?.name ?? "",
+            modelNames.get(right.model_id ?? "") ?? right.model?.name ?? "",
+          );
+          return modelComparison || compareAircraftLabels(left.tail_number, right.tail_number);
+        }),
+      })),
+  [aircraft, modelNames]);
+  const filteredAircraftFamilyGroups = useMemo(() => {
+    const needle = aircraftQuery.trim().toLocaleLowerCase();
+    return aircraftFamilyGroups.flatMap((group) => {
+      const familyMatches = Boolean(needle) && group.label.toLocaleLowerCase().includes(needle);
+      const items = group.items.filter((item) => {
+        if (
+          aircraftStatusFilter !== "all" &&
+          (item.operational_status ?? "available") !== aircraftStatusFilter
+        ) return false;
+        if (!needle || familyMatches) return true;
+        const modelName = modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "";
+        return `${item.tail_number} ${modelName}`.toLocaleLowerCase().includes(needle);
+      });
+      return items.length > 0 ? [{ ...group, items }] : [];
+    });
+  }, [aircraftFamilyGroups, aircraftQuery, aircraftStatusFilter, modelNames]);
+  const familyPageSize = 20;
+  const safeAircraftFamilyPage = Math.min(
+    aircraftFamilyPage,
+    Math.max(1, Math.ceil(filteredAircraftFamilyGroups.length / familyPageSize)),
+  );
+  const visibleAircraftFamilyGroups = filteredAircraftFamilyGroups.slice(
+    (safeAircraftFamilyPage - 1) * familyPageSize,
+    safeAircraftFamilyPage * familyPageSize,
+  );
+  const selectedAircraftFamily =
+    filteredAircraftFamilyGroups.find((group) => group.key === selectedFamilyKey)
+    ?? aircraftFamilyGroups.find((group) => group.key === selectedFamilyKey)
+    ?? null;
+  const safeFamilyAircraftPage = Math.min(
+    familyAircraftPage,
+    Math.max(1, Math.ceil((selectedAircraftFamily?.items.length ?? 0) / familyPageSize)),
+  );
+  const visibleFamilyAircraft = selectedAircraftFamily?.items.slice(
+    (safeFamilyAircraftPage - 1) * familyPageSize,
+    safeFamilyAircraftPage * familyPageSize,
+  ) ?? [];
   const peopleByUserId = useMemo(
     () => new Map(
       organizationPeople
@@ -357,6 +418,28 @@ export default function OrganizationManager({
   const activeFleetWorkspace: FleetWorkspace = storedFleetWorkspace;
   const editingAircraft = aircraft.find((item) => item.id === editingAircraftId) ?? null;
   const editingAssignedAircraft = editingAircraft?.organization_access === "assigned";
+
+  useEffect(() => {
+    if (view !== "fleet" || loading || !selectedFamilyKey) return;
+    if (
+      activeFleetWorkspace !== "aircraft" ||
+      !aircraftFamilyGroups.some((group) => group.key === selectedFamilyKey)
+    ) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("family");
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }
+  }, [
+    activeFleetWorkspace,
+    aircraftFamilyGroups,
+    loading,
+    pathname,
+    router,
+    searchParams,
+    selectedFamilyKey,
+    view,
+  ]);
 
   async function loadOrganizationData() {
     if (!activeOrganization?.id) {
@@ -749,6 +832,28 @@ export default function OrganizationManager({
     setAircraftForm((current) => ({ ...current, [key]: value }));
   }
 
+  function selectAircraftFamily(familyKey: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (familyKey) next.set("family", familyKey);
+    else next.delete("family");
+    setFamilyAircraftPage(1);
+    const query = next.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
+  function closeAircraftWorkspaceDialog() {
+    if (showAircraftForm && selectedAircraftFamily) {
+      setShowAircraftForm(false);
+      setEditingAircraftId("");
+      setAircraftError("");
+      return;
+    }
+    setShowAircraftForm(false);
+    setEditingAircraftId("");
+    setAircraftError("");
+    selectAircraftFamily("");
+  }
+
   function startCreateAircraft() {
     setEditingAircraftId("");
     setAircraftForm(emptyAircraftForm);
@@ -918,63 +1023,18 @@ export default function OrganizationManager({
       setStatus("Assigned aircraft can only be unassigned by a Platform Super Admin.");
       return;
     }
-    if (!activeOrganization?.id || !window.confirm(`Delete ${item.tail_number} from this organization?`)) return;
+    if (!activeOrganization?.id) return;
     setSaving(true);
     setStatus("");
     try {
       await deleteOrganizationAircraft(activeOrganization.id, item.id);
       setAircraft((current) => current.filter((aircraftItem) => aircraftItem.id !== item.id));
+      setDeleteAircraftTarget(null);
+      setShowAircraftForm(false);
+      setEditingAircraftId("");
       setStatus("Organization aircraft deleted.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to delete this aircraft."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function setStatusEditorOpen(item: AircraftRecord, open: boolean) {
-    if (!open) {
-      setStatusEditorAircraftId("");
-      setStatusEditorError("");
-      return;
-    }
-    setStatusEditorAircraftId(item.id);
-    setStatusEditorValue(item.operational_status ?? "available");
-    setStatusEditorNote(item.operational_status_note ?? "");
-    setStatusEditorError("");
-  }
-
-  async function handleQuickStatusSave(item: AircraftRecord) {
-    if (!activeOrganization?.id) return;
-    const note = statusEditorNote.trim();
-    if (statusEditorValue === "grounded" && note.length < 3) {
-      setStatusEditorError("Enter at least 3 characters explaining why this aircraft is grounded.");
-      return;
-    }
-    setSaving(true);
-    setStatusEditorError("");
-    try {
-      const result = await updateOrganizationAircraftStatus({
-        organizationId: activeOrganization.id,
-        aircraftId: item.id,
-        operationalStatus: statusEditorValue,
-        operationalStatusNote: note || null,
-      });
-      setAircraft((current) =>
-        current.map((aircraftItem) =>
-          aircraftItem.id === item.id
-            ? {
-                ...aircraftItem,
-                operational_status: result.operational_status,
-                operational_status_note: result.operational_status_note,
-              }
-            : aircraftItem
-        )
-      );
-      setStatusEditorAircraftId("");
-      setStatus(`Status updated for ${item.tail_number}.`);
-    } catch (error) {
-      setStatusEditorError(getErrorMessage(error, "Unable to update aircraft status."));
     } finally {
       setSaving(false);
     }
@@ -1485,7 +1545,6 @@ export default function OrganizationManager({
                 ["inspections", "Maintenance items"],
               ]
               : [["records", "Aircraft Records"]]),
-            ...(canViewAircraftHistory ? [["history", "Assignment history"]] : []),
           ]).map(([key, label]) => (
             <button
               key={key}
@@ -2084,19 +2143,52 @@ export default function OrganizationManager({
       {view === "fleet" && canManageFleet && activeFleetWorkspace === "aircraft" ? (<FleetWorkspacePanel
         title="Organization aircraft"
         description={`Aircraft available to members of ${activeOrganization.name}.`}
-        summary={`${aircraft.length} aircraft · ${aircraft.filter((item) => item.organization_access === "assigned").length} assigned`}
+        summary={`${filteredAircraftFamilyGroups.length} aircraft families`}
       >
-        <div className="mb-2 flex justify-end">
-          <button className="cursor-pointer rounded-md border border-blue-600 bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" type="button" onClick={startCreateAircraft}>Add aircraft</button>
-        </div>
+        <CompactToolbar
+          resultLabel={`${filteredAircraftFamilyGroups.length} families`}
+          actions={<CompactButton type="button" tone="primary" onClick={startCreateAircraft}>Add aircraft</CompactButton>}
+        >
+          <input
+            type="search"
+            className="h-8 w-full max-w-72 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+            placeholder="Search family, model, or tail number"
+            value={aircraftQuery}
+            onChange={(event) => {
+              setAircraftQuery(event.target.value);
+              setAircraftFamilyPage(1);
+            }}
+          />
+          <select
+            aria-label="Aircraft status"
+            className="h-8 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+            value={aircraftStatusFilter}
+            onChange={(event) => {
+              setAircraftStatusFilter(event.target.value as "all" | AircraftOperationalStatus);
+              setAircraftFamilyPage(1);
+            }}
+          >
+            <option value="all">All statuses</option>
+            <option value="available">Available</option>
+            <option value="away">Away</option>
+            <option value="in_maintenance">In maintenance</option>
+            <option value="grounded">Grounded</option>
+          </select>
+        </CompactToolbar>
 
         <DetailDrawer
-          open={showAircraftForm}
+          open={showAircraftForm || Boolean(selectedAircraftFamily)}
           width="wide"
-          title={editingAssignedAircraft ? "Aircraft maintenance" : editingAircraftId ? `Edit ${aircraftForm.tail_number}` : "Add aircraft"}
-          description="Edit the aircraft record as a compact worksheet. Blank due dates are not tracked."
-          onClose={() => setShowAircraftForm(false)}
+          title={showAircraftForm
+            ? editingAssignedAircraft
+              ? "Aircraft maintenance"
+              : editingAircraftId
+                ? `${selectedAircraftFamily?.label ? `${selectedAircraftFamily.label} / ` : ""}${aircraftForm.tail_number}`
+                : "Add aircraft"
+            : selectedAircraftFamily?.label ?? "Aircraft"}
+          onClose={closeAircraftWorkspaceDialog}
         >
+          {showAircraftForm ? (
           <form className="grid gap-4" onSubmit={handleSaveAircraft}>
             {editingAssignedAircraft ? (
               <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
@@ -2125,7 +2217,11 @@ export default function OrganizationManager({
                     <GridCell>
                       <select disabled={editingAssignedAircraft} aria-label="Aircraft model" className={`${gridControlClass} cursor-pointer disabled:bg-slate-100`} value={aircraftForm.model_id} onChange={(event) => updateAircraftField("model_id", event.target.value)} required>
                         <option value="">Choose a model</option>
-                        {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                        {modelFamilyGroups.map((group) => (
+                          <optgroup key={group.key} label={group.label}>
+                            {group.items.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                          </optgroup>
+                        ))}
                       </select>
                     </GridCell>
                     <GridCell><AircraftWorksheetInput ariaLabel="Tail number" disabled={editingAssignedAircraft} value={aircraftForm.tail_number} onChange={(value) => updateAircraftField("tail_number", value.toUpperCase())} placeholder="N5520X" required /></GridCell>
@@ -2199,114 +2295,89 @@ export default function OrganizationManager({
               </table>
             </AircraftWorksheet>
 
-            <div className="sticky -bottom-5 flex justify-end gap-2 border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur">
-              <button className="ghost-button" type="button" onClick={() => setShowAircraftForm(false)}>Cancel</button>
-              <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save aircraft"}</button>
+            <div className="sticky -bottom-5 flex items-center justify-between gap-2 border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur">
+              <div>
+                {editingAircraft && editingAircraft.organization_access !== "assigned" ? (
+                  <button className="danger-button-compact" type="button" disabled={saving} onClick={() => setDeleteAircraftTarget(editingAircraft)}>Delete aircraft</button>
+                ) : null}
+              </div>
+              <div className="flex gap-2">
+                <button className="ghost-button" type="button" onClick={closeAircraftWorkspaceDialog}>{selectedAircraftFamily ? "Back to family" : "Cancel"}</button>
+                <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save aircraft"}</button>
+              </div>
             </div>
           </form>
-        </DetailDrawer>
-
-        {aircraft.length === 0 ? (
-          <p className="saas-empty-state mt-5">No organization aircraft yet.</p>
-        ) : (
-          <div className="mt-5">
-            <AdminDataTable label="Organization aircraft">
-              <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
-                <tr>
-                  <th className="border-b border-slate-200 px-3 py-2">Tail</th>
-                  <th className="border-b border-slate-200 px-3 py-2">Model</th>
-                  <th className="border-b border-slate-200 px-3 py-2">Status</th>
-                  <th className="border-b border-slate-200 px-3 py-2">Meter</th>
-                  <th className="border-b border-slate-200 px-3 py-2">100-hour</th>
-                  <th className="border-b border-slate-200 px-3 py-2">Annual</th>
-                  <th className="border-b border-slate-200 px-3 py-2">Registration</th>
-                  <th className="border-b border-slate-200 px-3 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {aircraft.map((item) => (
-                  <tr key={item.id} className="bg-white transition-colors hover:bg-blue-50/40">
-                    <td className="px-3 py-2 font-semibold text-slate-950">{item.tail_number}</td>
-                    <td className="px-3 py-2 text-slate-700">{modelNames.get(item.model_id ?? "") ?? "Unknown"}</td>
-                    <td className="px-3 py-2">
-                      <QuickEditPopover
-                        open={statusEditorAircraftId === item.id}
-                        onOpenChange={(open) => setStatusEditorOpen(item, open)}
-                        label={`Change ${item.tail_number} status`}
-                        trigger={(
-                          <button
-                            type="button"
-                            className="cursor-pointer rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                            aria-haspopup="dialog"
-                            aria-expanded={statusEditorAircraftId === item.id}
-                            title="Change aircraft status"
-                          >
-                            <StatusBadge tone={aircraftStatusTone(item.operational_status)}>
-                              {formatOperationalStatus(item.operational_status)}
-                              <span aria-hidden="true">⌄</span>
-                            </StatusBadge>
-                          </button>
-                        )}
-                      >
-                        <label className="grid gap-1 text-xs font-semibold text-slate-700">
-                          Status
-                          <select
-                            value={statusEditorValue}
-                            onChange={(event) => {
-                              setStatusEditorValue(event.target.value as AircraftOperationalStatus);
-                              setStatusEditorError("");
-                            }}
-                            className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-normal text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                          >
-                            <option value="available">Available</option>
-                            <option value="away">Away</option>
-                            <option value="in_maintenance">In maintenance</option>
-                            <option value="grounded">Grounded</option>
-                          </select>
-                        </label>
-                        <label className="mt-2 grid gap-1 text-xs font-semibold text-slate-700">
-                          Note {statusEditorValue === "grounded" ? "(required)" : "(optional)"}
-                          <textarea
-                            rows={3}
-                            value={statusEditorNote}
-                            onChange={(event) => {
-                              setStatusEditorNote(event.target.value);
-                              setStatusEditorError("");
-                            }}
-                            placeholder={statusEditorValue === "grounded" ? "Why is this aircraft grounded?" : "Keep or update the current note"}
-                            className="resize-y rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                          />
-                        </label>
-                        {statusEditorError ? <p role="alert" className="mt-2 text-xs text-rose-700">{statusEditorError}</p> : null}
-                        <div className="mt-3 flex justify-end gap-2">
-                          <CompactButton type="button" onClick={() => setStatusEditorOpen(item, false)}>Cancel</CompactButton>
-                          <CompactButton
-                            type="button"
-                            tone="primary"
-                            disabled={saving || (statusEditorValue === "grounded" && statusEditorNote.trim().length < 3)}
-                            onClick={() => void handleQuickStatusSave(item)}
-                          >
-                            {saving ? "Saving…" : "Apply"}
-                          </CompactButton>
-                        </div>
-                      </QuickEditPopover>
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs tabular-nums text-slate-700">{item.current_meter_type ? `${item.current_meter_type.toUpperCase()} ${item.current_meter_value ?? "—"}` : "—"}</td>
-                    <td className="px-3 py-2 font-mono text-xs tabular-nums text-slate-700">{item.hundred_hour_due_hours ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs text-slate-700">{formatFleetDate(item.annual_due_date)}</td>
-                    <td className="px-3 py-2 text-xs text-slate-700">{formatFleetDate(item.registration_due_date)}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex justify-end gap-2">
-                        <button className="ghost-button" type="button" disabled={saving} onClick={() => startEditAircraft(item)}>{item.organization_access === "assigned" ? "Maintenance" : "Edit"}</button>
-                        {item.organization_access !== "assigned" ? <button className="danger-button-compact" type="button" disabled={saving} onClick={() => void handleDeleteAircraft(item)}>Delete</button> : null}
-                      </div>
-                    </td>
-                  </tr>
+          ) : selectedAircraftFamily ? (
+            <div className="grid gap-3">
+              <div className="grid border-x border-t border-slate-200 bg-white md:hidden">
+                {visibleFamilyAircraft.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="grid min-h-12 gap-0.5 border-b border-slate-200 px-3 py-2 text-left hover:bg-slate-50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
+                    onClick={() => startEditAircraft(item)}
+                  >
+                    <span className="text-sm font-semibold text-slate-950">{item.tail_number}</span>
+                    <span className="text-xs text-slate-500">
+                      {modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"} · {formatOperationalStatus(item.operational_status)}
+                    </span>
+                  </button>
                 ))}
-              </tbody>
-            </AdminDataTable>
-          </div>
-        )}
+              </div>
+              <div className="hidden md:block">
+                <AdminDataTable label={`${selectedAircraftFamily.label} aircraft`}>
+                  <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
+                    <tr>
+                      <th className="border-b border-slate-200 px-3 py-2">Tail number</th>
+                      <th className="border-b border-slate-200 px-3 py-2">Exact model</th>
+                      <th className="border-b border-slate-200 px-3 py-2">Status</th>
+                      <th className="border-b border-slate-200 px-3 py-2">Next due</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {visibleFamilyAircraft.map((item) => (
+                      <tr key={item.id} className="bg-white hover:bg-blue-50/40">
+                        <td className="px-3 py-2">
+                          <button type="button" className="font-semibold text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={() => startEditAircraft(item)}>
+                            {item.tail_number}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-slate-700">{modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</td>
+                        <td className="px-3 py-2"><StatusBadge tone={aircraftStatusTone(item.operational_status)}>{formatOperationalStatus(item.operational_status)}</StatusBadge></td>
+                        <td className="px-3 py-2 text-xs text-slate-600">{nextAircraftDue(item)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </AdminDataTable>
+              </div>
+              <AdminPagination page={safeFamilyAircraftPage} pageSize={familyPageSize} total={selectedAircraftFamily.items.length} onPageChange={setFamilyAircraftPage} />
+            </div>
+          ) : null}
+        </DetailDrawer>
+        <ConfirmDialog
+          open={Boolean(deleteAircraftTarget)}
+          title="Delete aircraft?"
+          description={deleteAircraftTarget ? `${deleteAircraftTarget.tail_number} will be removed from this organization. This cannot be undone.` : ""}
+          confirmLabel="Delete aircraft"
+          destructive
+          busy={saving}
+          onCancel={() => setDeleteAircraftTarget(null)}
+          onConfirm={() => {
+            if (deleteAircraftTarget) void handleDeleteAircraft(deleteAircraftTarget);
+          }}
+        />
+
+        <AdminNameList
+          label="Aircraft families"
+          emptyLabel={aircraft.length === 0 ? "No organization aircraft yet." : "No aircraft match these filters."}
+          items={visibleAircraftFamilyGroups.map((group) => ({
+            id: group.key,
+            name: group.label,
+            meta: `${group.items.length} aircraft`,
+          }))}
+          onSelect={(item) => selectAircraftFamily(item.id)}
+        />
+        <AdminPagination page={safeAircraftFamilyPage} pageSize={familyPageSize} total={filteredAircraftFamilyGroups.length} onPageChange={setAircraftFamilyPage} />
       </FleetWorkspacePanel>) : null}
 
       {view === "fleet" && canManageFleet && activeFleetWorkspace === "inspections" ? (
@@ -2317,10 +2388,6 @@ export default function OrganizationManager({
         >
           <OrganizationInspectionManager organizationId={activeOrganization.id} aircraft={aircraft} models={models} embedded />
         </FleetWorkspacePanel>
-      ) : null}
-
-      {view === "fleet" && canViewAircraftHistory && activeFleetWorkspace === "history" ? (
-        <AssignmentAuditLog embedded flat />
       ) : null}
 
       {view === "endorsements" ? (
@@ -2339,8 +2406,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function FleetWorkspacePanel({
   title,
-  description,
-  summary,
   children,
 }: {
   title: string;
@@ -2348,11 +2413,7 @@ function FleetWorkspacePanel({
   summary: React.ReactNode;
   children: React.ReactNode;
 }) {
-  return (
-    <ManagementDisclosure title={title} summary={summary} helpContent={<p>{description}</p>}>
-      {children}
-    </ManagementDisclosure>
-  );
+  return <section aria-label={title}>{children}</section>;
 }
 
 function HelicopterLimitsEditor({
@@ -3192,9 +3253,11 @@ function formatMemberPermissions(member: Pick<OrganizationMember, "member_role" 
     fleet: "Aircraft",
     endorsements: "Endorsements",
     notifications: "Notices",
-    audit: "Assignment history",
   } as const;
-  return member.permissions.map((permission) => labels[permission]).join(" · ") || "Standard member access";
+  return member.permissions
+    .filter((permission): permission is keyof typeof labels => permission !== "audit")
+    .map((permission) => labels[permission])
+    .join(" · ") || "Standard member access";
 }
 
 function memberConfirmationTitle(confirmation: MemberConfirmation | null) {
@@ -3230,4 +3293,20 @@ function formatDueLabel(key: string) {
 
 function formatFleetDate(value?: string | null) {
   return formatUsMonthYear(value);
+}
+
+function nextAircraftDue(item: AircraftRecord) {
+  const datedItems = [
+    { label: "Annual", value: item.annual_due_date },
+    { label: "Pitot/static", value: item.static_due_date },
+    { label: "Transponder", value: item.transponder_due_date },
+    { label: "ELT", value: item.elt_due_date },
+    { label: "ADS-B", value: item.adsb_due_date },
+    { label: "Registration", value: item.registration_due_date },
+  ]
+    .filter((entry): entry is { label: string; value: string } => Boolean(entry.value))
+    .sort((left, right) => left.value.localeCompare(right.value));
+  if (datedItems[0]) return `${datedItems[0].label} ${formatFleetDate(datedItems[0].value)}`;
+  if (item.hundred_hour_due_hours != null) return `100-hour ${item.hundred_hour_due_hours}`;
+  return "Not recorded";
 }
