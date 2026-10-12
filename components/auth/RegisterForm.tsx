@@ -18,7 +18,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { fetchOrganizationInvitation, type OrganizationInvitationPreview } from "@/lib/organizations";
 
 export default function RegisterForm({
-  redirectTo = "/dashboard",
+  redirectTo = "/console",
   inviteToken = "",
 }: {
   redirectTo?: string;

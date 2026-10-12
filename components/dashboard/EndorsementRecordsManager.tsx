@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AdminDataTable, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { AdminDataTable, AdminNameList, AdminPagination, CompactButton, ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -37,13 +37,6 @@ function formatRecordDate(value: string) {
   if (!value) return "No date";
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
   return formatUsDate(value, value);
-}
-
-function formatFileSize(value: number | null) {
-  if (!value) return "";
-  return value < 1024 * 1024
-    ? `${Math.max(1, Math.round(value / 1024))} KB`
-    : `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function endorsementIdentity(record: EndorsementRecord) {
@@ -89,16 +82,15 @@ export function buildStudentRecordGroups(
     group.items.push(item);
     if (item.updated_at > group.latestAt) group.latestAt = item.updated_at;
   }
-  return Array.from(groups.values()).sort((a, b) => b.latestAt.localeCompare(a.latestAt));
+  return Array.from(groups.values()).sort((a, b) =>
+    a.studentName.localeCompare(b.studentName, undefined, { sensitivity: "base" })
+  );
 }
 
 function groupMatches(group: StudentGroup, query: string) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  return [group.studentName, group.studentCertNumber ?? "",
-    ...group.endorsements.flatMap((record) => [record.instructor_name, record.endorsement_date, record.template_titles.join(" ")]),
-    ...group.items.flatMap((item) => [item.title, item.category ?? "", item.notes ?? "", item.record_date]),
-  ].join(" ").toLowerCase().includes(normalized);
+  return [group.studentName, group.studentCertNumber ?? ""].join(" ").toLowerCase().includes(normalized);
 }
 
 function fileExtension(file: File) {
@@ -137,15 +129,18 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   const [people, setPeople] = useState<EndorsementPerson[]>([]);
   const [query, setQuery] = useState("");
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
+  const [activeGroupPage, setActiveGroupPage] = useState(1);
   const [activeRecord, setActiveRecord] = useState<EndorsementRecord | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<EndorsementRecord | null>(null);
   const [activePdfUrl, setActivePdfUrl] = useState("");
   const [activeItem, setActiveItem] = useState<StudentRecordItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<StudentRecordItem | null>(null);
   const [activeFileUrl, setActiveFileUrl] = useState("");
-  const [folderFormOpen, setFolderFormOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [itemFormOpen, setItemFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<StudentRecordItem | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm>(emptyItemForm);
+  const [itemFormError, setItemFormError] = useState("");
   const [itemFile, setItemFile] = useState<File | null>(null);
   const [removeExistingFile, setRemoveExistingFile] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -189,10 +184,29 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
 
   const groups = useMemo(() => buildStudentRecordGroups(folders, records, items), [folders, records, items]);
   const filteredGroups = useMemo(() => groups.filter((group) => groupMatches(group, query)), [groups, query]);
+  const sortedPeople = useMemo(() => [...people].sort((a, b) =>
+    a.formal_name.localeCompare(b.formal_name, undefined, { sensitivity: "base" })
+  ), [people]);
+  const sortedOrganizationRecords = useMemo(() => [...records].sort((a, b) => (
+    a.student_name.localeCompare(b.student_name, undefined, { sensitivity: "base" })
+    || b.created_at.localeCompare(a.created_at)
+  )), [records]);
   const activeGroup = groups.find((group) => group.key === activeGroupKey) ?? null;
-  const existingStudentIds = useMemo(() => new Set(folders.map((folder) => folder.student_id).filter(Boolean)), [folders]);
+  const activeGroupEntries = useMemo(() => activeGroup ? [
+    ...activeGroup.endorsements.map((record) => ({ kind: "endorsement" as const, date: record.endorsement_date, created: record.created_at, record })),
+    ...activeGroup.items.map((item) => ({ kind: "item" as const, date: item.record_date, created: item.created_at, item })),
+  ].sort((a, b) => (b.date || b.created).localeCompare(a.date || a.created)) : [], [activeGroup]);
+  const activeGroupPageSize = 20;
+  const visibleActiveGroupEntries = activeGroupEntries.slice(
+    (activeGroupPage - 1) * activeGroupPageSize,
+    activeGroupPage * activeGroupPageSize,
+  );
   const isOrganizationView = organizationOnly || view === "organization";
   const personalOwnerView = !organizationOnly && view === "personal";
+
+  useEffect(() => {
+    setActiveGroupPage(1);
+  }, [activeGroupKey]);
 
   async function openEndorsement(record: EndorsementRecord) {
     setBusy(true); setStatus("");
@@ -202,7 +216,6 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   }
 
   async function handleDeleteEndorsement(record: EndorsementRecord) {
-    if (!window.confirm("Permanently delete this endorsement? This cannot be undone.")) return;
     setBusy(true);
     try {
       await deleteEndorsementRecord(record);
@@ -212,42 +225,43 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
     finally { setBusy(false); }
   }
 
-  async function handleCreateFolder() {
-    if (!selectedStudentId) { setStatus("Select a student first."); return; }
-    const existing = folders.find((folder) => folder.student_id === selectedStudentId);
-    if (existing) { setFolderFormOpen(false); setActiveGroupKey(`folder:${existing.id}`); return; }
-    setBusy(true); setStatus("");
-    try {
-      const folder = await createStudentRecordFolder(selectedStudentId);
-      setFolders((current) => [folder, ...current.filter((value) => value.id !== folder.id)]);
-      setFolderFormOpen(false); setSelectedStudentId(""); setActiveGroupKey(`folder:${folder.id}`);
-      setStatus("Student record created.");
-    } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to create the student record."); }
-    finally { setBusy(false); }
+  function openAddRecordForm() {
+    setEditingItem(null);
+    setSelectedStudentId("");
+    setItemForm(emptyItemForm());
+    setItemFormError("");
+    setItemFile(null); setRemoveExistingFile(false); setFileInputKey((value) => value + 1); setItemFormOpen(true);
   }
 
-  function openItemForm(item?: StudentRecordItem) {
-    setEditingItem(item ?? null);
-    setItemForm(item ? { title: item.title, recordDate: item.record_date,
-      category: item.category ?? "", notes: item.notes ?? "" } : emptyItemForm());
+  function openEditItemForm(item: StudentRecordItem) {
+    setEditingItem(item);
+    setItemForm({ title: item.title, recordDate: item.record_date,
+      category: item.category ?? "", notes: item.notes ?? "" });
+    setItemFormError("");
     setItemFile(null); setRemoveExistingFile(false); setFileInputKey((value) => value + 1); setItemFormOpen(true);
   }
 
   async function handleSaveItem() {
-    const folder = activeGroup?.folder;
     const userId = session?.user?.id;
-    if (!folder || !userId || !itemForm.title.trim() || !itemForm.recordDate) {
-      setStatus("Title and record date are required."); return;
+    if (!userId || (!editingItem && !selectedStudentId) || !itemForm.title.trim() || !itemForm.recordDate) {
+      setItemFormError(!editingItem && !selectedStudentId ? "Select a student first." : "Title and record date are required."); return;
     }
     if (itemFile) {
       try { validateStudentRecordFile(itemFile); }
-      catch (error) { setStatus(error instanceof Error ? error.message : "Invalid attachment."); return; }
+      catch (error) { setItemFormError(error instanceof Error ? error.message : "Invalid attachment."); return; }
     }
-    setBusy(true); setStatus("");
+    setBusy(true); setStatus(""); setItemFormError("");
     const itemId = editingItem?.id ?? crypto.randomUUID();
     let uploadedPath: string | null = null;
     const previousPath = editingItem?.storage_path ?? null;
     try {
+      let folder = editingItem ? activeGroup?.folder ?? null
+        : folders.find((value) => value.student_id === selectedStudentId) ?? null;
+      if (!folder && !editingItem) {
+        folder = await createStudentRecordFolder(selectedStudentId);
+        setFolders((current) => [folder as StudentRecordFolder, ...current.filter((value) => value.id !== folder?.id)]);
+      }
+      if (!folder) throw new Error("Unable to find the student record.");
       let storagePath = removeExistingFile ? null : previousPath;
       let originalFileName = removeExistingFile ? null : editingItem?.original_file_name ?? null;
       let mimeType = removeExistingFile ? null : editingItem?.mime_type ?? null;
@@ -268,10 +282,11 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
       if (previousPath && previousPath !== saved.storage_path) {
         await removeStudentRecordFiles([previousPath]).catch((error) => console.warn("Old student record file cleanup failed:", error));
       }
-      setItemFormOpen(false); setStatus(editingItem ? "Student record updated." : "Content added to the student record.");
+      setItemFormOpen(false); setSelectedStudentId(""); setActiveGroupKey(`folder:${folder.id}`);
+      setStatus(editingItem ? "Student record updated." : "Record added.");
     } catch (error) {
       if (uploadedPath) await removeStudentRecordFiles([uploadedPath]).catch(() => {});
-      setStatus(error instanceof Error ? error.message : "Unable to save the student record.");
+      setItemFormError(error instanceof Error ? error.message : "Unable to save the student record.");
     } finally { setBusy(false); }
   }
 
@@ -284,7 +299,6 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   }
 
   async function handleDeleteItem(item: StudentRecordItem) {
-    if (!window.confirm(`Delete “${item.title}” from this student record? This cannot be undone.`)) return;
     setBusy(true);
     try {
       const storagePath = await deleteStudentRecordItem(item.id);
@@ -300,89 +314,109 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
     <ManagementDisclosure id="endorsement-records" title={organizationOnly ? "Issued endorsements" : "Endorsements"}
       summary={loading ? "Loading…" : isOrganizationView ? `${records.length}` : `${groups.length} students`}
       className="dashboard-data-workspace" defaultOpen
-      actions={personalOwnerView ? <button className="primary-button" type="button" onClick={() => setFolderFormOpen(true)}>Add student record</button> : null}
       helpContent={organizationOnly ? <p>Shows endorsements issued while the instructor belonged to this organization.</p>
         : <p>Each student has one record containing issued endorsements, notes, and private files shared with that student account.</p>}>
-      {!organizationOnly ? <nav className="flex min-h-10 gap-0 overflow-x-auto border-b border-slate-200 bg-white" aria-label="Student record views">
-        {([ ["personal", "My student records"], ["received", "Shared with me"], ["organization", "Organization activity"] ] as const).map(([key, label]) =>
-          <button key={key} type="button" aria-current={view === key ? "page" : undefined}
-            className={`shrink-0 border-b-2 px-3 text-xs font-medium transition-colors ${view === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
-            onClick={() => { setStoredView(key); setActiveGroupKey(null); }}>{label}</button>)}
-      </nav> : null}
-      <div className="admin-toolbar flex flex-col items-end gap-2 border-b border-slate-200 py-3 sm:flex-row">
-        <label className="min-w-0 flex-1"><span className="sr-only">Search</span><input className="h-9 w-full rounded-sm border border-slate-300 px-3 text-sm" type="search" value={query}
-          onChange={(event) => setQuery(event.target.value)} placeholder="Search student or record content" /></label>
+      {!organizationOnly ? <div className="console-page-subnavigation flex min-h-10 items-stretch border-b border-slate-200 bg-white">
+        <nav className="flex min-w-0 flex-1 gap-0 overflow-x-auto" aria-label="Student record views">
+          {([ ["personal", "My student records"], ["received", "Shared with me"], ["organization", "Organization activity"] ] as const).map(([key, label]) =>
+            <button key={key} type="button" aria-current={view === key ? "page" : undefined}
+              className={`shrink-0 border-b-2 px-3 text-xs font-medium transition-colors ${view === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+              onClick={() => { setStoredView(key); setActiveGroupKey(null); }}>{label}</button>)}
+        </nav>
+      </div> : null}
+      <div className="admin-toolbar flex flex-col items-start gap-2 border-b border-slate-200 py-2 sm:flex-row sm:items-center">
+        <label className="w-72 max-w-full flex-none"><span className="sr-only">Search students</span><input className="h-9 w-full rounded-sm border border-slate-300 px-3 text-sm" type="search" value={query}
+          onChange={(event) => setQuery(event.target.value)} placeholder="Search students" /></label>
         {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
+        {personalOwnerView ? <div className="sm:ml-auto"><CompactButton type="button" tone="primary" onClick={openAddRecordForm}>Add record</CompactButton></div> : null}
       </div>
       {loading ? <p className="saas-meta-text mt-5">Loading records...</p> : null}
       {!loading && (isOrganizationView ? records.length === 0 : filteredGroups.length === 0)
         ? <p className="saas-empty-state mt-5">{query.trim() ? "No records match your search." : "No student records saved yet."}</p> : null}
       {isOrganizationView && records.length > 0 ? <div className="mt-3"><AdminDataTable label="Organization endorsement records">
         <thead><tr><th>Student</th><th>Endorsement</th><th>Date</th><th>Instructor</th><th>Saved</th><th aria-label="Actions" /></tr></thead>
-        <tbody>{records.map((record) => <tr key={record.id}><td className="font-semibold text-slate-900">{record.student_name}</td>
+        <tbody>{sortedOrganizationRecords.map((record) => <tr key={record.id}><td className="font-semibold text-slate-900">{record.student_name}</td>
           <td>{record.template_titles.length ? record.template_titles.join(", ") : "Endorsement PDF"}</td>
           <td>{formatRecordDate(record.endorsement_date)}</td><td>{record.instructor_name}</td><td>{formatUsDateTime(record.created_at, "")}</td>
           <td><button className="secondary-button icon-button" type="button" aria-label={`View PDF for ${record.student_name}`} disabled={busy} onClick={() => void openEndorsement(record)}><ActionIcon kind="open" /></button></td></tr>)}</tbody>
       </AdminDataTable></div> : null}
-      {!isOrganizationView && filteredGroups.length > 0 ? <div className="mt-3"><AdminDataTable label="Student records">
-        <thead><tr><th>Student</th><th>Certificate</th><th>Endorsements</th><th>Records</th><th>Files</th><th>Latest</th><th aria-label="Actions" /></tr></thead>
-        <tbody>{filteredGroups.map((group) => <tr key={group.key}><td className="font-semibold text-slate-900">{group.studentName}</td>
-          <td>{group.studentCertNumber || "—"}</td><td>{group.endorsements.length}</td><td>{group.items.length}</td>
-          <td>{group.items.filter((item) => item.storage_path).length}</td><td>{formatUsDateTime(group.latestAt, "")}</td>
-          <td><button className="secondary-button icon-button" type="button" aria-label={`Open record for ${group.studentName}`} title="Open student record" onClick={() => setActiveGroupKey(group.key)}><ActionIcon kind="expand" /></button></td></tr>)}</tbody>
-      </AdminDataTable></div> : null}
+      {!isOrganizationView && filteredGroups.length > 0 ? <div className="mt-3"><AdminNameList
+        label="Student records"
+        emptyLabel="No student records saved yet."
+        items={filteredGroups.map((group) => ({ id: group.key, name: group.studentName }))}
+        onSelect={(item) => setActiveGroupKey(item.id)}
+      /></div> : null}
     </ManagementDisclosure>
 
-    <DetailDrawer open={Boolean(activeGroup)} title={activeGroup ? `Student record · ${activeGroup.studentName}` : "Student record"}
-      description={activeGroup?.studentCertNumber ? `Certificate ${activeGroup.studentCertNumber}` : undefined} onClose={() => setActiveGroupKey(null)}>
+    <DetailDrawer open={Boolean(activeGroup)} title={activeGroup?.studentName ?? "Student record"} onClose={() => setActiveGroupKey(null)}>
       {activeGroup ? <div className="space-y-4">
-        {personalOwnerView && activeGroup.folder ? <div className="flex justify-end"><button className="primary-button" type="button" onClick={() => openItemForm()}>Add content</button></div> : null}
-        {personalOwnerView && !activeGroup.folder ? <p className="saas-meta-text">This legacy endorsement does not have a selectable student identity. Create a current student record before adding custom content.</p> : null}
         {activeGroup.endorsements.length + activeGroup.items.length === 0 ? <p className="saas-empty-state">This student record is empty.</p> : null}
-        {[...activeGroup.endorsements.map((record) => ({ kind: "endorsement" as const, date: record.endorsement_date, created: record.created_at, record })),
-          ...activeGroup.items.map((item) => ({ kind: "item" as const, date: item.record_date, created: item.created_at, item }))]
-          .sort((a, b) => (b.date || b.created).localeCompare(a.date || a.created))
-          .map((entry) => entry.kind === "endorsement" ? <article key={`endorsement:${entry.record.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
-            <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Endorsement</p>
-              <h3 className="mt-1 text-sm font-semibold text-slate-950">{entry.record.template_titles.join(", ") || "Endorsement PDF"}</h3>
-              <p className="mt-1 text-xs text-slate-500">{formatRecordDate(entry.record.endorsement_date)} · {entry.record.instructor_name}</p></div>
-              <div className="data-row-actions"><button className="secondary-button icon-button" type="button" aria-label="View endorsement PDF" disabled={busy} onClick={() => void openEndorsement(entry.record)}><ActionIcon kind="open" /></button>
-                {entry.record.user_id === session?.user?.id ? <button className="secondary-button" type="button" onClick={() => router.push(`/tools/endorsement-generator?editRecord=${encodeURIComponent(entry.record.id)}`)}>Edit</button> : null}
-                {entry.record.user_id === session?.user?.id ? <button className="danger-button icon-button" type="button" aria-label="Delete endorsement" disabled={busy} onClick={() => void handleDeleteEndorsement(entry.record)}><ActionIcon kind="delete" /></button> : null}</div></div>
-          </article> : <article key={`item:${entry.item.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
-            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{entry.item.category || "Record"}</p>
-              <h3 className="mt-1 text-sm font-semibold text-slate-950">{entry.item.title}</h3><p className="mt-1 text-xs text-slate-500">{formatRecordDate(entry.item.record_date)}</p>
-              {entry.item.notes ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{entry.item.notes}</p> : null}
-              {entry.item.original_file_name ? <p className="mt-2 text-xs text-slate-500">{entry.item.original_file_name}{entry.item.file_size_bytes ? ` · ${formatFileSize(entry.item.file_size_bytes)}` : ""}</p> : null}</div>
-              <div className="data-row-actions">{entry.item.storage_path ? <button className="secondary-button icon-button" type="button" aria-label={`Open ${entry.item.original_file_name ?? "attachment"}`} disabled={busy} onClick={() => void openStudentFile(entry.item)}><ActionIcon kind="file" /></button> : null}
-                {personalOwnerView ? <button className="secondary-button" type="button" onClick={() => openItemForm(entry.item)}>Edit</button> : null}
-                {personalOwnerView ? <button className="danger-button icon-button" type="button" aria-label="Delete record content" disabled={busy} onClick={() => void handleDeleteItem(entry.item)}><ActionIcon kind="delete" /></button> : null}</div></div>
-          </article>)}
+        <div className="border-x border-t border-slate-200 bg-white">
+          {visibleActiveGroupEntries.map((entry) => entry.kind === "endorsement" ? <button key={`endorsement:${entry.record.id}`} type="button" className="flex min-h-9 w-full items-center border-b border-slate-200 px-3 py-2 text-left text-[13px] font-medium text-slate-900 hover:bg-slate-50 focus-visible:bg-blue-50" disabled={busy} onClick={() => void openEndorsement(entry.record)}>
+            <span className="min-w-0 break-words">{entry.record.template_titles.join(", ") || "Endorsement PDF"}</span>
+          </button> : <button key={`item:${entry.item.id}`} type="button" className="flex min-h-9 w-full items-center border-b border-slate-200 px-3 py-2 text-left text-[13px] font-medium text-slate-900 hover:bg-slate-50 focus-visible:bg-blue-50" disabled={busy} onClick={() => entry.item.storage_path ? void openStudentFile(entry.item) : setActiveItem(entry.item)}>
+            <span className="min-w-0 break-words">{entry.item.title}</span>
+          </button>)}
+        </div>
+        <AdminPagination page={activeGroupPage} pageSize={activeGroupPageSize} total={activeGroupEntries.length} onPageChange={setActiveGroupPage} />
       </div> : null}
     </DetailDrawer>
 
-    <DetailDrawer open={folderFormOpen} title="Add student record" description="Select an existing student. An existing record will be opened instead of duplicated." onClose={() => setFolderFormOpen(false)}>
-      <div className="space-y-4"><label className="saas-field"><span>Student</span><select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
-        <option value="">Select student</option>{people.map((person) => <option key={person.saved_person_id} value={person.saved_person_id}>{person.formal_name}{existingStudentIds.has(person.saved_person_id) ? " · existing record" : ""}</option>)}</select></label>
-        <div className="flex justify-end gap-2"><button className="secondary-button" type="button" onClick={() => setFolderFormOpen(false)}>Cancel</button><button className="primary-button" type="button" disabled={busy || !selectedStudentId} onClick={() => void handleCreateFolder()}>Open record</button></div></div>
-    </DetailDrawer>
-
-    <DetailDrawer open={itemFormOpen} title={editingItem ? "Edit record content" : "Add record content"} onClose={() => setItemFormOpen(false)}>
-      <div className="space-y-4"><label className="saas-field"><span>Title</span><input value={itemForm.title} maxLength={120} onChange={(event) => setItemForm((value) => ({ ...value, title: event.target.value }))} /></label>
+    <DetailDrawer open={itemFormOpen} title={editingItem ? "Edit record" : "Add record"} onClose={() => { setItemFormOpen(false); setItemFormError(""); }}>
+      <div className="space-y-4">
+        {!editingItem ? <label className="saas-field"><span>Student</span><select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
+          <option value="">Select student</option>{sortedPeople.map((person) => <option key={person.saved_person_id} value={person.saved_person_id}>{person.formal_name}</option>)}</select></label> : null}
+        <label className="saas-field"><span>Title</span><input value={itemForm.title} maxLength={120} onChange={(event) => setItemForm((value) => ({ ...value, title: event.target.value }))} /></label>
         <div className="grid gap-4 sm:grid-cols-2"><label className="saas-field"><span>Record date</span><input type="date" value={itemForm.recordDate} onChange={(event) => setItemForm((value) => ({ ...value, recordDate: event.target.value }))} /></label>
           <label className="saas-field"><span>Category</span><input value={itemForm.category} maxLength={80} onChange={(event) => setItemForm((value) => ({ ...value, category: event.target.value }))} /></label></div>
         <label className="saas-field"><span>Notes</span><textarea rows={6} maxLength={10000} value={itemForm.notes} onChange={(event) => setItemForm((value) => ({ ...value, notes: event.target.value }))} /></label>
         <label className="saas-field"><span>Attachment</span><input key={fileInputKey} type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setItemFile(event.target.files?.[0] ?? null)} /><small>PDF, JPG, or PNG · maximum 5 MB</small></label>
         {editingItem?.storage_path ? <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={removeExistingFile} disabled={Boolean(itemFile)} onChange={(event) => setRemoveExistingFile(event.target.checked)} />Remove current attachment</label> : null}
-        <div className="flex justify-end gap-2"><button className="secondary-button" type="button" onClick={() => setItemFormOpen(false)}>Cancel</button><button className="primary-button" type="button" disabled={busy} onClick={() => void handleSaveItem()}>{busy ? "Saving…" : "Save"}</button></div></div>
+        {itemFormError ? <p className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{itemFormError}</p> : null}
+        <div className="flex justify-end gap-2"><button className="secondary-button" type="button" onClick={() => { setItemFormOpen(false); setItemFormError(""); }}>Cancel</button><button className="primary-button" type="button" disabled={busy} onClick={() => void handleSaveItem()}>{busy ? "Saving…" : "Save"}</button></div></div>
     </DetailDrawer>
 
     <DetailDrawer open={Boolean(activeRecord)} title={activeRecord ? `Endorsement · ${activeRecord.student_name}` : "Endorsement"} onClose={() => { setActiveRecord(null); setActivePdfUrl(""); }}>
-      {activePdfUrl ? <div className="space-y-3"><div className="flex justify-end"><a className="secondary-button icon-button" href={activePdfUrl} target="_blank" rel="noreferrer" aria-label="Open PDF in a new tab"><ActionIcon kind="external" /></a></div><iframe title="Endorsement PDF" src={activePdfUrl} className="min-h-[70vh] w-full rounded-lg border border-slate-200" /></div> : null}
+      {activeRecord && activePdfUrl ? <div className="space-y-3"><div className="flex justify-end gap-2"><a className="secondary-button icon-button" href={activePdfUrl} target="_blank" rel="noreferrer" aria-label="Open PDF in a new tab"><ActionIcon kind="external" /></a>
+        {activeRecord.user_id === session?.user?.id ? <button className="secondary-button" type="button" onClick={() => router.push(`/tools/endorsement-generator?editRecord=${encodeURIComponent(activeRecord.id)}`)}>Edit</button> : null}
+        {activeRecord.user_id === session?.user?.id ? <button className="danger-button" type="button" disabled={busy} onClick={() => { setRecordToDelete(activeRecord); setActiveRecord(null); setActivePdfUrl(""); }}>Delete</button> : null}</div><iframe title="Endorsement PDF" src={activePdfUrl} className="min-h-[70vh] w-full rounded-lg border border-slate-200" /></div> : null}
     </DetailDrawer>
     <DetailDrawer open={Boolean(activeItem)} title={activeItem?.title ?? "Attachment"} onClose={() => { setActiveItem(null); setActiveFileUrl(""); }}>
-      {activeItem && activeFileUrl ? <div className="space-y-3"><div className="flex justify-end"><a className="secondary-button" href={activeFileUrl} target="_blank" rel="noreferrer">Download</a></div>
-        <iframe title={activeItem.title} src={activeFileUrl} className="min-h-[70vh] w-full rounded-lg border border-slate-200 bg-white" /></div> : null}
+      {activeItem ? <div className="space-y-3"><div className="flex justify-end gap-2">{activeFileUrl ? <a className="secondary-button" href={activeFileUrl} target="_blank" rel="noreferrer">Download</a> : null}
+        {personalOwnerView ? <button className="secondary-button" type="button" onClick={() => { setActiveItem(null); setActiveFileUrl(""); openEditItemForm(activeItem); }}>Edit</button> : null}
+        {personalOwnerView ? <button className="danger-button" type="button" disabled={busy} onClick={() => { setItemToDelete(activeItem); setActiveItem(null); setActiveFileUrl(""); }}>Delete</button> : null}</div>
+        <dl className="grid gap-2 border-y border-slate-200 py-3 text-[13px]"><div><dt className="text-xs text-slate-500">Date</dt><dd className="text-slate-900">{formatRecordDate(activeItem.record_date)}</dd></div>{activeItem.category ? <div><dt className="text-xs text-slate-500">Category</dt><dd className="text-slate-900">{activeItem.category}</dd></div> : null}{activeItem.notes ? <div><dt className="text-xs text-slate-500">Notes</dt><dd className="whitespace-pre-wrap text-slate-700">{activeItem.notes}</dd></div> : null}</dl>
+        {activeFileUrl ? <iframe title={activeItem.title} src={activeFileUrl} className="min-h-[70vh] w-full rounded-lg border border-slate-200 bg-white" /> : null}</div> : null}
     </DetailDrawer>
+    <ConfirmDialog
+      open={Boolean(recordToDelete)}
+      title="Delete endorsement"
+      description="Permanently delete this endorsement? This cannot be undone."
+      confirmLabel="Delete endorsement"
+      destructive
+      busy={busy}
+      onCancel={() => setRecordToDelete(null)}
+      onConfirm={() => {
+        if (!recordToDelete) return;
+        const record = recordToDelete;
+        setRecordToDelete(null);
+        void handleDeleteEndorsement(record);
+      }}
+    />
+    <ConfirmDialog
+      open={Boolean(itemToDelete)}
+      title="Delete record content"
+      description={`Delete “${itemToDelete?.title ?? "this item"}” from this student record? This cannot be undone.`}
+      confirmLabel="Delete content"
+      destructive
+      busy={busy}
+      onCancel={() => setItemToDelete(null)}
+      onConfirm={() => {
+        if (!itemToDelete) return;
+        const item = itemToDelete;
+        setItemToDelete(null);
+        void handleDeleteItem(item);
+      }}
+    />
   </>;
 }

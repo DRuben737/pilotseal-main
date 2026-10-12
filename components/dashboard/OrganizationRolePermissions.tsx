@@ -17,18 +17,18 @@ import {
 } from "@/lib/organizations";
 
 const permissionLabels: Record<OrganizationPermission, { label: string; description: string }> = {
-  members: { label: "Members", description: "Invite members and manage organization profiles." },
-  fleet: { label: "Fleet", description: "Manage aircraft, models, inspections, and maintenance." },
+  members: { label: "People", description: "Invite members and manage organization profiles." },
+  fleet: { label: "Aircraft", description: "Manage aircraft, models, inspections, and maintenance." },
   endorsements: { label: "Endorsements", description: "Review organization endorsement requests." },
   notifications: { label: "Notifications", description: "Publish notifications to organization members." },
-  audit: { label: "Audit", description: "View organization assignment and activity logs." },
+  audit: { label: "Assignment history", description: "View aircraft assignment and removal history." },
 };
 
 type ConfigurableRole = "organization_admin" | "member";
 
 const roleLabels: Record<ConfigurableRole, string> = {
-  organization_admin: "Organization Admin",
-  member: "Member",
+  organization_admin: "Organization admin",
+  member: "Standard member",
 };
 
 export default function OrganizationRolePermissions() {
@@ -124,13 +124,13 @@ export default function OrganizationRolePermissions() {
   return (
     <>
       <CompactButton type="button" onClick={() => { setPermissionsOpen(true); setEditingRole("organization_admin"); }}>
-        Permissions
+        Role settings
       </CompactButton>
 
       <DetailDrawer
         open={permissionsOpen}
         onClose={closeEditor}
-        title="Role permissions"
+        title="Role access settings"
       >
         <div className="mb-4 flex border-b border-slate-200" role="tablist" aria-label="Organization roles">
           {(["organization_admin", "member"] as const).map((role) => (
@@ -144,7 +144,7 @@ export default function OrganizationRolePermissions() {
           <fieldset className="grid gap-1" disabled={loading || Boolean(savingRole)}>
             <legend className="sr-only">{roleLabels[selectedRole]} permissions</legend>
             {ORGANIZATION_PERMISSIONS.map((permission) => (
-              <label key={permission} className={`flex min-h-14 items-start gap-3 rounded-xl border px-3 py-3 ${isFixedPermission(selectedRole, permission) ? "cursor-not-allowed border-slate-200 bg-slate-50" : "cursor-pointer border-transparent hover:bg-slate-50"}`}>
+              <label key={permission} className={`flex min-h-12 items-start gap-3 border-b border-slate-200 px-1 py-2.5 ${isFixedPermission(selectedRole, permission) ? "cursor-not-allowed bg-slate-50" : "cursor-pointer hover:bg-slate-50"}`}>
                 <input className="mt-0.5 h-4 w-4 accent-blue-600" type="checkbox" checked={drafts[selectedRole].includes(permission)} disabled={isFixedPermission(selectedRole, permission)} onChange={() => togglePermission(selectedRole, permission)} />
                 <span>
                   <span className="block text-sm font-semibold text-slate-900">{permissionLabels[permission].label}</span>

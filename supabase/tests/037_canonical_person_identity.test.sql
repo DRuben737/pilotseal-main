@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(18);
 select set_config(
   'pilotseal_test.student_id',
   (select id::text from public.profiles where email = 'pilot.one@example.test'),
@@ -46,6 +46,10 @@ select set_config(
   (select id::text from public.profiles where email = 'instructor.one@example.test'),
   true
 );
+update public.organization_people
+set organization_display_name = null
+where organization_id = '10000000-0000-4000-8000-000000000001'
+  and user_id = current_setting('pilotseal_test.student_id')::uuid;
 set local role authenticated;
 select set_config(
   'pilotseal_test.identity_request',
@@ -90,6 +94,15 @@ select set_config(
   true
 );
 set local role authenticated;
+select is(
+  (
+    select display_name
+    from public.list_organization_members('10000000-0000-4000-8000-000000000001')
+    where user_id = current_setting('pilotseal_test.student_id')::uuid
+  ),
+  'Avery One Person',
+  'organization member list uses the canonical self profile name'
+);
 select is(
   (select count(*) from public.list_my_student_candidates()
    where student_user_id = current_setting('pilotseal_test.student_id')::uuid),

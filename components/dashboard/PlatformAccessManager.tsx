@@ -208,12 +208,6 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
       {!embedded ? <AdminPageHeader
         eyebrow="Platform administration"
         title={activityOnly ? "Activity" : "Organizations"}
-        action={!activityOnly ? (
-          <div className="flex gap-2">
-            <CompactButton type="button" onClick={() => setDrawerMode("admin")}>Grant access</CompactButton>
-            <CompactButton type="button" tone="primary" onClick={() => setDrawerMode("organization")}>Add organization</CompactButton>
-          </div>
-        ) : undefined}
       /> : null}
       {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
       {status ? <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{status}</p> : null}
@@ -224,12 +218,18 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
         items={activityOnly ? [
           { id: "audit", label: "Access activity", summary: auditLog.length },
         ] : [
-          { id: "requests", label: "Registration requests" },
+          { id: "requests", label: "Requests" },
           { id: "organizations", label: "Organizations" },
-          { id: "admins", label: "Administrators" },
+          { id: "admins", label: "Platform admins" },
         ]}
         activeId={activeAccessTab}
         onChange={(id) => setActiveAccessTab(id as AccessTab)}
+        actions={!activityOnly ? (
+          <div className="flex gap-2">
+            <CompactButton type="button" onClick={() => setDrawerMode("admin")}>Grant access</CompactButton>
+            <CompactButton type="button" tone="primary" onClick={() => setDrawerMode("organization")}>Add organization</CompactButton>
+          </div>
+        ) : undefined}
         helpContent={activeAccessTab === "requests"
           ? <p>Review verified company registration requests. Approval creates an organization and assigns the requester as its first Owner; rejection creates nothing.</p>
           : activeAccessTab === "organizations"

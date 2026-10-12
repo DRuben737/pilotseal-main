@@ -96,23 +96,6 @@ export default function AircraftReportsManager() {
     : null;
   const students = people.filter((person) => person.teaching_role === "student");
   const instructors = people.filter((person) => person.teaching_role === "instructor");
-  const reportStats = useMemo(
-    () => ({
-      open: reports.filter((report) => report.status !== "closed").length,
-      submitted: reports.filter((report) => report.status === "submitted").length,
-      signaturePending: reports.filter(
-        (report) =>
-          report.status !== "closed" &&
-          Boolean(report.instructor_name) &&
-          !report.instructor_signed_at
-      ).length,
-      groundedAircraft: aircraft.filter(
-        (item) => item.operational_status === "grounded"
-      ).length,
-    }),
-    [aircraft, reports]
-  );
-
   async function loadData(preferredReportId = "") {
     if (!activeOrganization?.id) {
       setReports([]);
@@ -367,33 +350,6 @@ export default function AircraftReportsManager() {
     <section className="space-y-5">
       {message ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
-      <ManagementDisclosure
-        id="aircraft-report-summary"
-        eyebrow={activeOrganization.name}
-        title="Aircraft discrepancy reports"
-        summary={loading ? "Loading…" : `${reportStats.open} open`}
-        actions={<button className="primary-button" type="button" onClick={startReport}>New report</button>}
-        helpContent={
-          <>
-            <p>Submit an aircraft discrepancy as soon as it is found. You can submit the report alone or ground the aircraft immediately.</p>
-            <p>Organization owners and administrators review reports, record signatures and disposition, and are the only roles that can return a grounded aircraft to service.</p>
-            <p>The fleet status is authoritative. A report can state that an aircraft is down without changing a later fleet status.</p>
-          </>
-        }
-      >
-
-        <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <ReportStat label="Open reports" value={reportStats.open} />
-          <ReportStat label="Waiting for review" value={reportStats.submitted} />
-          <ReportStat label="Signatures pending" value={reportStats.signaturePending} />
-          <ReportStat
-            label="Aircraft grounded now"
-            value={reportStats.groundedAircraft}
-            tone={reportStats.groundedAircraft > 0 ? "danger" : "neutral"}
-          />
-        </dl>
-      </ManagementDisclosure>
-
       <DetailDrawer open={showForm} title="New aircraft discrepancy report" width="wide" onClose={() => { setShowForm(false); setFormErrors({}); }}>
         <div id="aircraft-report-new-form">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -599,6 +555,7 @@ export default function AircraftReportsManager() {
         id="aircraft-report-activity"
         title="Report activity"
         summary={loading ? "Loading…" : `${filteredReports.length}`}
+        actions={<button className="primary-button" type="button" onClick={startReport}>New report</button>}
         className="dashboard-data-workspace"
         defaultOpen
         helpContent={<p>Expand to search and filter report history. Select a row to review the full description, workflow and activity in a side drawer.</p>}
@@ -638,7 +595,7 @@ export default function AircraftReportsManager() {
             ) : null}
           </div>
         ) : null}
-        <div className="mt-5 grid gap-3">
+        <div className="mt-3 divide-y divide-slate-200 border border-slate-200 bg-white">
           {filteredReports.map((report) => {
             const reportAircraft = aircraftById.get(report.aircraft_id) ?? null;
             const fleetGrounded = reportAircraft?.operational_status === "grounded";
@@ -648,10 +605,10 @@ export default function AircraftReportsManager() {
                 type="button"
                 onClick={() => setActiveReportId(report.id)}
                 aria-pressed={activeReportId === report.id}
-                className={`w-full rounded-2xl border p-4 text-left transition-colors duration-200 ${
+                className={`w-full px-3 py-2.5 text-left transition-colors duration-200 ${
                   activeReportId === report.id
-                    ? "border-blue-400 bg-blue-50"
-                    : "border-slate-200 bg-white hover:border-slate-300"
+                    ? "bg-blue-50"
+                    : "bg-white hover:bg-slate-50"
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -908,37 +865,6 @@ function TriStateField({ label, value, onChange }: { label: string; value: TriSt
 
 function Detail({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-3"><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</dt><dd className="mt-1 text-sm text-slate-800">{value}</dd></div>;
-}
-
-function ReportStat({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number;
-  tone?: "neutral" | "danger";
-}) {
-  return (
-    <div
-      className={`rounded-xl border p-3 ${
-        tone === "danger"
-          ? "border-rose-200 bg-rose-50"
-          : "border-slate-200 bg-white"
-      }`}
-    >
-      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-      </dt>
-      <dd
-        className={`mt-1 text-2xl font-semibold ${
-          tone === "danger" ? "text-rose-800" : "text-slate-950"
-        }`}
-      >
-        {value}
-      </dd>
-    </div>
-  );
 }
 
 function Badge({ tone, children }: { tone: "danger" | "warning" | "neutral" | "info"; children: React.ReactNode }) {

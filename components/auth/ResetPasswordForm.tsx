@@ -15,7 +15,7 @@ import {
 import { getSupabaseClient } from "@/lib/supabase";
 
 export default function ResetPasswordForm({
-  redirectTo = "/dashboard",
+  redirectTo = "/console",
 }: {
   redirectTo?: string;
 }) {

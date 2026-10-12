@@ -97,15 +97,8 @@ export default function SiteNav() {
           >
             {loading ? "Loading..." : "Login"}
           </Link>
-        ) : pathname.startsWith("/dashboard") ? (
-          <UserMenu email={userEmail} displayName={identityLabel} />
         ) : (
-          <Link
-            href="/dashboard"
-            className={`site-nav-inline-link ${pathname.startsWith("/dashboard") ? "site-nav-inline-link-active" : ""}`}
-          >
-            Dashboard
-          </Link>
+          <UserMenu email={userEmail} displayName={identityLabel} />
         )}
       </div>
 
@@ -157,15 +150,15 @@ export default function SiteNav() {
           ) : (
             <div className="site-nav-mobile-account">
               <Link
-                href="/dashboard"
-                className={`site-nav-link ${pathname === "/dashboard" ? "site-nav-link-active" : ""}`}
+                href="/console"
+                className="site-nav-link"
                 onClick={() => setMobileOpen(false)}
               >
-                Dashboard
+                Management Console
               </Link>
               <Link
-                href="/dashboard/account-settings"
-                className={`site-nav-link ${pathname === "/dashboard/account-settings" ? "site-nav-link-active" : ""}`}
+                href="/console/personal/account"
+                className="site-nav-link"
                 onClick={() => setMobileOpen(false)}
               >
                 Account

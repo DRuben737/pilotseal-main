@@ -15,14 +15,24 @@ export function AdminPageHeader({
   description?: string;
   action?: ReactNode;
 }) {
-  return (
-    <header className="admin-page-header flex min-h-14 flex-col gap-2 border-b border-slate-200 bg-white py-2.5 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        {eyebrow ? <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{eyebrow}</p> : null}
-        <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950">{title}</h1>
-        {description ? <p className="mt-0.5 max-w-3xl text-xs leading-5 text-slate-500">{description}</p> : null}
+  if (!action) {
+    return (
+      <div className="sr-only">
+        {eyebrow ? <p>{eyebrow}</p> : null}
+        <h1>{title}</h1>
+        {description ? <p>{description}</p> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+    );
+  }
+
+  return (
+    <header className="admin-page-header flex min-h-12 items-center justify-end border-b border-slate-200 bg-white py-2">
+      <div className="sr-only">
+        {eyebrow ? <p>{eyebrow}</p> : null}
+        <h1>{title}</h1>
+        {description ? <p>{description}</p> : null}
+      </div>
+      <div className="shrink-0">{action}</div>
     </header>
   );
 }
@@ -109,8 +119,8 @@ export function ManagementTabs({
 
   return (
     <section className="management-tabs min-w-0">
-      <div className="flex min-h-10 flex-col border-b border-slate-200 bg-white sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1 overflow-x-auto" role="tablist" aria-label={label}>
+      <div className="management-tabs-header flex min-h-10 flex-col border-b border-slate-200 bg-white sm:flex-row sm:items-center">
+        <div className="console-page-subnavigation min-w-0 flex-1 overflow-x-auto" role="tablist" aria-label={label}>
           <div className="flex min-w-max items-stretch">
             {items.map((item, index) => {
               const selected = item.id === activeItem?.id;
@@ -153,7 +163,7 @@ export function ManagementTabs({
           </div>
         </div>
         {actions ? (
-          <div className="flex shrink-0 items-center gap-2 border-t border-slate-200 px-3 py-1 sm:border-t-0 sm:border-l">
+          <div className="management-tabs-actions flex shrink-0 items-center gap-2 border-t border-slate-200 px-3 py-1.5 sm:border-t-0 sm:border-l">
             {actions}
           </div>
         ) : null}
@@ -162,7 +172,7 @@ export function ManagementTabs({
         id={`${id}-panel`}
         role="tabpanel"
         aria-labelledby={activeItem ? `${id}-tab-${activeItem.id}` : undefined}
-        className="min-w-0 bg-white pt-3"
+        className="min-w-0 bg-white"
       >
         {children}
       </div>
@@ -172,7 +182,7 @@ export function ManagementTabs({
 
 export function FilterToolbar({ children, resultLabel }: { children: ReactNode; resultLabel?: string }) {
   return (
-    <div className="admin-toolbar flex flex-col gap-2 border-b border-slate-200 bg-white py-3 lg:flex-row lg:items-center">
+    <div className="admin-toolbar flex min-h-12 flex-col gap-2 border-b border-slate-200 bg-white py-2 lg:flex-row lg:items-center">
       <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">{children}</div>
       {resultLabel ? <p className="shrink-0 text-xs font-medium text-slate-500">{resultLabel}</p> : null}
     </div>
@@ -208,6 +218,70 @@ export function AdminDataTable({ children, label }: { children: ReactNode; label
         </table>
       </div>
     </div>
+  );
+}
+
+export type AdminNameListItem = {
+  id: string;
+  name: string;
+  meta?: ReactNode;
+};
+
+export function AdminNameList({
+  items,
+  label,
+  emptyLabel,
+  onSelect,
+}: {
+  items: ReadonlyArray<AdminNameListItem>;
+  label: string;
+  emptyLabel: string;
+  onSelect: (item: AdminNameListItem) => void;
+}) {
+  return (
+    <div className="admin-name-list border-x border-t border-slate-200 bg-white" role="list" aria-label={label}>
+      {items.length === 0 ? (
+        <p className="border-b border-slate-200 px-3 py-5 text-center text-xs text-slate-500">{emptyLabel}</p>
+      ) : items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="listitem"
+          className="flex min-h-9 w-full items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-left text-[13px] font-medium leading-5 text-slate-900 transition-colors hover:bg-slate-50 focus-visible:relative focus-visible:z-10 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
+          onClick={() => onSelect(item)}
+        >
+          <span className="min-w-0 break-words">{item.name}</span>
+          {item.meta ? <span className="shrink-0 text-xs font-normal text-slate-500">{item.meta}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function AdminPagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  if (total <= pageSize) return null;
+  const safePage = Math.min(Math.max(1, page), pageCount);
+  const start = (safePage - 1) * pageSize + 1;
+  const end = Math.min(total, safePage * pageSize);
+
+  return (
+    <nav className="admin-pagination flex min-h-10 items-center justify-end gap-2 border-x border-b border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500" aria-label="Pagination">
+      <span>{start}–{end} of {total}</span>
+      <button type="button" className="min-h-7 rounded-sm border border-slate-200 px-2 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={safePage === 1} onClick={() => onPageChange(safePage - 1)}>Previous</button>
+      <span className="tabular-nums">{safePage} / {pageCount}</span>
+      <button type="button" className="min-h-7 rounded-sm border border-slate-200 px-2 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={safePage === pageCount} onClick={() => onPageChange(safePage + 1)}>Next</button>
+    </nav>
   );
 }
 
@@ -296,10 +370,9 @@ export function StatusBadge({
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="px-5 py-8 text-center">
-      <div aria-hidden="true" className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">—</div>
-      <h2 className="mt-2 text-sm font-semibold text-slate-900">{title}</h2>
-      <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{description}</p>
+    <div className="border-y border-slate-200 px-4 py-6 text-center">
+      <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+      <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">{description}</p>
     </div>
   );
 }
@@ -384,15 +457,24 @@ export function DetailDrawer({
     };
   }, [open, titleId]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-[90]" role="presentation">
       <button aria-label="Close details" className="absolute inset-0 cursor-default bg-slate-950/35" onClick={onClose} />
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`admin-dialog absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden bg-white shadow-2xl ${width === "wide" ? "max-w-5xl" : "max-w-2xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`admin-dialog absolute flex w-full flex-col overflow-hidden bg-white shadow-2xl ${width === "wide" ? "max-w-5xl" : "max-w-2xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
         <header className={`flex items-start justify-between border-b border-slate-200 ${compact ? "gap-3 px-4 py-3" : "gap-4 px-5 py-4"}`}>
           <div>
-            <h2 id={titleId} className="text-lg font-semibold text-slate-950">{title}</h2>
-            {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+            <h2 id={titleId} className="text-base font-semibold text-slate-950">{title}</h2>
+            {description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}
           </div>
           <button autoFocus type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-sm border border-slate-200 text-lg text-slate-600 hover:bg-slate-50" aria-label="Close">×</button>
         </header>
@@ -481,7 +563,7 @@ export function QuickEditPopover({
               role="dialog"
               aria-modal="false"
               aria-labelledby={titleId}
-              className="fixed z-[95] w-[min(20rem,calc(100vw-1.5rem))] rounded-xl border border-slate-200 bg-white p-3 shadow-2xl"
+              className="fixed z-[95] w-[min(20rem,calc(100vw-1.5rem))] rounded-sm border border-slate-200 bg-white p-3 shadow-lg"
               style={position}
             >
               <h2 id={titleId} className="text-sm font-semibold text-slate-950">{label}</h2>
@@ -497,9 +579,9 @@ export function QuickEditPopover({
 export function BulkActionBar({ count, children, onClear }: { count: number; children: ReactNode; onClear: () => void }) {
   if (!count) return null;
   return (
-    <div className="sticky bottom-4 z-30 mx-auto flex max-w-3xl flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white shadow-2xl sm:flex-row sm:items-center sm:justify-between">
+    <div className="sticky bottom-3 z-30 mx-auto flex max-w-3xl flex-col gap-2 rounded-sm border border-slate-700 bg-slate-900 px-3 py-2 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm font-semibold">{count} aircraft selected</p>
-      <div className="flex flex-wrap items-center gap-2">{children}<button type="button" onClick={onClear} className="min-h-10 rounded-xl px-3 text-sm text-slate-300 hover:bg-white/10 hover:text-white">Clear</button></div>
+      <div className="flex flex-wrap items-center gap-2">{children}<button type="button" onClick={onClear} className="min-h-8 rounded-sm px-3 text-xs text-slate-300 hover:bg-white/10 hover:text-white">Clear</button></div>
     </div>
   );
 }
@@ -541,15 +623,21 @@ export function ConfirmDialog({
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("keydown", onKey); if (previous?.isConnected) previous.focus(); };
   }, [open, busy]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [open]);
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/45 p-4">
-      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-        <h2 id="confirm-title" className="text-lg font-semibold text-slate-950">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-sm border border-slate-200 bg-white p-4 shadow-xl">
+        <h2 id="confirm-title" className="text-base font-semibold text-slate-950">{title}</h2>
+        <p className="mt-2 text-[13px] leading-5 text-slate-600">{description}</p>
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" disabled={busy} onClick={onCancel} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button type="button" disabled={busy} onClick={onConfirm} className={`min-h-11 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60 ${destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-600 hover:bg-blue-700"}`}>{busy ? "Saving…" : confirmLabel}</button>
+          <button type="button" disabled={busy} onClick={onCancel} className="min-h-8 rounded-sm border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="button" disabled={busy} onClick={onConfirm} className={`min-h-8 rounded-sm px-3 text-xs font-semibold text-white disabled:opacity-60 ${destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-600 hover:bg-blue-700"}`}>{busy ? "Saving…" : confirmLabel}</button>
         </div>
       </section>
     </div>, document.body

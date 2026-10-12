@@ -564,6 +564,42 @@
   }
 }
 
+/* Console is a standalone application surface inside the shared PilotSeal origin. */
+.console-shell {
+  min-height: 100dvh;
+  background: #f0f2f5;
+  padding-block: 1rem;
+}
+
+.console-shell > .site-shell {
+  width: min(100%, calc(100vw - 2rem));
+  max-width: none;
+}
+
+.console-shell .dashboard-app-layout,
+.console-shell .dashboard-content {
+  min-height: calc(100dvh - 2rem);
+}
+
+.console-shell .dashboard-sidebar-slot {
+  height: calc(100dvh - 2rem);
+  max-height: calc(100dvh - 2rem);
+}
+
+@media (max-width: 760px) {
+  .console-shell {
+    padding: 0;
+  }
+
+  .console-shell > .site-shell {
+    width: 100%;
+  }
+
+  .console-shell .dashboard-content {
+    min-height: 100dvh;
+  }
+}
+
 .dashboard-task-center {
   min-width: 0;
 }
@@ -927,20 +963,21 @@ summary:focus-visible {
 }
 
 .admin-dialog {
-  border-left: 1px solid #e2e8f0;
-  animation: dashboard-drawer-in 180ms ease-out;
+  inset: 50% auto auto 50% !important;
+  width: calc(100% - 2rem) !important;
+  max-height: calc(100dvh - 2rem);
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) !important;
+  animation: dashboard-dialog-in 180ms ease-out;
 }
 
-@keyframes dashboard-drawer-in {
-  from { transform: translateX(1.5rem); opacity: 0.75; }
-  to { transform: translateX(0); opacity: 1; }
+@keyframes dashboard-dialog-in {
+  from { transform: translate(-50%, calc(-50% + 0.5rem)); opacity: 0.75; }
+  to { transform: translate(-50%, -50%); opacity: 1; }
 }
 
 @media (max-width: 760px) {
-  .dashboard-visited-tabs {
-    display: none;
-  }
-
   .dashboard-breadcrumbs span:first-child,
   .dashboard-breadcrumbs span[aria-hidden="true"] {
     display: none;
@@ -3331,6 +3368,16 @@ summary:focus-visible {
   scrollbar-width: thin;
 }
 
+.dashboard-sidebar-item-group {
+  display: grid;
+  min-width: 0;
+  gap: 0.125rem;
+}
+
+.dashboard-sidebar[data-expanded="true"] .dashboard-sidebar-item-group {
+  width: 100%;
+}
+
 .dashboard-sidebar-nav::-webkit-scrollbar {
   width: 0.25rem;
 }
@@ -3411,6 +3458,46 @@ summary:focus-visible {
   background: #2f80ed;
   color: #fff;
   box-shadow: 0 7px 18px rgba(37, 99, 235, 0.3);
+}
+
+.dashboard-sidebar-link-section-active,
+.dashboard-sidebar-link-section-active:hover,
+.dashboard-sidebar-link-section-active:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  box-shadow: none;
+}
+
+.dashboard-sidebar-subnav {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0.125rem 0 0.25rem;
+  padding-left: 2.55rem;
+}
+
+.dashboard-sidebar-sublink {
+  min-width: 0;
+  border-radius: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.75rem;
+  font-weight: 560;
+  line-height: 1.25;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.dashboard-sidebar-sublink:hover,
+.dashboard-sidebar-sublink:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  outline: none;
+}
+
+.dashboard-sidebar-sublink-active,
+.dashboard-sidebar-sublink-active:hover,
+.dashboard-sidebar-sublink-active:focus-visible {
+  background: #2f80ed;
+  color: #fff;
 }
 
 .dashboard-sidebar-footer {
@@ -9087,24 +9174,27 @@ summary:focus-visible {
     box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
   }
 
-  .dashboard-mobile-page-menu > nav > a {
+  .dashboard-mobile-page-menu > nav > :is(a, button) {
     display: flex;
     min-width: 0;
     min-height: 44px;
     align-items: center;
     gap: 0.75rem;
+    border: 0;
     border-radius: 10px;
+    background: transparent;
     padding: 0.55rem 0.7rem;
     color: #334155;
     font-size: 0.88rem;
     font-weight: 650;
+    text-align: left;
     text-decoration: none;
     transition: background-color 150ms ease, color 150ms ease;
     touch-action: manipulation;
   }
 
-  .dashboard-mobile-page-menu > nav > a:hover,
-  .dashboard-mobile-page-menu > nav > a:focus-visible {
+  .dashboard-mobile-page-menu > nav > :is(a, button):hover,
+  .dashboard-mobile-page-menu > nav > :is(a, button):focus-visible {
     background: #f1f5f9;
     color: #0f172a;
   }
@@ -9112,6 +9202,15 @@ summary:focus-visible {
   .dashboard-mobile-page-menu > nav > .dashboard-mobile-page-active {
     background: rgba(0, 102, 204, 0.08);
     color: #0066cc;
+  }
+
+  .dashboard-mobile-page-menu > nav > .dashboard-mobile-page-exit {
+    margin-top: 0.25rem;
+    border-top: 1px solid #ebeef5;
+  }
+
+  .dashboard-mobile-page-menu > nav > .dashboard-mobile-page-signout {
+    color: #c53030;
   }
 
   .dashboard-mobile-notification-badge {
@@ -9193,58 +9292,6 @@ summary:focus-visible {
   color: #606266;
 }
 
-.dashboard-visited-tabs {
-  display: flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 0.35rem;
-  overflow-x: auto;
-  border-bottom: 1px solid #d8dce5;
-  padding: 0.3rem 0.75rem;
-  background: #fff;
-  white-space: nowrap;
-}
-
-.dashboard-visited-tabs > span {
-  display: inline-flex;
-  height: 26px;
-  flex: none;
-  align-items: center;
-  border: 1px solid #d8dce5;
-  background: #fff;
-  color: #495060;
-  font-size: 0.72rem;
-}
-
-.dashboard-visited-tabs a {
-  display: inline-flex;
-  height: 100%;
-  align-items: center;
-  padding: 0 0.55rem;
-}
-
-.dashboard-visited-tabs button {
-  display: grid;
-  width: 24px;
-  height: 100%;
-  cursor: pointer;
-  place-items: center;
-  color: inherit;
-  transition: background-color 160ms ease;
-}
-
-.dashboard-visited-tabs button:hover,
-.dashboard-visited-tabs button:focus-visible {
-  background: rgba(255, 255, 255, 0.16);
-  outline: none;
-}
-
-.dashboard-visited-tabs > .dashboard-visited-tab-active {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #fff;
-}
-
 .dashboard-content .dashboard-surface,
 .dashboard-content .management-disclosure,
 .dashboard-content .management-disclosure.dashboard-data-workspace,
@@ -9268,8 +9315,7 @@ summary:focus-visible {
   padding: 0;
 }
 
-.dashboard-content .management-disclosure.embedded-workspace > .management-disclosure-header,
-.dashboard-content .management-tabs .management-disclosure > .management-disclosure-header {
+.dashboard-content .management-disclosure.embedded-workspace > .management-disclosure-header {
   display: none;
 }
 
@@ -9351,10 +9397,38 @@ summary:focus-visible {
   box-shadow: none;
 }
 
+.dashboard-content .admin-toolbar .console-compact-search {
+  order: 0;
+  width: 18rem;
+  max-width: calc(100% - 7.5rem);
+  min-height: 0;
+  flex: 0 1 18rem;
+}
+
 .dashboard-content .people-table,
 .dashboard-content .people-data-grid {
   border-radius: 0;
   box-shadow: none;
+}
+
+.dashboard-content .people-data-grid th:nth-child(2) {
+  width: 30%;
+}
+
+.dashboard-content .people-data-grid th:nth-child(3) {
+  width: 12%;
+}
+
+.dashboard-content .people-data-grid th:nth-child(4) {
+  width: 16%;
+}
+
+.dashboard-content .people-data-grid th:nth-child(5) {
+  width: 14%;
+}
+
+.dashboard-content .people-data-grid th:nth-child(6) {
+  width: 8%;
 }
 
 .dashboard-content .saas-empty-state {
@@ -9370,6 +9444,13 @@ summary:focus-visible {
 
 .admin-dialog :is(.rounded-lg, .rounded-xl, .rounded-2xl) {
   border-radius: 2px;
+}
+
+.admin-dialog :is(.primary-button, .secondary-button, .ghost-button, .danger-button) {
+  min-height: 34px;
+  border-radius: 2px;
+  box-shadow: none;
+  transform: none;
 }
 
 .admin-dialog article {
@@ -9397,10 +9478,6 @@ summary:focus-visible {
   .dashboard-breadcrumbs {
     min-height: 42px;
     padding-inline: 0.75rem;
-  }
-
-  .dashboard-visited-tabs {
-    padding-inline: 0.5rem;
   }
 
   .dashboard-content .admin-data-table > div {
@@ -9445,50 +9522,51 @@ summary:focus-visible {
     flex: 0 0 3.625rem;
   }
 
-  .dashboard-sidebar[data-expanded="false"],
-  .dashboard-sidebar[data-expanded="false"]:hover,
-  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) {
+  .dashboard-sidebar[data-expanded="false"] {
     width: 3.625rem;
     padding: 0.25rem;
   }
 
+  .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) {
+    width: 15.75rem;
+    padding: 0.625rem;
+    box-shadow: 0 22px 54px rgba(15, 23, 42, 0.24);
+  }
+
   .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-sidebar-copy {
-    width: 0;
-    flex: 0 0 0;
-    overflow: hidden;
-    opacity: 0;
-    visibility: hidden;
+    width: auto;
+    flex: 1 1 0%;
+    overflow: visible;
+    opacity: 1;
+    visibility: visible;
   }
 
   .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-workspace-switcher {
-    max-height: 0;
-    margin-top: 0;
-    padding-top: 0;
-    opacity: 0;
-    pointer-events: none;
+    max-height: 6rem;
+    margin-top: 0.8rem;
+    border-color: rgba(255, 255, 255, 0.1);
+    padding-top: 0.65rem;
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-sidebar-section-label {
-    min-width: 0;
-    max-height: 0;
-    padding-block: 0;
-    opacity: 0;
+    min-width: 12rem;
+    max-height: 1.4rem;
+    padding: 0.15rem 0.75rem 0.3rem;
+    opacity: 1;
   }
 
   .dashboard-sidebar[data-expanded="false"]:is(:hover, :has(:focus-visible)) .dashboard-sidebar-link {
-    width: 3rem;
-    min-width: 0;
-    justify-content: center;
-    gap: 0;
-    padding: 0;
+    width: 100%;
+    min-width: 13.125rem;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0.875rem;
   }
 }
 
 @media (max-width: 760px) {
-  .dashboard-visited-tabs {
-    display: none;
-  }
-
   .dashboard-breadcrumbs span:first-child,
   .dashboard-breadcrumbs span[aria-hidden="true"] {
     display: none;
@@ -9500,5 +9578,333 @@ summary:focus-visible {
     max-width: none !important;
     max-height: none !important;
     transform: none !important;
+  }
+}
+
+/* Console content density derived from the PilotSeal Sites prototype. */
+.console-shell {
+  --console-line: #e4e8ee;
+  --console-muted: #64748b;
+  --console-header: #f5f7fa;
+  --console-blue: #1d4ed8;
+}
+
+.admin-dialog,
+.console-dialog-surface {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.admin-dialog :is(h1, h2, .text-lg, .text-xl, .text-2xl),
+.console-dialog-surface :is(h1, h2, .text-lg, .text-xl, .text-2xl) {
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.admin-dialog :is(.text-sm, p, dd),
+.console-dialog-surface :is(.text-sm, p, dd) {
+  font-size: 13px;
+}
+
+.admin-dialog :is(.text-xs, small, dt, label, .saas-label, .eyebrow),
+.console-dialog-surface :is(.text-xs, small, dt, label, .saas-label, .eyebrow) {
+  font-size: 12px;
+}
+
+.admin-dialog :is(input, select, textarea),
+.console-dialog-surface :is(input, select, textarea) {
+  font-size: 13px;
+}
+
+.admin-dialog .saas-field input,
+.admin-dialog .saas-field select,
+.admin-dialog .saas-field textarea {
+  font-size: 13px;
+}
+
+.admin-dialog .saas-field span,
+.admin-dialog .saas-label {
+  font-size: 12px;
+}
+
+.admin-dialog :is(button, a.primary-button, a.secondary-button, a.ghost-button, a.danger-button),
+.console-dialog-surface :is(button, a.primary-button, a.secondary-button, a.ghost-button, a.danger-button) {
+  font-size: 12px;
+}
+
+@media (min-width: 761px) {
+  .console-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    padding: 0 !important;
+  }
+
+  .console-shell > .site-shell {
+    width: 100%;
+  }
+
+  .console-shell > .site-shell,
+  .console-shell .dashboard-app-layout {
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .console-shell .dashboard-app-layout {
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .console-shell .dashboard-sidebar-slot {
+    position: relative;
+    top: auto;
+    height: 100%;
+    max-height: none;
+  }
+
+  .console-shell .dashboard-sidebar {
+    height: 100%;
+    border-top: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .console-shell .dashboard-content {
+    height: 100%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .console-shell .console-page-subnavigation {
+    display: none;
+  }
+
+  .console-shell .management-tabs-header:not(:has(.management-tabs-actions)) {
+    display: none;
+  }
+
+  .console-shell .management-tabs-header:has(.management-tabs-actions) {
+    min-height: 40px;
+    justify-content: flex-end;
+  }
+
+  .console-shell .management-tabs-actions {
+    margin-left: auto;
+    border-left: 0;
+  }
+}
+
+.dashboard-content .admin-page-header {
+  margin: 0;
+}
+
+.dashboard-content .management-tabs [role="tabpanel"] {
+  padding-top: 0;
+}
+
+.dashboard-content .admin-data-table :is(th, td) {
+  height: 36px;
+  padding: 0.25rem 0.65rem;
+  line-height: 1.15rem;
+}
+
+.dashboard-content .admin-toolbar {
+  min-height: 48px;
+  padding-block: 0.4rem;
+}
+
+.dashboard-content .admin-toolbar :is(input, select),
+.dashboard-content .people-search input {
+  height: 34px;
+}
+
+.dashboard-content :is(.primary-button, .secondary-button, .ghost-button, .danger-button),
+.dashboard-content :is(.admin-toolbar, .admin-data-table, .management-tabs) :is(button, a) {
+  box-shadow: none;
+  transform: none;
+}
+
+.dashboard-content .dashboard-settings-list {
+  gap: 0;
+  border-top: 1px solid var(--console-line);
+}
+
+.dashboard-content .dashboard-setting-row {
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--console-line);
+  padding: 0.7rem 0.25rem;
+}
+
+.dashboard-content .dashboard-setting-form {
+  padding-top: 0.65rem;
+}
+
+/* Mobile Console records remain one continuous worksheet, not stacked cards. */
+@media (max-width: 760px) {
+  .console-shell,
+  .console-shell > .site-shell,
+  .console-shell .dashboard-app-layout,
+  .console-shell .dashboard-content {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .dashboard-mobile-navigation {
+    position: sticky;
+    top: 0;
+    z-index: 45;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 0;
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid var(--console-line);
+    border-radius: 0;
+    background: #fff;
+    padding: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .dashboard-mobile-workspace-tabs {
+    gap: 0;
+    border-radius: 0;
+    background: var(--console-header);
+    padding: 0;
+  }
+
+  .dashboard-mobile-workspace-tabs a {
+    min-height: 44px;
+    border-radius: 0;
+    padding: 0.45rem;
+    box-shadow: none;
+  }
+
+  .dashboard-mobile-workspace-tabs .dashboard-mobile-workspace-active {
+    background: #fff;
+    box-shadow: inset 0 -2px var(--console-blue);
+  }
+
+  .dashboard-mobile-page-menu > button {
+    width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    border-left: 1px solid var(--console-line);
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .dashboard-mobile-page-menu > button > span {
+    display: none;
+  }
+
+  .dashboard-mobile-page-menu > nav {
+    top: calc(100% + 1px);
+    right: 0;
+    left: auto;
+    width: min(18rem, calc(100vw - 1rem));
+    border-radius: 2px;
+    padding: 0.25rem;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.14);
+  }
+
+  .dashboard-breadcrumbs {
+    display: none;
+  }
+
+  .dashboard-content :is(ul.grid.gap-2, ul.grid.gap-3) {
+    display: block;
+    border-top: 1px solid var(--console-line);
+  }
+
+  .dashboard-content :is(ul.grid.gap-2, ul.grid.gap-3) > li {
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid var(--console-line);
+    border-radius: 0;
+    background: #fff;
+    padding: 0.7rem 0.25rem;
+    box-shadow: none;
+  }
+
+  .dashboard-content .people-data-grid {
+    overflow: visible;
+    border: 1px solid var(--console-line);
+  }
+
+  .dashboard-content .people-data-grid table,
+  .dashboard-content .people-data-grid tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-content .people-data-grid thead {
+    display: none;
+  }
+
+  .dashboard-content .people-data-grid tr {
+    display: grid;
+    min-height: 52px;
+    grid-template-columns: 34px minmax(0, 1fr) auto auto;
+    align-items: center;
+    border-bottom: 1px solid var(--console-line);
+  }
+
+  .dashboard-content .people-data-grid tr:last-child {
+    border-bottom: 0;
+  }
+
+  .dashboard-content .people-data-grid td {
+    min-width: 0;
+    border: 0;
+    padding: 0.45rem 0.35rem;
+  }
+
+  .dashboard-content .people-data-grid td:nth-child(4),
+  .dashboard-content .people-data-grid td:nth-child(5),
+  .dashboard-content .people-data-grid td:nth-child(6) {
+    display: none;
+  }
+
+  .dashboard-content .people-data-grid .people-grid-empty {
+    grid-column: 1 / -1;
+    padding: 1rem;
+  }
+
+  .dashboard-content .admin-data-table table:is(
+    [aria-label="Student records"],
+    [aria-label="Platform aircraft models"],
+    [aria-label="Aircraft models"]
+  ) {
+    min-width: 0;
+  }
+
+  .dashboard-content .admin-data-table table:is(
+    [aria-label="Platform aircraft models"],
+    [aria-label="Aircraft models"]
+  ) :is(th, td):nth-child(2) {
+    display: none;
+  }
+
+  .dashboard-content .admin-data-table table:is(
+    [aria-label="Student records"],
+    [aria-label="Platform aircraft models"],
+    [aria-label="Aircraft models"]
+  ) :is(th, td):first-child {
+    width: auto;
+  }
+
+  .dashboard-content .admin-data-table table:is(
+    [aria-label="Student records"],
+    [aria-label="Platform aircraft models"],
+    [aria-label="Aircraft models"]
+  ) :is(th, td):last-child {
+    width: 1%;
+    white-space: nowrap;
   }
 }

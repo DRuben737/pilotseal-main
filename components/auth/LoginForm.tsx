@@ -20,7 +20,7 @@ function loginEmailFromIdentifier(identifier: string) {
 }
 
 export default function LoginForm({
-  redirectTo = "/dashboard",
+  redirectTo = "/console",
   initialStatus = "",
 }: {
   redirectTo?: string;

@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { AdminNameList, AdminPagination, CompactToolbar, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import EndorsementWordingEditor from "@/components/dashboard/EndorsementWordingEditor";
 import { endorsementTemplateDataVersion } from "@/components/tools-native/templates";
@@ -300,11 +300,11 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<TemplateFormState>(emptyForm);
   const [sourceForm, setSourceForm] = useState<SourceFormState>(emptySourceForm);
-  const [openCategory, setOpenCategory] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [previewTemplate, setPreviewTemplate] = useState<EndorsementTemplate | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -323,48 +323,34 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
   }, [templates]);
   const filteredTemplates = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return templates;
-    }
-
-    return templates.filter((template) =>
-      [
-        template.title,
-        template.key,
-        template.reference_number,
-        template.category,
-        template.status,
-        template.body,
-      ]
+    const categoryRank = (category: string) => {
+      const index = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.indexOf(category);
+      return index === -1 ? ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.length : index;
+    };
+    return templates
+      .filter((template) => categoryFilter === "all" || getDisplayCategory(template) === categoryFilter)
+      .filter((template) => !normalizedQuery || [template.title, template.reference_number]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery))
-    );
-  }, [query, templates]);
-  const groupedTemplates = useMemo(() => {
-    const groups = filteredTemplates.reduce<Record<string, EndorsementTemplate[]>>((accumulator, template) => {
-      const category = getDisplayCategory(template);
-      accumulator[category] = accumulator[category] ?? [];
-      accumulator[category].push(template);
-      return accumulator;
-    }, {});
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery)))
+      .sort((left, right) => (
+        categoryRank(getDisplayCategory(left)) - categoryRank(getDisplayCategory(right))
+        || left.title.localeCompare(right.title, undefined, { sensitivity: "base" })
+      ));
+  }, [categoryFilter, query, templates]);
+  const availableCategories = useMemo(() => Array.from(new Set(templates.map(getDisplayCategory))).sort((left, right) => {
+    const leftIndex = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.indexOf(left);
+    const rightIndex = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.indexOf(right);
+    if (leftIndex === -1 && rightIndex === -1) return left.localeCompare(right);
+    if (leftIndex === -1) return 1;
+    if (rightIndex === -1) return -1;
+    return leftIndex - rightIndex;
+  }), [templates]);
+  const pageSize = 20;
+  const visibleTemplates = filteredTemplates.slice((page - 1) * pageSize, page * pageSize);
 
-    return Object.entries(groups).sort(([leftCategory], [rightCategory]) => {
-      const leftIndex = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.indexOf(leftCategory);
-      const rightIndex = ENDORSEMENT_TEMPLATE_CATEGORY_ORDER.indexOf(rightCategory);
-
-      if (leftIndex !== -1 || rightIndex !== -1) {
-        if (leftIndex === -1) {
-          return 1;
-        }
-        if (rightIndex === -1) {
-          return -1;
-        }
-        return leftIndex - rightIndex;
-      }
-
-      return leftCategory.localeCompare(rightCategory);
-    });
-  }, [filteredTemplates]);
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter, query]);
 
   async function reloadTemplates() {
     const nextTemplates = await fetchAdminEndorsementTemplates();
@@ -447,6 +433,13 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [editorOpen, previewTemplate, sourceEditorOpen]);
+
+  useEffect(() => {
+    if (!editorOpen && !sourceEditorOpen && !previewTemplate) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
   }, [editorOpen, previewTemplate, sourceEditorOpen]);
 
   function updateForm<K extends keyof TemplateFormState>(key: K, value: TemplateFormState[K]) {
@@ -573,99 +566,32 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
       eyebrow="Manage"
       title="Endorsement Wording"
       summary={`${filteredTemplates.length}`}
-      actions={<div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              if (sourceSettings) {
-                setSourceForm(createSourceFormFromSettings(sourceSettings));
-              }
-              setSourceEditorOpen(true);
-            }}
-          >
-            Source details
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => {
-              setForm(emptyForm);
-              setEditorOpen(true);
-            }}
-          >
-            Add endorsement
-          </button>
-        </div>}
       openOnAction
       helpContent={<><p>Add or edit the official wording, then insert fill-ins wherever users need to provide information. The generator adds signature details automatically.</p><p>Hide an endorsement while it is being prepared; archive it when it should no longer appear in the generator. Organization proposals require platform approval before they affect live wording.</p></>}
     >
-
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search endorsements"
-        className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-      />
+      <CompactToolbar actions={<div className="flex flex-wrap gap-2">
+        <button type="button" className="secondary-button" onClick={() => { if (sourceSettings) setSourceForm(createSourceFormFromSettings(sourceSettings)); setSourceEditorOpen(true); }}>Source details</button>
+        <button type="button" className="primary-button" onClick={() => { setForm(emptyForm); setEditorOpen(true); }}>Add endorsement</button>
+      </div>}>
+        <select aria-label="Endorsement category" className="h-9 max-w-64 rounded-sm border border-slate-300 bg-white px-2 text-[13px]" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <option value="all">All categories</option>
+          {availableCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search endorsements" className="console-compact-search h-9 rounded-sm border border-slate-300 px-3 text-[13px]" />
+      </CompactToolbar>
       {status ? <p className="mt-3 text-sm text-slate-600">{status}</p> : null}
 
-      <div className="mt-4 overflow-hidden border border-slate-200 bg-white">
-        <div className="overflow-x-auto border-b border-slate-200 bg-slate-50/70" role="tablist" aria-label="Endorsement categories">
-          <div className="flex min-w-max items-stretch px-1">
-            {groupedTemplates.map(([category, categoryTemplates]) => {
-              const isOpen = openCategory === category;
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  role="tab"
-                  aria-selected={isOpen}
-                  className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap transition-colors ${isOpen ? "border-blue-600 bg-white text-blue-700" : "border-transparent text-slate-600 hover:bg-white/70 hover:text-slate-950"}`}
-                  onClick={() => setOpenCategory((current) => (current === category ? null : category))}
-                >
-                  <span>{category}</span>
-                  <span className="text-xs font-medium text-slate-400">{categoryTemplates.length}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {openCategory ? (
-          <div className="grid gap-3 bg-slate-50/35 p-3 md:grid-cols-2 xl:grid-cols-3" role="tabpanel">
-            {(groupedTemplates.find(([category]) => category === openCategory)?.[1] ?? []).map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                className="rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300"
-                onClick={() => setPreviewTemplate(template)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {template.reference_number ? <span className="saas-pill">{template.reference_number}</span> : null}
-                    <p className="text-sm font-semibold text-slate-950">{template.title}</p>
-                  </div>
-                  <span className="saas-pill">{getVisibilityLabel(template.status)}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {filteredTemplates.length === 0 ? (
-          <p className="p-4 text-sm text-slate-500">
-            No endorsements match the current search.
-          </p>
-        ) : null}
-      </div>
+      <AdminNameList label="Endorsement templates" emptyLabel="No endorsements match the current filters." items={visibleTemplates.map((template) => ({ id: template.id, name: template.title }))} onSelect={(item) => setPreviewTemplate(visibleTemplates.find((template) => template.id === item.id) ?? null)} />
+      <AdminPagination page={page} pageSize={pageSize} total={filteredTemplates.length} onPageChange={setPage} />
 
       {previewTemplate
         ? renderOverlay(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
-              <div className="max-h-[86vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+              <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[86vh] w-full max-w-3xl overflow-auto rounded-sm border border-slate-200 bg-white p-5 shadow-lg">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="eyebrow">Preview endorsement</p>
-                    <h2 className="text-xl font-semibold text-slate-950">{previewTemplate.title}</h2>
+                    <h2 className="text-base font-semibold text-slate-950">{previewTemplate.title}</h2>
                     <p className="mt-1 text-sm text-slate-500">
                       {[previewTemplate.reference_number, getDisplayCategory(previewTemplate)].filter(Boolean).join(" · ")}
                     </p>
@@ -675,7 +601,7 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
                   </button>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-4 border border-slate-200 bg-slate-50 p-4">
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
                     {getPreviewState(createFormFromTemplate(previewTemplate)).rendered}
                   </p>
@@ -706,12 +632,12 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
 
       {editorOpen
         ? renderOverlay(
-        <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/50">
-          <div role="dialog" aria-modal="true" className="h-full w-full max-w-3xl overflow-auto bg-white p-4 shadow-2xl sm:p-5">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
+          <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[92vh] w-full max-w-3xl overflow-auto rounded-sm border border-slate-200 bg-white p-4 shadow-lg sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="eyebrow">{form.id ? "Edit endorsement" : "New endorsement"}</p>
-                <h2 className="text-xl font-semibold text-slate-950">
+                <h2 className="text-base font-semibold text-slate-950">
                   {form.title || "Endorsement details"}
                 </h2>
               </div>
@@ -814,12 +740,12 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
 
       {sourceEditorOpen
         ? renderOverlay(
-            <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/50">
-              <div role="dialog" aria-modal="true" className="h-full w-full max-w-2xl overflow-auto bg-white p-5 shadow-2xl">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
+              <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[92vh] w-full max-w-2xl overflow-auto rounded-sm border border-slate-200 bg-white p-5 shadow-lg">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="eyebrow">Source details</p>
-                    <h2 className="text-xl font-semibold text-slate-950">Generator source text</h2>
+                    <h2 className="text-base font-semibold text-slate-950">Generator source text</h2>
                   </div>
                   <button type="button" className="secondary-button" onClick={() => setSourceEditorOpen(false)}>
                     Close
@@ -853,7 +779,7 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
                   </label>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <div className="mt-4 border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                   <p>Template data: {sourceForm.source || "--"}</p>
                   <p>Source date: {sourceForm.source_date || "--"}</p>
                   <p>Updated: {sourceForm.updated_date || "--"}</p>
@@ -874,46 +800,6 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
           )
         : null}
 
-      {guideOpen
-        ? renderOverlay(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
-          <div className="max-h-[86vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="eyebrow">Endorsement wording</p>
-                <h2 className="text-xl font-semibold text-slate-950">How to Manage Endorsements</h2>
-              </div>
-              <button type="button" className="secondary-button" onClick={() => setGuideOpen(false)}>
-                Close
-              </button>
-            </div>
-            <div className="mt-5 grid gap-4 text-sm leading-6 text-slate-600">
-              <section>
-                <h3 className="font-semibold text-slate-900">Add</h3>
-                <p>
-                  Click Add endorsement, choose its type, then enter the wording. Insert fill-ins wherever users
-                  need to provide information. Choose Show in the generator when it is ready.
-                </p>
-              </section>
-              <section>
-                <h3 className="font-semibold text-slate-900">Edit</h3>
-                <p>
-                  Click an endorsement card to preview it, then click Edit. Each fill-in can be moved, changed or
-                  removed without editing any code.
-                </p>
-              </section>
-              <section>
-                <h3 className="font-semibold text-slate-900">Hide or archive</h3>
-                <p>
-                  Change Where it appears to Hide for now when you want to keep working on it. Choose Archive when
-                  you no longer want it in the generator.
-                </p>
-              </section>
-            </div>
-          </div>
-        </div>
-          )
-        : null}
     </ManagementDisclosure>
   );
 }

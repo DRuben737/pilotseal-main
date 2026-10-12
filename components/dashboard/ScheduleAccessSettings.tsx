@@ -43,6 +43,7 @@ export default function ScheduleAccessSettings({
   const { refreshOrganizations } = useOrganization();
   const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
   const [draftEnabled, setDraftEnabled] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [eligibility, setEligibility] = useState<ScheduleEligibility | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -116,6 +117,7 @@ export default function ScheduleAccessSettings({
       const saved = await updateEnabledFeatureIds(userId, nextFeatureIds);
       setEnabledFeatureIds(saved);
       setDraftEnabled(saved.includes(scheduleFeatureId));
+      setEditing(false);
       setMessage(saved.includes(scheduleFeatureId)
         ? "Schedule is now available in your personal navigation."
         : "Schedule has been removed from your personal navigation.");
@@ -179,10 +181,15 @@ export default function ScheduleAccessSettings({
             {enabled ? "Shown in your personal workspace" : eligible ? "Ready to enable" : "Complete one access option below"}
           </p>
         </div>
-        {enabled ? <Link className="secondary-button" href="/dashboard/schedule">Open Schedule</Link> : null}
+        <div className="flex gap-2">
+          {enabled ? <Link className="secondary-button" href="/console/personal/schedule">Open Schedule</Link> : null}
+          <button className="ghost-button" type="button" aria-expanded={editing} onClick={() => { setEditing((current) => !current); setDraftEnabled(enabled); setMessage(""); }}>
+            {editing ? "Close" : enabled ? "Edit" : "Configure"}
+          </button>
+        </div>
       </header>
 
-      <form className="mt-4" onSubmit={handleSubmit}>
+      {editing ? <form className="mt-3 border-t border-slate-200 pt-3" onSubmit={handleSubmit}>
         <label className={`flex min-h-14 items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 ${toggleDisabled ? "cursor-not-allowed bg-slate-50" : "cursor-pointer bg-white"}`}>
           <input type="checkbox" className="h-5 w-5 shrink-0 accent-blue-600" checked={draftEnabled} disabled={toggleDisabled} onChange={(event) => { setDraftEnabled(event.target.checked); setMessage(""); }} />
           <span className="min-w-0">
@@ -245,12 +252,12 @@ export default function ScheduleAccessSettings({
           </div>
         ) : null}
 
-        {message ? <p className="mt-3 text-sm text-slate-600" role={message.startsWith("Unable") ? "alert" : "status"}>{message}</p> : null}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button className="primary-button" type="submit" disabled={!changed || saving || loadFailed}>{saving ? "Saving…" : "Apply"}</button>
-          {changed ? <button className="ghost-button" type="button" disabled={saving} onClick={() => { setDraftEnabled(enabled); setMessage(""); }}>Cancel</button> : null}
+          {changed ? <button className="ghost-button" type="button" disabled={saving} onClick={() => { setDraftEnabled(enabled); setMessage(""); setEditing(false); }}>Cancel</button> : null}
         </div>
-      </form>
+      </form> : null}
+      {message ? <p className="text-sm text-slate-600" role={message.startsWith("Unable") ? "alert" : "status"}>{message}</p> : null}
 
       <ConfirmDialog
         open={confirmingInvitation}

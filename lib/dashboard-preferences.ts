@@ -7,12 +7,12 @@ export const QUICK_ACTIONS = [
   { id: "weight_balance", href: "/tools/wb", label: "Weight & Balance" },
   { id: "nighttime", href: "/tools/nighttime", label: "Night Time Calculator" },
   { id: "decoder", href: "/tools/decoder", label: "Aviation Decoder" },
-  { id: "my_aircraft", href: "/dashboard/my-aircraft", label: "My Aircraft" },
-  { id: "safety_reports", href: "/dashboard/reports", label: "Safety Reports" },
-  { id: "records", href: "/dashboard/records", label: "View Records" },
-  { id: "people", href: "/dashboard/saved-people", label: "Manage People" },
-  { id: "notifications", href: "/dashboard/notifications", label: "Notifications" },
-  { id: "account", href: "/dashboard/account-settings", label: "Account Settings" },
+  { id: "my_aircraft", href: "/console/personal/aircraft", label: "My Aircraft" },
+  { id: "safety_reports", href: "/console/personal/reports", label: "Safety Reports" },
+  { id: "records", href: "/console/personal/flight-briefs", label: "View Records" },
+  { id: "people", href: "/console/personal/people", label: "Manage People" },
+  { id: "notifications", href: "/console/personal/notifications", label: "Notifications" },
+  { id: "account", href: "/console/personal/account", label: "Account Settings" },
 ] as const;
 
 export type QuickActionId = (typeof QUICK_ACTIONS)[number]["id"];
@@ -20,7 +20,7 @@ export type QuickActionId = (typeof QUICK_ACTIONS)[number]["id"];
 export const OPTIONAL_FEATURES = [
   {
     id: "cfi_schedule",
-    href: "/dashboard/schedule",
+    href: "/console/personal/schedule",
     label: "Schedule",
     description: "Plan lessons and availability. Requires complete instructor information or a student invitation.",
   },

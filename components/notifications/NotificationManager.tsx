@@ -64,6 +64,7 @@ export default function NotificationManager({
   const [adminHistory, setAdminHistory] = useState<NotificationRecord[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [showComposer, setShowComposer] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");
   const [inboxQuery, setInboxQuery] = useState("");
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => defaultNotificationPreferences(userId));
@@ -181,6 +182,7 @@ export default function NotificationManager({
       setPreferences(nextPreferences);
       await refreshInbox();
       setStatus("Notification settings saved.");
+      setShowPreferences(false);
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to save notification settings."));
     } finally {
@@ -321,14 +323,14 @@ export default function NotificationManager({
       {status ? <p className="saas-panel text-sm text-slate-600">{status}</p> : null}
 
       {!platformPublishingOnly && canPublishOrganization ? (
-        <nav className="dashboard-notification-tabs" aria-label="Notification views">
+        <nav className="dashboard-notification-tabs console-page-subnavigation" aria-label="Notification views">
           <button
             type="button"
             aria-current={activeView === "inbox" ? "page" : undefined}
             className={activeView === "inbox" ? "dashboard-notification-tab-active" : ""}
             onClick={() => setActiveView("inbox")}
           >
-            Inbox
+            Personal
           </button>
           <button
             type="button"
@@ -336,15 +338,15 @@ export default function NotificationManager({
             className={activeView === "organization" ? "dashboard-notification-tab-active" : ""}
             onClick={() => setActiveView("organization")}
           >
-            Organization publishing
+            Organization
           </button>
         </nav>
       ) : null}
 
       {!platformPublishingOnly && activeView === "inbox" ? <>
-      <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} className="dashboard-data-workspace" defaultOpen actions={<button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
+      <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} className="dashboard-data-workspace" defaultOpen actions={<div className="flex gap-2"><button className="ghost-button" type="button" onClick={() => setShowPreferences(true)}>Preferences</button><button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
             Mark all read ({unreadCount})
-          </button>} helpContent={<p>Personal reminders, organization messages, schedule updates and platform notices appear in this unified inbox. Expand it to search or filter.</p>}>
+          </button></div>} helpContent={<p>Personal reminders, organization messages, schedule updates and platform notices appear in this unified inbox. Expand it to search or filter.</p>}>
 
         <div className="mt-5 grid gap-3">
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -406,18 +408,8 @@ export default function NotificationManager({
         </div>
       </ManagementDisclosure>
 
-      <section className="saas-panel" aria-labelledby="notification-preferences-title">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="saas-kicker">Your settings</p>
-            <h2 id="notification-preferences-title" className="saas-subsection-title">Notification preferences</h2>
-            <p className="saas-meta-text mt-2">Choose what appears in your inbox and unread count. Critical safety and account events always remain enabled.</p>
-          </div>
-          <button className="primary-button" type="button" disabled={savingPreferences} onClick={() => void handleSavePreferences()}>
-            {savingPreferences ? "Saving..." : "Save settings"}
-          </button>
-        </div>
-        <div className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
+      <DetailDrawer open={showPreferences} title="Notification preferences" onClose={() => setShowPreferences(false)}>
+        <div className="divide-y divide-slate-200 border-y border-slate-200">
           {([
             ["personal_reminders_enabled", "Personal reminders", "Profile completion, certificates, medical dates, and personal aircraft due dates."],
             ["organization_messages_enabled", "Organization messages", "Messages, role changes, aircraft updates, and organization workflow events."],
@@ -438,7 +430,12 @@ export default function NotificationManager({
             </label>
           ))}
         </div>
-      </section>
+        <div className="mt-4 flex justify-end">
+          <button className="primary-button" type="button" disabled={savingPreferences} onClick={() => void handleSavePreferences()}>
+            {savingPreferences ? "Saving..." : "Save settings"}
+          </button>
+        </div>
+      </DetailDrawer>
       </> : null}
 
       {!platformPublishingOnly && activeView === "organization" && canPublishOrganization ? (
@@ -466,9 +463,9 @@ export default function NotificationManager({
             </DetailDrawer>
 
           <article>
-            <div className="mt-5 grid gap-3">
+            <div className="mt-3 divide-y divide-slate-200 border border-slate-200 bg-white">
               {adminHistory.map((notification) => (
-                <article key={notification.id} className="saas-list-item saas-list-item-stack">
+                <article key={notification.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
                   <div><h3 className="saas-card-title">{notification.title}</h3><p className="saas-list-meta mt-2">{notification.status} · {formatUsDateTime(notification.created_at)}</p></div>
                   <div className="flex flex-wrap gap-2"><button className="ghost-button" type="button" onClick={() => handleEdit(notification)}>Edit</button><button className="secondary-button" type="button" disabled={saving || notification.status === "sent"} onClick={() => void handleSendNow(notification.id)}>Send now</button><button className="danger-button" type="button" disabled={saving} onClick={() => void handleDelete(notification.id)}>Delete</button></div>
                 </article>

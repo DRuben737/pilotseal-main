@@ -397,7 +397,7 @@ export async function createOrganizationNotification(input: {
     p_title: input.title.trim(),
     p_message: input.message.trim(),
     p_priority: input.priority,
-    p_action_url: "/dashboard/notifications",
+    p_action_url: "/console/personal/notifications",
   });
   if (error) throw error;
   return Number(data ?? 0);

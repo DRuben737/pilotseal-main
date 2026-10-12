@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 
-import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { AdminNameList, CompactButton, ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
 import Badge from "@/components/ui/Badge";
@@ -366,7 +366,8 @@ export default function SavedPeopleManager() {
   const [certificateForms, setCertificateForms] = useState<Record<string, CertificateForm>>({});
   const [showPersonForm, setShowPersonForm] = useState(false);
   const [certificateFormPersonIds, setCertificateFormPersonIds] = useState<Set<string>>(new Set());
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [activePersonId, setActivePersonId] = useState<string | null>(null);
+  const [deletePersonId, setDeletePersonId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingCertificateId, setEditingCertificateId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, PersonDraft>>({});
@@ -482,11 +483,7 @@ export default function SavedPeopleManager() {
 
   const filteredPeople = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) {
-      return people;
-    }
-
-    return people.filter((person) => {
+    const matches = !query ? people : people.filter((person) => {
       const personCertificates = certificatesByPerson.get(person.id) ?? [];
       const searchable = [
         person.display_name,
@@ -505,6 +502,7 @@ export default function SavedPeopleManager() {
 
       return searchable.includes(query);
     });
+    return [...matches].sort((a, b) => a.display_name.localeCompare(b.display_name, undefined, { sensitivity: "base" }));
   }, [accountLinksByPerson, certificatesByPerson, people, search]);
 
   async function refreshPeople() {
@@ -644,15 +642,7 @@ export default function SavedPeopleManager() {
   }
 
   function toggleExpanded(id: string) {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    setActivePersonId((current) => current === id ? null : id);
   }
 
   function startEditing(person: SavedPerson) {
@@ -777,7 +767,7 @@ export default function SavedPeopleManager() {
 
   async function handleCreatePerson() {
     if (!session?.user?.id) {
-      setStatus("You must be signed in to save people.");
+      setStatus("You must be signed in to save profiles.");
       return;
     }
 
@@ -794,9 +784,9 @@ export default function SavedPeopleManager() {
       setPersonForm(emptyPersonForm);
       setShowPersonForm(false);
       await refreshPeople();
-      setStatus("Person saved.");
+      setStatus("Profile saved.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to save person.");
+      setStatus(error instanceof Error ? error.message : "Failed to save profile.");
     } finally {
       setSaving(false);
     }
@@ -804,7 +794,7 @@ export default function SavedPeopleManager() {
 
   async function handleSavePerson(person: SavedPerson) {
     if (!session?.user?.id) {
-      setStatus("You must be signed in to manage people.");
+      setStatus("You must be signed in to manage profiles.");
       return;
     }
 
@@ -824,9 +814,9 @@ export default function SavedPeopleManager() {
       });
       await refreshPeople();
       cancelEditing(person.id);
-      setStatus("Person updated.");
+      setStatus("Profile updated.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to update person.");
+      setStatus(error instanceof Error ? error.message : "Failed to update profile.");
     } finally {
       setSaving(false);
     }
@@ -834,7 +824,7 @@ export default function SavedPeopleManager() {
 
   async function handleDeletePerson(id: string) {
     if (!session?.user?.id) {
-      setStatus("You must be signed in to manage people.");
+      setStatus("You must be signed in to manage profiles.");
       return;
     }
 
@@ -843,9 +833,9 @@ export default function SavedPeopleManager() {
     try {
       await deleteSavedPerson(session.user.id, id);
       await refreshPeople();
-      setStatus("Person deleted.");
+      setStatus("Profile deleted.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to delete person.");
+      setStatus(error instanceof Error ? error.message : "Failed to delete profile.");
     } finally {
       setSaving(false);
     }
@@ -1013,21 +1003,20 @@ export default function SavedPeopleManager() {
       title="People"
       summary={loading ? "Loading…" : `${people.length}`}
       className="people-workspace"
-      actions={<button type="button" className="primary-button" onClick={() => setShowPersonForm(true)}>Add person</button>}
       defaultOpen
       openOnAction
       helpContent={<><p>Saved People stores private student, instructor and passenger records used by your tools.</p><p>Expand a person to manage certificates or link the record to a verified PilotSeal account. Linking does not expose your private notes or certificates.</p></>}
     >
-      <div className="people-toolbar">
-        <p className="saas-meta-text">{filteredPeople.length} of {people.length} people</p>
-        <label className="people-search" aria-label="Search people">
+      <div className="admin-toolbar flex items-center justify-between gap-2 border-b border-slate-200 py-2">
+        <label className="people-search console-compact-search min-w-0" aria-label="Search profiles">
           <ActionIcon kind="search" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search people"
+            placeholder="Search profiles"
           />
         </label>
+        <CompactButton type="button" tone="primary" className="shrink-0" onClick={() => setShowPersonForm(true)}>Create profile</CompactButton>
       </div>
 
       {loading ? <p className="saas-meta-text mt-3">Loading people...</p> : null}
@@ -1067,8 +1056,8 @@ export default function SavedPeopleManager() {
 
       <DetailDrawer
         open={showPersonForm}
-        title="Add person"
-        description="Add a private person record for endorsements and other PilotSeal tools."
+        title="Create profile"
+        description="Save a student, instructor, or passenger profile."
         compact
         onClose={() => setShowPersonForm(false)}
       >
@@ -1114,8 +1103,8 @@ export default function SavedPeopleManager() {
             <button
               type="button"
               className="primary-button icon-button"
-              aria-label={saving ? "Saving person" : "Save person"}
-              title="Save person"
+              aria-label={saving ? "Saving profile" : "Save profile"}
+              title="Save profile"
               disabled={saving || !personForm.display_name.trim()}
               onClick={() => void handleCreatePerson()}
             >
@@ -1124,7 +1113,7 @@ export default function SavedPeopleManager() {
             <button
               type="button"
               className="secondary-button icon-button"
-              aria-label="Cancel add person"
+              aria-label="Cancel creating profile"
               title="Cancel"
               disabled={saving}
               onClick={() => setShowPersonForm(false)}
@@ -1135,36 +1124,21 @@ export default function SavedPeopleManager() {
         </div>
       </DetailDrawer>
 
-      <div className="people-data-grid">
-        <table aria-label="Saved people">
-          <thead>
-            <tr>
-              <th className="people-grid-expand" aria-label="Details" />
-              <th>Name</th>
-              <th>Account</th>
-              <th>Certificate</th>
-              <th>Certificate no.</th>
-              <th>Weight</th>
-              <th className="people-grid-actions" aria-label="Actions" />
-            </tr>
-          </thead>
-          <tbody>
-        {people.length === 0 && !loading ? (
-          <tr><td colSpan={7} className="people-grid-empty">No people saved yet.</td></tr>
-        ) : null}
-        {people.length > 0 && filteredPeople.length === 0 ? (
-          <tr><td colSpan={7} className="people-grid-empty">No people match your search.</td></tr>
-        ) : null}
+      {!loading ? <AdminNameList
+        label="Saved profiles"
+        emptyLabel={people.length > 0 ? "No profiles match your search." : "No profiles yet."}
+        items={filteredPeople.map((person) => ({ id: person.id, name: person.display_name }))}
+        onSelect={(item) => setActivePersonId(item.id)}
+      /> : null}
 
         {filteredPeople.map((person) => {
           const isEditing = editingId === person.id;
-          const isExpanded = expandedIds.has(person.id);
+          const isExpanded = activePersonId === person.id;
           const isAddingCertificate = certificateFormPersonIds.has(person.id);
           const draft = drafts[person.id] ?? createDraft(person);
           const personCertificates = certificatesByPerson.get(person.id) ?? [];
           const form = certificateForms[person.id] ?? emptyCertificateForm;
           const accountLink = accountLinksByPerson.get(person.id) ?? null;
-          const endorsementPerson = endorsementPeopleByPerson.get(person.id) ?? null;
           const outgoingRequest = outgoingRequestsByPerson.get(person.id) ?? null;
           const mergeCandidates = people.filter((candidate) => (
             candidate.id !== person.id
@@ -1174,59 +1148,6 @@ export default function SavedPeopleManager() {
 
           return (
             <Fragment key={person.id}>
-              <tr>
-                <td className="people-grid-expand">
-                <button
-                  type="button"
-                  className={`people-expand-button ${isExpanded ? "people-expand-button-open" : ""}`}
-                  aria-label={isExpanded ? `Collapse ${person.display_name}` : `Expand ${person.display_name}`}
-                  title={isExpanded ? "Collapse" : "Expand"}
-                  onClick={() => toggleExpanded(person.id)}
-                >
-                  <ActionIcon kind="expand" />
-                </button>
-                </td>
-                <td className="people-grid-name">{person.display_name}</td>
-                <td>
-                  <span className={`people-grid-status ${endorsementPerson?.certificate_conflict ? "people-grid-status-warning" : accountLink ? "people-grid-status-success" : outgoingRequest ? "people-grid-status-pending" : ""}`}>
-                    {endorsementPerson?.certificate_conflict ? "Certificate conflict" : accountLink ? "Linked" : outgoingRequest ? "Pending" : "Private"}
-                  </span>
-                </td>
-                <td>
-                  {endorsementPerson?.certificate_source === "canonical_profile" || endorsementPerson?.certificate_source === "student_account"
-                    ? "Pilot certificate"
-                    : personCertificates.length > 0
-                      ? personCertificates.map((certificate) => CERTIFICATE_TYPE_LABELS[certificate.certificate_type]).join(", ")
-                      : "—"}
-                </td>
-                <td className="people-grid-mono">{endorsementPerson?.effective_certificate_number || "—"}</td>
-                <td>{typeof person.weight_lbs === "number" ? `${person.weight_lbs} lbs` : "—"}</td>
-                <td className="people-grid-actions">
-                    <div className="saas-inline-actions people-row-actions">
-                      <button
-                        type="button"
-                        className="secondary-button icon-button"
-                        aria-label={`Edit ${person.display_name}`}
-                        title="Edit person"
-                        disabled={saving}
-                        onClick={() => startEditing(person)}
-                      >
-                        <ActionIcon kind="edit" />
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-button icon-button"
-                        aria-label={`Delete ${person.display_name}`}
-                        title="Delete person"
-                        disabled={saving}
-                        onClick={() => void handleDeletePerson(person.id)}
-                      >
-                        <ActionIcon kind="delete" />
-                      </button>
-                    </div>
-                </td>
-              </tr>
-
               <DetailDrawer
                 open={isEditing}
                 title={`Edit ${person.display_name}`}
@@ -1282,6 +1203,10 @@ export default function SavedPeopleManager() {
                 onClose={() => toggleExpanded(person.id)}
               >
                 <div className="people-detail-row">
+                  <div className="flex flex-wrap justify-end gap-2 border-b border-slate-200 pb-3">
+                    <CompactButton type="button" disabled={saving} onClick={() => { setActivePersonId(null); startEditing(person); }}>Edit profile</CompactButton>
+                    <CompactButton type="button" tone="danger" disabled={saving} onClick={() => setDeletePersonId(person.id)}>Delete profile</CompactButton>
+                  </div>
                   <section className="people-account-link" aria-label={`Platform account for ${person.display_name}`}>
                     <div className="people-account-link-copy">
                       <p className="saas-card-title">Platform account</p>
@@ -1488,9 +1413,22 @@ export default function SavedPeopleManager() {
             </Fragment>
           );
         })}
-          </tbody>
-        </table>
-      </div>
+      <ConfirmDialog
+        open={Boolean(deletePersonId)}
+        title="Delete profile"
+        description={`Delete ${people.find((person) => person.id === deletePersonId)?.display_name ?? "this profile"}? This cannot be undone.`}
+        confirmLabel="Delete profile"
+        destructive
+        busy={saving}
+        onCancel={() => setDeletePersonId(null)}
+        onConfirm={() => {
+          if (!deletePersonId) return;
+          const id = deletePersonId;
+          setDeletePersonId(null);
+          setActivePersonId(null);
+          void handleDeletePerson(id);
+        }}
+      />
     </ManagementDisclosure>
     </>
   );

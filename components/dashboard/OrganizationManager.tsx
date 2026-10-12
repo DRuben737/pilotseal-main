@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { UsDateInput, UsDateTimeInput } from "@/components/forms/UsDateInput";
@@ -51,8 +51,10 @@ import OrganizationEndorsementRequests from "@/components/dashboard/Organization
 import EndorsementRecordsManager from "@/components/dashboard/EndorsementRecordsManager";
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
 import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
+import AssignmentAuditLog from "@/components/dashboard/AssignmentAuditLog";
 import {
   AdminDataTable,
+  AdminNameList,
   CompactButton,
   ConfirmDialog,
   DetailDrawer,
@@ -67,10 +69,18 @@ import { formatUsMonthYear } from "@/lib/date-format";
 import { fetchSavedPeople, type SavedPerson } from "@/lib/saved-people";
 
 export type OrganizationManagerView = "overview" | "people" | "fleet" | "endorsements";
-type FleetWorkspace = "aircraft" | "records" | "models" | "inspections";
+type FleetWorkspace = "aircraft" | "records" | "models" | "inspections" | "history";
 type MemberConfirmation =
-  | { action: "role" | "remove" | "transfer"; member: OrganizationMember }
+  | { action: "remove" | "transfer"; member: OrganizationMember }
   | { action: "pending"; person: OrganizationPerson };
+type MemberAccessDraft = {
+  memberRole: OrganizationMember["member_role"];
+  teachingRole: OrganizationTeachingRole | "";
+};
+type MemberAccessConfirmation = {
+  member: OrganizationMember;
+  draft: MemberAccessDraft;
+};
 
 type LoadingLocationDraft = {
   clientKey: string;
@@ -217,9 +227,11 @@ const emptyAircraftForm: AircraftForm = {
 export default function OrganizationManager({
   view = "overview",
   endorsementView = "records",
+  peopleActions,
 }: {
   view?: OrganizationManagerView;
   endorsementView?: "records" | "requests";
+  peopleActions?: ReactNode;
 }) {
   const { session } = useAuthSession();
   const { activeOrganization, loading: organizationsLoading, refreshOrganizations } = useOrganization();
@@ -228,7 +240,12 @@ export default function OrganizationManager({
   const canManageMembers = hasOrganizationPermission(activeOrganization, "members");
   const canEditStudents = canManageMembers || activeOrganization?.teaching_role === "instructor";
   const canManageFleet = canManageOrganization(role);
+  const canViewAircraftHistory = hasOrganizationPermission(activeOrganization, "audit");
   const canManageAdmins = canManageOrganizationAdmins(role);
+  const fleetWorkspaceValues = useMemo<FleetWorkspace[]>(() => [
+    ...(canManageFleet ? ["aircraft", "records", "models", "inspections"] as FleetWorkspace[] : ["records"] as FleetWorkspace[]),
+    ...(canViewAircraftHistory ? ["history"] as FleetWorkspace[] : []),
+  ], [canManageFleet, canViewAircraftHistory]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -248,7 +265,6 @@ export default function OrganizationManager({
   const [editingPersonId, setEditingPersonId] = useState("");
   const [personDraft, setPersonDraft] = useState({
     displayName: "",
-    teachingRole: "" as OrganizationTeachingRole | "",
     internalId: "",
     notes: "",
     formalName: "",
@@ -269,6 +285,8 @@ export default function OrganizationManager({
   const [aircraftError, setAircraftError] = useState("");
   const [editingModelId, setEditingModelId] = useState("");
   const [showModelForm, setShowModelForm] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<AircraftModelRecord | null>(null);
+  const [deleteModel, setDeleteModel] = useState<AircraftModelRecord | null>(null);
   const [modelForm, setModelForm] = useState<ModelForm>(emptyModelForm);
   const [modelError, setModelError] = useState("");
   const [statusEditorAircraftId, setStatusEditorAircraftId] = useState("");
@@ -276,17 +294,21 @@ export default function OrganizationManager({
   const [statusEditorNote, setStatusEditorNote] = useState("");
   const [statusEditorError, setStatusEditorError] = useState("");
   const [memberConfirmation, setMemberConfirmation] = useState<MemberConfirmation | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [memberAccessDraft, setMemberAccessDraft] = useState<MemberAccessDraft | null>(null);
+  const [memberAccessConfirmation, setMemberAccessConfirmation] = useState<MemberAccessConfirmation | null>(null);
+  const [memberAccessError, setMemberAccessError] = useState("");
   const [activePeopleTab, setActivePeopleTab] = usePersistentDashboardView({
-    defaultValue: "people",
+    defaultValue: "instructors",
     enabled: view === "people",
     storageKey: "organization-people",
-    values: ["people", "invitations"] as const,
+    values: ["instructors", "students", "unassigned", "invitations"] as const,
   });
   const [storedFleetWorkspace, setFleetWorkspace] = usePersistentDashboardView({
-    defaultValue: "aircraft",
-    enabled: view === "fleet" && canManageFleet,
+    defaultValue: canManageFleet ? "aircraft" : "records",
+    enabled: view === "fleet",
     storageKey: "organization-aircraft",
-    values: ["aircraft", "records", "models", "inspections"] as const,
+    values: fleetWorkspaceValues,
   });
 
   const modelNames = useMemo(
@@ -305,7 +327,34 @@ export default function OrganizationManager({
   const organizationInstructors = members.filter(
     (member) => member.teaching_role === "instructor",
   );
-  const activeFleetWorkspace: FleetWorkspace = canManageFleet ? storedFleetWorkspace : "records";
+  const sortedMembers = useMemo(() => [...members].sort((a, b) =>
+    memberDisplayName(a, peopleByUserId.get(a.user_id)).localeCompare(
+      memberDisplayName(b, peopleByUserId.get(b.user_id)),
+      undefined,
+      { sensitivity: "base" },
+    )
+  ), [members, peopleByUserId]);
+  const instructorMembers = sortedMembers.filter((member) => member.teaching_role === "instructor");
+  const studentMembers = sortedMembers.filter((member) => member.teaching_role === "student");
+  const unassignedMembers = sortedMembers.filter((member) => !member.teaching_role);
+  useEffect(() => {
+    if (view === "people" && activePeopleTab === "unassigned" && unassignedMembers.length === 0) {
+      setActivePeopleTab("instructors");
+    }
+  }, [activePeopleTab, setActivePeopleTab, unassignedMembers.length, view]);
+  const selectedMember = members.find((member) => member.user_id === selectedMemberId) ?? null;
+  const selectedOrganizationPerson = selectedMember ? peopleByUserId.get(selectedMember.user_id) ?? null : null;
+  const selectedMemberIsSelf = selectedMember?.user_id === session?.user?.id;
+  const selectedMemberIsOwner = selectedMember?.member_role === "owner";
+  const canChangeSelectedManagementAccess = Boolean(selectedMember && canManageAdmins && !selectedMemberIsOwner && !selectedMemberIsSelf);
+  const canRemoveSelectedMember = Boolean(selectedMember && !selectedMemberIsOwner && !selectedMemberIsSelf && (
+    canManageAdmins || (canManageMembers && role === "organization_admin" && selectedMember.member_role === "member")
+  ));
+  const memberAccessChanged = Boolean(selectedMember && memberAccessDraft && (
+    memberAccessDraft.memberRole !== selectedMember.member_role
+    || (memberAccessDraft.teachingRole || null) !== selectedMember.teaching_role
+  ));
+  const activeFleetWorkspace: FleetWorkspace = storedFleetWorkspace;
   const editingAircraft = aircraft.find((item) => item.id === editingAircraftId) ?? null;
   const editingAssignedAircraft = editingAircraft?.organization_access === "assigned";
 
@@ -380,7 +429,7 @@ export default function OrganizationManager({
           : null,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
-      const nextInviteLink = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
+      const nextInviteLink = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/console/organization/people")}`;
       setInviteLink(nextInviteLink);
       setInviteRecipient(invitation.invited_email);
       setInviteEmailSent(invitation.email_sent);
@@ -438,7 +487,7 @@ export default function OrganizationManager({
           : null,
       });
       if (!invitation) throw new Error("Invitation could not be created.");
-      const link = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/dashboard/organization/overview")}`;
+      const link = `${window.location.origin}/register?invite=${encodeURIComponent(invitation.invite_token)}&next=${encodeURIComponent("/console/organization/people")}`;
       setMemberInvitations(await fetchOrganizationMemberInvitations(activeOrganization.id));
       if (invitation.email_sent) {
         setStatus(`A new invitation email was sent to ${person.email}. The previous link is now invalid.`);
@@ -514,7 +563,6 @@ export default function OrganizationManager({
     setEditingPersonId(person.id);
     setPersonDraft({
       displayName: person.organization_display_name ?? "",
-      teachingRole: person.teaching_role ?? "",
       internalId: person.internal_id ?? "",
       notes: person.notes ?? "",
       formalName: "",
@@ -559,7 +607,7 @@ export default function OrganizationManager({
         await updateOrganizationPerson({
           personId: editingPersonId,
           displayName: personDraft.displayName,
-          teachingRole: personDraft.teachingRole || null,
+          teachingRole: person.teaching_role,
           internalId: personDraft.internalId,
           notes: personDraft.notes,
         });
@@ -585,7 +633,7 @@ export default function OrganizationManager({
       setMembers(nextMembers);
       setOrganizationPeople(nextPeople);
       setEditingPersonId("");
-      setStatus("The student's single formal profile was updated for every linked instructor and organization.");
+      setStatus("Profile updated.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to update this organization person."));
     } finally {
@@ -593,40 +641,60 @@ export default function OrganizationManager({
     }
   }
 
-  async function handleRoleChange(member: OrganizationMember) {
-    if (!activeOrganization?.id) return;
-    const nextRole = member.member_role === "organization_admin" ? "member" : "organization_admin";
-    setSaving(true);
-    setStatus("");
-    try {
-      await setOrganizationMemberRole(activeOrganization.id, member.user_id, nextRole);
-      setMembers(await fetchOrganizationMembers(activeOrganization.id));
-      setStatus(nextRole === "organization_admin" ? "Administrator assigned." : "Administrator access removed.");
-    } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to change this member's role."));
-    } finally {
-      setSaving(false);
-    }
+  function openMemberDetail(member: OrganizationMember) {
+    setSelectedMemberId(member.user_id);
+    setMemberAccessDraft({
+      memberRole: member.member_role,
+      teachingRole: member.teaching_role ?? "",
+    });
+    setMemberAccessError("");
   }
 
-  async function handleTeachingRoleChange(member: OrganizationMember, teachingRole: "instructor" | "student" | null) {
+  async function handleSaveMemberAccess(member: OrganizationMember, draft: MemberAccessDraft) {
     if (!activeOrganization?.id) return;
     setSaving(true);
-    setStatus("");
+    setStatus(""); setMemberAccessError("");
     try {
-      await setOrganizationMemberTeachingRole(activeOrganization.id, member.user_id, teachingRole);
+      if (draft.memberRole !== member.member_role) {
+        if (draft.memberRole === "owner") throw new Error("Ownership changes use Transfer ownership.");
+        await setOrganizationMemberRole(activeOrganization.id, member.user_id, draft.memberRole);
+      }
+      if ((draft.teachingRole || null) !== member.teaching_role) {
+        await setOrganizationMemberTeachingRole(activeOrganization.id, member.user_id, draft.teachingRole || null);
+      }
       const [nextMembers, nextPeople] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
       ]);
       setMembers(nextMembers);
       setOrganizationPeople(nextPeople);
-      setStatus(teachingRole ? `Teaching role set to ${teachingRole}.` : "Teaching role removed.");
+      const updated = nextMembers.find((item) => item.user_id === member.user_id);
+      if (updated) setMemberAccessDraft({ memberRole: updated.member_role, teachingRole: updated.teaching_role ?? "" });
+      setStatus("Role and access updated.");
     } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to change this teaching role."));
+      setMemberAccessError(getErrorMessage(error, "Unable to update role and access."));
+      const [nextMembers, nextPeople] = await Promise.all([
+        fetchOrganizationMembers(activeOrganization.id),
+        fetchOrganizationPeople(activeOrganization.id),
+      ]).catch(() => [null, null]);
+      if (nextMembers) {
+        setMembers(nextMembers);
+        const updated = nextMembers.find((item) => item.user_id === member.user_id);
+        if (updated) setMemberAccessDraft({ memberRole: updated.member_role, teachingRole: updated.teaching_role ?? "" });
+      }
+      if (nextPeople) setOrganizationPeople(nextPeople);
     } finally {
       setSaving(false);
     }
+  }
+
+  function applyMemberAccess() {
+    if (!selectedMember || !memberAccessDraft) return;
+    if (memberAccessDraft.memberRole !== selectedMember.member_role) {
+      setMemberAccessConfirmation({ member: selectedMember, draft: memberAccessDraft });
+      return;
+    }
+    void handleSaveMemberAccess(selectedMember, memberAccessDraft);
   }
 
   async function handleRemoveMember(member: OrganizationMember) {
@@ -637,6 +705,7 @@ export default function OrganizationManager({
       await removeOrganizationMember(activeOrganization.id, member.user_id);
       setMembers((current) => current.filter((item) => item.user_id !== member.user_id));
       setOrganizationPeople((current) => current.filter((item) => item.user_id !== member.user_id));
+      setSelectedMemberId(""); setMemberAccessDraft(null);
       setStatus("Member removed. Their PilotSeal account was not changed.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to remove this member."));
@@ -653,6 +722,7 @@ export default function OrganizationManager({
       await transferOrganizationOwnership(activeOrganization.id, member.user_id);
       await refreshOrganizations();
       setMembers(await fetchOrganizationMembers(activeOrganization.id));
+      setSelectedMemberId(""); setMemberAccessDraft(null);
       setStatus("Organization ownership transferred.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to transfer ownership."));
@@ -666,8 +736,6 @@ export default function OrganizationManager({
     if (!confirmation) return;
     if (confirmation.action === "pending") {
       await handleArchivePendingPerson(confirmation.person);
-    } else if (confirmation.action === "role") {
-      await handleRoleChange(confirmation.member);
     } else if (confirmation.action === "transfer") {
       await handleTransferOwnership(confirmation.member);
     } else {
@@ -1316,7 +1384,6 @@ export default function OrganizationManager({
 
   async function handleDeleteModel(model: AircraftModelRecord) {
     if (!activeOrganization?.id || model.organization_id !== activeOrganization.id) return;
-    if (!window.confirm(`Delete organization model ${model.name}?`)) return;
     setSaving(true);
     setStatus("");
     try {
@@ -1366,13 +1433,6 @@ export default function OrganizationManager({
         <Field label="Organization-only name">
           <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.displayName} onChange={(event) => setPersonDraft((current) => ({ ...current, displayName: event.target.value }))} />
         </Field>
-        <Field label="Teaching role">
-          <select className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.teachingRole} onChange={(event) => setPersonDraft((current) => ({ ...current, teachingRole: event.target.value as OrganizationTeachingRole | "" }))}>
-            <option value="">No teaching role</option>
-            <option value="instructor">Instructor</option>
-            <option value="student">Student</option>
-          </select>
-        </Field>
         <Field label="Internal ID">
           <input className="rounded-xl border border-slate-300 px-3 py-2" value={personDraft.internalId} onChange={(event) => setPersonDraft((current) => ({ ...current, internalId: event.target.value }))} maxLength={120} />
         </Field>
@@ -1381,7 +1441,7 @@ export default function OrganizationManager({
         </Field>
         </> : null}
         <div className="flex gap-2 md:col-span-2">
-          <button className="primary-button" type="button" disabled={saving || (person.teaching_role === "student" && !personDraft.formalName.trim())} onClick={() => void handleSaveOrganizationPerson()}>{saving ? "Saving..." : "Save student profile"}</button>
+          <button className="primary-button" type="button" disabled={saving || (person.teaching_role === "student" && !personDraft.formalName.trim())} onClick={() => void handleSaveOrganizationPerson()}>{saving ? "Saving..." : "Save profile"}</button>
           <button className="ghost-button" type="button" disabled={saving} onClick={() => setEditingPersonId("")}>Cancel</button>
         </div>
       </div>
@@ -1414,17 +1474,19 @@ export default function OrganizationManager({
       {view === "fleet" ? (
         <nav
           aria-label="Fleet workspace"
-          className="flex min-h-12 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-1"
+          className="console-page-subnavigation flex min-h-12 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-1"
         >
-          {(canManageFleet
-            ? [
+          {([
+            ...(canManageFleet
+              ? [
                 ["aircraft", "Aircraft"],
                 ["records", "Aircraft Records"],
                 ["models", "Models"],
                 ["inspections", "Maintenance items"],
               ]
-            : [["records", "Aircraft Records"]]
-          ).map(([key, label]) => (
+              : [["records", "Aircraft Records"]]),
+            ...(canViewAircraftHistory ? [["history", "Assignment history"]] : []),
+          ]).map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -1465,6 +1527,28 @@ export default function OrganizationManager({
         <div className="mb-2 flex justify-end">
           <button className="cursor-pointer rounded-md border border-blue-600 bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" type="button" onClick={startCreateModel}>Add model</button>
         </div>
+
+        <DetailDrawer open={Boolean(selectedModel)} title={selectedModel?.name ?? "Aircraft model"} description="Aircraft model details." onClose={() => setSelectedModel(null)}>
+          {selectedModel ? <div className="space-y-4 text-[13px]">
+            <dl className="grid gap-3 border-y border-slate-200 py-3 sm:grid-cols-2"><div><dt className="text-xs text-slate-500">Type</dt><dd className="font-medium capitalize text-slate-900">{selectedModel.category || "—"}</dd></div><div><dt className="text-xs text-slate-500">Scope</dt><dd className="font-medium text-slate-900">{selectedModel.organization_id === activeOrganization.id ? "Organization" : "Platform"}</dd></div></dl>
+            {selectedModel.organization_id === activeOrganization.id ? <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => { const model = selectedModel; setSelectedModel(null); startEditModel(model); }}>Edit</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => { setDeleteModel(selectedModel); setSelectedModel(null); }}>Delete</CompactButton></div> : null}
+          </div> : null}
+        </DetailDrawer>
+        <ConfirmDialog
+          open={Boolean(deleteModel)}
+          title="Delete aircraft model"
+          description={`Delete ${deleteModel?.name ?? "this aircraft model"}? This cannot be undone.`}
+          confirmLabel="Delete model"
+          destructive
+          busy={saving}
+          onCancel={() => setDeleteModel(null)}
+          onConfirm={() => {
+            if (!deleteModel) return;
+            const model = deleteModel;
+            setDeleteModel(null);
+            void handleDeleteModel(model);
+          }}
+        />
 
         <DetailDrawer
           open={showModelForm}
@@ -1776,141 +1860,78 @@ export default function OrganizationManager({
           </form>
         </DetailDrawer>
 
-        <div>
-          <AdminDataTable label="Aircraft models">
-            <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
-              <tr>
-                <th className="border-b border-slate-200 px-3 py-2">Model</th>
-                <th className="border-b border-slate-200 px-3 py-2">Type</th>
-                <th className="border-b border-slate-200 px-3 py-2">Envelope</th>
-                <th className="border-b border-slate-200 px-3 py-2">Fuel burn</th>
-                <th className="border-b border-slate-200 px-3 py-2">Max weight</th>
-                <th className="border-b border-slate-200 px-3 py-2">Source</th>
-                <th className="border-b border-slate-200 px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {models.map((model) => {
-                const organizationOwned = model.organization_id === activeOrganization.id;
-                return (
-                  <tr key={model.id} className="hover:bg-blue-50/40">
-                    <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-900">{model.name}</td>
-                    <td className="border-b border-slate-100 px-3 py-2 text-xs capitalize text-slate-700">{model.category || "—"}</td>
-                    <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-700">{formatChartType(model.chart_type)}</td>
-                    <td className="border-b border-slate-100 px-3 py-2 text-xs tabular-nums text-slate-700">{model.avg_fuel_burn_rate == null ? "—" : `${model.avg_fuel_burn_rate} gph`}</td>
-                    <td className="border-b border-slate-100 px-3 py-2 text-xs tabular-nums text-slate-700">{model.max_weight == null ? "—" : `${model.max_weight.toLocaleString()} lb`}</td>
-                    <td className="border-b border-slate-100 px-3 py-2 text-xs text-slate-600">{organizationOwned ? "Organization" : "Global"}</td>
-                    <td className="border-b border-slate-100 px-3 py-1.5">
-                      {organizationOwned ? (
-                        <div className="flex justify-end gap-1">
-                          <button className="cursor-pointer rounded px-2 py-1 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50" type="button" onClick={() => startEditModel(model)}>Edit</button>
-                          <button className="cursor-pointer rounded px-2 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50" type="button" onClick={() => void handleDeleteModel(model)}>Delete</button>
-                        </div>
-                      ) : <span className="block text-right text-xs text-slate-400">Read only</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </AdminDataTable>
-        </div>
+        <AdminNameList
+          label="Aircraft models"
+          emptyLabel="No aircraft models."
+          items={[...models].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map((model) => ({ id: model.id, name: model.name }))}
+          onSelect={(item) => setSelectedModel(models.find((model) => model.id === item.id) ?? null)}
+        />
       </FleetWorkspacePanel>) : null}
 
       {view === "people" ? (
         <>
           <ManagementTabs
             id="organization-people-sections"
-            label="Organization people sections"
+            label="Team management sections"
             items={[
-              { id: "people", label: "People", summary: members.length },
-              { id: "invitations", label: "Pending invitations", summary: pendingPeople.length },
+              { id: "instructors", label: "Instructors", summary: instructorMembers.length },
+              { id: "students", label: "Students", summary: studentMembers.length },
+              ...(unassignedMembers.length ? [{ id: "unassigned", label: "Unassigned", summary: unassignedMembers.length }] : []),
+              { id: "invitations", label: "Invitations", summary: pendingPeople.length },
             ]}
             activeId={activePeopleTab}
             onChange={(id) => setActivePeopleTab(id as typeof activePeopleTab)}
-            actions={activePeopleTab === "people" && canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite</CompactButton> : undefined}
-            helpContent={activePeopleTab === "people"
-              ? <><p>Manage linked members, teaching roles and organization-only profile fields.</p><p>Student invitations create the assigned instructor relationship as soon as the verified student accepts. Role changes, removal and ownership transfer require confirmation.</p></>
-              : <p>Pending invitations have not yet been accepted by a verified account. You can resend or revoke them.</p>}
+            actions={(canManageAdmins && peopleActions) || canManageMembers ? <div className="flex items-center gap-2">
+              {canManageAdmins ? peopleActions : null}
+              {canManageMembers ? <CompactButton type="button" tone="primary" onClick={openInviteDrawer}>Invite member</CompactButton> : null}
+            </div> : undefined}
           >
-          {activePeopleTab === "people" ? <>
-          <div className="hidden md:block">
-            <AdminDataTable label="Linked organization members">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
-                  <th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Access</th><th className="px-3 py-2">Teaching role</th><th className="px-3 py-2">Internal ID</th><th className="px-3 py-2">Notes</th><th className="px-3 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {members.map((member) => {
-                  const isOwner = member.member_role === "owner";
-                  const isSelf = member.user_id === session?.user?.id;
-                  const organizationPerson = peopleByUserId.get(member.user_id);
-                  const adminCanRemove = canManageMembers && role === "organization_admin" && member.member_role === "member";
-                  const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
-                  return (
-                    <tr key={member.user_id} className="hover:bg-blue-50/40">
-                      <td className="px-3 py-2 font-semibold text-slate-950">{member.display_name || member.email}</td>
-                      <td className="px-3 py-2 text-xs text-slate-600">{member.email}</td>
-                      <td className="px-3 py-2"><StatusBadge tone={isOwner ? "info" : member.member_role === "organization_admin" ? "warning" : "neutral"}>{formatRole(member.member_role)}</StatusBadge></td>
-                      <td className="px-3 py-2"><select className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs" value={member.teaching_role ?? ""} disabled={saving || !canManageMembers} aria-label={`Teaching role for ${member.email}`} onChange={(event) => void handleTeachingRoleChange(member, (event.target.value || null) as "instructor" | "student" | null)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></td>
-                      <td className="px-3 py-2 text-xs text-slate-600">{organizationPerson?.internal_id || "—"}</td>
-                      <td className="max-w-52 truncate px-3 py-2 text-xs text-slate-600" title={organizationPerson?.notes ?? ""}>{organizationPerson?.notes || "—"}</td>
-                      <td className="px-3 py-2"><div className="flex justify-end gap-1">
-                        {organizationPerson && (canManageMembers || member.teaching_role === "student") ? <CompactButton type="button" disabled={saving} onClick={() => void startEditOrganizationPerson(organizationPerson)}>Edit profile</CompactButton> : null}
-                        {canManageAdmins && !isOwner && !isSelf ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "role", member })}>{member.member_role === "organization_admin" ? "Make member" : "Make admin"}</CompactButton> : null}
-                        {canManageAdmins && !isSelf && !isOwner ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member })}>Transfer owner</CompactButton> : null}
-                        {canRemove ? <CompactButton type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member })}>Remove</CompactButton> : null}
-                      </div></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </AdminDataTable>
-          </div>
-          <ul className="grid gap-2 md:hidden" aria-label="Linked organization members">
-            {members.map((member) => {
-              const isOwner = member.member_role === "owner";
-              const isSelf = member.user_id === session?.user?.id;
-              const organizationPerson = peopleByUserId.get(member.user_id);
-              const canEditProfile = Boolean(organizationPerson && (canManageMembers || member.teaching_role === "student"));
-              const canChangeRole = canManageAdmins && !isOwner && !isSelf;
-              const canTransfer = canManageAdmins && !isSelf && !isOwner;
-              const adminCanRemove = canManageMembers && role === "organization_admin" && member.member_role === "member";
-              const canRemove = !isOwner && !isSelf && (canManageAdmins || adminCanRemove);
-              const hasActions = canEditProfile || canChangeRole || canTransfer || canRemove;
-              return (
-                <li key={member.user_id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_3px_12px_rgba(15,23,42,0.04)]">
-                  <div className="flex min-w-0 items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-950">{member.display_name || member.email}</p>
-                      <p className="mt-0.5 break-all text-xs leading-4 text-slate-500">{member.email}</p>
-                    </div>
-                    <StatusBadge tone={isOwner ? "info" : member.member_role === "organization_admin" ? "warning" : "neutral"}>{formatRole(member.member_role)}</StatusBadge>
-                  </div>
-                  <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3">
-                    <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      Teaching role
-                      <select className="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-slate-900" value={member.teaching_role ?? ""} disabled={saving || !canManageMembers} aria-label={`Teaching role for ${member.email}`} onChange={(event) => void handleTeachingRoleChange(member, (event.target.value || null) as "instructor" | "student" | null)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select>
-                    </label>
-                    {(organizationPerson?.internal_id || organizationPerson?.notes) ? (
-                      <dl className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-2.5 text-xs">
-                        <div className="min-w-0"><dt className="font-semibold text-slate-500">Internal ID</dt><dd className="mt-1 break-words text-slate-800">{organizationPerson?.internal_id || "—"}</dd></div>
-                        <div className="min-w-0"><dt className="font-semibold text-slate-500">Notes</dt><dd className="mt-1 break-words text-slate-800">{organizationPerson?.notes || "—"}</dd></div>
-                      </dl>
-                    ) : null}
-                    {hasActions ? (
-                      <div className="grid grid-cols-2 gap-2" aria-label={`Actions for ${member.email}`}>
-                        {canEditProfile && organizationPerson ? <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => void startEditOrganizationPerson(organizationPerson)}>Edit profile</CompactButton> : null}
-                        {canChangeRole ? <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "role", member })}>{member.member_role === "organization_admin" ? "Make member" : "Make admin"}</CompactButton> : null}
-                        {canTransfer ? <CompactButton className="min-h-11 w-full" type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member })}>Transfer owner</CompactButton> : null}
-                        {canRemove ? <CompactButton className="min-h-11 w-full" type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member })}>Remove</CompactButton> : null}
-                      </div>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          {activePeopleTab === "instructors" ? <>
+          <AdminNameList
+            label="Organization instructors"
+            emptyLabel="No instructors."
+            items={instructorMembers.map((member) => ({
+              id: member.user_id,
+              name: memberDisplayName(member, peopleByUserId.get(member.user_id)),
+              meta: formatManagementRole(member),
+            }))}
+            onSelect={(item) => {
+              const member = members.find((value) => value.user_id === item.id);
+              if (member) openMemberDetail(member);
+            }}
+          />
+          </> : null}
+
+          {activePeopleTab === "students" ? <>
+          <AdminNameList
+            label="Organization students"
+            emptyLabel="No students."
+            items={studentMembers.map((member) => ({
+              id: member.user_id,
+              name: memberDisplayName(member, peopleByUserId.get(member.user_id)),
+              meta: formatManagementRole(member),
+            }))}
+            onSelect={(item) => {
+              const member = members.find((value) => value.user_id === item.id);
+              if (member) openMemberDetail(member);
+            }}
+          />
+          </> : null}
+
+          {activePeopleTab === "unassigned" ? <>
+          <AdminNameList
+            label="Members without a teaching role"
+            emptyLabel="No unassigned members."
+            items={unassignedMembers.map((member) => ({
+              id: member.user_id,
+              name: memberDisplayName(member, peopleByUserId.get(member.user_id)),
+              meta: formatManagementRole(member),
+            }))}
+            onSelect={(item) => {
+              const member = members.find((value) => value.user_id === item.id);
+              if (member) openMemberDetail(member);
+            }}
+          />
           </> : null}
 
           {activePeopleTab === "invitations" ? <>
@@ -1968,6 +1989,43 @@ export default function OrganizationManager({
           </> : null}
           </ManagementTabs>
 
+          <DetailDrawer
+            open={Boolean(selectedMember)}
+            onClose={() => { setSelectedMemberId(""); setMemberAccessDraft(null); setMemberAccessError(""); }}
+            title={selectedMember ? memberDisplayName(selectedMember, selectedOrganizationPerson) : "Organization member"}
+          >
+            {selectedMember && memberAccessDraft ? <div className="grid gap-5 text-[13px]">
+              <section className="grid gap-3">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2">
+                  <h3 className="text-sm font-semibold text-slate-950">Role &amp; access</h3>
+                  <span className="text-xs text-slate-500">{formatCombinedMemberRole({ ...selectedMember, member_role: memberAccessDraft.memberRole, teaching_role: memberAccessDraft.teachingRole || null })}</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="saas-field"><span>Teaching role</span><select value={memberAccessDraft.teachingRole} disabled={saving || !canManageMembers} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, teachingRole: event.target.value as OrganizationTeachingRole | "" } : current)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></label>
+                  <label className="saas-field"><span>Management access</span><select value={memberAccessDraft.memberRole} disabled={saving || !canChangeSelectedManagementAccess} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, memberRole: event.target.value as MemberAccessDraft["memberRole"] } : current)}>{selectedMemberIsOwner ? <option value="owner">Owner</option> : null}<option value="member">Standard</option><option value="organization_admin">Organization admin</option></select></label>
+                </div>
+                <dl className="grid gap-1 border-y border-slate-200 py-2 text-xs"><div className="flex gap-2"><dt className="font-semibold text-slate-600">Current access</dt><dd className="text-slate-700">{formatMemberPermissions(selectedMember)}</dd></div></dl>
+                {memberAccessError ? <p className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{memberAccessError}</p> : null}
+                {(canManageMembers || canChangeSelectedManagementAccess) ? <div className="flex justify-end"><CompactButton type="button" tone="primary" disabled={saving || !memberAccessChanged} onClick={applyMemberAccess}>{saving ? "Saving…" : "Apply role & access"}</CompactButton></div> : null}
+              </section>
+
+              <section className="grid gap-3">
+                <h3 className="border-b border-slate-200 pb-2 text-sm font-semibold text-slate-950">Member details</h3>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <div><dt className="text-xs text-slate-500">Email</dt><dd className="mt-0.5 break-all text-slate-900">{selectedMember.email}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Internal ID</dt><dd className="mt-0.5 text-slate-900">{selectedOrganizationPerson?.internal_id || "—"}</dd></div>
+                  {selectedOrganizationPerson?.notes ? <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Notes</dt><dd className="mt-0.5 whitespace-pre-wrap text-slate-700">{selectedOrganizationPerson.notes}</dd></div> : null}
+                </dl>
+                {selectedOrganizationPerson && (canManageMembers || selectedMember.teaching_role === "student") ? <div className="flex justify-end"><CompactButton type="button" disabled={saving} onClick={() => { const person = selectedOrganizationPerson; setSelectedMemberId(""); void startEditOrganizationPerson(person); }}>Edit profile</CompactButton></div> : null}
+              </section>
+
+              {(canManageAdmins && !selectedMemberIsSelf && !selectedMemberIsOwner) || canRemoveSelectedMember ? <section className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
+                {canManageAdmins && !selectedMemberIsSelf && !selectedMemberIsOwner ? <CompactButton type="button" disabled={saving} onClick={() => setMemberConfirmation({ action: "transfer", member: selectedMember })}>Transfer ownership</CompactButton> : null}
+                {canRemoveSelectedMember ? <CompactButton type="button" tone="danger" disabled={saving} onClick={() => setMemberConfirmation({ action: "remove", member: selectedMember })}>Remove member</CompactButton> : null}
+              </section> : null}
+            </div> : null}
+          </DetailDrawer>
+
           <DetailDrawer open={showAddPersonDrawer} onClose={() => setShowAddPersonDrawer(false)} title="Invite organization member" description="For a student, choose the instructor now. Accepting the verified invitation creates both membership and the instructor link.">
             {inviteLink ? (
               <div className="grid gap-3">
@@ -1993,7 +2051,7 @@ export default function OrganizationManager({
               <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setShowAddPersonDrawer(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={saving || (inviteTeachingRole === "student" && (!memberFormalName.trim() || !inviteInstructorUserId))}>{saving ? "Sending…" : "Send invitation"}</CompactButton></div>
             </form>}
           </DetailDrawer>
-          <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit student profile" description="Formal identity and certificate changes update the student's single shared record.">
+          <DetailDrawer open={Boolean(editingPersonId)} onClose={() => setEditingPersonId("")} title="Edit profile">
             {editingPersonId ? renderOrganizationPersonEditor(organizationPeople.find((person) => person.id === editingPersonId) ?? ({ id: editingPersonId } as OrganizationPerson)) : null}
           </DetailDrawer>
           <ConfirmDialog
@@ -2005,6 +2063,20 @@ export default function OrganizationManager({
             busy={saving}
             onCancel={() => setMemberConfirmation(null)}
             onConfirm={() => void runMemberConfirmation()}
+          />
+          <ConfirmDialog
+            open={Boolean(memberAccessConfirmation)}
+            title="Apply role and access changes?"
+            description={memberAccessConfirmation ? `${memberDisplayName(memberAccessConfirmation.member, peopleByUserId.get(memberAccessConfirmation.member.user_id))} will use ${formatCombinedMemberRole({ ...memberAccessConfirmation.member, member_role: memberAccessConfirmation.draft.memberRole, teaching_role: memberAccessConfirmation.draft.teachingRole || null })}. Management permissions follow the selected access role.` : ""}
+            confirmLabel="Apply changes"
+            busy={saving}
+            onCancel={() => setMemberAccessConfirmation(null)}
+            onConfirm={() => {
+              if (!memberAccessConfirmation) return;
+              const change = memberAccessConfirmation;
+              setMemberAccessConfirmation(null);
+              void handleSaveMemberAccess(change.member, change.draft);
+            }}
           />
         </>
       ) : null}
@@ -2245,6 +2317,10 @@ export default function OrganizationManager({
         >
           <OrganizationInspectionManager organizationId={activeOrganization.id} aircraft={aircraft} models={models} embedded />
         </FleetWorkspacePanel>
+      ) : null}
+
+      {view === "fleet" && canViewAircraftHistory && activeFleetWorkspace === "history" ? (
+        <AssignmentAuditLog embedded flat />
       ) : null}
 
       {view === "endorsements" ? (
@@ -3076,17 +3152,54 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function formatRole(role: string) {
-  if (role === "platform_admin") return "Platform administrator";
-  if (role === "organization_admin") return "Organization administrator";
-  if (role === "owner") return "Owner";
+function memberDisplayName(member: OrganizationMember, person?: OrganizationPerson | null) {
+  const email = member.email.trim().toLocaleLowerCase();
+  const candidates = [
+    person?.organization_display_name,
+    member.display_name,
+    person?.profile_display_name,
+  ];
+  return candidates
+    .map((value) => value?.trim() ?? "")
+    .find((value) => value && !value.includes("@") && value.toLocaleLowerCase() !== email)
+    || "Unnamed member";
+}
+
+function formatCombinedMemberRole(member: Pick<OrganizationMember, "member_role" | "teaching_role">) {
+  const teachingRole = member.teaching_role === "instructor"
+    ? "Instructor"
+    : member.teaching_role === "student"
+      ? "Student"
+      : "";
+  const managementRole = member.member_role === "owner"
+    ? "Owner"
+    : member.member_role === "organization_admin"
+      ? "Admin"
+      : "";
+  return [teachingRole, managementRole].filter(Boolean).join(" · ") || "Member";
+}
+
+function formatManagementRole(member: Pick<OrganizationMember, "member_role">) {
+  if (member.member_role === "owner") return "Owner";
+  if (member.member_role === "organization_admin") return "Admin";
   return "Member";
+}
+
+function formatMemberPermissions(member: Pick<OrganizationMember, "member_role" | "permissions">) {
+  if (member.member_role === "owner") return "Full organization access";
+  const labels = {
+    members: "People",
+    fleet: "Aircraft",
+    endorsements: "Endorsements",
+    notifications: "Notices",
+    audit: "Assignment history",
+  } as const;
+  return member.permissions.map((permission) => labels[permission]).join(" · ") || "Standard member access";
 }
 
 function memberConfirmationTitle(confirmation: MemberConfirmation | null) {
   if (!confirmation) return "Confirm change";
   if (confirmation.action === "pending") return "Remove pending person?";
-  if (confirmation.action === "role") return confirmation.member.member_role === "organization_admin" ? "Remove administrator access?" : "Grant administrator access?";
   if (confirmation.action === "transfer") return "Transfer organization ownership?";
   return "Remove organization member?";
 }
@@ -3094,14 +3207,12 @@ function memberConfirmationTitle(confirmation: MemberConfirmation | null) {
 function memberConfirmationDescription(confirmation: MemberConfirmation | null) {
   if (!confirmation) return "";
   if (confirmation.action === "pending") return `${confirmation.person.email} will be removed from the pending organization roster.`;
-  if (confirmation.action === "role") return `${confirmation.member.email} will ${confirmation.member.member_role === "organization_admin" ? "move to the Member role" : "move to the Organization Admin role"}. Their access will follow that role's permission template.`;
   if (confirmation.action === "transfer") return `${confirmation.member.email} will become the organization Owner. Your role will change according to the existing ownership workflow.`;
   return `${confirmation.member.email} will lose access to this organization. Their PilotSeal account will not be deleted.`;
 }
 
 function memberConfirmationLabel(confirmation: MemberConfirmation | null) {
   if (!confirmation) return "Confirm";
-  if (confirmation.action === "role") return confirmation.member.member_role === "organization_admin" ? "Remove admin access" : "Grant admin access";
   if (confirmation.action === "transfer") return "Transfer ownership";
   return "Remove";
 }
@@ -3115,13 +3226,6 @@ function formatDueLabel(key: string) {
     adsb_due_date: "ADS-B check due",
     registration_due_date: "Aircraft registration expires",
   } as Record<string, string>)[key] ?? key;
-}
-
-function formatChartType(value?: string | null) {
-  if (value === "1d1p") return "CG + weight";
-  if (value === "2d1p") return "Single 2-axis";
-  if (value === "2d2p") return "Top + side";
-  return "—";
 }
 
 function formatFleetDate(value?: string | null) {

@@ -77,7 +77,7 @@ export default function FleetReportsPanel({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="border border-slate-200 bg-white">
         <ReportCard
           title="Next inspections"
           details={`${aircraft.length} aircraft · ${assignments.length} extra items`}
@@ -148,14 +148,11 @@ function ReportCard({
       disabled={disabled}
       onClick={onOpen}
     >
-      <span aria-hidden="true" className="grid h-9 w-11 shrink-0 grid-cols-3 gap-px rounded border border-slate-300 bg-slate-200 p-1">
-        {Array.from({ length: 9 }).map((_, index) => <span key={index} className={index < 3 ? "bg-blue-200" : "bg-white"} />)}
-      </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-slate-900">{title}</span>
         <span className="block text-xs text-slate-500">{details}</span>
       </span>
-      <span className="text-xs font-semibold text-blue-700 group-hover:underline">Preview / print →</span>
+      <span className="text-xs font-semibold text-blue-700 group-hover:underline">Preview / print</span>
     </button>
   );
 }

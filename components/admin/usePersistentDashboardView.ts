@@ -42,7 +42,7 @@ export function usePersistentDashboardView<const T extends string>({
     window.localStorage.setItem(`pilotseal:dashboard-view:${storageKey}`, value);
     const next = new URLSearchParams(searchParams.toString());
     next.set(param, value);
-    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
   }
 
   return [activeValue, selectValue] as const;

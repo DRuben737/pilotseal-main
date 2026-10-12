@@ -595,7 +595,7 @@ export default function EndorsementWordingEditor({
 
       {pickerOpen ? (
         <div data-endorsement-child-dialog className="fixed inset-0 z-[10001] flex items-center justify-center bg-slate-950/50 p-4">
-          <div role="dialog" aria-modal="true" className="max-h-[82vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-5 shadow-2xl">
+          <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[82vh] w-full max-w-lg overflow-auto rounded-sm bg-white p-4 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold text-slate-950">Insert fill-in</h3>
               <button type="button" className="secondary-button" onClick={() => setPickerOpen(false)}>Close</button>
@@ -645,7 +645,7 @@ export default function EndorsementWordingEditor({
 
       {fieldDraft ? (
         <div data-endorsement-child-dialog className="fixed inset-0 z-[10002] flex items-center justify-center bg-slate-950/50 p-4">
-          <div role="dialog" aria-modal="true" className="max-h-[86vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-5 shadow-2xl">
+          <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[86vh] w-full max-w-lg overflow-auto rounded-sm bg-white p-4 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold text-slate-950">{fieldDraft.editingKey ? "Edit fill-in" : "New fill-in"}</h3>
               <button type="button" className="secondary-button" onClick={() => setFieldDraft(null)}>Close</button>

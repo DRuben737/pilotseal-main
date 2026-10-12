@@ -64,7 +64,7 @@ import { applyScheduleOperations, moveScheduleLesson, scheduleChanges, scheduleC
 import { fetchEnabledFeatureIds, fetchScheduleEligibility, updateEnabledFeatureIds, type ScheduleEligibility } from "@/lib/dashboard-preferences";
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
 
-type DrawerMode = "help" | "review" | "students" | "availability-overview" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "teaching" | "settings" | "publish" | null;
+type DrawerMode = "review" | "students" | "availability-overview" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "teaching" | "settings" | "publish" | null;
 type AvailabilityRow = { start: string; end: string };
 type AutoRequestRow = AutomaticScheduleRequest & { selected: boolean };
 
@@ -148,6 +148,7 @@ export default function CfiScheduleManager() {
   const [agendaStart, setAgendaStart] = useState(() => localDateKey(new Date()));
   const [agendaDays, setAgendaDays] = useState(14);
   const [layout, setLayout] = useState<"list" | "calendar">("calendar");
+  const layoutWasSelected = useRef(false);
   const [eligibility, setEligibility] = useState<ScheduleEligibility | null>(null);
   const [availabilityReview, setAvailabilityReview] = useState<AvailabilityReview | null>(null);
   const [reviewChecked, setReviewChecked] = useState(false);
@@ -215,6 +216,21 @@ export default function CfiScheduleManager() {
   const activeStudents = useMemo(() => cfiAccess.filter((item) => item.access_enabled), [cfiAccess]);
   const automaticAircraft = useMemo(() => aircraft.filter((item) => item.operational_status === "available"), [aircraft]);
   const maxAvailabilityDate = localDateKey(addCalendarDays(new Date(), 27));
+
+  useEffect(() => {
+    const phoneViewport = window.matchMedia("(max-width: 600px)");
+    const applyResponsiveDefault = () => {
+      if (!layoutWasSelected.current) setLayout(phoneViewport.matches ? "list" : "calendar");
+    };
+    applyResponsiveDefault();
+    phoneViewport.addEventListener("change", applyResponsiveDefault);
+    return () => phoneViewport.removeEventListener("change", applyResponsiveDefault);
+  }, []);
+
+  function selectLayout(nextLayout: "list" | "calendar") {
+    layoutWasSelected.current = true;
+    setLayout(nextLayout);
+  }
 
   async function loadIdentityData() {
     if (!userId) return;
@@ -1068,7 +1084,6 @@ export default function CfiScheduleManager() {
       <div className={styles.root} aria-label="Schedule setup">
         <header className={styles.onboardingHeader}>
           <div><p className={styles.eyebrow}>Personal schedule</p><h1>{canEnable ? "Schedule is ready" : "Get started"}</h1></div>
-          <HelpButton onClick={() => setDrawer("help")} />
         </header>
         {canEnable ? <section className={styles.onboardingCard}>
           <h2>{eligibility?.can_instruct ? "Your instructor information is complete" : "Your instructor has added you"}</h2>
@@ -1084,10 +1099,9 @@ export default function CfiScheduleManager() {
           <section className={styles.onboardingCard}>
             <p className={styles.eyebrow}>Instructor</p><h2>Set up your instructor information</h2>
             <p>Add your name and a Flight Instructor or Ground Instructor certificate. Include the certificate number, ratings, and last activity or issuance date.</p>
-            <Link className="primary-button mt-5 inline-flex" href="/dashboard/saved-people">Complete my information</Link>
+            <Link className="primary-button mt-5 inline-flex" href="/console/personal/people">Complete my information</Link>
           </section>
         </div>}
-        <ScheduleHelpDrawer open={drawer === "help"} onClose={() => setDrawer(null)} />
       </div>
     );
   }
@@ -1129,7 +1143,6 @@ export default function CfiScheduleManager() {
           <button className={styles.weekArrow} type="button" aria-label="Next week" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(addCalendarDays(new Date(`${selectedDate}T12:00:00`), 7)))}>›</button>
         </div>
         <div className={styles.actions}>
-          <HelpButton onClick={() => setDrawer("help")} />
           {isCfiView ? <ScheduleMenu label="Add to schedule" icon="＋" disabled={saving || !weekReady} actions={[
             { label: "Add lesson", disabled: !activeStudents.length, onSelect: () => openNewLesson(selectedDate) },
             { label: "Aircraft unavailable", onSelect: () => openBlockDrawer(selectedDate) },
@@ -1160,8 +1173,8 @@ export default function CfiScheduleManager() {
 
       <div className={styles.toolbar}>
         <div className={styles.segments} aria-label="Schedule view">
-          <button type="button" aria-pressed={!calendarView} disabled={hasDraft || saving} onClick={() => setLayout("list")}>List</button>
-          <button type="button" aria-pressed={calendarView} disabled={hasDraft || saving} onClick={() => setLayout("calendar")}>Week</button>
+          <button type="button" aria-pressed={!calendarView} disabled={hasDraft || saving} onClick={() => selectLayout("list")}>List</button>
+          <button type="button" aria-pressed={calendarView} disabled={hasDraft || saving} onClick={() => selectLayout("calendar")}>Week</button>
         </div>
         {!isCfiView ? <button type="button" className={styles.textButton} aria-pressed={studentTab === "availability"} onClick={() => { setStudentTab(studentTab === "availability" ? "lessons" : "availability"); setAgendaDays(studentTab === "availability" ? 14 : 28); }}>My availability</button> : null}
         <button className={styles.textButton} type="button" disabled={hasDraft || saving} onClick={() => jumpToDate(localDateKey(new Date()))}>Today</button>
@@ -1264,8 +1277,6 @@ export default function CfiScheduleManager() {
       </div>
       {!calendarView ? <button type="button" className={`${styles.textButton} ${styles.moreDates}`} disabled={!weekReady || saving} onClick={() => setAgendaDays((current) => current + 14)}>Show 2 more weeks</button> : null}
       {isCfiView && !activeStudents.length ? <button type="button" className={styles.textButton} onClick={openAccessDrawer}>Choose students from People</button> : null}
-
-      <ScheduleHelpDrawer open={drawer === "help"} onClose={() => setDrawer(null)} />
 
       <DetailDrawer compact open={drawer === "students"} onClose={() => setDrawer(null)} title="Students" description="Availability and weekly goals." width="wide">
 
@@ -1455,25 +1466,11 @@ export default function CfiScheduleManager() {
   );
 }
 
-function HelpButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" className={styles.helpButton} onClick={onClick} aria-label="Schedule help" title="How Schedule works"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1c0 1.8-2.4 2.1-2.4 3.8" /><path d="M12 17.5h.01" /></svg></button>;
-}
-
 function InfoHint({ label, children }: { label: string; children: string }) {
   return <details className={styles.infoHint}>
     <summary aria-label={label} title={label}><svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="currentColor" /><path d="M10 8.5v5M10 6.25h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg></summary>
     <p>{children}</p>
   </details>;
-}
-
-function ScheduleHelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return <DetailDrawer compact open={open} onClose={onClose} title="How Schedule works" description="A quick guide for students and instructors.">
-    <div className={styles.helpContent}>
-      <section><p className={styles.eyebrow}>Students</p><h3>Share when you can fly</h3><ol><li>Your instructor adds you from People and grants Schedule access.</li><li>On first use, review at least the next 7 days. Keeping 2–4 weeks current gives your instructor better choices.</li><li>Set a usual week, then auto-fill four weeks. Edit any date when that week is different. Each available period must be at least 2 hours; a blank day means unavailable.</li><li>Use Week to see the whole calendar or List for upcoming lessons. Other students are shown only as unavailable time.</li></ol><p>Changing availability never moves a published lesson. Contact your instructor when an existing lesson must change.</p></section>
-      <section><p className={styles.eyebrow}>Instructors</p><h3>Build the week</h3><ol><li>Complete People → My information with your Flight Instructor or Ground Instructor certificate, then add Schedule.</li><li>Add students in People. Linked students can see the schedule; unlinked students can still be scheduled without notifications.</li><li>Use Student availability in the options menu to scan everyone’s week. Tap any available time to start a lesson for that student.</li><li>Set your teaching days, start and end times, and maximum total lesson time per day in My teaching time. Add a full-day vacation or a short break there too. Auto scheduling avoids this time; existing lessons only receive conflict warnings.</li><li>Flight lessons can use a specific aircraft from My Aircraft or any organization you belong to. Ground lessons do not use an aircraft.</li><li>Automatic scheduling shows only Available aircraft and lets you choose separate Flight and Ground totals for each student.</li><li>Every unavailable aircraft block identifies one aircraft. Blocks for organization aircraft are shared across the organization; only the instructor who created one can change or remove it.</li><li>Aircraft blocks and another instructor’s booking are respected automatically. Away, Grounded, and Maintenance aircraft remain visible on the calendar but are excluded from automatic scheduling.</li><li>Drag lessons to swap them, including while a draft is open.</li><li>Add, edit, cancel, and swap changes stay in the draft until Review &amp; publish.</li></ol></section>
-      <section><p className={styles.eyebrow}>Good to know</p><h3>Calendar controls</h3><p>The arrows move one full week. Today returns to the current week. Moving a lesson never moves another automatically. Overlapping lessons are listed with a quick Edit action; availability and aircraft conflicts remain warnings.</p></section>
-    </div>
-  </DetailDrawer>;
 }
 
 function BlockForm({ value, aircraft, onChange }: { value: { date: string; start: string; end: string; note: string; aircraftId: string }; aircraft: ScheduleAircraft[]; onChange: (value: { date: string; start: string; end: string; note: string; aircraftId: string }) => void }) {

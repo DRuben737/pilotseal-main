@@ -630,40 +630,6 @@ export default function AsrReportsManager() {
     <section className="space-y-5">
       {message ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
-      <ManagementDisclosure
-        id="asr-summary"
-        eyebrow={activeOrganization.name}
-        title="Air Safety Event Reports"
-        summary={loading ? "Loading…" : `${reports.length}`}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {canManage ? (
-              <button className="secondary-button" type="button" onClick={() => setShowSettings(true)}>
-                Settings
-              </button>
-            ) : null}
-            <button
-              className="primary-button"
-              type="button"
-              onClick={startNewReport}
-              disabled={showForm || busy}
-              title={showForm ? "Save and close the open draft first." : undefined}
-            >
-              New ASR
-            </button>
-          </div>
-        }
-        helpContent={
-          <>
-            <p>ASRs document internal safety events and coordinate Training, Maintenance, and Safety review.</p>
-            <p>Drafts save automatically and remain editable by their owner. Submitted reports move through the assigned review workflow and may create a linked aircraft discrepancy.</p>
-            <p>Reviewer permissions and organization-specific options are managed from Settings.</p>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-500">Expand the activity section to search or review reports.</p>
-      </ManagementDisclosure>
-
       <DetailDrawer open={showSettings && canManage} title="ASR reviewer and option settings" width="wide" onClose={() => setShowSettings(false)}>
         {canManage ? <AsrSettings
           organizationId={activeOrganization.id}
@@ -833,6 +799,12 @@ export default function AsrReportsManager() {
         id="asr-activity"
         title="ASR activity"
         summary={loading ? "Loading…" : `${filteredReports.length}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {canManage ? <button className="secondary-button" type="button" onClick={() => setShowSettings(true)}>Settings</button> : null}
+            <button className="primary-button" type="button" onClick={startNewReport} disabled={showForm || busy} title={showForm ? "Save and close the open draft first." : undefined}>New ASR</button>
+          </div>
+        }
         className="dashboard-data-workspace"
         defaultOpen
         helpContent={<p>Expand to search ASR history. Rows show only the reference, aircraft, occurrence date, status and assigned reviewer context; open one for the full occurrence and review record.</p>}
@@ -843,9 +815,9 @@ export default function AsrReportsManager() {
         </div>
         {loading ? <p className="saas-empty-state mt-5">Loading ASR reports…</p> : null}
         {!loading && filteredReports.length === 0 ? <p className="saas-empty-state mt-5">No matching ASR reports.</p> : null}
-        <div className="mt-5 grid gap-3">
+        <div className="mt-3 divide-y divide-slate-200 border border-slate-200 bg-white">
           {filteredReports.map((report) => (
-            <article key={report.id} className={`rounded-2xl border p-4 ${activeReportId === report.id ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"}`}>
+            <article key={report.id} className={`px-3 py-2.5 ${activeReportId === report.id ? "bg-blue-50" : "bg-white"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setActiveReportId(report.id)}>
                   <p className="font-semibold text-slate-950">{report.reference_number ?? "ASR Draft"} · {report.aircraft_tail_number ?? "No aircraft"}</p>

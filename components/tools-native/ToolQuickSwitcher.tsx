@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
-import { primaryToolKeys, toolEmbedConfig } from "@/app/tools/tool-config";
+import { primaryToolKeys, toolEmbedConfig } from "@/app/(site)/tools/tool-config";
 
 export default function ToolQuickSwitcher({ currentToolKey }: { currentToolKey: string }) {
   const scrollerRef = useRef<HTMLDivElement>(null);

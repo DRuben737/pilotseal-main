@@ -45,7 +45,7 @@ try{
   const key=`sb-${new URL(env.API_URL).hostname.split('.')[0]}-auth-token`;
   await context.addInitScript(({key,value})=>localStorage.setItem(key,value),{key,value:JSON.stringify(auth.session)});
   const page=await context.newPage();
-  await page.goto(`${appUrl}/dashboard/schedule`);
+  await page.goto(`${appUrl}/console/personal/schedule`);
   await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Schedule options',exact:true}).click();
   await page.getByRole('menuitem',{name:'Student availability',exact:true}).click();

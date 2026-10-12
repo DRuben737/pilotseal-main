@@ -6,10 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 
 const accountLinks = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/people", label: "People" },
-  { href: "/dashboard/flight-briefs", label: "Flight Briefs" },
-  { href: "/dashboard/account-settings", label: "Profile" },
+  { href: "/console", label: "Management Console" },
+  { href: "/console/personal/account", label: "Account" },
 ];
 
 export default function UserMenu({ email, displayName }: { email: string; displayName?: string }) {

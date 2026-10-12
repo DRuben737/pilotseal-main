@@ -65,7 +65,7 @@ try {
   const onboardingClient=createClient(status.API_URL,status.ANON_KEY ?? status.PUBLISHABLE_KEY,options);
   const onboardingAuth=unwrap(await onboardingClient.auth.signInWithPassword({email:onboardingEmail,password:onboardingPassword}));
   const {page:onboardingPage}=await contextFor(onboardingAuth.session);
-  await onboardingPage.goto(`${appUrl}/dashboard/schedule`);
+  await onboardingPage.goto(`${appUrl}/console/personal/schedule`);
   await onboardingPage.getByLabel('Schedule setup',{exact:true}).waitFor();
   await onboardingPage.getByText('Already have an instructor?',{exact:true}).waitFor();
   await onboardingPage.getByText('Set up your instructor information',{exact:true}).waitFor();
@@ -91,9 +91,9 @@ try {
   const countNotifications=async()=>unwrap(await admin.from('notifications').select('id').eq('recipient_user_id',studentId).eq('kind','schedule')).length;
   const originalNotifications=await countNotifications();
   const {page}=await contextFor(cfiAuth.session);
-  await page.goto(`${appUrl}/dashboard`);
-  await page.waitForURL('**/dashboard/schedule');
-  assert.equal(page.url(),`${appUrl}/dashboard/schedule`,'personal dashboard opens Schedule directly');
+  await page.goto(`${appUrl}/console`);
+  await page.waitForURL('**/console/personal/schedule');
+  assert.equal(page.url(),`${appUrl}/console/personal/schedule`,'Console opens Schedule directly for an eligible CFI');
   await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
   assert.equal(await page.getByLabel('Schedule workspace',{exact:true}).getByRole('heading').count(),0,'no duplicate feature title');
   assert.equal(await page.getByRole('link',{name:'Overview',exact:true}).count(),0,'personal navigation has no redundant Overview');
@@ -228,7 +228,7 @@ try {
   await page.getByRole('dialog').waitFor({state:'hidden'});
 
   const {page:studentPage}=await contextFor(studentAuth.session);
-  await studentPage.goto(`${appUrl}/dashboard/schedule`);
+  await studentPage.goto(`${appUrl}/console/personal/schedule`);
   await studentPage.getByRole('dialog',{name:'Set your availability',exact:true}).waitFor();
   assert.equal(await studentPage.getByRole('dialog').getByRole('button',{name:/Review availability on/}).count(),14,'first use reviews two full weeks');
   assert(await studentPage.getByRole('button',{name:'Confirm next 2 weeks',exact:true}).isDisabled(),'review requires explicit acknowledgment');
