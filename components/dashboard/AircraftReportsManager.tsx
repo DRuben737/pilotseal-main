@@ -4,12 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { FlatRecordGroups } from "@/components/admin/FlatRecordGroups";
+import { ReportActionControls, ReturnAircraftOption, useReportActionContext } from "@/components/dashboard/ReportActionControls";
+import { groupAircraftReports } from "@/lib/record-groups";
+import { performReportAction } from "@/lib/report-actions";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import { useOrganization } from "@/components/organizations/OrganizationProvider";
+import { useReportOrganization } from "@/components/dashboard/useReportOrganization";
 import { UsDateInput } from "@/components/forms/UsDateInput";
 import {
   AIRCRAFT_DISCREPANCY_TYPES,
-  closeAircraftDiscrepancyReport,
   fetchOrganizationAircraftReports,
   fetchOrganizationReportPeople,
   processAircraftDiscrepancyReport,
@@ -52,8 +55,9 @@ export default function AircraftReportsManager() {
   const searchParams = useSearchParams();
   const requestedReportId = searchParams.get("reportId") ?? "";
   const { session } = useAuthSession();
-  const { activeOrganization, organizations, setActiveOrganizationId, loading: organizationsLoading } = useOrganization();
+  const { activeOrganization, organizations, setActiveOrganizationId, loading: organizationsLoading, canSubmit, error: organizationError } = useReportOrganization();
   const canManage = canManageOrganization(activeOrganization?.member_role);
+  const isPlatformAdmin = activeOrganization?.member_role === "platform_admin";
   const [reports, setReports] = useState<AircraftDiscrepancyReport[]>([]);
   const [aircraft, setAircraft] = useState<AircraftRecord[]>([]);
   const [people, setPeople] = useState<OrganizationReportPerson[]>([]);
@@ -65,6 +69,8 @@ export default function AircraftReportsManager() {
   const [processingForm, setProcessingForm] = useState<ProcessingForm | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("open");
+  const [showHidden, setShowHidden] = useState(false);
+  const [returnToService, setReturnToService] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pendingSubmission, setPendingSubmission] = useState<boolean | null>(null);
@@ -78,6 +84,7 @@ export default function AircraftReportsManager() {
   const [error, setError] = useState("");
 
   const activeReport = reports.find((report) => report.id === activeReportId) ?? null;
+  const closeContext = useReportActionContext(activeReportId, pendingClose);
   const aircraftById = useMemo(
     () => new Map(aircraft.map((item) => [item.id, item])),
     [aircraft]
@@ -141,6 +148,8 @@ export default function AircraftReportsManager() {
     setFormErrors({});
     setPendingSubmission(null);
     setPendingClose(false);
+    setShowHidden(false);
+    setReturnToService(false);
     setCloseError("");
     setReports([]);
     setAircraft([]);
@@ -162,6 +171,7 @@ export default function AircraftReportsManager() {
   const filteredReports = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return reports.filter((report) => {
+      if (report.hidden_at && !showHidden) return false;
       if (statusFilter === "open") {
         if (report.status === "closed") return false;
       } else if (statusFilter !== "all" && report.status !== statusFilter) {
@@ -181,7 +191,11 @@ export default function AircraftReportsManager() {
         .toLowerCase()
         .includes(needle);
     });
-  }, [query, reports, statusFilter]);
+  }, [query, reports, statusFilter, showHidden]);
+  const reportGroups = useMemo(() => groupAircraftReports(filteredReports).map(group => {
+    const plane = aircraftById.get(group.records[0].aircraft_id);
+    return { ...group, statusLabel: plane ? formatAircraftStatus(plane.operational_status) : undefined };
+  }), [filteredReports, aircraftById]);
 
   const reviewDirty = Boolean(activeReport && processingForm &&
     JSON.stringify(processingForm) !== JSON.stringify(reviewFromReport(activeReport)));
@@ -325,11 +339,11 @@ export default function AircraftReportsManager() {
     setMessage("");
     setCloseError("");
     try {
-      await closeAircraftDiscrepancyReport(activeReport.id, activeReport.updated_at,
-        reviewDirty && closeChoice === "save" ? {
+      await performReportAction({ report: activeReport, action: "close", returnToService: returnToService && closeContext.context?.aircraft_status === "grounded",
+        contextToken: closeContext.context?.token, review: reviewDirty && closeChoice === "save" ? {
           ...processingForm,
           instructorPersonId: processingForm.instructorPersonId || null,
-        } : null);
+        } : null });
       setPendingClose(false);
       await loadData(activeReport.id);
       setMessage("Report closed.");
@@ -353,6 +367,7 @@ export default function AircraftReportsManager() {
         setCloseError("Unable to reload this report. Try again.");
       }
     } finally {
+      closeContext.reload();
       busyRef.current = false;
       setBusy(false);
     }
@@ -397,7 +412,7 @@ export default function AircraftReportsManager() {
           </label>
         ) : <p className="break-words text-slate-600">Organization: {activeOrganization.name}</p>}
       </div>
-      {!showForm && !activeReport ? <Feedback message={message} error={error} /> : null}
+      {!showForm && !activeReport ? <Feedback message={message} error={error || organizationError} /> : null}
       <DetailDrawer open={showForm} title="New aircraft report" description={activeOrganization.name} width="wide" onClose={() => { if (!busyRef.current) { setShowForm(false); setFormErrors({}); } }}>
         <div id="aircraft-report-new-form">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -609,7 +624,7 @@ export default function AircraftReportsManager() {
         id="aircraft-report-activity"
         title="Report activity"
         summary={loading ? "Loading…" : `${filteredReports.length}`}
-        actions={<button className="primary-button" type="button" disabled={loading || busy} onClick={startReport}>New report</button>}
+        actions={<button className="primary-button" type="button" disabled={loading || busy || !canSubmit} onClick={startReport}>New report</button>}
         className="dashboard-data-workspace"
         defaultOpen
       >
@@ -629,6 +644,7 @@ export default function AircraftReportsManager() {
           ) : null}
         </div>
 
+        <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHidden} onChange={event => { setShowHidden(event.target.checked); if (event.target.checked) setStatusFilter("all"); }} />Show hidden</label>
         {loading ? <p className="saas-empty-state mt-5">Loading reports…</p> : null}
         {!loading && filteredReports.length === 0 ? (
           <div className="saas-empty-state mt-5">
@@ -648,16 +664,12 @@ export default function AircraftReportsManager() {
             ) : null}
           </div>
         ) : null}
-        <div className="mt-3 divide-y divide-slate-200 border border-slate-200 bg-white">
-          {filteredReports.map((report) => {
+        <FlatRecordGroups groups={reportGroups} searching={query.trim()} renderRecord={(report) => {
             const reportAircraft = aircraftById.get(report.aircraft_id) ?? null;
             const fleetGrounded = reportAircraft?.operational_status === "grounded";
             return (
-              <button
+              <article
                 key={report.id}
-                type="button"
-                onClick={() => setActiveReportId(report.id)}
-                aria-pressed={activeReportId === report.id}
                 className={`w-full px-3 py-2.5 text-left transition-colors duration-200 ${
                   activeReportId === report.id
                     ? "bg-blue-50"
@@ -665,29 +677,17 @@ export default function AircraftReportsManager() {
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-slate-950">
-                      {report.aircraft_tail_number}
-                    </p>
-                    <p className="saas-meta-text mt-1">
-                      {formatUsDate(report.report_date)} · {activeOrganization.name}
-                    </p>
-                    <p className="mt-1 line-clamp-1 text-sm text-slate-700">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setActiveReportId(report.id)} aria-pressed={activeReportId === report.id}>
+                    <p className="line-clamp-1 text-sm font-medium text-slate-900">
                       {report.description}
                     </p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Found by: {report.found_by_name ?? "Not recorded"} · Submitted by: {report.submitted_by_name}
-                    </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Affected area: {formatDiscrepancyType(report.discrepancy_type)}
-                      {report.instructor_name
-                        ? ` · Assigned instructor: ${report.instructor_name}`
-                        : ""}
+                      {formatUsDate(report.report_date)} · {formatDiscrepancyType(report.discrepancy_type)} · Found by: {report.found_by_name ?? "Not recorded"} · Submitted by: {report.submitted_by_name}
                     </p>
-                  </div>
+                  </button>
                   <div className="flex flex-wrap gap-2">
-                    {fleetGrounded ? <Badge tone="danger">Aircraft grounded</Badge> : null}
-                    {report.aircraft_down === true && !fleetGrounded ? (
+                    {report.hidden_at ? <Badge tone="neutral">Hidden</Badge> : null}
+                    {report.status !== "closed" && report.aircraft_down === true && !fleetGrounded ? (
                       <Badge tone="warning">Reported aircraft down</Badge>
                     ) : null}
                     {!report.instructor_signed_at && report.instructor_name ? <Badge tone="warning">Signature pending</Badge> : null}
@@ -695,11 +695,14 @@ export default function AircraftReportsManager() {
                       {formatReportStatus(report.status)}
                     </Badge>
                   </div>
+                  <ReportActionControls report={report} canManage={canManage} isPlatformAdmin={isPlatformAdmin} disabled={busy} onChanged={async deleted => {
+                    if (deleted && activeReportId === report.id) setActiveReportId("");
+                    await loadData(deleted ? "" : activeReportId);
+                  }} />
                 </div>
-              </button>
+              </article>
             );
-          })}
-        </div>
+          }} />
       </ManagementDisclosure>
 
       <DetailDrawer
@@ -721,7 +724,7 @@ export default function AircraftReportsManager() {
                   className="secondary-button"
                   type="button"
                   disabled={busy}
-                  onClick={() => { setCloseChoice(""); setCloseError(""); setPendingClose(true); }}
+                  onClick={() => { setCloseChoice(""); setCloseError(""); setReturnToService(false); setPendingClose(true); }}
                 >
                   Close report
                 </button>
@@ -804,9 +807,6 @@ export default function AircraftReportsManager() {
                     <input type="checkbox" disabled={busy || Boolean(activeReport.credit_authorized_at)} checked={processingForm.creditAuthorized} onChange={(event) => setProcessingForm({ ...processingForm, creditAuthorized: event.target.checked })} />
                     Authorize flight credit
                   </label>
-                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                    Aircraft status is managed separately.
-                  </p>
                   <button className="primary-button mt-4" type="button" disabled={busy} onClick={() => void handleProcess()}>
                     {busy ? "Saving…" : "Save changes"}
                   </button>
@@ -847,13 +847,16 @@ export default function AircraftReportsManager() {
       <ConfirmDialog
         open={pendingClose}
         title="Close this report?"
-        description="The report will become read-only. Aircraft status will stay unchanged."
+        description="The report will become read-only."
         confirmLabel="Close report"
         busy={busy}
-        confirmDisabled={reviewDirty && !closeChoice}
+        confirmDisabled={(reviewDirty && !closeChoice) || closeContext.loading || !closeContext.context}
         onCancel={() => { setPendingClose(false); setCloseError(""); }}
         onConfirm={() => void handleCloseReport()}
       >
+        <ReturnAircraftOption context={closeContext.context} checked={returnToService} onChange={setReturnToService} disabled={busy} />
+        {closeContext.loading ? <p className="mt-3 text-xs">Loading aircraft status…</p> : null}
+        {closeContext.error ? <p className="mt-3 text-xs text-rose-700" role="alert">{closeContext.error}<button type="button" className="ml-2 underline" onClick={closeContext.reload}>Retry</button></p> : null}
         {reviewDirty ? (
           <fieldset disabled={busy} className="mt-4 grid gap-2 text-sm">
             <legend className="mb-2 font-medium">Unsaved changes</legend>
@@ -865,6 +868,7 @@ export default function AircraftReportsManager() {
         {closeError.startsWith("This report changed.") || closeError.startsWith("Unable to reload") ? (
           <button className="ghost-button mt-3" type="button" disabled={busy} onClick={() => void handleReloadForClose()}>Reload report</button>
         ) : null}
+        {closeError.startsWith("Aircraft status") ? <button type="button" className="ghost-button mt-3" disabled={busy} onClick={() => { closeContext.reload(); setCloseError(""); }}>Reload confirmation</button> : null}
       </ConfirmDialog>
     </section>
   );

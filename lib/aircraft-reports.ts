@@ -44,6 +44,7 @@ export type AircraftDiscrepancyReport = {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  hidden_at: string | null;
   aircraft_id: string;
   aircraft_tail_number: string;
   report_date: string;
@@ -103,7 +104,7 @@ export type ProcessAircraftDiscrepancyInput = {
 
 const REPORT_SELECT = `
   id, organization_id, status, submitted_by, submitted_by_name,
-  created_at, updated_at, closed_at,
+  created_at, updated_at, closed_at, hidden_at,
   aircraft_discrepancy_reports!aircraft_discrepancy_reports_report_id_fkey (
     aircraft_id, aircraft_tail_number, report_date, found_by_person_id, found_by_name,
     student_person_id, student_name, instructor_person_id, instructor_name,
@@ -242,6 +243,7 @@ function normalizeAircraftDiscrepancyReport(
     created_at: String(value.created_at ?? ""),
     updated_at: String(value.updated_at ?? ""),
     closed_at: nullableString(value.closed_at),
+    hidden_at: nullableString(value.hidden_at),
     aircraft_id: String(detail.aircraft_id ?? ""),
     aircraft_tail_number: String(detail.aircraft_tail_number ?? ""),
     report_date: String(detail.report_date ?? ""),

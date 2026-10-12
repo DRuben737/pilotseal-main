@@ -104,6 +104,9 @@ export type AsrReport = {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  hidden_at: string | null;
+  deleted_source_report_id: string | null;
+  deleted_supersedes_report_id: string | null;
   source_discrepancy_report_id: string | null;
   aircraft_id: string | null;
   aircraft_tail_number: string | null;
@@ -191,10 +194,10 @@ export function createEmptyAsrReportData(): AsrReportData {
 
 const ASR_REPORT_SELECT = `
   id, organization_id, status, reference_number, revision_number,
-  supersedes_report_id, submitted_by, submitted_by_name,
-  created_at, updated_at, closed_at,
+  supersedes_report_id, deleted_supersedes_report_id, submitted_by, submitted_by_name,
+  created_at, updated_at, closed_at, hidden_at,
   asr_reports!asr_reports_report_id_fkey (
-    source_discrepancy_report_id, aircraft_id, aircraft_tail_number,
+    source_discrepancy_report_id, deleted_source_report_id, aircraft_id, aircraft_tail_number,
     aircraft_type, occurrence_date, occurrence_local_time,
     type_of_occurrence, description, report_data, reporter_title,
     reporter_signed_name, reporter_signed_at, risk_score,
@@ -440,6 +443,9 @@ function normalizeAsrReport(value: Record<string, unknown>): AsrReport | null {
     created_at: String(value.created_at ?? ""),
     updated_at: String(value.updated_at ?? ""),
     closed_at: nullableString(value.closed_at),
+    hidden_at: nullableString(value.hidden_at),
+    deleted_source_report_id: nullableString(detail.deleted_source_report_id),
+    deleted_supersedes_report_id: nullableString(value.deleted_supersedes_report_id),
     source_discrepancy_report_id: nullableString(detail.source_discrepancy_report_id),
     aircraft_id: nullableString(detail.aircraft_id),
     aircraft_tail_number: nullableString(detail.aircraft_tail_number),

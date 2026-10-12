@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AdminDataTable, AdminNameList, AdminPagination, CompactButton, ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { CompactButton, ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { FlatRecordGroups } from "@/components/admin/FlatRecordGroups";
+import { RecordMenu } from "@/components/admin/RecordMenu";
+import { endorsementPersonIdentity, recordSortDate, type RecordGroup } from "@/lib/record-groups";
+import { fetchHiddenOrganizationEndorsements, setOrganizationEndorsementHidden } from "@/lib/report-actions";
 import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -19,7 +23,7 @@ import {
   validateStudentRecordFile, type StudentRecordFolder, type StudentRecordItem,
 } from "@/lib/student-records";
 import { canManageOrganization } from "@/lib/organizations";
-import { formatUsDate, formatUsDateTime } from "@/lib/date-format";
+import { formatUsDate } from "@/lib/date-format";
 
 type RecordView = "personal" | "received" | "organization";
 type StudentGroup = {
@@ -40,9 +44,7 @@ function formatRecordDate(value: string) {
 }
 
 function endorsementIdentity(record: EndorsementRecord) {
-  if (record.student_user_id) return `user:${record.student_user_id}`;
-  if (record.student_id) return `student:${record.student_id}`;
-  return `legacy:${record.student_name.trim().toLowerCase()}|${(record.student_cert_number ?? "").trim().toLowerCase()}`;
+  return endorsementPersonIdentity(record);
 }
 
 function folderIdentity(folder: StudentRecordFolder) {
@@ -52,21 +54,22 @@ function folderIdentity(folder: StudentRecordFolder) {
 }
 
 export function buildStudentRecordGroups(
-  folders: StudentRecordFolder[], endorsements: EndorsementRecord[], items: StudentRecordItem[]
+  folders: StudentRecordFolder[], endorsements: EndorsementRecord[], items: StudentRecordItem[], organizationScoped = false, organizationScopes?: Map<string, string>
 ) {
   const groups = new Map<string, StudentGroup>();
   const folderKeys = new Map<string, string>();
   for (const folder of folders) {
-    const key = `folder:${folder.id}`;
-    groups.set(key, { key, folder, studentName: folder.student_name,
+    const key = `person:${folderIdentity(folder)}`;
+    if (!groups.has(key)) groups.set(key, { key, folder, studentName: folder.student_name,
       studentCertNumber: folder.student_cert_number, endorsements: [], items: [], latestAt: folder.updated_at });
+    folderKeys.set(`folder:${folder.id}`, key);
     folderKeys.set(folderIdentity(folder), key);
     if (folder.student_id) folderKeys.set(`student:${folder.student_id}`, key);
     if (folder.student_user_id) folderKeys.set(`user:${folder.student_user_id}`, key);
   }
   for (const record of endorsements) {
     const identity = endorsementIdentity(record);
-    const key = folderKeys.get(identity) ?? `endorsement:${identity}`;
+    const key = organizationScoped ? `organization:${organizationScopes?.get(record.id) ?? record.organization_id}:${identity}` : folderKeys.get(identity) ?? `endorsement:${identity}`;
     const group = groups.get(key);
     if (group) {
       group.endorsements.push(record);
@@ -77,7 +80,7 @@ export function buildStudentRecordGroups(
     }
   }
   for (const item of items) {
-    const group = groups.get(`folder:${item.folder_id}`);
+    const group = groups.get(folderKeys.get(`folder:${item.folder_id}`) ?? "");
     if (!group) continue;
     group.items.push(item);
     if (item.updated_at > group.latestAt) group.latestAt = item.updated_at;
@@ -90,7 +93,7 @@ export function buildStudentRecordGroups(
 function groupMatches(group: StudentGroup, query: string) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  return [group.studentName, group.studentCertNumber ?? ""].join(" ").toLowerCase().includes(normalized);
+  return [group.studentName, group.studentCertNumber ?? "", ...group.endorsements.flatMap(record => [...record.template_titles, record.instructor_name, record.endorsement_date]), ...group.items.flatMap(item => [item.title, item.category ?? "", item.record_date])].join(" ").toLowerCase().includes(normalized);
 }
 
 function fileExtension(file: File) {
@@ -129,7 +132,11 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   const [people, setPeople] = useState<EndorsementPerson[]>([]);
   const [query, setQuery] = useState("");
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
-  const [activeGroupPage, setActiveGroupPage] = useState(1);
+  const [hiddenRecords, setHiddenRecords] = useState<Set<string>>(new Set());
+  const [organizationRecordIds, setOrganizationRecordIds] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
+  const [visibilityAction, setVisibilityAction] = useState<EndorsementRecord | null>(null);
+  const [visibilityError, setVisibilityError] = useState("");
   const [activeRecord, setActiveRecord] = useState<EndorsementRecord | null>(null);
   const [recordToDelete, setRecordToDelete] = useState<EndorsementRecord | null>(null);
   const [activePdfUrl, setActivePdfUrl] = useState("");
@@ -152,16 +159,20 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
       if (!userId) { setLoading(false); return; }
       try {
         setLoading(true); setStatus("");
+        setShowHidden(false);
         const effectiveView = organizationOnly ? "organization" : view;
         if (effectiveView === "organization") {
-          const [issued, organizationRecords] = await Promise.all([
+          const [issued, organizationRecords, nextHidden] = await Promise.all([
             organizationOnly ? Promise.resolve([]) : fetchIssuedOrganizationEndorsementRecords(userId),
             activeOrganization?.id && canViewOrganizationRecords
               ? fetchOrganizationEndorsementRecords(activeOrganization.id) : Promise.resolve([]),
+            activeOrganization?.id ? fetchHiddenOrganizationEndorsements(activeOrganization.id) : Promise.resolve(new Set<string>()),
           ]);
           if (!cancelled) {
             setRecords(Array.from(new Map([...issued, ...organizationRecords].map((record) => [record.id, record])).values()));
             setFolders([]); setItems([]);
+            setHiddenRecords(nextHidden);
+            setOrganizationRecordIds(new Set(organizationRecords.map(record => record.id)));
           }
           return;
         }
@@ -182,31 +193,43 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
     return () => { cancelled = true; };
   }, [activeOrganization?.id, canViewOrganizationRecords, organizationOnly, session?.user?.id, view]);
 
-  const groups = useMemo(() => buildStudentRecordGroups(folders, records, items), [folders, records, items]);
+  const isOrganizationView = organizationOnly || view === "organization";
+  const visibleRecords = useMemo(() => isOrganizationView && !showHidden ? records.filter(record => !hiddenRecords.has(record.id)) : records, [records, isOrganizationView, hiddenRecords, showHidden]);
+  const groups = useMemo(() => buildStudentRecordGroups(folders, visibleRecords, items, isOrganizationView,
+    activeOrganization ? new Map([...organizationRecordIds].map(id => [id, activeOrganization.id])) : undefined), [folders, visibleRecords, items, isOrganizationView, activeOrganization, organizationRecordIds]);
   const filteredGroups = useMemo(() => groups.filter((group) => groupMatches(group, query)), [groups, query]);
   const sortedPeople = useMemo(() => [...people].sort((a, b) =>
     a.formal_name.localeCompare(b.formal_name, undefined, { sensitivity: "base" })
   ), [people]);
-  const sortedOrganizationRecords = useMemo(() => [...records].sort((a, b) => (
-    a.student_name.localeCompare(b.student_name, undefined, { sensitivity: "base" })
-    || b.created_at.localeCompare(a.created_at)
-  )), [records]);
   const activeGroup = groups.find((group) => group.key === activeGroupKey) ?? null;
-  const activeGroupEntries = useMemo(() => activeGroup ? [
-    ...activeGroup.endorsements.map((record) => ({ kind: "endorsement" as const, date: record.endorsement_date, created: record.created_at, record })),
-    ...activeGroup.items.map((item) => ({ kind: "item" as const, date: item.record_date, created: item.created_at, item })),
-  ].sort((a, b) => (b.date || b.created).localeCompare(a.date || a.created)) : [], [activeGroup]);
-  const activeGroupPageSize = 20;
-  const visibleActiveGroupEntries = activeGroupEntries.slice(
-    (activeGroupPage - 1) * activeGroupPageSize,
-    activeGroupPage * activeGroupPageSize,
-  );
-  const isOrganizationView = organizationOnly || view === "organization";
+  type Entry = { id: string; date: string; sortDate: string; created: string; groupKey: string } & ({ kind: "endorsement"; record: EndorsementRecord } | { kind: "item"; item: StudentRecordItem });
+  const flatGroups: RecordGroup<Entry>[] = filteredGroups.map(group => ({ id: group.key,
+    label: group.studentCertNumber ? `${group.studentName} · ${group.studentCertNumber}` : group.studentName,
+    latestAt: group.latestAt, openCount: 0,
+    records: [
+      ...group.endorsements.map(record => ({ id: `endorsement:${record.id}`, date: record.endorsement_date, sortDate: recordSortDate(record.endorsement_date, record.created_at), created: record.created_at, groupKey: group.key, kind: "endorsement" as const, record })),
+      ...group.items.map(item => ({ id: `item:${item.id}`, date: item.record_date, sortDate: recordSortDate(item.record_date, item.created_at), created: item.created_at, groupKey: group.key, kind: "item" as const, item })),
+    ].filter(entry => {
+      const needle = query.trim().toLowerCase();
+      if (!needle || `${group.studentName} ${group.studentCertNumber ?? ""}`.toLowerCase().includes(needle)) return true;
+      const text = entry.kind === "endorsement" ? [...entry.record.template_titles, entry.record.instructor_name, entry.date].join(" ") : [entry.item.title, entry.item.category ?? "", entry.date].join(" ");
+      return text.toLowerCase().includes(needle);
+    }).sort((a, b) => b.sortDate.localeCompare(a.sortDate) || b.created.localeCompare(a.created) || a.id.localeCompare(b.id)),
+  }));
   const personalOwnerView = !organizationOnly && view === "personal";
 
-  useEffect(() => {
-    setActiveGroupPage(1);
-  }, [activeGroupKey]);
+  async function confirmVisibility() {
+    if (!visibilityAction || !activeOrganization?.id || busy) return;
+    const hidden = !hiddenRecords.has(visibilityAction.id);
+    setBusy(true); setVisibilityError("");
+    try {
+      await setOrganizationEndorsementHidden(activeOrganization.id, visibilityAction.id, hidden);
+      setHiddenRecords(previous => { const next = new Set(previous); if (hidden) next.add(visibilityAction.id); else next.delete(visibilityAction.id); return next; });
+      setVisibilityAction(null);
+      requestAnimationFrame(() => { if (document.activeElement === document.body) document.querySelector<HTMLElement>('input[type="search"]')?.focus(); });
+    } catch (value) { setVisibilityError(value instanceof Error ? value.message : String((value as { message?: string }).message ?? "Unable to change record visibility.")); }
+    finally { setBusy(false); }
+  }
 
   async function openEndorsement(record: EndorsementRecord) {
     setBusy(true); setStatus("");
@@ -282,7 +305,7 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
       if (previousPath && previousPath !== saved.storage_path) {
         await removeStudentRecordFiles([previousPath]).catch((error) => console.warn("Old student record file cleanup failed:", error));
       }
-      setItemFormOpen(false); setSelectedStudentId(""); setActiveGroupKey(`folder:${folder.id}`);
+      setItemFormOpen(false); setSelectedStudentId(""); setActiveGroupKey(`person:${folderIdentity(folder)}`);
       setStatus(editingItem ? "Student record updated." : "Record added.");
     } catch (error) {
       if (uploadedPath) await removeStudentRecordFiles([uploadedPath]).catch(() => {});
@@ -312,55 +335,43 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
   return <>
     {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
     <ManagementDisclosure id="endorsement-records" title={organizationOnly ? "Issued endorsements" : "Endorsements"}
-      summary={loading ? "Loading…" : isOrganizationView ? `${records.length}` : `${groups.length} students`}
-      className="dashboard-data-workspace" defaultOpen
-      helpContent={organizationOnly ? <p>Shows endorsements issued while the instructor belonged to this organization.</p>
-        : <p>Each student has one record containing issued endorsements, notes, and private files shared with that student account.</p>}>
+      summary={loading ? "Loading…" : `${groups.length} people`}
+      className="dashboard-data-workspace" defaultOpen>
       {!organizationOnly ? <div className="console-page-subnavigation flex min-h-10 items-stretch border-b border-slate-200 bg-white">
-        <nav className="flex min-w-0 flex-1 gap-0 overflow-x-auto" aria-label="Student record views">
+        <nav className="flex min-w-0 flex-1 gap-0" aria-label="Student record views">
           {([ ["personal", "My student records"], ["received", "Shared with me"], ["organization", "Organization activity"] ] as const).map(([key, label]) =>
             <button key={key} type="button" aria-current={view === key ? "page" : undefined}
-              className={`shrink-0 border-b-2 px-3 text-xs font-medium transition-colors ${view === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+              className={`min-w-0 flex-1 whitespace-normal border-b-2 px-2 py-2 text-center text-xs font-medium transition-colors ${view === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
               onClick={() => { setStoredView(key); setActiveGroupKey(null); }}>{label}</button>)}
         </nav>
       </div> : null}
       <div className="admin-toolbar flex flex-col items-start gap-2 border-b border-slate-200 py-2 sm:flex-row sm:items-center">
         <label className="w-72 max-w-full flex-none"><span className="sr-only">Search students</span><input className="h-9 w-full rounded-sm border border-slate-300 px-3 text-sm" type="search" value={query}
-          onChange={(event) => setQuery(event.target.value)} placeholder="Search students" /></label>
+          onChange={(event) => setQuery(event.target.value)} placeholder="Search people or records" /></label>
+        {isOrganizationView ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHidden} onChange={event => setShowHidden(event.target.checked)} />Show hidden</label> : null}
         {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
         {personalOwnerView ? <div className="sm:ml-auto"><CompactButton type="button" tone="primary" onClick={openAddRecordForm}>Add record</CompactButton></div> : null}
       </div>
       {loading ? <p className="saas-meta-text mt-5">Loading records...</p> : null}
-      {!loading && (isOrganizationView ? records.length === 0 : filteredGroups.length === 0)
+      {!loading && filteredGroups.length === 0
         ? <p className="saas-empty-state mt-5">{query.trim() ? "No records match your search." : "No student records saved yet."}</p> : null}
-      {isOrganizationView && records.length > 0 ? <div className="mt-3"><AdminDataTable label="Organization endorsement records">
-        <thead><tr><th>Student</th><th>Endorsement</th><th>Date</th><th>Instructor</th><th>Saved</th><th aria-label="Actions" /></tr></thead>
-        <tbody>{sortedOrganizationRecords.map((record) => <tr key={record.id}><td className="font-semibold text-slate-900">{record.student_name}</td>
-          <td>{record.template_titles.length ? record.template_titles.join(", ") : "Endorsement PDF"}</td>
-          <td>{formatRecordDate(record.endorsement_date)}</td><td>{record.instructor_name}</td><td>{formatUsDateTime(record.created_at, "")}</td>
-          <td><button className="secondary-button icon-button" type="button" aria-label={`View PDF for ${record.student_name}`} disabled={busy} onClick={() => void openEndorsement(record)}><ActionIcon kind="open" /></button></td></tr>)}</tbody>
-      </AdminDataTable></div> : null}
-      {!isOrganizationView && filteredGroups.length > 0 ? <div className="mt-3"><AdminNameList
-        label="Student records"
-        emptyLabel="No student records saved yet."
-        items={filteredGroups.map((group) => ({ id: group.key, name: group.studentName }))}
-        onSelect={(item) => setActiveGroupKey(item.id)}
-      /></div> : null}
+      <FlatRecordGroups groups={flatGroups} searching={query.trim()} renderRecord={entry => <div className="flex min-w-0 items-start gap-2 px-3 py-2">
+        <button type="button" className="min-w-0 flex-1 text-left text-sm hover:text-blue-700" disabled={busy} onClick={() => {
+          setActiveGroupKey(entry.groupKey);
+          if (entry.kind === "endorsement") void openEndorsement(entry.record);
+          else if (entry.item.storage_path) void openStudentFile(entry.item); else setActiveItem(entry.item);
+        }}><span className="block break-words font-medium">{entry.kind === "endorsement" ? entry.record.template_titles.join(", ") || "Endorsement PDF" : entry.item.title}</span>
+          <span className="mt-1 block text-xs text-slate-500">{formatRecordDate(entry.date)}{entry.kind === "endorsement" ? ` · ${entry.record.instructor_name}` : ""}{isOrganizationView && entry.kind === "endorsement" && hiddenRecords.has(entry.record.id) ? " · Hidden" : ""}</span>
+        </button>
+        {isOrganizationView && canViewOrganizationRecords && entry.kind === "endorsement" && organizationRecordIds.has(entry.record.id) ? <RecordMenu label="Record actions" disabled={busy}><button type="button" disabled={busy} className="w-full px-3 py-2 text-left text-xs" onClick={() => { setVisibilityError(""); setVisibilityAction(entry.record); }}>{hiddenRecords.has(entry.record.id) ? "Unhide" : "Hide"}</button></RecordMenu> : null}
+      </div>} />
     </ManagementDisclosure>
 
-    <DetailDrawer open={Boolean(activeGroup)} title={activeGroup?.studentName ?? "Student record"} onClose={() => setActiveGroupKey(null)}>
-      {activeGroup ? <div className="space-y-4">
-        {activeGroup.endorsements.length + activeGroup.items.length === 0 ? <p className="saas-empty-state">This student record is empty.</p> : null}
-        <div className="border-x border-t border-slate-200 bg-white">
-          {visibleActiveGroupEntries.map((entry) => entry.kind === "endorsement" ? <button key={`endorsement:${entry.record.id}`} type="button" className="flex min-h-9 w-full items-center border-b border-slate-200 px-3 py-2 text-left text-[13px] font-medium text-slate-900 hover:bg-slate-50 focus-visible:bg-blue-50" disabled={busy} onClick={() => void openEndorsement(entry.record)}>
-            <span className="min-w-0 break-words">{entry.record.template_titles.join(", ") || "Endorsement PDF"}</span>
-          </button> : <button key={`item:${entry.item.id}`} type="button" className="flex min-h-9 w-full items-center border-b border-slate-200 px-3 py-2 text-left text-[13px] font-medium text-slate-900 hover:bg-slate-50 focus-visible:bg-blue-50" disabled={busy} onClick={() => entry.item.storage_path ? void openStudentFile(entry.item) : setActiveItem(entry.item)}>
-            <span className="min-w-0 break-words">{entry.item.title}</span>
-          </button>)}
-        </div>
-        <AdminPagination page={activeGroupPage} pageSize={activeGroupPageSize} total={activeGroupEntries.length} onPageChange={setActiveGroupPage} />
-      </div> : null}
-    </DetailDrawer>
+    <ConfirmDialog open={Boolean(visibilityAction)} title={visibilityAction && hiddenRecords.has(visibilityAction.id) ? "Unhide this record?" : "Hide this record?"}
+      description="Only the organization list changes. Personal records remain available." confirmLabel={visibilityAction && hiddenRecords.has(visibilityAction.id) ? "Unhide" : "Hide"} busy={busy}
+      onCancel={() => setVisibilityAction(null)} onConfirm={() => void confirmVisibility()}>
+      {visibilityError ? <p className="mt-3 text-xs text-rose-700" role="alert">{visibilityError}</p> : null}
+    </ConfirmDialog>
 
     <DetailDrawer open={itemFormOpen} title={editingItem ? "Edit record" : "Add record"} onClose={() => { setItemFormOpen(false); setItemFormError(""); }}>
       <div className="space-y-4">

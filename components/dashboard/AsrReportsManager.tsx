@@ -12,14 +12,17 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { ConfirmDialog, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { FlatRecordGroups } from "@/components/admin/FlatRecordGroups";
+import { ReportActionControls, ReturnAircraftOption, useReportActionContext } from "@/components/dashboard/ReportActionControls";
+import { groupAircraftReports } from "@/lib/record-groups";
+import { fetchReportActionContext, performReportAction } from "@/lib/report-actions";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import { useOrganization } from "@/components/organizations/OrganizationProvider";
+import { useReportOrganization } from "@/components/dashboard/useReportOrganization";
 import { UsDateInput } from "@/components/forms/UsDateInput";
 import { formatUsDateTime } from "@/lib/date-format";
 import {
   ASR_RISK_SCORES,
-  closeAsrReport,
   completeAsrMaintenanceReview,
   completeAsrTrainingReview,
   configureAsrReview,
@@ -99,8 +102,9 @@ export default function AsrReportsManager() {
   const searchParams = useSearchParams();
   const requestedReportId = searchParams.get("reportId") ?? "";
   const { session } = useAuthSession();
-  const { activeOrganization, loading: organizationsLoading } = useOrganization();
+  const { activeOrganization, organizations, setActiveOrganizationId, loading: organizationsLoading, canSubmit, error: organizationError } = useReportOrganization();
   const canManage = canManageOrganization(activeOrganization?.member_role);
+  const isPlatformAdmin = activeOrganization?.member_role === "platform_admin";
   const [reports, setReports] = useState<AsrReport[]>([]);
   const [aircraft, setAircraft] = useState<AircraftRecord[]>([]);
   const [people, setPeople] = useState<OrganizationReportPerson[]>([]);
@@ -123,6 +127,8 @@ export default function AsrReportsManager() {
   const [discrepancyDescription, setDiscrepancyDescription] = useState("");
   const [groundAircraft, setGroundAircraft] = useState(false);
   const [query, setQuery] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("open");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -136,6 +142,7 @@ export default function AsrReportsManager() {
     latestSaveVersion: 0,
   });
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const loadVersion = useRef(0);
 
   const activeReport = reports.find((report) => report.id === activeReportId) ?? null;
   const aircraftOptionGroups = useMemo(() =>
@@ -245,6 +252,7 @@ export default function AsrReportsManager() {
   }, []);
 
   async function loadData(preferredReportId = "") {
+    const version = ++loadVersion.current;
     if (!activeOrganization?.id) {
       setReports([]);
       setLoading(false);
@@ -270,6 +278,7 @@ export default function AsrReportsManager() {
         fetchAsrReviewerAssignments(activeOrganization.id),
         canManage ? fetchOrganizationMembers(activeOrganization.id) : Promise.resolve([]),
       ]);
+      if (version !== loadVersion.current) return;
       setReports(nextReports);
       setAircraft(nextAircraft);
       setPeople(nextPeople);
@@ -282,9 +291,10 @@ export default function AsrReportsManager() {
         setActiveReportId(nextId);
       }
     } catch (value) {
+      if (version !== loadVersion.current) return;
       setError(getErrorMessage(value, "Unable to load ASR reports."));
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }
 
@@ -300,7 +310,11 @@ export default function AsrReportsManager() {
       latestSaveVersion: 0,
     };
     setActiveReportId("");
+    setReports([]);
+    setShowHidden(false);
     void loadData();
+    const currentLoad = loadVersion;
+    return () => { currentLoad.current++; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrganization?.id, canManage, requestedReportId]);
 
@@ -353,8 +367,9 @@ export default function AsrReportsManager() {
 
   const filteredReports = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return reports;
     return reports.filter((report) =>
+      (!report.hidden_at || showHidden) &&
+      (statusFilter === "all" || (statusFilter === "open" ? !["closed", "superseded"].includes(report.status) : report.status === statusFilter)) &&
       [
         report.reference_number ?? "",
         report.aircraft_tail_number ?? "",
@@ -367,7 +382,8 @@ export default function AsrReportsManager() {
         .toLowerCase()
         .includes(needle)
     );
-  }, [query, reports]);
+  }, [query, reports, showHidden, statusFilter]);
+  const reportGroups = useMemo(() => groupAircraftReports(filteredReports), [filteredReports]);
 
   function optionValues(category: AsrOptionCategory) {
     return options
@@ -636,6 +652,10 @@ export default function AsrReportsManager() {
 
   return (
     <section className="space-y-5">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+        {organizations.length > 1 ? <label className="flex min-w-0 items-center gap-2"><span>Organization</span><select aria-label="Organization" className="min-w-0 max-w-full" value={activeOrganization.id} disabled={busy || showForm || Boolean(activeReport)} onChange={event => setActiveOrganizationId(event.target.value)}>{organizations.map(organization => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label> : <p className="break-words text-slate-600">Organization: {activeOrganization.name}</p>}
+      </div>
+      {organizationError ? <p className="text-sm text-rose-700" role="alert">{organizationError}</p> : null}
       {message ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
       <DetailDrawer open={showSettings && canManage} title="ASR reviewer and option settings" width="wide" onClose={() => setShowSettings(false)}>
@@ -814,36 +834,36 @@ export default function AsrReportsManager() {
         actions={
           <div className="flex flex-wrap gap-2">
             {canManage ? <button className="secondary-button" type="button" onClick={() => setShowSettings(true)}>Settings</button> : null}
-            <button className="primary-button" type="button" onClick={startNewReport} disabled={showForm || busy} title={showForm ? "Save and close the open draft first." : undefined}>New ASR</button>
+            <button className="primary-button" type="button" onClick={startNewReport} disabled={showForm || busy || !canSubmit} title={showForm ? "Save and close the open draft first." : undefined}>New ASR</button>
           </div>
         }
         className="dashboard-data-workspace"
         defaultOpen
-        helpContent={<p>Expand to search ASR history. Rows show only the reference, aircraft, occurrence date, status and assigned reviewer context; open one for the full occurrence and review record.</p>}
       >
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input className="min-w-0 flex-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reference, aircraft, occurrence, description, or reporter" />
+          <input aria-label="Search reports" className="min-w-0 flex-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports" />
+          <select aria-label="Report status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="open">Open reports</option><option value="closed">Closed</option><option value="draft">Drafts</option><option value="all">All statuses</option></select>
           {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
         </div>
+        <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHidden} onChange={event => { setShowHidden(event.target.checked); if (event.target.checked) setStatusFilter("all"); }} />Show hidden</label>
         {loading ? <p className="saas-empty-state mt-5">Loading ASR reports…</p> : null}
         {!loading && filteredReports.length === 0 ? <p className="saas-empty-state mt-5">No matching ASR reports.</p> : null}
-        <div className="mt-3 divide-y divide-slate-200 border border-slate-200 bg-white">
-          {filteredReports.map((report) => (
+        <FlatRecordGroups groups={reportGroups} searching={query.trim()} renderRecord={report => (
             <article key={report.id} className={`px-3 py-2.5 ${activeReportId === report.id ? "bg-blue-50" : "bg-white"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setActiveReportId(report.id)}>
-                  <p className="font-semibold text-slate-950">{report.reference_number ?? "ASR Draft"} · {report.aircraft_tail_number ?? "No aircraft"}</p>
-                  <p className="saas-meta-text mt-1">{report.occurrence_date ?? "No date"} · {report.type_of_occurrence ?? "Occurrence not selected"} · {formatStatus(report.status)}</p>
-                  <p className="mt-2 text-xs font-semibold text-slate-600">Reporter: {report.submitted_by_name}</p>
+                  <p className="line-clamp-1 text-sm font-medium text-slate-900">{report.reference_number ?? "ASR Draft"} · {report.description || report.type_of_occurrence || "Occurrence not selected"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{report.occurrence_date ?? "No date"} · {formatStatus(report.status)} · Submitted by: {report.submitted_by_name}</p>
+                  {report.hidden_at ? <span className="text-xs text-slate-500">Hidden</span> : null}
                 </button>
                 <div className="flex gap-2">
+                  <ReportActionControls report={report} canManage={canManage} isPlatformAdmin={isPlatformAdmin} disabled={busy || showForm} onChanged={async deleted => { if (deleted && activeReportId === report.id) setActiveReportId(""); await loadData(deleted ? "" : activeReportId); }} />
                   {report.risk_score ? <RiskBadge score={report.risk_score} /> : null}
                   {report.status === "draft" && report.submitted_by === session?.user?.id ? <><button className="ghost-button" type="button" disabled={showForm || busy} onClick={() => editDraft(report)}>Edit draft</button><button className="danger-button" type="button" disabled={showForm || busy} onClick={() => void handleCancelReport(report.id)}>Delete draft</button></> : null}
                 </div>
               </div>
             </article>
-          ))}
-        </div>
+          )} />
       </ManagementDisclosure>
 
       <DetailDrawer
@@ -857,6 +877,7 @@ export default function AsrReportsManager() {
         <AsrReportDetail
           key={`${activeReport.id}:${activeReport.updated_at}`}
           report={activeReport}
+          aircraftStatus={aircraft.find(plane => plane.id === activeReport.aircraft_id)?.operational_status}
           isSafetyReviewer={isSafetyReviewer}
           isTrainingReviewer={isTrainingReviewer}
           isMaintenanceReviewer={isMaintenanceReviewer}
@@ -878,6 +899,7 @@ export default function AsrReportsManager() {
 
 function AsrReportDetail({
   report,
+  aircraftStatus,
   isSafetyReviewer,
   isTrainingReviewer,
   isMaintenanceReviewer,
@@ -889,6 +911,7 @@ function AsrReportDetail({
   onEditDraft,
 }: {
   report: AsrReport;
+  aircraftStatus?: string;
   isSafetyReviewer: boolean;
   isTrainingReviewer: boolean;
   isMaintenanceReviewer: boolean;
@@ -918,6 +941,24 @@ function AsrReportDetail({
   const [investigationReference, setInvestigationReference] = useState(report.internal_investigation_reference ?? "");
   const [safetyTitle, setSafetyTitle] = useState(report.safety_signed_title ?? "Safety Manager");
   const [notifications, setNotifications] = useState<AsrExternalNotification[]>(report.external_notifications);
+  const [pendingClose, setPendingClose] = useState(false);
+  const [returnToService, setReturnToService] = useState(false);
+  const [closeError, setCloseError] = useState("");
+  const [expectedVersion, setExpectedVersion] = useState(report.updated_at);
+  const closeContext = useReportActionContext(report.id, pendingClose);
+  const actionBusy = useRef(false);
+
+  async function confirmClose() {
+    if (actionBusy.current || !closeContext.context) return;
+    actionBusy.current = true; onBusy(true); setCloseError("");
+    try {
+      await performReportAction({ report: { id: report.id, updated_at: expectedVersion }, action: "close", returnToService: returnToService && closeContext.context.aircraft_status === "grounded", contextToken: closeContext.context.token,
+        safetyReview: { safetyComments, hazardLogReference: hazardReference, internalInvestigationReference: investigationReference, title: safetyTitle,
+          externalNotifications: notifications.map(value => ({ ...value, notified_on: value.notified_on || null, contact_information: value.contact_information || null })) } });
+      setPendingClose(false); await onChanged(returnToService && closeContext.context.aircraft_status === "grounded" ? "Report closed and aircraft returned to service." : "Safety review signed and report closed.");
+    } catch (value) { setCloseError(getErrorMessage(value, "Unable to close this report. Try again.")); }
+    finally { actionBusy.current = false; onBusy(false); }
+  }
 
   async function run(
     action: () => Promise<void | string>,
@@ -936,6 +977,7 @@ function AsrReportDetail({
 
   return (
     <section className="saas-panel">
+      {report.deleted_source_report_id || report.deleted_supersedes_report_id ? <p className="mb-3 text-sm text-slate-600">A related report was deleted.</p> : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="saas-kicker">ASR detail</p>
@@ -952,6 +994,7 @@ function AsrReportDetail({
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Detail label="Occurrence" value={`${report.occurrence_date ?? "—"} ${report.occurrence_local_time ?? ""}`} />
         <Detail label="Aircraft" value={`${report.aircraft_tail_number ?? "N/A"} · ${report.aircraft_type ?? "N/A"}`} />
+        {report.aircraft_id ? <Detail label="Aircraft status" value={aircraftStatus ? aircraftStatus.split('_').map(word => word[0].toUpperCase() + word.slice(1)).join(' ') : "Unavailable"} /> : null}
         <Detail label="Type" value={report.type_of_occurrence ?? "—"} />
         <Detail label="Risk" value={report.risk_score ? `${report.risk_score} · ${riskBand(report.risk_score)}` : "Not rated"} />
         <Detail label="Commander" value={report.report_data.aircraft_commander_name || "—"} />
@@ -1005,11 +1048,22 @@ function AsrReportDetail({
               ))}
             </div>
           </div>
-          <button className="primary-button mt-4" disabled={busy} type="button" onClick={() => void run(() => closeAsrReport({ reportId: report.id, safetyComments, hazardLogReference: hazardReference, internalInvestigationReference: investigationReference, title: safetyTitle, externalNotifications: notifications }), "Safety review signed and ASR closed.")}>Sign Safety Review & Close ASR</button>
+          <button className="primary-button mt-4" disabled={busy} type="button" onClick={() => { setReturnToService(false); setCloseError(""); setPendingClose(true); }}>Close report</button>
         </ReviewPanel>
       ) : null}
 
       {report.safety_signed_at ? <ReviewPanel title="Section 8 - Safety Manager or Designee"><SignedReview comments={report.safety_comments} name={report.safety_signed_name} title={report.safety_signed_title} signedAt={report.safety_signed_at} /><p className="saas-meta-text mt-2">Hazard Log: {report.hazard_log_reference ?? "—"} · Investigation: {report.internal_investigation_reference ?? "—"}</p></ReviewPanel> : null}
+      <ConfirmDialog open={pendingClose} title="Close this report?" description="Save and sign the safety review, then close this report." confirmLabel="Close report" busy={busy}
+        confirmDisabled={closeContext.loading || !closeContext.context} onCancel={() => setPendingClose(false)} onConfirm={() => void confirmClose()}>
+        <ReturnAircraftOption context={closeContext.context} checked={returnToService} onChange={setReturnToService} disabled={busy} />
+        {closeContext.loading ? <p className="mt-3 text-xs">Loading aircraft status…</p> : null}
+        {closeError || closeContext.error ? <div className="mt-3 text-xs text-rose-700" role="alert"><p>{closeError || closeContext.error}</p><button type="button" disabled={busy} className="mt-2 underline" onClick={() => {
+          if (actionBusy.current) return;
+          actionBusy.current = true; onBusy(true);
+          void fetchReportActionContext(report.id).then(context => { setExpectedVersion(context.report_updated_at); closeContext.reload(); setCloseError(""); }, value => setCloseError(getErrorMessage(value, "Unable to reload this report.")))
+            .finally(() => { actionBusy.current = false; onBusy(false); });
+        }}>Reload confirmation</button></div> : null}
+      </ConfirmDialog>
     </section>
   );
 }
