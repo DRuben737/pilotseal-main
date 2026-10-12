@@ -427,6 +427,10 @@ export function DetailDrawer({
         document.removeEventListener("pointerdown", rememberPointerTarget, true);
       };
     }
+    const currentDialog = dialogRef.current;
+    const focusFrame = requestAnimationFrame(() => {
+      dialogRef.current?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')?.focus();
+    });
     function onKeyDown(event: KeyboardEvent) {
       if (document.querySelector('[role="alertdialog"]')) return;
       if (event.key === "Escape") {
@@ -452,8 +456,11 @@ export function DetailDrawer({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", onKeyDown);
-      restoreFocusRef.current?.focus();
+      if (!Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).some(dialog => dialog !== currentDialog)) {
+        restoreFocusRef.current?.focus();
+      }
     };
   }, [open, titleId]);
 
@@ -595,6 +602,8 @@ export function ConfirmDialog({
   destructive,
   onCancel,
   onConfirm,
+  children,
+  confirmDisabled = false,
 }: {
   open: boolean;
   title: string;
@@ -604,6 +613,8 @@ export function ConfirmDialog({
   destructive?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  children?: ReactNode;
+  confirmDisabled?: boolean;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef(onCancel);
@@ -615,7 +626,7 @@ export function ConfirmDialog({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) { event.preventDefault(); cancelRef.current(); }
       if (event.key !== "Tab") return;
-      const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+      const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') ?? []);
       if (!buttons.length) { event.preventDefault(); return; }
       if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons.at(-1)?.focus(); }
       else if (!event.shiftKey && document.activeElement === buttons.at(-1)) { event.preventDefault(); buttons[0].focus(); }
@@ -635,9 +646,10 @@ export function ConfirmDialog({
       <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-sm border border-slate-200 bg-white p-4 shadow-xl">
         <h2 id="confirm-title" className="text-base font-semibold text-slate-950">{title}</h2>
         <p className="mt-2 text-[13px] leading-5 text-slate-600">{description}</p>
+        {children}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" disabled={busy} onClick={onCancel} className="min-h-8 rounded-sm border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button type="button" disabled={busy} onClick={onConfirm} className={`min-h-8 rounded-sm px-3 text-xs font-semibold text-white disabled:opacity-60 ${destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-600 hover:bg-blue-700"}`}>{busy ? "Saving…" : confirmLabel}</button>
+          <button type="button" disabled={busy || confirmDisabled} onClick={onConfirm} className={`min-h-8 rounded-sm px-3 text-xs font-semibold text-white disabled:opacity-60 ${destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-600 hover:bg-blue-700"}`}>{busy ? "Saving…" : confirmLabel}</button>
         </div>
       </section>
     </div>, document.body

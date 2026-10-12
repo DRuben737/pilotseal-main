@@ -72,14 +72,18 @@ export function UsDateInput({
         if (nextDraft.length === expectedLength) {
           const parsed = parseValue(nextDraft);
           if (parsed) onChange(parsed);
-          else event.currentTarget.setCustomValidity(`Enter a valid date as ${formatLabel}.`);
-        }
+          else {
+            onChange("");
+            event.currentTarget.setCustomValidity(`Enter a valid date as ${formatLabel}.`);
+          }
+        } else onChange("");
       }}
       onBlur={(event) => {
         const parsed = draft ? parseValue(draft) : "";
         event.currentTarget.setCustomValidity(
           draft && !parsed ? `Enter a valid date as ${formatLabel}.` : ""
         );
+        onChange(parsed ?? "");
         setEditing(false);
         onBlur?.(event);
       }}

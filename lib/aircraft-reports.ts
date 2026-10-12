@@ -1,27 +1,7 @@
 import { getSupabaseClient } from "@/lib/supabase";
 
-export const AIRCRAFT_DISCREPANCY_TYPES = [
-  "Wings",
-  "Fuselage",
-  "Main Rotor",
-  "Tail Rotor",
-  "Propeller",
-  "Flight Controls",
-  "Engine",
-  "Fuel",
-  "Landing Gear",
-  "Electrical/Lighting",
-  "Flight Instrument",
-  "Hobbs",
-  "Pitot Static",
-  "Radio",
-  "Navigation",
-  "EFIS",
-  "Transponder/ADS-B",
-  "Auto Pilot",
-] as const;
-
-export type AircraftDiscrepancyType = (typeof AIRCRAFT_DISCREPANCY_TYPES)[number];
+import type { AircraftDiscrepancyType } from "./aircraft-report-types";
+export { AIRCRAFT_DISCREPANCY_TYPES, type AircraftDiscrepancyType } from "./aircraft-report-types";
 export type OrganizationReportStatus = "submitted" | "in_review" | "closed";
 export type TriState = boolean | null;
 
@@ -67,6 +47,8 @@ export type AircraftDiscrepancyReport = {
   aircraft_id: string;
   aircraft_tail_number: string;
   report_date: string;
+  found_by_person_id: string | null;
+  found_by_name: string | null;
   student_person_id: string | null;
   student_name: string | null;
   instructor_person_id: string | null;
@@ -96,6 +78,8 @@ export type SubmitAircraftDiscrepancyInput = {
   clientRequestId: string;
   aircraftId: string;
   reportDate: string;
+  foundByPersonId: string;
+  reportTimezone: string;
   studentPersonId?: string | null;
   instructorPersonId?: string | null;
   flightHobbsEnd?: number | null;
@@ -121,7 +105,7 @@ const REPORT_SELECT = `
   id, organization_id, status, submitted_by, submitted_by_name,
   created_at, updated_at, closed_at,
   aircraft_discrepancy_reports!aircraft_discrepancy_reports_report_id_fkey (
-    aircraft_id, aircraft_tail_number, report_date,
+    aircraft_id, aircraft_tail_number, report_date, found_by_person_id, found_by_name,
     student_person_id, student_name, instructor_person_id, instructor_name,
     flight_hobbs_end, maintenance_hobbs_end, flight_duration,
     discrepancy_type, description, is_asr_submitted, is_deferrable, is_aircraft_down,
@@ -176,11 +160,13 @@ export async function submitAircraftDiscrepancyReport(
   input: SubmitAircraftDiscrepancyInput
 ): Promise<string> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("submit_aircraft_discrepancy_report", {
+  const { data, error } = await supabase.rpc("submit_aircraft_report", {
     p_organization_id: input.organizationId,
     p_client_request_id: input.clientRequestId,
     p_aircraft_id: input.aircraftId,
     p_report_date: input.reportDate,
+    p_found_by_person_id: input.foundByPersonId,
+    p_report_timezone: input.reportTimezone,
     p_student_person_id: input.studentPersonId || null,
     p_instructor_person_id: input.instructorPersonId || null,
     p_flight_hobbs_end: input.flightHobbsEnd ?? null,
@@ -219,6 +205,19 @@ export async function processAircraftDiscrepancyReport(
   if (error) throw error;
 }
 
+export async function closeAircraftDiscrepancyReport(
+  reportId: string,
+  expectedUpdatedAt: string,
+  review: Omit<ProcessAircraftDiscrepancyInput, "reportId"> | null = null,
+) {
+  const { error } = await getSupabaseClient().rpc("close_aircraft_report", {
+    p_report_id: reportId,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_review: review,
+  });
+  if (error) throw error;
+}
+
 function normalizeAircraftDiscrepancyReport(
   value: Record<string, unknown>
 ): AircraftDiscrepancyReport | null {
@@ -246,6 +245,8 @@ function normalizeAircraftDiscrepancyReport(
     aircraft_id: String(detail.aircraft_id ?? ""),
     aircraft_tail_number: String(detail.aircraft_tail_number ?? ""),
     report_date: String(detail.report_date ?? ""),
+    found_by_person_id: nullableString(detail.found_by_person_id),
+    found_by_name: nullableString(detail.found_by_name),
     student_person_id: nullableString(detail.student_person_id),
     student_name: nullableString(detail.student_name),
     instructor_person_id: nullableString(detail.instructor_person_id),
@@ -253,7 +254,7 @@ function normalizeAircraftDiscrepancyReport(
     flight_hobbs_end: nullableNumber(detail.flight_hobbs_end),
     maintenance_hobbs_end: nullableNumber(detail.maintenance_hobbs_end),
     flight_duration: nullableNumber(detail.flight_duration),
-    discrepancy_type: String(detail.discrepancy_type ?? "Wings") as AircraftDiscrepancyType,
+    discrepancy_type: String(detail.discrepancy_type ?? "") as AircraftDiscrepancyType,
     description: String(detail.description ?? ""),
     asr_submitted: nullableBoolean(detail.is_asr_submitted),
     deferrable: nullableBoolean(detail.is_deferrable),
