@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase";
+import { localReportDate } from "./aircraft-report-form";
 import type {
   AircraftDiscrepancyType,
   OrganizationReportEvent,
@@ -148,7 +149,7 @@ export const ASR_RISK_SCORES = [1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 20, 25] 
 export function createEmptyAsrReportData(): AsrReportData {
   return {
     source_discrepancy_report_id: "",
-    occurrence_date: new Date().toISOString().slice(0, 10),
+    occurrence_date: localReportDate(),
     occurrence_local_time: "",
     aircraft_id: "",
     aircraft_registration: "",
@@ -245,37 +246,17 @@ export async function fetchAsrOptions(organizationId: string): Promise<AsrOption
   return (data ?? []) as AsrOption[];
 }
 
-export async function createAsrOption(input: {
-  organizationId: string;
-  category: AsrOptionCategory;
-  value: string;
-}) {
-  const supabase = getSupabaseClient();
-  const { error } = await supabase.from("organization_asr_options").insert({
-    organization_id: input.organizationId,
-    category: input.category,
-    value: input.value.trim(),
-  });
-  if (error) throw error;
-}
-
-export async function setAsrOptionActive(optionId: string, isActive: boolean) {
-  const supabase = getSupabaseClient();
-  const { error } = await supabase
-    .from("organization_asr_options")
-    .update({ is_active: isActive, updated_at: new Date().toISOString() })
-    .eq("id", optionId);
-  if (error) throw error;
-}
-
 export async function fetchAsrReviewerAssignments(
-  organizationId: string
+  organizationId: string,
+  userId?: string
 ): Promise<AsrReviewerAssignment[]> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("organization_report_reviewer_assignments")
     .select("organization_id, user_id, capability, assigned_by, created_at")
     .eq("organization_id", organizationId);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as AsrReviewerAssignment[];
 }

@@ -50,6 +50,7 @@ import {
 import OrganizationEndorsementRequests from "@/components/dashboard/OrganizationEndorsementRequests";
 import EndorsementRecordsManager from "@/components/dashboard/EndorsementRecordsManager";
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
+import OrganizationMemberReviewAccess from "@/components/dashboard/OrganizationMemberReviewAccess";
 import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
 import {
   AdminDataTable,
@@ -2058,7 +2059,7 @@ export default function OrganizationManager({
 
           <DetailDrawer
             open={Boolean(selectedMember)}
-            onClose={() => { setSelectedMemberId(""); setMemberAccessDraft(null); setMemberAccessError(""); }}
+            onClose={() => { if (saving) return; setSelectedMemberId(""); setMemberAccessDraft(null); setMemberAccessError(""); }}
             title={selectedMember ? memberDisplayName(selectedMember, selectedOrganizationPerson) : "Organization member"}
           >
             {selectedMember && memberAccessDraft ? <div className="grid gap-5 text-[13px]">
@@ -2075,6 +2076,13 @@ export default function OrganizationManager({
                 {memberAccessError ? <p className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{memberAccessError}</p> : null}
                 {(canManageMembers || canChangeSelectedManagementAccess) ? <div className="flex justify-end"><CompactButton type="button" tone="primary" disabled={saving || !memberAccessChanged} onClick={applyMemberAccess}>{saving ? "Saving…" : "Apply role & access"}</CompactButton></div> : null}
               </section>
+
+              {canManageOrganization(role) ? <OrganizationMemberReviewAccess
+                key={`${activeOrganization.id}:${selectedMember.user_id}`}
+                organizationId={activeOrganization.id} userId={selectedMember.user_id}
+                memberName={memberDisplayName(selectedMember, selectedOrganizationPerson)}
+                disabled={saving} onBusy={setSaving}
+              /> : null}
 
               <section className="grid gap-3">
                 <h3 className="border-b border-slate-200 pb-2 text-sm font-semibold text-slate-950">Member details</h3>

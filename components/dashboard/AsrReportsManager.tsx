@@ -26,7 +26,6 @@ import {
   completeAsrMaintenanceReview,
   completeAsrTrainingReview,
   configureAsrReview,
-  createAsrOption,
   createAsrRevision,
   createEmptyAsrReportData,
   deleteAsrDraft,
@@ -34,8 +33,6 @@ import {
   fetchAsrReviewerAssignments,
   fetchOrganizationAsrReports,
   saveAsrDraft,
-  setAsrOptionActive,
-  setAsrReviewerCapability,
   submitAsrReport,
   type AsrExternalNotification,
   type AsrOption,
@@ -43,7 +40,6 @@ import {
   type AsrReport,
   type AsrReportData,
   type AsrReviewerAssignment,
-  type AsrReviewerCapability,
 } from "@/lib/asr-reports";
 import {
   AIRCRAFT_DISCREPANCY_TYPES,
@@ -55,11 +51,8 @@ import {
 } from "@/lib/aircraft-reports";
 import { fetchOrganizationAircraft, type AircraftRecord } from "@/lib/aircraft";
 import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
-import {
-  canManageOrganization,
-  fetchOrganizationMembers,
-  type OrganizationMember,
-} from "@/lib/organizations";
+import { canManageOrganization } from "@/lib/organizations";
+import { asrFieldOptions, asrOptionLabel, asrOptionValues } from "@/lib/asr-options";
 import { downloadAsrPdf } from "@/lib/asr-pdf";
 import {
   validateAsrDraft,
@@ -67,28 +60,6 @@ import {
   type AsrRequiredField,
 } from "@/lib/asr-report-validation";
 
-const REVIEWER_CAPABILITIES: Array<{
-  value: AsrReviewerCapability;
-  label: string;
-}> = [
-  { value: "training_reviewer", label: "Head of Training" },
-  { value: "maintenance_reviewer", label: "Maintenance" },
-  { value: "safety_reviewer", label: "Safety Manager" },
-];
-
-const OPTION_CATEGORIES: Array<{ value: AsrOptionCategory; label: string }> = [
-  { value: "occurrence_type", label: "Occurrence Type" },
-  { value: "nature_of_flight", label: "Nature of Flight" },
-  { value: "phase_of_flight", label: "Phase of Flight" },
-  { value: "maneuver", label: "Maneuver" },
-  { value: "training_area", label: "Training Area" },
-  { value: "program", label: "Program" },
-  { value: "day_night", label: "Day / Night" },
-  { value: "flight_conditions", label: "IMC / VMC" },
-  { value: "precipitation", label: "Precipitation" },
-  { value: "intensity", label: "Intensity" },
-  { value: "external_agency", label: "External Agency" },
-];
 
 type DraftSaveContext = {
   organizationId: string;
@@ -111,10 +82,8 @@ export default function AsrReportsManager() {
   const [discrepancies, setDiscrepancies] = useState<AircraftDiscrepancyReport[]>([]);
   const [options, setOptions] = useState<AsrOption[]>([]);
   const [assignments, setAssignments] = useState<AsrReviewerAssignment[]>([]);
-  const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [activeReportId, setActiveReportId] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [editingReportId, setEditingReportId] = useState("");
   const [draftRequestId, setDraftRequestId] = useState("");
   const [draftData, setDraftData] = useState<AsrReportData>(createEmptyAsrReportData);
@@ -123,7 +92,8 @@ export default function AsrReportsManager() {
   const [closingDraft, setClosingDraft] = useState(false);
   const [createDiscrepancy, setCreateDiscrepancy] = useState(false);
   const [discrepancyType, setDiscrepancyType] =
-    useState<AircraftDiscrepancyType>("Wings");
+    useState<AircraftDiscrepancyType | "">("");
+  const [discrepancyError, setDiscrepancyError] = useState("");
   const [discrepancyDescription, setDiscrepancyDescription] = useState("");
   const [groundAircraft, setGroundAircraft] = useState(false);
   const [query, setQuery] = useState("");
@@ -268,7 +238,6 @@ export default function AsrReportsManager() {
         nextDiscrepancies,
         nextOptions,
         nextAssignments,
-        nextMembers,
       ] = await Promise.all([
         fetchOrganizationAsrReports(activeOrganization.id),
         fetchOrganizationAircraft(activeOrganization.id),
@@ -276,7 +245,6 @@ export default function AsrReportsManager() {
         fetchOrganizationAircraftReports(activeOrganization.id),
         fetchAsrOptions(activeOrganization.id),
         fetchAsrReviewerAssignments(activeOrganization.id),
-        canManage ? fetchOrganizationMembers(activeOrganization.id) : Promise.resolve([]),
       ]);
       if (version !== loadVersion.current) return;
       setReports(nextReports);
@@ -285,7 +253,6 @@ export default function AsrReportsManager() {
       setDiscrepancies(nextDiscrepancies);
       setOptions(nextOptions);
       setAssignments(nextAssignments);
-      setMembers(nextMembers);
       const nextId = preferredReportId || requestedReportId;
       if (nextId && nextReports.some((report) => report.id === nextId)) {
         setActiveReportId(nextId);
@@ -386,9 +353,7 @@ export default function AsrReportsManager() {
   const reportGroups = useMemo(() => groupAircraftReports(filteredReports), [filteredReports]);
 
   function optionValues(category: AsrOptionCategory) {
-    return options
-      .filter((option) => option.category === category && option.is_active)
-      .map((option) => option.value);
+    return asrOptionValues(options, category);
   }
 
   function startNewReport() {
@@ -421,6 +386,7 @@ export default function AsrReportsManager() {
     setDraftRequestId(requestId);
     setEditingReportId("");
     setCreateDiscrepancy(false);
+    setDiscrepancyType(""); setDiscrepancyError("");
     setGroundAircraft(false);
     setDiscrepancyDescription("");
     setShowForm(true);
@@ -446,6 +412,7 @@ export default function AsrReportsManager() {
     setDraftRequestId(requestId);
     setEditingReportId(report.id);
     setCreateDiscrepancy(false);
+    setDiscrepancyType(""); setDiscrepancyError("");
     setGroundAircraft(false);
     setDiscrepancyDescription(report.description ?? "");
     setShowForm(true);
@@ -607,6 +574,11 @@ export default function AsrReportsManager() {
       return;
     }
     setFormErrors({});
+    if (createDiscrepancy && !discrepancyType) {
+      setDiscrepancyError("Select an affected area.");
+      setError("Select an affected area for the linked aircraft report.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -622,7 +594,7 @@ export default function AsrReportsManager() {
       await submitAsrReport({
         reportId,
         createDiscrepancy,
-        discrepancyType: createDiscrepancy ? discrepancyType : null,
+        discrepancyType: createDiscrepancy ? discrepancyType || null : null,
         discrepancyDescription: createDiscrepancy
           ? discrepancyDescription || draftData.description
           : null,
@@ -658,17 +630,6 @@ export default function AsrReportsManager() {
       {organizationError ? <p className="text-sm text-rose-700" role="alert">{organizationError}</p> : null}
       {message ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
-      <DetailDrawer open={showSettings && canManage} title="ASR reviewer and option settings" width="wide" onClose={() => setShowSettings(false)}>
-        {canManage ? <AsrSettings
-          organizationId={activeOrganization.id}
-          members={members}
-          assignments={assignments}
-          options={options}
-          onChanged={() => loadData(activeReportId)}
-          onError={(value) => setError(getErrorMessage(value, "Unable to update ASR settings."))}
-        /> : null}
-      </DetailDrawer>
-
       <DetailDrawer open={showForm} title={editingReportId ? "Edit ASR draft" : "New ASR"} width="wide" onClose={() => void handleCloseDraft()}>
         <div id="asr-report-form">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -817,7 +778,7 @@ export default function AsrReportsManager() {
           {!draftData.source_discrepancy_report_id ? (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <label className="flex items-center gap-3 text-sm font-semibold text-amber-950"><input type="checkbox" checked={createDiscrepancy} onChange={(event) => { setCreateDiscrepancy(event.target.checked); if (!event.target.checked) setGroundAircraft(false); }} />Also create a linked Aircraft Discrepancy Report</label>
-              {createDiscrepancy ? <div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Discrepancy Type"><select value={discrepancyType} onChange={(event) => setDiscrepancyType(event.target.value as AircraftDiscrepancyType)}>{AIRCRAFT_DISCREPANCY_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field><Field label="Discrepancy Description"><textarea rows={3} value={discrepancyDescription} onChange={(event) => setDiscrepancyDescription(event.target.value)} placeholder="Defaults to the ASR occurrence description" /></Field><label className="flex items-center gap-3 text-sm font-semibold text-rose-800"><input type="checkbox" checked={groundAircraft} onChange={(event) => setGroundAircraft(event.target.checked)} />Ground the aircraft when submitted</label></div> : null}
+              {createDiscrepancy ? <div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Affected area" required error={discrepancyError}><select value={discrepancyType} onChange={(event) => { setDiscrepancyType(event.target.value as AircraftDiscrepancyType); setDiscrepancyError(""); }}><option value="">Select an affected area</option>{AIRCRAFT_DISCREPANCY_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field><Field label="Discrepancy Description"><textarea rows={3} value={discrepancyDescription} onChange={(event) => setDiscrepancyDescription(event.target.value)} placeholder="Defaults to the ASR occurrence description" /></Field><label className="flex items-center gap-3 text-sm font-semibold text-rose-800"><input type="checkbox" checked={groundAircraft} onChange={(event) => setGroundAircraft(event.target.checked)} />Ground the aircraft when submitted</label></div> : null}
             </div>
           ) : null}
 
@@ -833,7 +794,6 @@ export default function AsrReportsManager() {
         summary={loading ? "Loading…" : `${filteredReports.length}`}
         actions={
           <div className="flex flex-wrap gap-2">
-            {canManage ? <button className="secondary-button" type="button" onClick={() => setShowSettings(true)}>Settings</button> : null}
             <button className="primary-button" type="button" onClick={startNewReport} disabled={showForm || busy || !canSubmit} title={showForm ? "Save and close the open draft first." : undefined}>New ASR</button>
           </div>
         }
@@ -1068,13 +1028,6 @@ function AsrReportDetail({
   );
 }
 
-function AsrSettings({ organizationId, members, assignments, options, onChanged, onError }: { organizationId: string; members: OrganizationMember[]; assignments: AsrReviewerAssignment[]; options: AsrOption[]; onChanged: () => Promise<void>; onError: (value: unknown) => void }) {
-  const [category, setCategory] = useState<AsrOptionCategory>("occurrence_type");
-  const [newValue, setNewValue] = useState("");
-  const [busy, setBusy] = useState(false);
-  async function run(action: () => Promise<void>) { setBusy(true); try { await action(); await onChanged(); } catch (value) { onError(value); } finally { setBusy(false); } }
-  return <section className="saas-panel"><h2 className="saas-subsection-title">ASR reviewer and option settings</h2><div className="mt-5 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="border-b text-left text-slate-500"><th className="p-2">Member</th>{REVIEWER_CAPABILITIES.map((capability) => <th className="p-2" key={capability.value}>{capability.label}</th>)}</tr></thead><tbody>{members.map((member) => <tr className="border-b border-slate-100" key={member.user_id}><td className="p-2">{member.display_name || member.email}</td>{REVIEWER_CAPABILITIES.map((capability) => { const enabled = assignments.some((assignment) => assignment.user_id === member.user_id && assignment.capability === capability.value); return <td className="p-2" key={capability.value}><input type="checkbox" checked={enabled} disabled={busy} onChange={(event) => void run(() => setAsrReviewerCapability({ organizationId, userId: member.user_id, capability: capability.value, enabled: event.target.checked }))} /></td>; })}</tr>)}</tbody></table></div><div className="mt-6 border-t border-slate-200 pt-5"><h3 className="font-semibold text-slate-950">Organization ASR options</h3><div className="mt-3 flex flex-wrap gap-2"><select value={category} onChange={(event) => setCategory(event.target.value as AsrOptionCategory)}>{OPTION_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><input value={newValue} onChange={(event) => setNewValue(event.target.value)} placeholder="New option" /><button className="secondary-button" type="button" disabled={busy || !newValue.trim()} onClick={() => void run(async () => { await createAsrOption({ organizationId, category, value: newValue }); setNewValue(""); })}>Add</button></div><div className="mt-3 flex flex-wrap gap-2">{options.filter((option) => option.category === category).map((option) => <button key={option.id} type="button" disabled={busy} onClick={() => void run(() => setAsrOptionActive(option.id, !option.is_active))} className={`rounded-full border px-3 py-1 text-xs ${option.is_active ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-100 text-slate-500 line-through"}`}>{option.value}</button>)}</div></div></section>;
-}
 
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <fieldset className="mt-5 rounded-2xl border border-slate-200 p-4"><legend className="px-2 text-sm font-semibold text-slate-900">{title}</legend>{children}</fieldset>; }
 function ReviewPanel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="mt-5 rounded-2xl border border-slate-200 p-4"><h3 className="font-semibold text-slate-950">{title}</h3><div className="mt-4">{children}</div></div>; }
@@ -1142,7 +1095,7 @@ function OptionField({
     <Field label={label} required={required} error={error}>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">{required ? "Select an option" : "Not specified"}</option>
-        {options.map((option) => <option key={option}>{option}</option>)}
+        {asrFieldOptions(options, value).map((option) => <option key={option} value={option}>{asrOptionLabel(option)}</option>)}
       </select>
     </Field>
   );
