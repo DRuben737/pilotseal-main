@@ -603,7 +603,7 @@ export default function MyAircraftManager() {
       await savePersonalAircraftInspections(conflict.aircraft.id, getPersonalInspectionInputs());
       await reloadAircraftLists();
       closeForm();
-      setStatus("Current shared aircraft added to My Aircraft.");
+      setStatus("Aircraft added to My Aircraft.");
     } catch (error) {
       setStatus(getErrorMessage(error, "Unable to attach current aircraft."));
     } finally {
@@ -690,8 +690,8 @@ export default function MyAircraftManager() {
         onChange={(id) => setStoredAircraftTab(id as typeof storedAircraftTab)}
         actions={activeAircraftTab === "mine" ? <CompactButton type="button" tone="primary" onClick={openAddForm}>Add aircraft</CompactButton> : undefined}
         helpContent={activeAircraftTab === "mine"
-          ? <><p>Manage aircraft attached to your account, including weight and balance data and personal maintenance reminders.</p><p>Eligible private aircraft can be shared with selected organizations without changing ownership.</p></>
-          : <p>These aircraft are shared with the selected organization. Access and editing depend on your organization role.</p>}
+          ? <p>Eligible private aircraft can be shared with selected organizations without changing ownership.</p>
+          : <p>Editing depends on your organization role.</p>}
       >
       {activeAircraftTab === "mine" ? (
         <div className="my-aircraft-table">
@@ -829,7 +829,7 @@ export default function MyAircraftManager() {
         title={editingAircraftId ? "Edit aircraft" : "Add aircraft"}
         description={editingAircraftId
           ? "Edit aircraft details and personal maintenance due values in compact worksheets."
-          : "Add a tail number or attach an existing shared aircraft."
+          : "Add a tail number."
         }
         onClose={closeForm}
       >
@@ -1003,7 +1003,7 @@ export default function MyAircraftManager() {
 
           {conflict ? (
             <div className="border-t border-amber-300 bg-amber-50 p-3">
-              <p className="text-xs font-semibold text-amber-950">Existing shared aircraft found</p>
+              <p className="text-xs font-semibold text-amber-950">Tail number already exists</p>
               <p className="mt-1 text-xs text-amber-800">
                 The tail number exists with different weight-and-balance values. Use the current record or submit your values for review.
               </p>

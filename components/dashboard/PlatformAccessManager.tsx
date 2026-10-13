@@ -233,10 +233,10 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
         helpContent={activeAccessTab === "requests"
           ? <p>Review verified company registration requests. Approval creates an organization and assigns the requester as its first Owner; rejection creates nothing.</p>
           : activeAccessTab === "organizations"
-            ? <p>Organizations are the tenant workspaces on PilotSeal. Add creates the workspace and assigns its first Owner in one audited step.</p>
+            ? <p>Creating an organization assigns its first Owner.</p>
             : activeAccessTab === "admins"
               ? <p>Platform administrators can review registrations and manage platform-wide resources. This role is independent from organization membership.</p>
-              : <p>This immutable history records platform role grants and revocations, including the actor, target, reason and time.</p>}
+              : undefined}
       >
       {activeAccessTab === "requests" ? (
       <AdminDataTable label="Company registration requests">

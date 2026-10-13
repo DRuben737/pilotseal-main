@@ -1023,7 +1023,6 @@ function ConverterPanel() {
     <article className="flight-computer-card flight-computer-cardCompact flight-computer-converterPanel">
       <div className="flight-computer-cardHead">
         <h3>Converters</h3>
-        <p>Select a converter, then work in one panel.</p>
       </div>
 
       <div className="flight-computer-segmented">
@@ -1043,7 +1042,6 @@ function ConverterPanel() {
         <div className="flight-computer-converterCard">
           <div className="flight-computer-cardHead">
             <h3>Distance converter</h3>
-            <p>NM, SM, KM, meters, feet, yards.</p>
           </div>
           <div className="flight-computer-converterGrid">
             {DISTANCE_UNITS.map((unit) => (
@@ -1063,7 +1061,6 @@ function ConverterPanel() {
         <div className="flight-computer-converterCard">
           <div className="flight-computer-cardHead">
             <h3>Speed converter</h3>
-            <p>Knots, Mach at sea level, MPH, KPH, FPM, M/S.</p>
           </div>
           <div className="flight-computer-converterGrid">
             {SPEED_UNITS.map((unit) => (
@@ -1083,7 +1080,6 @@ function ConverterPanel() {
         <div className="flight-computer-converterCard">
           <div className="flight-computer-cardHead">
             <h3>Temperature converter</h3>
-            <p>Fahrenheit, Celsius, Kelvin.</p>
           </div>
           <div className="flight-computer-converterGrid flight-computer-converterGridTight">
             {TEMPERATURE_UNITS.map((unit) => (
@@ -1103,7 +1099,6 @@ function ConverterPanel() {
         <div className="flight-computer-converterCard">
           <div className="flight-computer-cardHead">
             <h3>Fuel converter</h3>
-            <p>Volume and mass with selectable fuel density.</p>
           </div>
 
           <div className="flight-computer-converterMeta">
@@ -1452,7 +1447,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Wind correction</h3>
-            <p>Course, TAS, wind.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="True course" value={nav.trueCourse} setValue={(v) => setNav((c) => ({ ...c, trueCourse: v }))} suffix="°" placeholder="090" />
@@ -1485,7 +1479,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Runway wind</h3>
-            <p>Runway and wind.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Runway heading" value={runway.runwayHeading} setValue={(v) => setRunway((c) => ({ ...c, runwayHeading: v }))} suffix="°" placeholder="250" />
@@ -1508,7 +1501,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Rule of 60</h3>
-            <p>Track error and intercept.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Off course" value={rule60.offCourseNm} setValue={(v) => setRule60((c) => ({ ...c, offCourseNm: v }))} suffix="nm" placeholder="2" />
@@ -1529,7 +1521,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Time and fuel</h3>
-            <p>Distance, GS, burn.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Distance" value={fuelPlan.distanceNm} setValue={(v) => setFuelPlan((c) => ({ ...c, distanceNm: v }))} suffix="nm" placeholder="245" />
@@ -1552,7 +1543,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Fuel remaining</h3>
-            <p>Onboard fuel, distance, GS, burn.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Fuel on board" value={fuelRemaining.fuelOnBoard} setValue={(v) => setFuelRemaining((c) => ({ ...c, fuelOnBoard: v }))} suffix="gal" placeholder="42" />
@@ -1599,7 +1589,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Altitude</h3>
-            <p>Elevation, altimeter, OAT.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Field elevation" value={altitude.fieldElevation} setValue={(v) => setAltitude((c) => ({ ...c, fieldElevation: v }))} suffix="ft" placeholder="500" />
@@ -1620,7 +1609,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Fuel by weight</h3>
-            <p>Gallons and pounds.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Fuel gallons" value={fuelWeightCalc.fuelGallons} setValue={(v) => setFuelWeightCalc((c) => ({ ...c, fuelGallons: v }))} suffix="gal" placeholder="32.5" />
@@ -1641,7 +1629,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Climb / descent</h3>
-            <p>Altitude, GS, vertical speed.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Altitude change" value={climb.altitudeChange} setValue={(v) => setClimb((c) => ({ ...c, altitudeChange: v }))} suffix="ft" placeholder="3000" />
@@ -1662,7 +1649,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Rate of climb / descent table</h3>
-            <p>Quick FPM reference from groundspeed and path angle.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Groundspeed" value={climbTable.groundspeed} setValue={(v) => setClimbTable((c) => ({ ...c, groundspeed: v }))} suffix="kt" placeholder="120" />
@@ -1708,7 +1694,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Required descent rate</h3>
-            <p>Altitude, distance, GS.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Altitude to lose" value={requiredDescent.altitudeToLose} setValue={(v) => setRequiredDescent((c) => ({ ...c, altitudeToLose: v }))} suffix="ft" placeholder="4500" />
@@ -1729,7 +1714,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Vertical speed from gradient</h3>
-            <p>GS and ft per NM.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Groundspeed" value={gradientVs.groundspeed} setValue={(v) => setGradientVs((c) => ({ ...c, groundspeed: v }))} suffix="kt" placeholder="120" />
@@ -1747,7 +1731,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Top of descent</h3>
-            <p>Altitude, rate, GS.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Altitude to lose" value={tod.altitudeToLose} setValue={(v) => setTod((c) => ({ ...c, altitudeToLose: v }))} suffix="ft" placeholder="6000" />
@@ -1767,7 +1750,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Required groundspeed</h3>
-            <p>Distance and time remaining.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <Field label="Distance remaining" value={requiredGs.distanceNm} setValue={(v) => setRequiredGs((c) => ({ ...c, distanceNm: v }))} suffix="nm" placeholder="84" />
@@ -1788,7 +1770,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Holding trainer</h3>
-            <p>Entry type, drift, and outbound setup.</p>
           </div>
           <div className="flight-computer-fieldGrid">
             <HoldingCourseField
@@ -1849,7 +1830,6 @@ export default function FlightComputer() {
         <article className="flight-computer-card flight-computer-cardCompact">
           <div className="flight-computer-cardHead">
             <h3>Nav log</h3>
-            <p>Build route legs and totals.</p>
           </div>
 
           <div className="flight-computer-navlogList">
@@ -1991,7 +1971,6 @@ export default function FlightComputer() {
       <section className="flight-computer-hero">
         <div className="flight-computer-heroCopy">
           <h2>Flight computer</h2>
-          <p>Operational calculations in one panel.</p>
         </div>
       </section>
 

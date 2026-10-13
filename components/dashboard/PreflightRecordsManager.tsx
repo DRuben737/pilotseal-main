@@ -129,7 +129,6 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
       actions={<Link className="secondary-button" href="/tools/flight-brief">New Flight Brief</Link>}
       helpContent={
         <>
-          <p>{organizationOnly ? "This view contains organization-scoped member briefs." : "This view combines your own briefs with organization records you are permitted to see."}</p>
           <p>Flight Brief records, including drafts and finalized history, are retained for up to 7 days and then expire automatically.</p>
           <p>Unfinished drafts you own can be continued or deleted. Finalized records cannot be edited; create a revision when a correction is needed.</p>
           <p>A Flight Brief is a planning record, not a maintenance release, aircraft logbook entry, or legal weather briefing certificate.</p>

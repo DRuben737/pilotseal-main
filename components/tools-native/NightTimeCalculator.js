@@ -486,7 +486,7 @@ const NightTimeCalculator = () => {
               </div>
             </div>
 
-            <p className="night-tool-visualNote">Drag anywhere on the sky to inspect a time · all horizontal positions use exact elapsed time</p>
+            <p className="night-tool-visualNote">Drag on the sky to inspect a time</p>
 
             <div className="night-tool-bands">
               {nightReference.tracks.map((track) => (

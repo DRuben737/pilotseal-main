@@ -1005,7 +1005,7 @@ export default function SavedPeopleManager() {
       className="people-workspace"
       defaultOpen
       openOnAction
-      helpContent={<><p>Saved People stores private student, instructor and passenger records used by your tools.</p><p>Expand a person to manage certificates or link the record to a verified PilotSeal account. Linking does not expose your private notes or certificates.</p></>}
+      helpContent={<p>Linking an account does not expose your private notes or certificates.</p>}
     >
       <div className="admin-toolbar flex items-center justify-between gap-2 border-b border-slate-200 py-2">
         <label className="people-search console-compact-search min-w-0" aria-label="Search profiles">
@@ -1057,7 +1057,6 @@ export default function SavedPeopleManager() {
       <DetailDrawer
         open={showPersonForm}
         title="Create profile"
-        description="Save a student, instructor, or passenger profile."
         compact
         onClose={() => setShowPersonForm(false)}
       >
@@ -1151,7 +1150,6 @@ export default function SavedPeopleManager() {
               <DetailDrawer
                 open={isEditing}
                 title={`Edit ${person.display_name}`}
-                description="Update the fields used across PilotSeal tools."
                 compact
                 onClose={() => cancelEditing(person.id)}
               >
@@ -1197,7 +1195,6 @@ export default function SavedPeopleManager() {
               <DetailDrawer
                 open={isExpanded}
                 title={person.display_name}
-                description="Platform link and certificate details"
                 width="wide"
                 compact
                 onClose={() => toggleExpanded(person.id)}

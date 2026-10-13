@@ -346,7 +346,7 @@ export default function NotificationManager({
       {!platformPublishingOnly && activeView === "inbox" ? <>
       <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} className="dashboard-data-workspace" defaultOpen actions={<div className="flex gap-2"><button className="ghost-button" type="button" onClick={() => setShowPreferences(true)}>Preferences</button><button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
             Mark all read ({unreadCount})
-          </button></div>} helpContent={<p>Personal reminders, organization messages, schedule updates and platform notices appear in this unified inbox. Expand it to search or filter.</p>}>
+          </button></div>}>
 
         <div className="mt-5 grid gap-3">
           <div className="flex flex-col gap-2 sm:flex-row">

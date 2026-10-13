@@ -429,8 +429,7 @@ function mergeAircraftOptions(sharedAircraft, myAircraft) {
 }
 
 function formatAircraftOptionLabel(aircraft) {
-  const baseLabel = String(aircraft.tail_number ?? aircraft.name ?? "Untitled aircraft");
-  return aircraft.is_saved ? `${baseLabel} · My aircraft` : `${baseLabel} · Shared`;
+  return String(aircraft.tail_number ?? aircraft.name ?? "Untitled aircraft");
 }
 
 export default function WeightBalanceCalculator({

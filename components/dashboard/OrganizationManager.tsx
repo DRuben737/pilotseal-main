@@ -1596,7 +1596,7 @@ export default function OrganizationManager({
           <button className="cursor-pointer rounded-md border border-blue-600 bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" type="button" onClick={startCreateModel}>Add model</button>
         </div>
 
-        <DetailDrawer open={Boolean(selectedModel)} title={selectedModel?.name ?? "Aircraft model"} description="Aircraft model details." onClose={() => setSelectedModel(null)}>
+        <DetailDrawer open={Boolean(selectedModel)} title={selectedModel?.name ?? "Aircraft model"} onClose={() => setSelectedModel(null)}>
           {selectedModel ? <div className="space-y-4 text-[13px]">
             <dl className="grid gap-3 border-y border-slate-200 py-3 sm:grid-cols-2"><div><dt className="text-xs text-slate-500">Type</dt><dd className="font-medium capitalize text-slate-900">{selectedModel.category || "—"}</dd></div><div><dt className="text-xs text-slate-500">Scope</dt><dd className="font-medium text-slate-900">{selectedModel.organization_id === activeOrganization.id ? "Organization" : "Platform"}</dd></div></dl>
             {selectedModel.organization_id === activeOrganization.id ? <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => { const model = selectedModel; setSelectedModel(null); startEditModel(model); }}>Edit</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => { setDeleteModel(selectedModel); setSelectedModel(null); }}>Delete</CompactButton></div> : null}
@@ -1622,7 +1622,6 @@ export default function OrganizationManager({
           open={showModelForm}
           width="wide"
           title={editingModelId ? `Edit ${modelForm.name}` : "Add aircraft model"}
-          description="Model details, loading locations, and approved CG limits."
           onClose={() => setShowModelForm(false)}
         >
           <form
@@ -1904,10 +1903,7 @@ export default function OrganizationManager({
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-3 border-t border-slate-300 bg-slate-50 px-3 py-2">
-              <p className="text-[11px] text-slate-500">
-                A blank row is added automatically as you type.
-              </p>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-300 bg-slate-50 px-3 py-2">
               <div className="flex gap-2">
                 <button
                   className="cursor-pointer rounded border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"

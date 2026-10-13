@@ -2055,11 +2055,9 @@ export default function AircraftAdminPanel() {
             : activeLibraryTab === "aircraft"
               ? <CompactButton type="button" tone="primary" onClick={() => openAircraftEditor()}>Add aircraft</CompactButton>
               : undefined}
-          helpContent={activeLibraryTab === "models"
-            ? <p>Platform models define reusable loading locations, fuel data and approved weight-and-balance envelopes.</p>
-            : activeLibraryTab === "aircraft"
-              ? <p>Manage platform aircraft identity, visibility, weight-and-balance data and organization access.</p>
-              : <p>Review submitted changes before they replace the current aircraft weight-and-balance values.</p>}
+          helpContent={activeLibraryTab === "requests"
+            ? <p>Approved changes replace the current aircraft weight-and-balance values.</p>
+            : undefined}
         >
         {activeLibraryTab === "models" ? (
         <AdminNameList
@@ -2210,10 +2208,10 @@ export default function AircraftAdminPanel() {
           void handleDeleteModel(id);
         }}
       />
-      <DetailDrawer open={showModelForm} width="wide" onClose={() => setShowModelForm(false)} title={modelForm.id ? "Edit aircraft model" : "Add aircraft model"} description="Model identity, loading locations, and approved envelopes.">
+      <DetailDrawer open={showModelForm} width="wide" onClose={() => setShowModelForm(false)} title={modelForm.id ? "Edit aircraft model" : "Add aircraft model"}>
         {renderCompactModelForm()}
       </DetailDrawer>
-      <DetailDrawer open={showAircraftForm} width="wide" onClose={() => setShowAircraftForm(false)} title={aircraftForm.id ? "Edit aircraft" : "Add aircraft"} description="Aircraft identity and weight-and-balance record.">
+      <DetailDrawer open={showAircraftForm} width="wide" onClose={() => setShowAircraftForm(false)} title={aircraftForm.id ? "Edit aircraft" : "Add aircraft"}>
         {renderAircraftForm()}
       </DetailDrawer>
       <DetailDrawer open={Boolean(assigningAircraftId)} onClose={() => { setAssigningAircraftId(""); setSelectedOrganizationIds([]); }} title="Organization access" description="Choose every organization that may use this private aircraft.">
