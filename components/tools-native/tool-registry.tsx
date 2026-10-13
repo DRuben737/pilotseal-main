@@ -1,3 +1,4 @@
+import SkyArt from "@/components/tools-native/SkyArt";
 import Decoder from "@/components/tools-native/Decoder";
 import EndorsementGenerator from "@/components/tools-native/EndorsementGenerator";
 import FlightBrief from "@/components/tools-native/FlightBrief";
@@ -6,6 +7,7 @@ import NightTimeCalculator from "@/components/tools-native/NightTimeCalculator";
 import WeightBalanceCalculator from "@/components/tools-native/WeightBalanceCalculator";
 
 export const nativeToolRegistry = {
+  "sky-art": SkyArt,
   decoder: Decoder,
   "endorsement-generator": EndorsementGenerator,
   "flight-brief": FlightBrief,

@@ -5,6 +5,11 @@ export type ToolEmbedConfig = {
 };
 
 export const toolEmbedConfig: Record<string, ToolEmbedConfig> = {
+  "sky-art": {
+    title: "Sky Art",
+    description: "Compose artwork and turn it into a flight track and nav log.",
+    eyebrow: "Flight tracks",
+  },
   "endorsement-generator": {
     title: "Endorsement Generator",
     description: "Create and print FAA-style endorsement packets.",
@@ -43,6 +48,7 @@ export function getToolEmbedConfig(slug: string[]) {
 }
 
 const allPrimaryToolKeys = [
+  "sky-art",
   "endorsement-generator",
   "flight-brief",
   "flight-computer",

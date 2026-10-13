@@ -4,7 +4,7 @@ import { toolEmbedConfig } from "@/app/(site)/tools/tool-config";
 
 const toolGroups = [
   { title: "Training", tools: ["endorsement-generator", "flight-brief"] },
-  { title: "Flight planning", tools: ["flight-computer", "wb", "nighttime", "decoder"] },
+  { title: "Flight planning", tools: ["sky-art", "flight-computer", "wb", "nighttime", "decoder"] },
 ] as const;
 
 function ToolIcon({ tool }: { tool: string }) {
@@ -18,6 +18,7 @@ function ToolIcon({ tool }: { tool: string }) {
     "aria-hidden": true,
   };
 
+  if (tool === "sky-art") return <svg {...common}><path d="m3 16 6-11 4 9 8-7-4 13-5-3-9-1Z" /></svg>;
   if (tool === "endorsement-generator") return <svg {...common}><path d="M6 3.5h12v17H6z" /><path d="M9 8h6M9 11h4" /><path d="m10 16 1.5 1.5L15 14" /></svg>;
   if (tool === "flight-brief") return <svg {...common}><path d="M4 6.5h16v13H4z" /><path d="M8 3.5v6M16 3.5v6M4 10.5h16" /><path d="M8 14h3M13 14h3M8 17h3" /></svg>;
   if (tool === "flight-computer") return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 6v12M6 12h12M8 8l8 8M16 8l-8 8" /></svg>;

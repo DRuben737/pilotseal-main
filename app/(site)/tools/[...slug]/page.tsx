@@ -53,6 +53,8 @@ const toolVisuals = {
 
 function renderNativeTool(slug: string) {
   switch (slug) {
+    case "sky-art":
+      return createElement(nativeToolRegistry["sky-art"]);
     case "decoder":
       return createElement(nativeToolRegistry.decoder);
     case "endorsement-generator":
