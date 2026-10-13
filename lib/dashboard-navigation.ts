@@ -35,10 +35,10 @@ export const dashboardPrimaryNavigation: DashboardNavItem[] = [
     { label: "Safety reports", param: "type", value: "asr" },
   ] },
   { href: "/console/personal/flight-briefs", label: "Flight Briefs", access: "all" },
-  { href: "/console/personal/endorsements", label: "Endorsements", access: "all", children: [
-    { label: "My student records", value: "personal", default: true },
+  { href: "/console/personal/endorsements", label: "Records", access: "all", children: [
+    { label: "Student records", value: "personal", default: true },
     { label: "Shared with me", value: "received" },
-    { label: "Organization activity", value: "organization", organizationManagerOnly: true },
+    { label: "Organization endorsements", value: "organization", organizationManagerOnly: true },
   ] },
   { href: "/console/personal/notifications", label: "Notifications", access: "all", children: [
     { label: "Personal", value: "inbox", default: true },

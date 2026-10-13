@@ -306,10 +306,10 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
         await removeStudentRecordFiles([previousPath]).catch((error) => console.warn("Old student record file cleanup failed:", error));
       }
       setItemFormOpen(false); setSelectedStudentId(""); setActiveGroupKey(`person:${folderIdentity(folder)}`);
-      setStatus(editingItem ? "Student record updated." : "Record added.");
+      setStatus(editingItem ? "Record updated." : "Record added.");
     } catch (error) {
       if (uploadedPath) await removeStudentRecordFiles([uploadedPath]).catch(() => {});
-      setItemFormError(error instanceof Error ? error.message : "Unable to save the student record.");
+      setItemFormError(error instanceof Error ? error.message : "Unable to save this record.");
     } finally { setBusy(false); }
   }
 
@@ -327,26 +327,26 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
       const storagePath = await deleteStudentRecordItem(item.id);
       setItems((current) => current.filter((value) => value.id !== item.id)); setActiveItem(null);
       if (storagePath) await removeStudentRecordFiles([storagePath]).catch((error) => console.warn("Student record file cleanup failed:", error));
-      setStatus("Student record content deleted.");
-    } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to delete the student record content."); }
+      setStatus("Record deleted.");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to delete this record."); }
     finally { setBusy(false); }
   }
 
   return <>
     {status ? <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600" role="status">{status}</p> : null}
-    <ManagementDisclosure id="endorsement-records" title={organizationOnly ? "Issued endorsements" : "Endorsements"}
+    <ManagementDisclosure id="endorsement-records" title={organizationOnly ? "Issued endorsements" : "Records"}
       summary={loading ? "Loading…" : `${groups.length} people`}
       className="dashboard-data-workspace" defaultOpen>
       {!organizationOnly ? <div className="console-page-subnavigation flex min-h-10 items-stretch border-b border-slate-200 bg-white">
-        <nav className="flex min-w-0 flex-1 gap-0" aria-label="Student record views">
-          {([ ["personal", "My student records"], ["received", "Shared with me"], ["organization", "Organization activity"] ] as const).map(([key, label]) =>
+        <nav className="flex min-w-0 flex-1 gap-0" aria-label="Record views">
+          {([ ["personal", "Student records"], ["received", "Shared with me"], ["organization", "Organization endorsements"] ] as const).map(([key, label]) =>
             <button key={key} type="button" aria-current={view === key ? "page" : undefined}
               className={`min-w-0 flex-1 whitespace-normal border-b-2 px-2 py-2 text-center text-xs font-medium transition-colors ${view === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
               onClick={() => { setStoredView(key); setActiveGroupKey(null); }}>{label}</button>)}
         </nav>
       </div> : null}
       <div className="admin-toolbar flex flex-col items-start gap-2 border-b border-slate-200 py-2 sm:flex-row sm:items-center">
-        <label className="w-72 max-w-full flex-none"><span className="sr-only">Search students</span><input className="h-9 w-full rounded-sm border border-slate-300 px-3 text-sm" type="search" value={query}
+        <label className="w-72 max-w-full flex-none"><span className="sr-only">Search people or records</span><input className="h-9 w-full rounded-sm border border-slate-300 px-3 text-sm" type="search" value={query}
           onChange={(event) => setQuery(event.target.value)} placeholder="Search people or records" /></label>
         {isOrganizationView ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHidden} onChange={event => setShowHidden(event.target.checked)} />Show hidden</label> : null}
         {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
@@ -354,7 +354,13 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
       </div>
       {loading ? <p className="saas-meta-text mt-5">Loading records...</p> : null}
       {!loading && filteredGroups.length === 0
-        ? <p className="saas-empty-state mt-5">{query.trim() ? "No records match your search." : "No student records saved yet."}</p> : null}
+        ? <p className="saas-empty-state mt-5">{query.trim()
+            ? "No records match your search."
+            : isOrganizationView
+              ? "No organization endorsements yet."
+              : view === "received"
+                ? "No records have been shared with you yet."
+                : "No student records yet."}</p> : null}
       <FlatRecordGroups groups={flatGroups} searching={query.trim()} renderRecord={entry => <div className="flex min-w-0 items-start gap-2 px-3 py-2">
         <button type="button" className="min-w-0 flex-1 text-left text-sm hover:text-blue-700" disabled={busy} onClick={() => {
           setActiveGroupKey(entry.groupKey);
@@ -416,9 +422,9 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
     />
     <ConfirmDialog
       open={Boolean(itemToDelete)}
-      title="Delete record content"
-      description={`Delete “${itemToDelete?.title ?? "this item"}” from this student record? This cannot be undone.`}
-      confirmLabel="Delete content"
+      title="Delete record"
+      description={`Permanently delete “${itemToDelete?.title ?? "this record"}” and its attachment? This cannot be undone.`}
+      confirmLabel="Delete record"
       destructive
       busy={busy}
       onCancel={() => setItemToDelete(null)}

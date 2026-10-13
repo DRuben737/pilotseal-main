@@ -9,7 +9,7 @@ export const QUICK_ACTIONS = [
   { id: "decoder", href: "/tools/decoder", label: "Aviation Decoder" },
   { id: "my_aircraft", href: "/console/personal/aircraft", label: "My Aircraft" },
   { id: "safety_reports", href: "/console/personal/reports", label: "Safety Reports" },
-  { id: "records", href: "/console/personal/flight-briefs", label: "View Records" },
+  { id: "records", href: "/console/personal/flight-briefs", label: "View Flight Briefs" },
   { id: "people", href: "/console/personal/people", label: "Manage People" },
   { id: "notifications", href: "/console/personal/notifications", label: "Notifications" },
   { id: "account", href: "/console/personal/account", label: "Account Settings" },

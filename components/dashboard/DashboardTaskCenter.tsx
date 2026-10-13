@@ -25,7 +25,7 @@ const moduleLinks = [
   ["Aircraft", "/dashboard/aircraft", "Aircraft details and due items"],
   ["Reports", "/dashboard/reports", "Safety and aircraft reports"],
   ["Flight Briefs", "/dashboard/flight-briefs", "Recent preflight records"],
-  ["Endorsements", "/dashboard/endorsements", "Issued and received records"],
+  ["Records", "/dashboard/endorsements", "Student records, endorsements, and attachments"],
   ["Notifications", "/dashboard/notifications", "Requests, reminders, and updates"],
   ["Account", "/dashboard/account-settings", "Profile, certificates, and preferences"],
 ] as const;
