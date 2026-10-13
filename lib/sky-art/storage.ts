@@ -51,6 +51,19 @@ export function validateProject(raw: unknown): SavedProject {
     throw new Error("Invalid contour mode.");
   if (c.firstElement && !ids.has(c.firstElement))
     throw new Error("Invalid first element.");
+  if (c.firstCharacter !== undefined) {
+    const element = c.elements.find((e) => e.id === c.firstElement);
+    const chars = element ? [...element.value.replace(/\n/g, "")] : [];
+    if (
+      !element ||
+      element.kind !== "text" ||
+      !Number.isInteger(c.firstCharacter) ||
+      c.firstCharacter < 0 ||
+      c.firstCharacter >= chars.length ||
+      /\s/.test(chars[c.firstCharacter])
+    )
+      throw new Error("Invalid first character.");
+  }
   if (
     !place ||
     !place.anchor ||

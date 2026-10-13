@@ -84,6 +84,41 @@ try {
     path: path.join(output, "canvas-desktop.png"),
     fullPage: true,
   });
+  assert.equal(await page.getByLabel("X", { exact: true }).count(), 0);
+  assert.equal(await page.getByLabel("Y", { exact: true }).count(), 0);
+  assert.equal(await page.getByLabel("Rotation °", { exact: true }).count(), 0);
+  assert.equal(
+    await page.getByLabel("Project name", { exact: true }).count(),
+    0,
+  );
+  await page.getByRole("button", { name: "Clear canvas", exact: true }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('[class*="elementList"] button').length === 0,
+  );
+  assert.equal(
+    await page.getByRole("button", { name: "View on map →" }).isEnabled(),
+    false,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Clear canvas", exact: true })
+      .isEnabled(),
+    false,
+  );
+  await page.getByRole("button", { name: "↶ Undo", exact: true }).click();
+  await ready();
+  const startDrawing = page.getByLabel("Start drawing", { exact: true });
+  await startDrawing.selectOption({ label: "2026 · 2 (1)" });
+  await ready();
+  await startDrawing.selectOption("");
+  await ready();
+  await page.getByText("Layers", { exact: true }).click();
+  await page
+    .locator('[class*="elementList"] button')
+    .filter({ hasText: "2026" })
+    .click();
+  await page.getByText("Layers", { exact: true }).click();
   // Text edit, undo, unsupported character recovery.
   const text = page.getByRole("textbox", { name: "Text content" });
   await text.fill("生日快乐");
@@ -146,6 +181,7 @@ try {
   await page.getByRole("button", { name: "↶ Undo", exact: true }).click();
   await ready();
   // Select both through element list, group, move as one and undo.
+  await page.getByText("Layers", { exact: true }).click();
   const elements = page.locator('[class*="elementList"] button');
   await elements.nth(0).click();
   await elements.nth(1).click({ modifiers: ["Shift"] });
@@ -170,6 +206,11 @@ try {
     );
   const balancedCount = await countPoints();
   await page.getByText("Advanced", { exact: true }).click();
+  const radius = page.getByLabel("Turn radius NM", { exact: true });
+  assert.ok(await radius.isVisible());
+  await radius.fill("0.1");
+  assert.equal(await radius.inputValue(), "0.1");
+  await radius.fill("0");
   await page.getByLabel("Navigation detail", { exact: true }).selectOption("0");
   const fullCount = await countPoints();
   assert.ok(fullCount > balancedCount, "original detail restores points");
@@ -273,6 +314,7 @@ try {
   await page
     .getByRole("button", { name: "Select multiple", exact: true })
     .click();
+  await page.getByText("Layers", { exact: true }).click();
   const mobileElements = page.locator('[class*="elementList"] button');
   await mobileElements.nth(0).click();
   await mobileElements.nth(1).click();

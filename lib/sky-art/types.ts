@@ -18,6 +18,7 @@ export type Composition = {
   name: string;
   elements: Element[];
   firstElement?: string;
+  firstCharacter?: number;
   connectionMode?: "complete" | "open";
 };
 export type Stroke = {

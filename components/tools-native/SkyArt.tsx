@@ -157,6 +157,11 @@ export default function SkyArt() {
   const changeElement = (patch: Partial<Element>) =>
     update({
       ...composition,
+      firstCharacter:
+        patch.value !== undefined &&
+        selection.includes(composition.firstElement ?? "")
+          ? undefined
+          : composition.firstCharacter,
       elements: composition.elements.map((e) =>
         selection.includes(e.id) ? { ...e, ...patch } : e,
       ),
@@ -205,6 +210,9 @@ export default function SkyArt() {
     update({
       ...composition,
       elements: composition.elements.filter((e) => !selection.includes(e.id)),
+      firstCharacter: selection.includes(composition.firstElement ?? "")
+        ? undefined
+        : composition.firstCharacter,
       firstElement: selection.includes(composition.firstElement ?? "")
         ? undefined
         : composition.firstElement,
@@ -280,6 +288,14 @@ export default function SkyArt() {
   }, [workerEpoch]);
   useEffect(() => {
     const id = ++request.current;
+    if (!composition.elements.length) {
+      setGeometry([]);
+      setRoute(null);
+      setBusy(false);
+      setError("");
+      setGeneratedKey("");
+      return;
+    }
     const timer = setTimeout(() => {
       setBusy(true);
       setError("");
@@ -744,6 +760,20 @@ export default function SkyArt() {
             <button disabled={!selected.length} onClick={remove}>
               Delete
             </button>
+            <button
+              disabled={!composition.elements.length}
+              onClick={() => {
+                update({
+                  ...composition,
+                  elements: [],
+                  firstElement: undefined,
+                  firstCharacter: undefined,
+                });
+                setSelection([]);
+              }}
+            >
+              Clear canvas
+            </button>
             <label className={styles.toggle}>
               <input
                 type="checkbox"
@@ -865,86 +895,100 @@ export default function SkyArt() {
                   ) : (
                     <strong>{label(active)}</strong>
                   )}
-                  <div className={styles.twoColumns}>
-                    <NumberField
-                      name="X"
-                      value={active.x}
-                      onChange={(x) => changeElement({ x })}
-                    />
-                    <NumberField
-                      name="Y"
-                      value={active.y}
-                      onChange={(y) => changeElement({ y })}
-                    />
-                    <NumberField
-                      name="Size"
-                      value={active.scale}
-                      onChange={(scale) => changeElement({ scale })}
-                      min={0.05}
-                      max={100}
-                      step={0.1}
-                    />
-                    <NumberField
-                      name="Rotation °"
-                      value={active.rotation}
-                      onChange={(rotation) => changeElement({ rotation })}
-                    />
-                  </div>
+                  <NumberField
+                    name="Size"
+                    value={active.scale}
+                    onChange={(scale) => changeElement({ scale })}
+                    min={0.05}
+                    max={100}
+                    step={0.1}
+                  />
                 </>
               )}
-              <h2 className={styles.sectionTitle}>Elements</h2>
-              <div className={styles.elementList}>
-                {composition.elements.map((e) => (
-                  <button
-                    key={e.id}
-                    aria-pressed={selection.includes(e.id)}
-                    onClick={(event) =>
-                      setSelection(
-                        event.shiftKey || multiple
-                          ? selection.includes(e.id)
-                            ? selection.filter((id) => id !== e.id)
-                            : [...selection, e.id]
-                          : composition.elements
-                              .filter((a) =>
-                                e.group ? a.group === e.group : a.id === e.id,
-                              )
-                              .map((a) => a.id),
-                      )
-                    }
-                  >
-                    <span>{e.kind === "text" ? "T" : "◇"}</span>
-                    <strong>{label(e)}</strong>
-                    {e.group && <small>Grouped</small>}
-                  </button>
-                ))}
-              </div>
-              <Field name="First element">
+              <details>
+                <summary>Layers</summary>
+                <div className={styles.elementList}>
+                  {composition.elements.map((e) => (
+                    <button
+                      key={e.id}
+                      aria-pressed={selection.includes(e.id)}
+                      onClick={(event) =>
+                        setSelection(
+                          event.shiftKey || multiple
+                            ? selection.includes(e.id)
+                              ? selection.filter((id) => id !== e.id)
+                              : [...selection, e.id]
+                            : composition.elements
+                                .filter((a) =>
+                                  e.group ? a.group === e.group : a.id === e.id,
+                                )
+                                .map((a) => a.id),
+                        )
+                      }
+                    >
+                      <span>{e.kind === "text" ? "T" : "◇"}</span>
+                      <strong>{label(e)}</strong>
+                      {e.group && <small>Grouped</small>}
+                    </button>
+                  ))}
+                </div>
+              </details>
+              <Field name="Start drawing">
                 <select
-                  aria-label="First element"
-                  value={composition.firstElement ?? ""}
-                  onChange={(e) =>
+                  aria-label="Start drawing"
+                  value={
+                    composition.firstElement
+                      ? JSON.stringify([
+                          composition.firstElement,
+                          composition.firstCharacter ?? null,
+                        ])
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const [firstElement, firstCharacter] = e.target.value
+                      ? JSON.parse(e.target.value)
+                      : [undefined, undefined];
                     update({
                       ...composition,
-                      firstElement: e.target.value || undefined,
-                    })
-                  }
+                      firstElement,
+                      firstCharacter: firstCharacter ?? undefined,
+                    });
+                  }}
                 >
                   <option value="">Automatic</option>
-                  {composition.elements.map((e) => (
-                    <option value={e.id} key={e.id}>
-                      {label(e)}
-                    </option>
-                  ))}
+                  {composition.elements.flatMap((e) =>
+                    e.kind === "preset"
+                      ? [
+                          <option
+                            key={e.id}
+                            value={JSON.stringify([e.id, null])}
+                          >
+                            {label(e)}
+                          </option>,
+                        ]
+                      : [
+                          <option
+                            key={e.id}
+                            value={JSON.stringify([e.id, null])}
+                          >
+                            {label(e)} · Automatic entry
+                          </option>,
+                          ...[...e.value.replace(/\n/g, "")].flatMap(
+                            (character, index) =>
+                              /\s/.test(character)
+                                ? []
+                                : [
+                                    <option
+                                      key={`${e.id}-${index}`}
+                                      value={JSON.stringify([e.id, index])}
+                                    >
+                                      {label(e)} · {character} ({index + 1})
+                                    </option>,
+                                  ],
+                          ),
+                        ],
+                  )}
                 </select>
-              </Field>
-              <Field name="Project name">
-                <input
-                  value={composition.name}
-                  maxLength={200}
-                  onChange={(e) =>
-                    update({ ...composition, name: e.target.value })
-                  }
-                />
               </Field>
             </aside>
           </div>
@@ -1210,19 +1254,16 @@ export default function SkyArt() {
                     <option value={0}>All original points</option>
                   </select>
                 </Field>
-                <details>
-                  <summary>Turn smoothing</summary>
-                  <NumberField
-                    name="Radius NM · 0 = off"
-                    value={placement.radiusNm}
-                    onChange={(radiusNm) =>
-                      updatePlacement({ ...placement, radiusNm })
-                    }
-                    min={0}
-                    max={20}
-                    step={0.1}
-                  />
-                </details>
+                <NumberField
+                  name="Turn radius NM"
+                  value={placement.radiusNm}
+                  onChange={(radiusNm) =>
+                    updatePlacement({ ...placement, radiusNm })
+                  }
+                  min={0}
+                  max={20}
+                  step={0.1}
+                />
               </details>
             </aside>
             <div className={styles.mapStage}>

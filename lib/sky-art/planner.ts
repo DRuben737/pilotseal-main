@@ -529,8 +529,23 @@ export function planRoute(
     let variants: number[][] = [[]];
     for (const element of [orderedElements[0], ...tail]) {
       const block = forward.filter((i) => groups[i].id === element.id);
+      const pinned =
+        element.id === composition.firstElement &&
+        composition.firstCharacter !== undefined
+          ? block.findIndex(
+              (i) => groups[i].character === composition.firstCharacter,
+            )
+          : -1;
+      const rotateTo = (order: number[]) => {
+        const start = order.indexOf(block[pinned]);
+        return [...order.slice(start), ...order.slice(0, start)];
+      };
       const choices =
-        approach && block.length > 1 ? [block, [...block].reverse()] : [block];
+        pinned >= 0
+          ? [rotateTo(block), rotateTo([...block].reverse())]
+          : approach && block.length > 1
+            ? [block, [...block].reverse()]
+            : [block];
       variants = variants.flatMap((prefix) =>
         choices.map((choice) => [...prefix, ...choice]),
       );

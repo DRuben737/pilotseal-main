@@ -879,3 +879,77 @@ test("successive text blocks choose independent directions", async () => {
   for (let i = 1; i < route.segments.length; i++)
     assert.deepEqual(route.segments[i - 1].to, route.segments[i].from);
 });
+
+test("explicit first character survives movement, rotation, route variants and project import", async () => {
+  const c: Composition = {
+    version: 1,
+    name: "Pinned character",
+    connectionMode: "open",
+    firstElement: "word",
+    firstCharacter: 0,
+    elements: [
+      { ...text("ABCD"), id: "word", x: 100, y: 100 },
+      {
+        ...text(""),
+        id: "tree",
+        kind: "preset",
+        value: "christmas-tree",
+        x: 500,
+        y: 100,
+      },
+    ],
+  };
+  // Use the catalog ID rather than the display label.
+  c.elements[1].value = PRESETS.find((p) => p.name === "Christmas tree")!.id;
+  const g = await buildGeometry(c, font);
+  for (const index of [0, 1, 3]) {
+    const pinned = { ...c, firstCharacter: index };
+    for (const variant of ["balanced", "shortest", "cleanest"] as const) {
+      const route = planPlacedRoute(g, pinned, variant, {
+        ...place,
+        mode: "start",
+        airport: true,
+        offsetX: -12000,
+        offsetY: 8000,
+        rotation: 45,
+      });
+      assert.deepEqual(route.visitOrder?.[0], {
+        elementId: "word",
+        character: index,
+      });
+      assert.deepEqual(
+        route.visitOrder
+          ?.filter((v) => v.elementId === "word")
+          .map((v) => v.character)
+          .sort(),
+        [0, 1, 2, 3],
+      );
+      for (let i = 1; i < route.segments.length; i++)
+        assert.deepEqual(route.segments[i - 1].to, route.segments[i].from);
+    }
+    const imported = validateProject({
+      schema: "pilotseal-sky-art",
+      version: 1,
+      composition: pinned,
+      placement: place,
+      variant: "balanced",
+    });
+    assert.equal(imported.composition.firstCharacter, index);
+  }
+  const raw = {
+    schema: "pilotseal-sky-art",
+    version: 1,
+    composition: c,
+    placement: place,
+    variant: "balanced",
+  };
+  for (const index of [-1, 4, 0.5])
+    assert.throws(
+      () =>
+        validateProject({
+          ...raw,
+          composition: { ...c, firstCharacter: index },
+        }),
+      /Invalid first character/,
+    );
+});
