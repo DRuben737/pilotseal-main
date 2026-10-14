@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
+import { networkInterfaces } from "node:os";
+const localDevOrigins = Object.values(networkInterfaces())
+  .flatMap((addresses) => addresses ?? [])
+  .filter((address) => address.family === "IPv4" && !address.internal)
+  .map((address) => address.address);
 const nextConfig = {
+  allowedDevOrigins: localDevOrigins,
   async redirects() {
     return [
       { source: "/dashboard", destination: "/console", permanent: true },

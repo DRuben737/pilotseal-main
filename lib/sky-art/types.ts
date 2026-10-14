@@ -1,9 +1,17 @@
 export type Point = { x: number; y: number };
 export type Coordinate = { lat: number; lon: number };
+export type SketchStroke = {
+  id: string;
+  raw: Point[];
+  points: Point[];
+  closed: boolean;
+};
 export type Element = {
   id: string;
-  kind: "preset" | "text";
+  kind: "preset" | "text" | "sketch";
   value: string;
+  strokes?: SketchStroke[];
+  sketchOrderLocked?: boolean;
   x: number;
   y: number;
   scale: number;
@@ -14,14 +22,17 @@ export type Element = {
   lineHeight: number;
 };
 export type Composition = {
-  version: 1;
+  version: 1 | 2;
   name: string;
   elements: Element[];
   firstElement?: string;
   firstCharacter?: number;
+  sketchStart?: { elementId: string; strokeId: string; pointIndex: number };
+  connectors?: Record<string, Point>;
   connectionMode?: "complete" | "open";
 };
 export type Stroke = {
+  id?: string;
   points: Point[];
   closed: boolean;
   elementId: string;
@@ -37,6 +48,8 @@ export type RouteSegment = {
   to: Point;
   kind: "art" | "connection" | "airport";
   elementId: string;
+  connectorId?: string;
+  manualConnector?: boolean;
 };
 export type RouteGeometry = {
   visitOrder?: { elementId: string; character: number }[];
@@ -90,7 +103,7 @@ export type RoutePlan = {
 };
 export type SavedProject = {
   schema: "pilotseal-sky-art";
-  version: 1;
+  version: 1 | 2;
   composition: Composition;
   placement: Placement;
   variant: Variant;
@@ -98,7 +111,7 @@ export type SavedProject = {
   savedAt: string;
 };
 export const DEFAULT_COMPOSITION: Composition = {
-  version: 1,
+  version: 2,
   name: "Christmas 2026",
   connectionMode: "open",
   elements: [

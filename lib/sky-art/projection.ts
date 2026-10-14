@@ -11,7 +11,7 @@ import type {
 } from "./types";
 import { distance, lerp } from "./geometry";
 import { clearConnection } from "./clear-connections";
-import { connectionCurve } from "./connections";
+import { connectionCurve, joinAngle } from "./connections";
 import { navigationSegments } from "./navigation";
 const geodesic = GeographicLib.Geodesic.WGS84;
 export function inverse(a: Coordinate, b: Coordinate) {
@@ -165,15 +165,17 @@ export function projectRoute(
     placement.roundTrip &&
     placement.airport &&
     distance(end, anchorLocal) > 1e-7;
-  const connect =
-    geometry.variant === "shortest" || !geometry.outlines
-      ? connectionCurve
-      : (previous: Point[], next: Point[]) =>
-          clearConnection(
-            previous,
-            next,
-            geometry.outlines!.map((points) => ({ points, closed: true })),
-          );
+  const connect = (previous: Point[], next: Point[]) => {
+    const from = previous.at(-1)!, to = next[0];
+    const direct = distance(from, to) < 1e-7 ? [from] : [from, to];
+    const sharp = previous.length > 1 && next.length > 1 &&
+      (joinAngle(previous.at(-2)!, from, to) > 12 ||
+        joinAngle(from, to, next[1]) > 12);
+    if (geometry.variant === "shortest" || !sharp) return direct;
+    if (!geometry.outlines) return connectionCurve(previous, next);
+    return clearConnection(previous, next,
+      geometry.outlines.map((points) => ({ points, closed: true })), true);
+  };
   if (hasDeparture) {
     const curve = connect(
       [lerp(anchorLocal, start, -0.2), anchorLocal],
@@ -229,6 +231,6 @@ export function projectRoute(
     warnings: [...geometry.warnings, ...warnings],
     geometry,
     placement: { ...placement, anchor: { ...placement.anchor } },
-    algorithmVersion: "sky-art-1.7",
+    algorithmVersion: "sky-art-2.1",
   };
 }

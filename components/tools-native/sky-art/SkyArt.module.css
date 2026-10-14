@@ -114,11 +114,23 @@
   align-items: center;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  position: relative;
+  z-index: 3;
 }
-.toolbar button {
-  font-size: 11px;
-  padding: 6px 9px;
+.toolbar button,
+.drawToolbar button,
+.toolMore summary {
+  width: 36px;
+  height: 36px;
+  padding: 7px;
+  flex: none;
+}
+.toolbar button[aria-pressed="true"],
+.drawToolbar button[aria-pressed="true"] {
+  background: #dff1f4;
+  border-color: #74b9c6;
+  color: #087e91;
 }
 .toolbar > span {
   width: 1px;
@@ -133,8 +145,79 @@
   cursor: pointer;
   font-size: 12px;
 }
-.toolbar .toggle {
+.toolMore {
   margin-left: auto;
+  position: relative;
+}
+.toolMore summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.toolMore summary::-webkit-details-marker {
+  display: none;
+}
+.toolMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 36px);
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 12px 35px #18344925;
+  z-index: 10;
+}
+.drawOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: #102b3bcc;
+  border: 0;
+  border-radius: 0;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+.drawDialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, 100%);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 20px 65px #071e2d55;
+}
+.drawToolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.drawToolbar > span {
+  flex: 1;
+}
+.drawCanvas {
+  flex: 1;
+  min-height: 0;
+}
+.drawCanvas .canvasWrap,
+.drawCanvas .canvas {
+  height: 100%;
 }
 .workspace {
   display: grid;
@@ -190,13 +273,13 @@
 }
 .presets button {
   flex-direction: column;
-  height: 77px;
-  padding: 7px 3px;
+  height: 71px;
+  padding: 5px 3px;
   white-space: normal;
 }
 .presets svg {
-  width: 43px;
-  height: 43px;
+  width: 39px;
+  height: 39px;
   color: #477186;
 }
 .presets span {
@@ -264,6 +347,9 @@
   background: #f5f8fa;
   min-width: 0;
   overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 .canvas {
   display: block;
@@ -706,9 +792,15 @@
     padding: 9px;
     gap: 4px;
   }
-  .toolbar button {
+  .toolbar button,
+  .toolMore summary,
+  .drawToolbar button {
+    width: 32px;
+    height: 32px;
     padding: 5px;
-    font-size: 10px;
+  }
+  .toolMenu {
+    grid-template-columns: repeat(4, 32px);
   }
   .workspace {
     display: flex;

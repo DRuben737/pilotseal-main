@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { parse } from "opentype.js";
 import { buildGeometry, outlineText } from "../lib/sky-art/fonts";
-import { PRESETS } from "../lib/sky-art/presets";
+import { FEATURED_PRESETS, PRESETS } from "../lib/sky-art/presets";
 import { planPlacedRoute } from "../lib/sky-art/placement-planner";
 import { clearConnection } from "../lib/sky-art/clear-connections";
 import { planRoute } from "../lib/sky-art/planner";
@@ -25,6 +25,9 @@ import { joinCounters } from "../lib/sky-art/contours";
 import { navigationSegments } from "../lib/sky-art/navigation";
 import { distance, lerp, intersects, bounds } from "../lib/sky-art/geometry";
 import { validateProject } from "../lib/sky-art/storage";
+import skyArtRefine from "../netlify/functions/sky-art-refine.mjs";
+import { cleanStroke, compressSamples, recognizeHeldShape, strokeLength } from "../lib/sky-art/sketch";
+import { skyArtId } from "../lib/sky-art/id";
 import {
   DEFAULT_COMPOSITION,
   DEFAULT_PLACEMENT,
@@ -62,6 +65,173 @@ const place = {
   waypointToleranceNm: 0,
   anchor: { lat: 40, lon: -75 },
 };
+test("held strokes snap to simple shapes and closed paths remain nonempty", () => {
+  const line = Array.from({ length: 15 }, (_, i) => ({ x: i * 6, y: i * 2 + (i % 2) * 0.3 }));
+  assert.equal(recognizeHeldShape(line)?.kind, "line");
+  const circle = Array.from({ length: 49 }, (_, i) => {
+    const angle = i * Math.PI * 2 / 48;
+    return { x: 80 * Math.cos(angle), y: 80 * Math.sin(angle) };
+  });
+  assert.ok(strokeLength(compressSamples(circle)) > 200);
+  assert.equal(recognizeHeldShape(circle)?.kind, "ellipse");
+  const square = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 },
+    { x: 0, y: 100 }, { x: 0, y: 0 }].flatMap((p, edge, corners) =>
+    edge === corners.length - 1 ? [] : Array.from({ length: 10 }, (_, i) => ({
+      x: p.x + (corners[edge + 1].x - p.x) * i / 10,
+      y: p.y + (corners[edge + 1].y - p.y) * i / 10,
+    }))).concat({ x: 0, y: 0 });
+  assert.equal(recognizeHeldShape(square)?.kind, "square");
+  assert.match(skyArtId(), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+});
+test("hand drawn strokes survive cleanup, routing, projection, and v2 storage", async () => {
+  const heart = [
+    { x: 0, y: 0 }, { x: -24, y: -26 }, { x: -46, y: -12 },
+    { x: -38, y: 16 }, { x: 0, y: 52 }, { x: 38, y: 16 },
+    { x: 46, y: -12 }, { x: 24, y: -26 },
+  ];
+  const c: Composition = { version: 2, name: "Hand drawn heart", elements: [{
+    id: "heart", kind: "sketch", value: "Sketch", x: 400, y: 300,
+    scale: 1, rotation: 0, font: "outline", spacing: 12, lineHeight: 130,
+    strokes: [{ id: "stroke-1", raw: heart, points: heart, closed: true }],
+  }] };
+  const cleaned = cleanStroke(c.elements[0].strokes![0]);
+  assert.equal(cleaned.closed, true);
+  assert.deepEqual(cleaned.raw, heart);
+  assert.deepEqual(compressSamples(heart)[0], heart[0]);
+  const restored = validateProject({ schema: "pilotseal-sky-art", version: 2,
+    composition: c, placement: place, variant: "balanced", savedAt: "" });
+  const geometry = await buildGeometry(restored.composition);
+  const route = planRoute(geometry, restored.composition);
+  assert.equal(route.segments.filter((s) => s.kind === "connection").length, 0);
+  for (let i = 1; i < route.segments.length; i++)
+    assert.deepEqual(route.segments[i - 1].to, route.segments[i].from);
+  const plan = projectRoute(route, place);
+  assert.equal(plan.waypoints.length, plan.legs.length + 1);
+  assert.equal((routeGpx(plan).match(/<rtept/g) ?? []).length, plan.waypoints.length);
+  const pinned: Composition = { ...restored.composition, firstElement: "heart",
+    sketchStart: { elementId: "heart", strokeId: "stroke-1", pointIndex: 4 } };
+  const pinnedRoute = planRoute(geometry, pinned);
+  assert.deepEqual(pinnedRoute.segments[0].from, { x: 400, y: 352 });
+  const open: Composition = { ...pinned, elements: [{ ...pinned.elements[0],
+    strokes: [{ ...pinned.elements[0].strokes![0], closed: false }] }] };
+  const openRoute = planRoute(await buildGeometry(open), open);
+  assert.deepEqual(openRoute.segments[0].from, { x: 400, y: 352 });
+});
+test("separate hand-drawn strokes use an editable visible connector", async () => {
+  const c: Composition = { version: 2, name: "Two strokes", elements: [{
+    id: "drawing", kind: "sketch", value: "Sketch", x: 400, y: 300,
+    scale: 1, rotation: 0, font: "outline", spacing: 12, lineHeight: 130,
+    strokes: [
+      { id: "left", raw: [{ x: -50, y: 0 }, { x: -30, y: 0 }],
+        points: [{ x: -50, y: 0 }, { x: -30, y: 0 }], closed: false },
+      { id: "right", raw: [{ x: 30, y: 0 }, { x: 50, y: 0 }],
+        points: [{ x: 30, y: 0 }, { x: 50, y: 0 }], closed: false },
+    ],
+  }] };
+  const geometry = await buildGeometry(c);
+  const route = planRoute(geometry, c);
+  const id = route.segments.find((s) => s.connectorId)?.connectorId;
+  assert.ok(id);
+  const handle = { x: 400, y: 240 };
+  const adjusted = planRoute(geometry, { ...c, connectors: { [id]: handle } });
+  assert.ok(adjusted.segments.some((s) => s.connectorId === id &&
+    (s.from === handle || s.to === handle)));
+  for (let i = 1; i < adjusted.segments.length; i++)
+    assert.deepEqual(adjusted.segments[i - 1].to, adjusted.segments[i].from);
+  const collinear = planRoute(geometry, { ...c, connectors: { [id]: { x: 400, y: 300 } } });
+  const projected = projectRoute(collinear, { ...place, waypointToleranceNm: 0.2 });
+  assert.equal(projected.legs.filter((leg) => leg.kind === "connection").length, 2,
+    "a user-set connector handle must remain a waypoint");
+  const locked: Composition = { ...c, elements: [{ ...c.elements[0], sketchOrderLocked: true }] };
+  const lockedRoute = planRoute(await buildGeometry(locked), locked);
+  assert.deepEqual(lockedRoute.visitOrder?.map((visit) => visit.character), [0, 1]);
+});
+test("heart to 2026 crosses the empty gap in one waypoint-free leg", async () => {
+  const heart = [
+    { x: 0, y: 0 }, { x: -28, y: -26 }, { x: -60, y: -20 },
+    { x: -75, y: 5 }, { x: -70, y: 35 }, { x: -45, y: 65 },
+    { x: 0, y: 100 }, { x: 45, y: 65 }, { x: 70, y: 35 },
+    { x: 75, y: 5 }, { x: 60, y: -20 }, { x: 28, y: -26 },
+  ];
+  const c: Composition = { version: 2, name: "Heart 2026", firstElement: "heart",
+    elements: [
+      { id: "heart", kind: "sketch", value: "Sketch", x: 270, y: 280,
+        scale: 1.3, rotation: 0, font: "outline", spacing: 12, lineHeight: 130,
+        strokes: [{ id: "heart-line", raw: heart, points: heart, closed: true }] },
+      { ...text("2026"), id: "year", x: 510, y: 300, scale: 0.9 },
+    ] };
+  const route = planRoute(await buildGeometry(c, font), c);
+  const bridge = route.segments.filter((s, i) => s.kind === "connection" &&
+    s.elementId === "year" && route.segments[i - 1]?.elementId === "heart");
+  assert.equal(bridge.length, 1);
+  assert.ok(bridge[0].connectorId, "transition can be adjusted on the canvas");
+  const plan = projectRoute(route, place);
+  const firstConnection = plan.legs.findIndex((leg) => leg.kind === "connection");
+  assert.ok(firstConnection >= 0);
+  assert.notEqual(plan.legs[firstConnection + 1]?.kind, "connection");
+});
+test("AI refinement rejects invalid topology before calling a provider", async () => {
+  const response = await skyArtRefine(new Request("http://localhost/api/sky-art-refine", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ intent: "smooth", strokes: [{ id: "a", points: [{ x: 0, y: 0 }] }] }),
+  }));
+  assert.equal(response.status, 400);
+});
+test("v1 artwork opens as v2 without changing its text geometry", async () => {
+  const old = composition("LOVE");
+  const migrated = validateProject({ schema: "pilotseal-sky-art", version: 1,
+    composition: old, placement: place, variant: "balanced", savedAt: "" });
+  assert.equal(migrated.version, 2);
+  assert.equal(migrated.composition.version, 2);
+  assert.deepEqual(await buildGeometry(migrated.composition, font),
+    await buildGeometry(old, font));
+});
+test("multi-stroke cake, moon and snowflake cover every drawn edge in one flight line", async () => {
+  const cases = [
+    [
+      [[-70, 60], [-70, -10], [70, -10], [70, 60], [-70, 60]],
+      [[-80, -10], [-60, -30], [-30, -15], [0, -30], [30, -15], [60, -30], [80, -10]],
+      [[-30, -30], [-30, -65]], [[0, -30], [0, -65]], [[30, -30], [30, -65]],
+    ],
+    [
+      [[-90, -60], [-55, -80], [-20, -50], [-10, 0], [-25, 50], [-65, 70], [-90, 45], [-65, 25], [-55, -25], [-90, -60]],
+      [[55, -50], [65, -20], [95, -20], [70, 0], [80, 30], [55, 12], [30, 30], [40, 0], [15, -20], [45, -20], [55, -50]],
+    ],
+    [
+      [[0, -90], [0, 90]], [[-90, 0], [90, 0]], [[-65, -65], [65, 65]],
+      [[-65, 65], [65, -65]], [[0, -90], [-12, -72]], [[0, -90], [12, -72]],
+    ],
+  ];
+  for (const [caseIndex, paths] of cases.entries()) {
+    const strokes = paths.map((pairs, i) => {
+      const points = pairs.map(([x, y]) => ({ x, y }));
+      const closed = distance(points[0], points.at(-1)!) < 1e-6;
+      if (closed) points.pop();
+      return { id: `stroke-${i}`, raw: points, points, closed };
+    });
+    const c: Composition = { version: 2, name: `fixture-${caseIndex}`, elements: [{
+      id: "art", kind: "sketch", value: "Sketch", x: 400, y: 300,
+      scale: 1, rotation: 0, font: "outline", spacing: 12, lineHeight: 130, strokes,
+    }] };
+    const geometry = await buildGeometry(c);
+    const route = planRoute(geometry, c);
+    assert.ok(route.segments.length);
+    for (let i = 1; i < route.segments.length; i++)
+      assert.deepEqual(route.segments[i - 1].to, route.segments[i].from);
+    for (const stroke of geometry[0].strokes) {
+      const edges = stroke.closed ? stroke.points.length : stroke.points.length - 1;
+      for (let i = 0; i < edges; i++) {
+        const a = stroke.points[i], b = stroke.points[(i + 1) % stroke.points.length];
+        assert.ok(route.segments.some((segment) => segment.kind === "art" &&
+          (distance(segment.from, a) < 1e-6 && distance(segment.to, b) < 1e-6 ||
+            distance(segment.from, b) < 1e-6 && distance(segment.to, a) < 1e-6)),
+        `Missing drawn edge in fixture ${caseIndex}`);
+      }
+    }
+    const plan = projectRoute(route, place);
+    assert.equal(plan.legs.length + 1, plan.waypoints.length);
+  }
+});
 for (const value of [
   "LOVE",
   "2026",
@@ -116,6 +286,33 @@ test("all 30 presets generate nonzero continuous tracks", async () => {
     for (let i = 1; i < r.segments.length; i++)
       assert.deepEqual(r.segments[i - 1].to, r.segments[i].from);
     assert.ok(projectRoute(r, place).distanceNm > 0);
+  }
+});
+test("curated patterns remain recognizable and older saved motifs stay routable", async () => {
+  assert.equal(FEATURED_PRESETS.length, 12);
+  assert.equal(
+    new Set(FEATURED_PRESETS.map((p) => p.id)).size,
+    FEATURED_PRESETS.length,
+  );
+  assert.ok(FEATURED_PRESETS.length < PRESETS.length);
+  for (const id of ["christmas-tree", "heart", "cake", "airplane", "snowflake"])
+    assert.ok(FEATURED_PRESETS.some((p) => p.id === id));
+  const snowflake = PRESETS.find((p) => p.id === "snowflake")!;
+  assert.equal(snowflake.shapes.length, 1);
+  assert.equal(snowflake.shapes[0].closed, true);
+  const cake = PRESETS.find((p) => p.id === "cake")!;
+  assert.equal(cake.shapes.length, 4);
+  assert.equal(cake.shapes[0].closed, true);
+  for (const id of ["snowflake", "gift", "cake", "wave"]) {
+    const c: Composition = {
+      version: 1,
+      name: id,
+      elements: [{ ...text(""), kind: "preset", value: id }],
+    };
+    const route = planRoute(await buildGeometry(c, font), c);
+    assert.ok(route.segments.length > 0);
+    for (let i = 1; i < route.segments.length; i++)
+      assert.deepEqual(route.segments[i - 1].to, route.segments[i].from);
   }
 });
 test("Christmas 2026 composition preserves first element and connections", async () => {
@@ -271,7 +468,7 @@ test("10-character performance cases, all variants and total text limit", async 
     /30 characters/,
   );
 });
-test("one-line connections preserve endpoint directions without a collinear U-turn cusp", async () => {
+test("connection curves avoid U-turn cusps and clear artwork transitions use one leg", async () => {
   const { connectionCurve, joinAngle } =
     await import("../lib/sky-art/connections");
   for (const [before, after] of [
@@ -321,14 +518,11 @@ test("one-line connections preserve endpoint directions without a collinear U-tu
     r = planRoute(await buildGeometry(c, font), c);
   for (let i = 1; i < r.segments.length; i++)
     assert.deepEqual(r.segments[i - 1].to, r.segments[i].from);
+  let connectorRun = 0;
   for (let i = 1; i < r.segments.length; i++) {
-    const a = r.segments[i - 1],
-      b = r.segments[i];
-    if (a.kind !== b.kind)
-      assert.ok(
-        joinAngle(a.from, a.to, b.to) < 12,
-        "art-to-connection tangent discontinuity",
-      );
+    const segment = r.segments[i];
+    connectorRun = segment.kind === "connection" ? connectorRun + 1 : 0;
+    assert.ok(connectorRun <= 1, "clear transition added an unnecessary waypoint");
   }
 });
 test("single-line and English script fonts use local assets and generate continuous routes", async () => {
@@ -463,7 +657,7 @@ test("ForeFlight GPX conforms to GPX 1.1 and preserves repeated visits and date-
   }
 });
 
-test("navigation reduction bounds error and retains corners, visits and transition tangents", () => {
+test("navigation reduction bounds error and retains corners, visits and real transition boundaries", () => {
   const points = Array.from({ length: 101 }, (_, i) => ({
     x: i,
     y: 10 * Math.sin(i / 25),
@@ -507,10 +701,7 @@ test("navigation reduction bounds error and retains corners, visits and transiti
     kind: i < 50 ? ("art" as const) : ("connection" as const),
   }));
   const joined = navigationSegments(transition, 5);
-  for (const index of [48, 50, 52])
-    assert.ok(
-      joined.some((s) => s.from === points[index] || s.to === points[index]),
-    );
+  assert.ok(joined.some((s) => s.from === points[50] || s.to === points[50]));
 });
 test("Christmas export reduces navigation points while sharing one route across all outputs", async () => {
   const geometry = planRoute(

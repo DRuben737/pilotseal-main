@@ -22,27 +22,10 @@ export function navigationSegments(
       after = segments[i];
     if (before.kind !== after.kind || before.elementId !== after.elementId) {
       keep.add(i);
-      // Keep a useful tangent sample rather than an almost coincident point.
-      for (const direction of [-1, 1]) {
-        let j = i + direction;
-        while (
-          j > 0 &&
-          j < points.length - 1 &&
-          distance(points[j], points[i]) < tolerance * 0.4
-        ) {
-          const next = j + direction;
-          const edge = direction < 0 ? segments[j - 1] : segments[j];
-          const boundary = direction < 0 ? before : after;
-          if (
-            edge.kind !== boundary.kind ||
-            edge.elementId !== boundary.elementId
-          )
-            break;
-          j = next;
-        }
-        if (j >= 0 && j < points.length) keep.add(j);
-      }
     }
+    if (before.manualConnector && after.manualConnector &&
+      before.connectorId === after.connectorId)
+      keep.add(i);
     const a = points[i - 1],
       b = points[i],
       c = points[i + 1];

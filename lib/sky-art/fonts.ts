@@ -15,6 +15,7 @@ import {
   transform,
 } from "./geometry";
 import { presetStrokes } from "./presets";
+import { MAX_SKETCH_STROKES } from "./sketch";
 let fontPromise: Promise<Font> | undefined;
 export async function loadOutlineFont(): Promise<Font> {
   fontPromise ??= fetch("/sky-art/fonts/NotoSansCJKsc-Bold.otf")
@@ -154,6 +155,8 @@ export async function buildGeometry(
   if (!composition.elements.length)
     throw new Error("Add a pattern or text first.");
   if (composition.elements.length > 8) throw new Error("Use up to 8 elements.");
+  if (composition.elements.reduce((n, e) => n + (e.kind === "sketch" ? e.strokes?.length ?? 0 : 0), 0) > MAX_SKETCH_STROKES)
+    throw new Error("Use up to 40 sketch strokes in one artwork.");
   if (
     composition.elements
       .filter((e) => e.kind === "text")
@@ -170,7 +173,22 @@ export async function buildGeometry(
     if (!Number.isFinite(e.scale) || e.scale <= 0)
       throw new Error("Element size must be positive.");
     let strokes: Stroke[];
-    if (e.kind === "preset")
+    if (e.kind === "sketch") {
+      const ordered = [...(e.strokes ?? [])];
+      if (e.sketchOrderLocked && composition.sketchStart?.elementId === e.id) {
+        const start = ordered.findIndex((s) => s.id === composition.sketchStart?.strokeId);
+        if (start > 0) ordered.push(...ordered.splice(0, start));
+      }
+      strokes = ordered.map((stroke, index) => ({
+        id: stroke.id,
+        points: stroke.points,
+        closed: stroke.closed,
+        elementId: e.id,
+        character: e.sketchOrderLocked ? index : 0,
+        hole: false,
+      }));
+    }
+    else if (e.kind === "preset")
       strokes = normalizeStrokes(presetStrokes(e.value, e.id));
     else if (e.font === "outline") strokes = outlineText(e, outline!);
     else {
@@ -179,8 +197,9 @@ export async function buildGeometry(
     }
     result.push({
       id: e.id,
-      strokes: strokes.map((s) => ({
+      strokes: strokes.map((s, index) => ({
         ...s,
+        id: s.id ?? `${e.id}:${index}`,
         points: s.points.map((p) => transform(p, e)),
       })),
     });

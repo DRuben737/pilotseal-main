@@ -92,22 +92,33 @@ export const PRESETS: Preset[] = [
     id: "snowflake",
     name: "Snowflake",
     category: "Holiday",
-    shapes: Array.from({ length: 6 }, (_, i) => {
-      const a = (i * Math.PI) / 3;
-      return line(
-        [
-          [0, 0],
-          [0, -85],
-          [-17, -65],
-          [0, -85],
-          [17, -65],
-          [0, -85],
-        ].map(([x, y]) => [
-          x * Math.cos(a) - y * Math.sin(a),
-          x * Math.sin(a) + y * Math.cos(a),
-        ]),
-      );
-    }),
+    // A single exterior contour avoids six disconnected arms and repeated
+    // flights over each arm's tip.
+    shapes: [
+      line(
+        Array.from({ length: 6 }, (_, i) => {
+          const angle = (i * Math.PI) / 3;
+          return [
+            [-8, -24],
+            [-7, -47],
+            [-20, -60],
+            [-15, -65],
+            [-7, -57],
+            [-7, -88],
+            [7, -88],
+            [7, -57],
+            [15, -65],
+            [20, -60],
+            [7, -47],
+            [8, -24],
+          ].map(([x, y]) => [
+            x * Math.cos(angle) - y * Math.sin(angle),
+            x * Math.sin(angle) + y * Math.cos(angle),
+          ]);
+        }).flat(),
+        true,
+      ),
+    ],
   },
   {
     id: "bell",
@@ -132,23 +143,32 @@ export const PRESETS: Preset[] = [
     shapes: [
       line(
         [
-          [-75, -30],
-          [75, -30],
+          [-75, -20],
+          [75, -20],
           [75, 80],
           [-75, 80],
         ],
         true,
       ),
       line([
-        [0, -30],
+        [0, -20],
         [0, 80],
       ]),
       line([
-        [-75, 0],
-        [75, 0],
+        [-75, 12],
+        [75, 12],
       ]),
-      ellipse(-24, -48, 25, 18),
-      ellipse(24, -48, 25, 18),
+      line(
+        [
+          [0, -20],
+          [-38, -42],
+          [-34, -66],
+          [0, -45],
+          [34, -66],
+          [38, -42],
+        ],
+        true,
+      ),
     ],
   },
   {
@@ -238,6 +258,14 @@ export const PRESETS: Preset[] = [
       line(
         [
           [-75, 0],
+          [-35, 0],
+          [-35, -40],
+          [-25, -40],
+          [-25, 0],
+          [25, 0],
+          [25, -40],
+          [35, -40],
+          [35, 0],
           [75, 0],
           [75, 70],
           [-75, 70],
@@ -253,20 +281,8 @@ export const PRESETS: Preset[] = [
         [50, 35],
         [75, 25],
       ]),
-      line([
-        [-30, 0],
-        [-30, -40],
-        [-20, -40],
-        [-20, 0],
-      ]),
-      line([
-        [20, 0],
-        [20, -40],
-        [30, -40],
-        [30, 0],
-      ]),
-      ellipse(-25, -53, 6, 10),
-      ellipse(25, -53, 6, 10),
+      ellipse(-30, -54, 6, 9),
+      ellipse(30, -54, 6, 9),
     ],
   },
   {
@@ -533,6 +549,25 @@ export const PRESETS: Preset[] = [
     ],
   },
 ];
+// The canvas favors motifs people can identify from a single flight track.
+// Keep the full catalog above so projects saved with older presets still open.
+const featuredIds = [
+  "christmas-tree",
+  "snowflake",
+  "gift",
+  "pumpkin",
+  "heart",
+  "cake",
+  "balloon",
+  "infinity",
+  "star",
+  "circle",
+  "airplane",
+  "moon",
+];
+export const FEATURED_PRESETS = featuredIds.map((id) =>
+  PRESETS.find((p) => p.id === id)!,
+);
 export function presetStrokes(id: string, elementId: string): Stroke[] {
   const preset = PRESETS.find((p) => p.id === id);
   if (!preset) throw new Error(`Unknown pattern: ${id}`);

@@ -40,7 +40,17 @@ function openStroke(s: Stroke, start: number, reverse: boolean): Point[] {
   }
   return [...p, p[0]];
 }
-function options(s: Stroke): Point[][] {
+function options(s: Stroke, forcedStart?: number): Point[][] {
+  if (forcedStart !== undefined) {
+    const index = Math.max(0, Math.min(s.points.length - 1, forcedStart));
+    if (s.closed) return [openStroke(s, index, false), openStroke(s, index, true)];
+    if (!index) return [s.points];
+    if (index === s.points.length - 1) return [[...s.points].reverse()];
+    return [
+      [...s.points.slice(index), ...s.points.slice(index, -1).reverse(), ...s.points.slice(0, index).reverse()],
+      [...s.points.slice(0, index + 1).reverse(), ...s.points.slice(1, index + 1), ...s.points.slice(index + 1)],
+    ];
+  }
   if (!s.closed) return [s.points, [...s.points].reverse()];
   const ports = s.points
     .map((p, i) => ({ p, i }))
@@ -82,8 +92,8 @@ type Obstacle = {
 };
 const pointOwners = new WeakMap<Point, string>();
 function isCrossElement(previous: Point[], next: Point[]) {
-  const from = pointOwners.get(previous.at(-2) ?? previous[0]),
-    to = pointOwners.get(next[1] ?? next[0]);
+  const from = pointOwners.get(previous.at(-2) ?? previous[0]);
+  const to = pointOwners.get(next[1] ?? next[0]);
   return !from || !to || from !== to;
 }
 function connectionCost(
@@ -95,15 +105,10 @@ function connectionCost(
   clearCrossElement = false,
 ): number {
   const curve =
-      variant === "shortest" ||
-      !clearCrossElement ||
+      variant === "shortest" || !clearCrossElement ||
       !isCrossElement(previous, next)
-        ? connectionCurve(previous, next)
-        : clearConnection(
-            previous,
-            next,
-            obstacles.map((o) => o.stroke),
-          ),
+        ? [previous.at(-1)!, next[0]]
+        : clearConnection(previous, next, obstacles.map((o) => o.stroke)),
     d = curveLength(curve);
   let penalty = 0;
   const a = previous.at(-1)!,
@@ -190,6 +195,7 @@ function planCharacter(
   variant: Variant,
   target: Point[][] | undefined,
   memo: Map<string, number>,
+  pinned?: { strokeId: string; pointIndex: number },
 ): Point[][] {
   const memoCost = (a: Point[], b: Point[]) => {
     const last = a[a.length - 1],
@@ -203,7 +209,8 @@ function planCharacter(
     memo.set(key, value);
     return value;
   };
-  const original = strokes.map((s) => ({ s, choices: options(s) })),
+  const original = strokes.map((s) => ({ s, choices: options(s,
+    pinned && s.id === pinned.strokeId ? pinned.pointIndex : undefined) })),
     initial = original
       .flatMap((o, index) =>
         o.choices.map((path) => ({
@@ -225,6 +232,7 @@ function planCharacter(
     initial.find((s) => s.index === index)!,
   );
   const seeds = [...contourSeeds, ...distinctSeeds]
+    .filter((seed) => !pinned || original[seed.index].s.id === pinned.strokeId)
     .filter(
       (seed, index, list) =>
         list.findIndex((s) => s.path === seed.path) === index,
@@ -276,7 +284,7 @@ function planCharacter(
     // Two-opt reverses a contiguous block and each stroke's flight direction.
     for (let pass = 0; pass < 2; pass++) {
       let changed = false;
-      for (let i = 0; i < ordered.length; i++)
+      for (let i = pinned ? 1 : 0; i < ordered.length; i++)
         for (let j = i; j < ordered.length; j++) {
           if (ordered.length > 24 && j - i > 4) continue;
           const candidate = [
@@ -345,6 +353,9 @@ export function planRoute(
   const textIds = new Set(
     composition.elements.filter((e) => e.kind === "text").map((e) => e.id),
   );
+  const lockedSketchIds = new Set(composition.elements
+    .filter((e) => e.kind === "sketch" && e.sketchOrderLocked)
+    .map((e) => e.id));
   geometry = geometry.map((e) => ({
     ...e,
     strokes: e.strokes.map((s) => ({
@@ -396,10 +407,10 @@ export function planRoute(
         },
       ),
     }));
+  const memo = new Map<string, number>();
   all.forEach((s) =>
     s.points.forEach((point) => pointOwners.set(point, s.elementId)),
   );
-  const memo = new Map<string, number>();
   const remaining = [...geometry],
     orderedElements: GeometryElement[] = [];
   // Element order is fixed for a given composition; geographic transforms do not change it.
@@ -458,8 +469,11 @@ export function planRoute(
   // Compare complete character candidates together. A locally cheap exit must
   // not force the following character into a longer approach.
   const candidates = groups.map((group) => {
+    const pinned = composition.sketchStart?.elementId === group.id
+      ? composition.sketchStart : undefined;
     if (group.strokes.length === 1)
-      return options(group.strokes[0]).map((path) => [path]);
+      return options(group.strokes[0], pinned && group.strokes[0].id === pinned.strokeId
+        ? pinned.pointIndex : undefined).map((path) => [path]);
     const b = bounds(group.strokes.flatMap((s) => s.points));
     const center = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
     const reach = Math.max(b.width, b.height, 1);
@@ -484,11 +498,11 @@ export function planRoute(
         variant,
         undefined,
         memo,
+        pinned,
       ),
     );
-    return plans.flatMap((paths) => [
-      paths,
-      [...paths].reverse().map((path) => [...path].reverse()),
+    return plans.flatMap((paths) => pinned ? [paths] : [
+      paths, [...paths].reverse().map((path) => [...path].reverse()),
     ]);
   });
   const ownCosts = new WeakMap<Point[][], number>();
@@ -543,6 +557,8 @@ export function planRoute(
       const choices =
         pinned >= 0
           ? [rotateTo(block), rotateTo([...block].reverse())]
+          : lockedSketchIds.has(element.id)
+            ? [block]
           : approach && block.length > 1
             ? [block, [...block].reverse()]
             : [block];
@@ -627,15 +643,22 @@ export function planRoute(
   }
   const segments: RouteSegment[] = [];
   let previous: Point[] | undefined;
+  const pathOwner = (path: Point[]) => all.find((stroke) =>
+    path.some((point) => stroke.points.includes(point)));
   for (let g = 0; g < groups.length; g++) {
     const index = selectedOrder[g],
       group = groups[index],
       paths = candidates[index][selected[g]];
     for (const p of paths) {
       if (previous) {
-        const connection =
-          variant === "shortest" || !isCrossElement(previous, p)
-            ? connectionCurve(previous, p)
+        const fromId = pathOwner(previous)?.id,
+          toId = pathOwner(p)?.id,
+          connectorId = fromId && toId ? `${fromId}>${toId}` : undefined,
+          handle = connectorId ? composition.connectors?.[connectorId] : undefined;
+        const connection = handle
+          ? [previous.at(-1)!, handle, p[0]]
+          : variant === "shortest" || !isCrossElement(previous, p)
+            ? [previous.at(-1)!, p[0]]
             : clearConnection(previous, p, all);
         for (let i = 1; i < connection.length; i++)
           if (distance(connection[i - 1], connection[i]) > 1e-6)
@@ -644,6 +667,8 @@ export function planRoute(
               to: connection[i],
               kind: "connection",
               elementId: group.id,
+              connectorId,
+              manualConnector: !!handle,
             });
       }
       for (let i = 1; i < p.length; i++)

@@ -60,10 +60,14 @@ export function clearConnection(
   previous: Point[],
   next: Point[],
   strokes: Pick<Stroke, "points" | "closed">[],
+  preferSmooth = false,
 ): Point[] {
   const a = previous.at(-1)!,
     b = next[0],
-    direct = connectionCurve(previous, next);
+    // A clear artwork transit needs only its endpoints. Airport transit may
+    // request curvature when a direct arrival would produce a sharp turn.
+    direct = distance(a, b) < 1e-7 ? [a] :
+      preferSmooth ? connectionCurve(previous, next) : [a, b];
   const region = bounds(direct);
   const blockers = strokes
     .filter((s) => s.closed)

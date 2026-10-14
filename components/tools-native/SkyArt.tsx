@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import { createPortal } from "react-dom";
 import {
   useCallback,
   useEffect,
@@ -10,8 +11,10 @@ import {
 } from "react";
 import ArtCanvas from "./sky-art/ArtCanvas";
 import styles from "./sky-art/SkyArt.module.css";
-import { PRESETS } from "@/lib/sky-art/presets";
-import { bounds, pathData } from "@/lib/sky-art/geometry";
+import { FEATURED_PRESETS, PRESETS } from "@/lib/sky-art/presets";
+import { bounds, distance, pathData } from "@/lib/sky-art/geometry";
+import { cleanStroke } from "@/lib/sky-art/sketch";
+import { skyArtId } from "@/lib/sky-art/id";
 import {
   DEFAULT_COMPOSITION,
   DEFAULT_PLACEMENT,
@@ -19,6 +22,7 @@ import {
   type Element,
   type GeometryElement,
   type Placement,
+  type Point,
   type RouteGeometry,
   type SavedProject,
   type Variant,
@@ -44,9 +48,41 @@ import {
 const RouteMap = dynamic(() => import("./sky-art/RouteMap"), { ssr: false });
 type Airport = [string, string, string, number, number, string];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+type ToolIcon = "pen" | "select" | "undo" | "redo" | "delete" | "rotateLeft" | "rotateRight" | "more" | "close" | "route" | "erase" | "start" | "refine" | "ai" | "check" | "copy" | "group" | "ungroup" | "clear" | "path" | "save";
+function Icon({ name }: { name: ToolIcon }) {
+  const paths: Record<ToolIcon, React.ReactNode> = {
+    pen: <><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z" /><path d="m13.5 6.5 3.5 3.5" /></>,
+    select: <><path d="m4 3 15 9-7 1-3 7-5-17Z" /></>,
+    undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-2" /></>,
+    redo: <><path d="m15 14 5-5-5-5" /><path d="M20 9H10a6 6 0 0 0 0 12h2" /></>,
+    delete: <><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6m4-6v6" /></>,
+    rotateLeft: <><path d="M4 5v5h5" /><path d="M4.5 10a8 8 0 1 1 0 5" /></>,
+    rotateRight: <><path d="M20 5v5h-5" /><path d="M19.5 10a8 8 0 1 0 0 5" /></>,
+    more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+    close: <path d="M5 5 19 19M19 5 5 19" />,
+    route: <><circle cx="5" cy="18" r="2" /><circle cx="19" cy="6" r="2" /><path d="M7 17 17 7" /></>,
+    erase: <><path d="m3 16 10-11 8 7-7 8H7l-4-4ZM8 20h13" /></>,
+    start: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="2" /></>,
+    refine: <><path d="M3 17c4-2 5-12 9-10s4 8 9 1M4 21l1-3m14-14 1-3" /></>,
+    ai: <><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5L12 2Z" /></>,
+    check: <path d="m4 12 5 5L20 6" />,
+    copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4H4v12h4" /></>,
+    group: <><rect x="2" y="2" width="9" height="9" rx="1" /><rect x="13" y="13" width="9" height="9" rx="1" /><path d="M11 6h3m4 5v2M6 11v3m5 4h2" /></>,
+    ungroup: <><rect x="2" y="2" width="9" height="9" rx="1" /><rect x="13" y="13" width="9" height="9" rx="1" /><path d="m3 21 18-18" /></>,
+    clear: <><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /><path d="m10 11 4 6m0-6-4 6" /></>,
+    path: <><circle cx="4" cy="17" r="2" /><circle cx="12" cy="7" r="2" /><circle cx="20" cy="17" r="2" /><path d="m6 16 5-7m2 0 5 7" /></>,
+    save: <><path d="M4 3h14l3 3v15H4V3Z" /><path d="M7 3v6h10V3M8 21v-8h9v8" /></>,
+  };
+  return <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+function ToolButton({ icon, label, ...props }: { icon: ToolIcon; label: string } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return <button type="button" aria-label={label} title={label} {...props}><Icon name={icon} /></button>;
+}
 const label = (e: Element) =>
   e.kind === "text"
     ? e.value
+    : e.kind === "sketch"
+      ? `Sketch · ${e.strokes?.length ?? 0} strokes`
     : (PRESETS.find((p) => p.id === e.value)?.name ?? e.value);
 function Field({
   name,
@@ -111,8 +147,14 @@ export default function SkyArt() {
   const [stage, setStage] = useState<"canvas" | "map" | "details">("canvas"),
     [selection, setSelection] = useState<string[]>(["year"]),
     [pathView, setPathView] = useState(false),
-    [multiple, setMultiple] = useState(false),
-    [category, setCategory] = useState("All");
+    [multiple, setMultiple] = useState(false);
+  const [drawTool, setDrawTool] = useState<"select" | "pen" | "erase" | "start">("select");
+  const [drawingOpen, setDrawingOpen] = useState(false);
+  const [selectedStroke, setSelectedStroke] = useState<{ elementId: string; strokeId: string } | null>(null);
+  const [refinePreview, setRefinePreview] = useState<Composition | null>(null);
+  const [aiIntent, setAiIntent] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  useEffect(() => setRefinePreview(null), [composition]);
   const [geometry, setGeometry] = useState<GeometryElement[]>([]),
     [route, setRoute] = useState<RouteGeometry | null>(null),
     [busy, setBusy] = useState(true),
@@ -207,6 +249,22 @@ export default function SkyArt() {
     }
   };
   const remove = useCallback(() => {
+    if (selectedStroke && selection.includes(selectedStroke.elementId)) {
+      const elements = composition.elements.map((e) => e.id === selectedStroke.elementId && e.kind === "sketch"
+        ? { ...e, strokes: e.strokes?.filter((stroke) => stroke.id !== selectedStroke.strokeId) }
+        : e).filter((e) => e.kind !== "sketch" || !!e.strokes?.length);
+      const elementRemains = elements.some((e) => e.id === selectedStroke.elementId);
+      update({ ...composition, elements,
+        firstElement: !elementRemains && composition.firstElement === selectedStroke.elementId
+          ? undefined : composition.firstElement,
+        firstCharacter: !elementRemains && composition.firstElement === selectedStroke.elementId
+          ? undefined : composition.firstCharacter,
+        sketchStart: composition.sketchStart?.strokeId === selectedStroke.strokeId
+          ? undefined : composition.sketchStart });
+      setSelectedStroke(null);
+      setSelection(elementRemains ? [selectedStroke.elementId] : []);
+      return;
+    }
     update({
       ...composition,
       elements: composition.elements.filter((e) => !selection.includes(e.id)),
@@ -216,9 +274,43 @@ export default function SkyArt() {
       firstElement: selection.includes(composition.firstElement ?? "")
         ? undefined
         : composition.firstElement,
+      sketchStart: selection.includes(composition.sketchStart?.elementId ?? "")
+        ? undefined : composition.sketchStart,
     });
     setSelection([]);
-  }, [composition, selection, update]);
+    setSelectedStroke(null);
+  }, [composition, selection, selectedStroke, update]);
+  const rotateSelection = (degrees: number) => {
+    if (!selection.length) return;
+    update({ ...composition, elements: composition.elements.map((element) =>
+      selection.includes(element.id)
+        ? { ...element, rotation: (element.rotation + degrees + 360) % 360 }
+        : element) });
+  };
+  const openDrawing = () => {
+    setDrawTool("pen");
+    setDrawingOpen(true);
+  };
+  const closeDrawing = () => {
+    setDrawingOpen(false);
+    setDrawTool("select");
+  };
+  useEffect(() => {
+    if (!drawingOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDrawingOpen(false);
+        setDrawTool("select");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [drawingOpen]);
   const routingPlacement = useMemo(
     () => ({
       mode: placement.mode,
@@ -314,7 +406,7 @@ export default function SkyArt() {
     const timer = setTimeout(() => {
       saveProject({
         schema: "pilotseal-sky-art",
-        version: 1,
+        version: 2,
         composition,
         placement,
         variant,
@@ -403,7 +495,7 @@ export default function SkyArt() {
     generatedKey !== JSON.stringify({ composition, variant, routingKey });
   const save = (): SavedProject => ({
     schema: "pilotseal-sky-art",
-    version: 1,
+    version: 2,
     composition,
     placement,
     variant,
@@ -415,7 +507,7 @@ export default function SkyArt() {
       setNotice("Use up to 8 elements.");
       return;
     }
-    const id = crypto.randomUUID();
+    const id = skyArtId();
     update({
       ...composition,
       elements: [
@@ -436,6 +528,57 @@ export default function SkyArt() {
     });
     setSelection([id]);
   };
+  const refineWithAi = async () => {
+    const sourceKey = JSON.stringify(composition);
+    const elements = composition.elements.filter((e) => e.kind === "sketch" &&
+      (!selection.length || selection.includes(e.id)));
+    const strokes = elements.flatMap((e) => e.strokes ?? []);
+    if (!strokes.length || strokes.length > 8 ||
+      strokes.reduce((n, s) => n + s.points.length, 0) > 300) {
+      setNotice("AI adjustment supports up to 8 selected strokes and 300 points.");
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const response = await fetch("/api/sky-art-refine", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intent: aiIntent, strokes: strokes.map((s) => ({
+          id: s.id, points: s.points,
+        })) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "AI adjustment unavailable.");
+      if (!Array.isArray(data.strokes) || data.strokes.length !== strokes.length)
+        throw new Error("Invalid AI suggestion.");
+      if (JSON.stringify(committed.current) !== sourceKey)
+        throw new Error("Drawing changed. Request a new suggestion.");
+      const proposals = new Map<string, Point[]>(data.strokes.map((s: { id: string; points: Point[] }) => [s.id, s.points]));
+      setRefinePreview({ ...composition, elements: composition.elements.map((e) =>
+        elements.some((item) => item.id === e.id)
+          ? { ...e, strokes: e.strokes?.map((s) => ({ ...s,
+            points: proposals.get(s.id) ?? s.points })) }
+          : e) });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "AI adjustment unavailable.");
+    } finally { setAiBusy(false); }
+  };
+  const previewLocalRefinement = () => {
+    const elements = composition.elements.map((e) =>
+      e.kind === "sketch" && (!selection.length || selection.includes(e.id))
+        ? { ...e, strokes: e.strokes?.map(cleanStroke) } : e);
+    let sketchStart = composition.sketchStart;
+    if (sketchStart) {
+      const oldStroke = composition.elements.find((e) => e.id === sketchStart!.elementId)
+        ?.strokes?.find((s) => s.id === sketchStart!.strokeId);
+      const newStroke = elements.find((e) => e.id === sketchStart!.elementId)
+        ?.strokes?.find((s) => s.id === sketchStart!.strokeId);
+      const oldPoint = oldStroke?.points[sketchStart.pointIndex];
+      if (oldPoint && newStroke)
+        sketchStart = { ...sketchStart, pointIndex: newStroke.points.reduce((best, p, i) =>
+          distance(p, oldPoint) < distance(newStroke.points[best], oldPoint) ? i : best, 0) };
+    }
+    setRefinePreview({ ...composition, elements, sketchStart });
+  };
   const duplicate = () => {
     if (composition.elements.length + selected.length > 8) {
       setNotice("Use up to 8 elements.");
@@ -443,7 +586,7 @@ export default function SkyArt() {
     }
     const copies = selected.map((e) => ({
       ...e,
-      id: crypto.randomUUID(),
+      id: skyArtId(),
       x: e.x + 25,
       y: e.y + 25,
       group: undefined,
@@ -452,30 +595,8 @@ export default function SkyArt() {
     setSelection(copies.map((e) => e.id));
   };
   const group = () => {
-    const id = crypto.randomUUID();
+    const id = skyArtId();
     changeElement({ group: id });
-  };
-  const align = (axis: "x" | "y" | "distribute") => {
-    if (selected.length < 2) return;
-    const cx = selected.reduce((v, e) => v + e.x, 0) / selected.length,
-      cy = selected.reduce((v, e) => v + e.y, 0) / selected.length;
-    const ordered = [...selected].sort((a, b) => a.x - b.x);
-    update({
-      ...composition,
-      elements: composition.elements.map((e) => {
-        if (!selection.includes(e.id)) return e;
-        if (axis === "x") return { ...e, x: cx };
-        if (axis === "y") return { ...e, y: cy };
-        return {
-          ...e,
-          x:
-            ordered[0].x +
-            ((ordered[ordered.length - 1].x - ordered[0].x) *
-              ordered.findIndex((o) => o.id === e.id)) /
-              (ordered.length - 1),
-        };
-      }),
-    });
   };
   const loadAirports = async () => {
     if (airports.length) return;
@@ -631,6 +752,7 @@ export default function SkyArt() {
       setNotice(e instanceof Error ? e.message : "Export failed.");
     }
   };
+  const downloadProject = () => download(serialize(save()), "sky-art-project.json", "application/json");
   return (
     <div className={styles.root} data-history-version={historyVersion}>
       <header className={styles.header}>
@@ -640,15 +762,7 @@ export default function SkyArt() {
         </div>
         <div className={styles.headerActions}>
           <button onClick={() => file.current?.click()}>Open</button>
-          <button
-            onClick={() =>
-              download(
-                serialize(save()),
-                "sky-art-project.json",
-                "application/json",
-              )
-            }
-          >
+          <button onClick={downloadProject}>
             Save project
           </button>
           <input
@@ -720,87 +834,55 @@ export default function SkyArt() {
       {stage === "canvas" && (
         <>
           <div className={styles.toolbar}>
-            <button
-              aria-pressed={multiple}
-              onClick={() => setMultiple((v) => !v)}
-            >
-              Select multiple
-            </button>
-            <button disabled={!undo.current.length} onClick={undoCanvas}>
-              ↶ Undo
-            </button>
-            <button disabled={!redo.current.length} onClick={redoCanvas}>
-              ↷ Redo
-            </button>
+            <ToolButton icon="select" label="Select" aria-pressed={drawTool === "select"} onClick={() => setDrawTool("select")} />
+            <ToolButton icon="pen" label="Draw" onClick={openDrawing} />
             <span />
-            <button disabled={!selected.length} onClick={duplicate}>
-              Duplicate
-            </button>
-            <button disabled={selected.length < 2} onClick={group}>
-              Group
-            </button>
-            <button
-              disabled={!selected.some((e) => e.group)}
-              onClick={() => changeElement({ group: undefined })}
-            >
-              Ungroup
-            </button>
-            <button disabled={selected.length < 2} onClick={() => align("x")}>
-              Align X
-            </button>
-            <button disabled={selected.length < 2} onClick={() => align("y")}>
-              Align Y
-            </button>
-            <button
-              disabled={selected.length < 3}
-              onClick={() => align("distribute")}
-            >
-              Distribute
-            </button>
-            <button disabled={!selected.length} onClick={remove}>
-              Delete
-            </button>
-            <button
-              disabled={!composition.elements.length}
-              onClick={() => {
-                update({
-                  ...composition,
-                  elements: [],
-                  firstElement: undefined,
-                  firstCharacter: undefined,
-                });
-                setSelection([]);
-              }}
-            >
-              Clear canvas
-            </button>
-            <label className={styles.toggle}>
-              <input
-                type="checkbox"
-                checked={pathView}
-                onChange={(e) => setPathView(e.target.checked)}
-              />{" "}
-              Paths
-            </label>
+            <ToolButton icon="undo" label="Undo" disabled={!undo.current.length} onClick={undoCanvas} />
+            <ToolButton icon="redo" label="Redo" disabled={!redo.current.length} onClick={redoCanvas} />
+            <ToolButton icon="rotateLeft" label="Rotate selected left 15 degrees" disabled={!selected.length} onClick={() => rotateSelection(-15)} />
+            <ToolButton icon="rotateRight" label="Rotate selected right 15 degrees" disabled={!selected.length} onClick={() => rotateSelection(15)} />
+            <ToolButton icon="delete" label="Delete selected" disabled={!selected.length} onClick={remove} />
+            <ToolButton icon="route" label="Generate route" onClick={() => { setPathView(true); setDrawTool("select"); }} />
+            <details className={styles.toolMore}>
+              <summary aria-label="More tools" title="More tools"><Icon name="more" /></summary>
+              <div className={styles.toolMenu} onClick={(event) => {
+                if ((event.target as HTMLElement).closest("button"))
+                  (event.currentTarget.parentElement as HTMLDetailsElement).open = false;
+              }}>
+                <ToolButton icon="erase" label="Erase stroke" aria-pressed={drawTool === "erase"} onClick={() => setDrawTool("erase")} />
+                <ToolButton icon="start" label="Set start point" aria-pressed={drawTool === "start"} onClick={() => setDrawTool("start")} />
+                <ToolButton icon="path" label="Show flight path" aria-pressed={pathView} onClick={() => setPathView((value) => !value)} />
+                <ToolButton icon="select" label="Select multiple" aria-pressed={multiple} onClick={() => setMultiple((value) => !value)} />
+                <ToolButton icon="copy" label="Duplicate selected" disabled={!selected.length} onClick={duplicate} />
+                <ToolButton icon="group" label="Group selected" disabled={selected.length < 2} onClick={group} />
+                <ToolButton icon="ungroup" label="Ungroup selected" disabled={!selected.some((e) => e.group)} onClick={() => changeElement({ group: undefined })} />
+                <ToolButton icon="check" label="Close last stroke" disabled={active?.kind !== "sketch" || !active.strokes?.length}
+                  onClick={() => {
+                    if (!active || active.kind !== "sketch") return;
+                    const strokes = [...(active.strokes ?? [])];
+                    strokes[strokes.length - 1] = { ...strokes[strokes.length - 1], closed: true };
+                    changeElement({ strokes });
+                  }} />
+                <ToolButton icon="refine" label="Refine lines" disabled={!composition.elements.some((e) => e.kind === "sketch" && e.strokes?.length)} onClick={previewLocalRefinement} />
+                <ToolButton icon="ai" label={aiBusy ? "Adjusting drawing" : "AI adjust"} disabled={aiBusy || !composition.elements.some((e) => e.kind === "sketch" && e.strokes?.length)} onClick={refineWithAi} />
+                {refinePreview && <>
+                  <ToolButton icon="check" label="Apply refinement" onClick={() => { update(refinePreview); setRefinePreview(null); }} />
+                  <ToolButton icon="close" label="Discard preview" onClick={() => setRefinePreview(null)} />
+                </>}
+                <ToolButton icon="clear" label="Clear canvas" disabled={!composition.elements.length}
+                  onClick={() => {
+                    update({ ...composition, elements: [], firstElement: undefined, firstCharacter: undefined, sketchStart: undefined });
+                    setSelection([]);
+                    setSelectedStroke(null);
+                  }} />
+              </div>
+            </details>
           </div>
           <div className={styles.workspace}>
             <aside className={styles.library}>
               <h2>Patterns</h2>
-              <select
-                aria-label="Pattern category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                {["All", ...new Set(PRESETS.map((p) => p.category))].map(
-                  (c) => (
-                    <option key={c}>{c}</option>
-                  ),
-                )}
-              </select>
               <div className={styles.presets}>
-                {PRESETS.filter(
-                  (p) => category === "All" || p.category === category,
-                ).map((p) => (
+                {FEATURED_PRESETS.map((p) => (
                   <button
                     key={p.id}
                     title={p.name}
@@ -829,15 +911,21 @@ export default function SkyArt() {
                 ＋ Add text
               </button>
             </aside>
-            <ArtCanvas
+            {!drawingOpen && <ArtCanvas
               composition={composition}
               geometry={geometry}
+              route={stale ? null : route}
+              refinePreview={refinePreview}
               selection={selection}
-              onSelect={setSelection}
+              selectedStroke={selectedStroke}
+              onSelectStroke={setSelectedStroke}
+              onSelect={(ids) => { setSelection(ids); setSelectedStroke(null); }}
               onChange={update}
               pathView={pathView}
               multiple={multiple}
-            />
+              tool={drawTool}
+              onNotice={setNotice}
+            />}
             <aside className={styles.properties}>
               <h2>
                 {selected.length > 1
@@ -903,6 +991,14 @@ export default function SkyArt() {
                     max={100}
                     step={0.1}
                   />
+                  {active.kind === "sketch" && <Field name="AI intent (optional)">
+                    <input value={aiIntent} maxLength={200} onChange={(event) => setAiIntent(event.target.value)} />
+                  </Field>}
+                  {active.kind === "sketch" && <label className={styles.toggle}>
+                    <input type="checkbox" checked={!!active.sketchOrderLocked}
+                      onChange={(event) => changeElement({ sketchOrderLocked: event.target.checked })} />
+                    Lock stroke order
+                  </label>}
                 </>
               )}
               <details>
@@ -926,7 +1022,7 @@ export default function SkyArt() {
                         )
                       }
                     >
-                      <span>{e.kind === "text" ? "T" : "◇"}</span>
+                      <span>{e.kind === "text" ? "T" : e.kind === "sketch" ? "✎" : "◇"}</span>
                       <strong>{label(e)}</strong>
                       {e.group && <small>Grouped</small>}
                     </button>
@@ -952,12 +1048,13 @@ export default function SkyArt() {
                       ...composition,
                       firstElement,
                       firstCharacter: firstCharacter ?? undefined,
+                      sketchStart: undefined,
                     });
                   }}
                 >
                   <option value="">Automatic</option>
                   {composition.elements.flatMap((e) =>
-                    e.kind === "preset"
+                    e.kind !== "text"
                       ? [
                           <option
                             key={e.id}
@@ -1010,6 +1107,40 @@ export default function SkyArt() {
               View on map →
             </button>
           </footer>
+          {drawingOpen && createPortal(<div className={`${styles.root} ${styles.drawOverlay}`} role="presentation">
+            <section className={styles.drawDialog} role="dialog" aria-modal="true" aria-label="Drawing canvas">
+              <div className={styles.drawToolbar}>
+                <ToolButton icon="pen" label="Draw" aria-pressed={drawTool === "pen"} onClick={() => setDrawTool("pen")} />
+                <ToolButton icon="select" label="Select drawing" aria-pressed={drawTool === "select"} onClick={() => setDrawTool("select")} />
+                <ToolButton icon="erase" label="Erase stroke" aria-pressed={drawTool === "erase"} onClick={() => setDrawTool("erase")} />
+                <span />
+                <ToolButton icon="undo" label="Undo drawing" disabled={!undo.current.length} onClick={undoCanvas} />
+                <ToolButton icon="redo" label="Redo drawing" disabled={!redo.current.length} onClick={redoCanvas} />
+                <ToolButton icon="rotateLeft" label="Rotate selected left 15 degrees" disabled={!selected.length} onClick={() => rotateSelection(-15)} />
+                <ToolButton icon="rotateRight" label="Rotate selected right 15 degrees" disabled={!selected.length} onClick={() => rotateSelection(15)} />
+                <ToolButton icon="delete" label="Delete selected" disabled={!selected.length} onClick={remove} />
+                <ToolButton icon="save" label="Save drawing project" onClick={downloadProject} />
+                <ToolButton icon="close" label="Close drawing canvas" onClick={closeDrawing} />
+              </div>
+              <div className={styles.drawCanvas}>
+                <ArtCanvas
+                  composition={composition}
+                  geometry={geometry}
+                  route={stale ? null : route}
+                  refinePreview={refinePreview}
+                  selection={selection}
+                  selectedStroke={selectedStroke}
+                  onSelectStroke={setSelectedStroke}
+                  onSelect={(ids) => { setSelection(ids); setSelectedStroke(null); }}
+                  onChange={update}
+                  pathView={pathView}
+                  multiple={multiple}
+                  tool={drawTool}
+                  onNotice={setNotice}
+                />
+              </div>
+            </section>
+          </div>, document.body)}
         </>
       )}
       {stage === "map" && plan && (

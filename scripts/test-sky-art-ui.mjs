@@ -43,6 +43,10 @@ try {
       return route.fulfill({
         json: [["X001", "XXA", "Synthetic Test Airport", 40, -75, "Test Town"]],
       });
+    if (u.pathname === "/api/sky-art-refine") {
+      const body = route.request().postDataJSON();
+      return route.fulfill({ json: { strokes: body.strokes } });
+    }
     if (
       ["localhost", "127.0.0.1"].includes(u.hostname) ||
       ["data:", "blob:"].includes(u.protocol)
@@ -53,6 +57,11 @@ try {
     return route.abort();
   });
   const page = await context.newPage();
+  const moreTool = async (name) => {
+    const menu = page.locator('details[class*="toolMore"]');
+    if ((await menu.getAttribute("open")) === null) await page.getByLabel("More tools").click();
+    await menu.getByRole("button", { name, exact: true }).click();
+  };
   const errors = [];
   console.log("Checking canvas, composition and typography…");
   page.on("pageerror", (e) => errors.push(e.message));
@@ -80,6 +89,8 @@ try {
       .count(),
     1,
   );
+  assert.equal(await page.locator('[class*="presets"] button').count(), 12);
+  assert.equal(await page.getByLabel("Pattern category").count(), 0);
   await page.screenshot({
     path: path.join(output, "canvas-desktop.png"),
     fullPage: true,
@@ -91,7 +102,7 @@ try {
     await page.getByLabel("Project name", { exact: true }).count(),
     0,
   );
-  await page.getByRole("button", { name: "Clear canvas", exact: true }).click();
+  await moreTool("Clear canvas");
   await page.waitForFunction(
     () =>
       document.querySelectorAll('[class*="elementList"] button').length === 0,
@@ -101,12 +112,10 @@ try {
     false,
   );
   assert.equal(
-    await page
-      .getByRole("button", { name: "Clear canvas", exact: true })
-      .isEnabled(),
-    false,
+    await page.locator('[class*="toolMenu"] button[aria-label="Clear canvas"]').isDisabled(),
+    true,
   );
-  await page.getByRole("button", { name: "↶ Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
   await ready();
   const startDrawing = page.getByLabel("Start drawing", { exact: true });
   await startDrawing.selectOption({ label: "2026 · 2 (1)" });
@@ -127,7 +136,7 @@ try {
     path: path.join(output, "canvas-chinese.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "↶ Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
   assert.equal(await text.inputValue(), "2026");
   await ready();
   await text.fill("🦄");
@@ -178,17 +187,17 @@ try {
   });
   await page.mouse.up();
   await ready();
-  await page.getByRole("button", { name: "↶ Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
   await ready();
   // Select both through element list, group, move as one and undo.
   await page.getByText("Layers", { exact: true }).click();
   const elements = page.locator('[class*="elementList"] button');
   await elements.nth(0).click();
   await elements.nth(1).click({ modifiers: ["Shift"] });
-  await page.getByRole("button", { name: "Group", exact: true }).click();
+  await moreTool("Group selected");
   await ready();
   assert.equal(await page.getByText("Grouped", { exact: true }).count(), 2);
-  await page.getByRole("button", { name: "Ungroup", exact: true }).click();
+  await moreTool("Ungroup selected");
   await ready();
   console.log("Checking map controls and playback…");
   await page.getByRole("button", { name: "View on map →" }).click();
@@ -311,9 +320,7 @@ try {
   await ready();
   // Responsive canvas and map, no page-level horizontal overflow.
   await page.setViewportSize({ width: 390, height: 844 });
-  await page
-    .getByRole("button", { name: "Select multiple", exact: true })
-    .click();
+  await moreTool("Select multiple");
   await page.getByText("Layers", { exact: true }).click();
   const mobileElements = page.locator('[class*="elementList"] button');
   await mobileElements.nth(0).click();
@@ -324,9 +331,9 @@ try {
       .count(),
     2,
   );
-  await page.getByRole("button", { name: "Group", exact: true }).click();
+  await moreTool("Group selected");
   await ready();
-  await page.getByRole("button", { name: "Ungroup", exact: true }).click();
+  await moreTool("Ungroup selected");
   await ready();
 
   await page.screenshot({
@@ -350,6 +357,46 @@ try {
       () => document.documentElement.scrollWidth <= window.innerWidth + 1,
     ),
   );
+  // Hand drawing shares the same saved project, planner and map flow.
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.getByRole("button", { name: "Design", exact: true }).click();
+  await moreTool("Clear canvas");
+  await page.getByRole("button", { name: "Draw", exact: true }).click();
+  const drawingDialog = page.getByRole("dialog", { name: "Drawing canvas" });
+  assert.equal(await drawingDialog.isVisible(), true);
+  const svg = page.getByRole("img", { name: "Artwork composition canvas" });
+  const drawBox = await svg.boundingBox();
+  const canvasPoint = (x, y) => ({
+    x: drawBox.x + (drawBox.width * x) / 800,
+    y: drawBox.y + (drawBox.height * y) / 600,
+  });
+  for (const [index, [x, y]] of [
+    [330, 280], [300, 240], [260, 260], [275, 320], [400, 420],
+    [525, 320], [540, 260], [500, 240], [470, 280],
+  ].entries()) {
+    const p = canvasPoint(x, y);
+    await page.mouse.move(p.x, p.y, { steps: 3 });
+    if (index === 0) await page.mouse.down();
+  }
+  await page.mouse.up();
+  await drawingDialog.getByRole("button", { name: "Close drawing canvas" }).click();
+  await moreTool("Close last stroke");
+  await moreTool("Refine lines");
+  await page.getByLabel("More tools").click();
+  assert.ok(await page.getByRole("button", { name: "Apply refinement" }).isVisible());
+  await moreTool("Apply refinement");
+  await moreTool("AI adjust");
+  await moreTool("Discard preview");
+  const sketchFile = await download("Save project");
+  const sketchProject = JSON.parse(fs.readFileSync(sketchFile, "utf8"));
+  assert.equal(sketchProject.version, 2);
+  assert.equal(sketchProject.composition.elements[0].kind, "sketch");
+  assert.ok(sketchProject.composition.elements[0].strokes[0].raw.length > 2);
+  await page.getByRole("button", { name: "Generate route" }).click();
+  await ready();
+  await page.screenshot({ path: path.join(output, "handdraw-desktop.png"), fullPage: true });
+  await page.getByRole("button", { name: "View on map →" }).click();
+  await page.getByRole("heading", { name: "Position" }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify(
