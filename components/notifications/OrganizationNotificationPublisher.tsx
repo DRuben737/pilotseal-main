@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
   CompactButton,
@@ -19,20 +19,23 @@ import {
 } from "@/lib/notifications";
 import { hasOrganizationPermission } from "@/lib/organizations";
 
-export default function OrganizationNotificationPublisher() {
-  const { activeOrganizationId, organizations, setActiveOrganizationId } = useOrganization();
+export default function OrganizationNotificationPublisher({ activeOrganizationOnly = false }: { activeOrganizationOnly?: boolean }) {
+  const { activeOrganizationId, activeOrganization, organizations, setActiveOrganizationId, loading: organizationsLoading } = useOrganization();
   const [memberCount, setMemberCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerOrganizationId, setComposerOrganizationId] = useState("");
+  const [composerError, setComposerError] = useState("");
+  const savingRef = useRef(false);
   const [status, setStatus] = useState("");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState<NotificationPriority>("normal");
   const managedOrganizations = organizations.filter((organization) => hasOrganizationPermission(organization, "notifications"));
-  const publishingOrganization = managedOrganizations.find((organization) => organization.id === activeOrganizationId)
-    ?? managedOrganizations[0]
-    ?? null;
+  const publishingOrganization = activeOrganizationOnly
+    ? (hasOrganizationPermission(activeOrganization, "notifications") ? activeOrganization : null)
+    : managedOrganizations.find((organization) => organization.id === activeOrganizationId) ?? managedOrganizations[0] ?? null;
   const canPublish = Boolean(publishingOrganization);
 
   useEffect(() => {
@@ -60,9 +63,15 @@ export default function OrganizationNotificationPublisher() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!publishingOrganization?.id || !canPublish) return;
+    if (savingRef.current) return;
+    if (!publishingOrganization?.id || !canPublish || publishingOrganization.id !== composerOrganizationId) {
+      setComposerError("The organization changed. Close and reopen the notification before sending.");
+      return;
+    }
+    savingRef.current = true;
     setSaving(true);
     setStatus("");
+    setComposerError("");
     try {
       const recipientCount = await createOrganizationNotification({
         organizationId: publishingOrganization.id,
@@ -76,22 +85,25 @@ export default function OrganizationNotificationPublisher() {
       setComposerOpen(false);
       setStatus(`Organization notification sent to ${recipientCount} member${recipientCount === 1 ? "" : "s"}.`);
     } catch (error) {
-      setStatus(getErrorMessage(error, "Unable to send the organization notification."));
+      setComposerError(getErrorMessage(error, "Unable to send the organization notification."));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
-  if (!canPublish) return null;
+  if (organizationsLoading) return <p className="saas-panel">Loading organization…</p>;
+  if (!publishingOrganization) return activeOrganizationOnly ? <p className="saas-panel">You do not have permission to publish notifications for this organization.</p> : null;
 
   return (
     <div className="grid gap-4">
-      {managedOrganizations.length > 1 ? (
+      {!activeOrganizationOnly && managedOrganizations.length > 1 ? (
         <label className="dashboard-notification-organization-picker">
           <span>Publishing for</span>
           <select
             aria-label="Organization to notify"
             value={publishingOrganization?.id ?? ""}
+            disabled={composerOpen || saving}
             onChange={(event) => setActiveOrganizationId(event.target.value)}
           >
             {managedOrganizations.map((organization) => (
@@ -108,22 +120,21 @@ export default function OrganizationNotificationPublisher() {
         eyebrow="Organization administration"
         title="Organization notifications"
         summary={loading ? "Loading audience..." : `${memberCount} recipients`}
-        actions={<CompactButton type="button" tone="primary" onClick={() => setComposerOpen(true)}>New notification</CompactButton>}
+        actions={<CompactButton type="button" tone="primary" disabled={saving || composerOpen} onClick={() => { setComposerOrganizationId(publishingOrganization.id); setComposerError(""); setComposerOpen(true); }}>New notification</CompactButton>}
         openOnAction
-        helpContent={<p>Send an operational announcement or urgent notice to every current member of the selected organization.</p>}
       >
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          Notifications appear in each member&apos;s unified inbox. Use this channel for organization-wide operational information.
-        </div>
+        <p className="break-words text-sm text-slate-600">{publishingOrganization.name}</p>
       </ManagementDisclosure>
 
       <DetailDrawer
         open={composerOpen}
-        onClose={() => setComposerOpen(false)}
+        onClose={() => { if (!savingRef.current) setComposerOpen(false); }}
         title="New organization notification"
-        description={`Send one notification to ${memberCount} current member${memberCount === 1 ? "" : "s"}.`}
+        description={organizations.find(organization => organization.id === composerOrganizationId)?.name ?? ""}
       >
         <form onSubmit={handleSubmit}>
+          {composerError ? <p role="alert" className="mb-3 text-sm text-rose-700">{composerError}</p> : null}
+          <fieldset disabled={saving}>
           <WorksheetGrid label="Organization notification details">
             <thead><tr><WorksheetHeader>Title</WorksheetHeader><WorksheetHeader>Priority</WorksheetHeader></tr></thead>
             <tbody><tr>
@@ -146,6 +157,7 @@ export default function OrganizationNotificationPublisher() {
             <CompactButton type="button" onClick={() => setComposerOpen(false)}>Cancel</CompactButton>
             <CompactButton type="submit" tone="primary" disabled={saving || !title.trim() || !message.trim()}>{saving ? "Sending..." : "Send notification"}</CompactButton>
           </div>
+          </fieldset>
         </form>
       </DetailDrawer>
     </div>

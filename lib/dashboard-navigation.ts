@@ -68,6 +68,7 @@ export const dashboardOrganizationNavigation: DashboardNavItem[] = [
     { label: "Issued endorsements", value: "records", default: true },
     { label: "Change requests", value: "requests" },
   ] },
+  { href: "/console/organization/notifications", label: "Notifications", access: "organization-manager", organizationPermission: "notifications" },
 ];
 
 export const dashboardPlatformNavigation: DashboardNavItem[] = [

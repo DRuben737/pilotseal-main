@@ -195,7 +195,7 @@ function SidebarNavigationItem({
       >
         <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
           <DashboardIcon kind={item.label} />
-          {item.label === "Notifications" && unreadNotificationCount > 0 ? (
+          {item.href === "/console/personal/notifications" && unreadNotificationCount > 0 ? (
             <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white">
               {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
             </span>
