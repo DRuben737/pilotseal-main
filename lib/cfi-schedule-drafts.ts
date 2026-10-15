@@ -43,7 +43,13 @@ export function scheduleChanges(original: ScheduleEntry[], current: ScheduleEntr
 
 export function scheduleHasOverlap(entries: ScheduleEntry[]) {
   const lessons = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled").sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
-  return lessons.some((entry, index) => index > 0 && Date.parse(entry.start_at) < Date.parse(lessons[index - 1].end_at));
+  return lessons.some((entry, index) => lessons.slice(0, index).some((other) => lessonsConflict(entry, other)));
+}
+
+function lessonsConflict(left: ScheduleEntry, right: ScheduleEntry) {
+  const overlaps = Date.parse(left.start_at) < Date.parse(right.end_at) && Date.parse(left.end_at) > Date.parse(right.start_at);
+  if (!overlaps) return false;
+  return left.student_user_id === right.student_user_id || (left.lesson_kind !== "solo" && right.lesson_kind !== "solo");
 }
 
 export function scheduleConflictsForLesson(entries: ScheduleEntry[], lessonId: string) {
@@ -52,7 +58,7 @@ export function scheduleConflictsForLesson(entries: ScheduleEntry[], lessonId: s
   const start = Date.parse(edited.start_at);
   const end = Date.parse(edited.end_at);
   return entries.filter((entry) => entry.id !== lessonId && entry.entry_type === "lesson" && entry.status === "scheduled"
-    && Date.parse(entry.start_at) < end && Date.parse(entry.end_at) > start)
+    && Date.parse(entry.start_at) < end && Date.parse(entry.end_at) > start && lessonsConflict(edited, entry))
     .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
 }
 

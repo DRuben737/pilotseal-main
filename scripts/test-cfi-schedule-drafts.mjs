@@ -60,6 +60,10 @@ assert.equal(Date.parse(movedToNextDay.find(e=>e.id==='a').end_at)-Date.parse(mo
 assert.equal(scheduleChanges(original,movedToNextDay).length,1,'moving stages only the dragged lesson');
 assert.equal(moveScheduleLesson(original,'c',b.end_at).find(e=>e.id==='c').start_at,new Date(b.end_at).toISOString(),'a lesson can be placed directly after another lesson');
 assert.throws(()=>moveScheduleLesson(original,'missing',a.start_at),/no longer available/);
+const solo={...lesson('solo','07:30','08:30'),lesson_kind:'solo',aircraft_id:'plane-1',student_user_id:'solo-student'};
+assert.equal(scheduleHasOverlap([...original,solo]),false,'a Solo lesson does not occupy the instructor');
+assert.deepEqual(scheduleConflictsForLesson([...original,solo],'solo'),[],'Solo may overlap another student’s instructed lesson');
+assert.equal(scheduleHasOverlap([...original,{...solo,student_user_id:'a'}]),true,'the same student cannot overlap their Solo with another lesson');
 // Pure scheduling checks: no database or network calls.
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');
@@ -75,6 +79,8 @@ const warningInput = { studentUserId:'a', start:new Date(a.start_at), end:new Da
 assert.equal(getManualConflictWarnings({...warningInput,lessonKind:'flight',aircraftId:'plane-1'}).length,1);
 assert.equal(getManualConflictWarnings({...warningInput,lessonKind:'ground'}).length,0);
 assert.match(getManualConflictWarnings({...warningInput,lessonKind:'flight',aircraftId:'plane-2',aircraftStatus:'grounded'})[0],/grounded/);
+assert.equal(getManualConflictWarnings({...warningInput,lessonKind:'solo',aircraftId:'plane-1'}).length,1,'Solo respects aircraft unavailable time');
+assert.match(getManualConflictWarnings({...warningInput,lessonKind:'solo',aircraftId:'plane-2',aircraftStatus:'grounded'})[0],/grounded/,'Solo exposes aircraft status warnings');
 const autoInput = { cfiUserId:'cfi', weekStart:new Date('2026-09-14T12:00:00'), includeWeekends:false,
   access:[{student_user_id:'a',student_name:'Student',default_duration_min:120,default_weekly_sessions:1}],
   weekOverrides:[], slots, overrideDates:[], existingEntries:[], blocks:[aircraftBlock],aircraft,selectedAircraftIds:['plane-1'],aircraftReservations:[] };
@@ -96,6 +102,8 @@ assert.equal(explicitAdditions.drafts[0].start_at.slice(0,10),'2026-09-15','the 
 const metTarget=generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[a],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0}]});
 assert.equal(metTarget.drafts.length,0,'no duplicate is added when the weekly Flight total is already met');
 const existingGround={...a,id:'ground-a',lesson_kind:'ground',aircraft_id:null,aircraft_tail_number:null};
+const existingSolo={...a,id:'solo-aircraft',lesson_kind:'solo',student_user_id:'solo-student',aircraft_id:'plane-1',aircraft_tail_number:'N101PS'};
+assert(Date.parse(generateAutomaticSchedule({...autoInput,slots:twoDaySlots,blocks:[],existingEntries:[existingSolo],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0}]}).drafts[0].start_at)>=Date.parse(existingSolo.end_at),'automatic Flight avoids overlapping an aircraft reserved for Solo');
 const separateKinds=generateAutomaticSchedule({...autoInput,slots:[...twoDaySlots,{student_user_id:'a',scope:'weekly',weekday:3,start_minute:420,end_minute:900,timezone:'America/New_York'}],blocks:[],existingEntries:[a,existingGround],requests:[{studentUserId:'a',flightSessions:2,groundSessions:2}]});
 assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='flight').length,1,'existing Flight is deducted only from the Flight total');
 assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='ground').length,1,'existing Ground is deducted only from the Ground total');

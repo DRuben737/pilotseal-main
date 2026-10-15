@@ -1,6 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase";
 
-export type LessonKind = "flight" | "ground";
+export type LessonKind = "flight" | "ground" | "solo";
 export type AvailabilityScope = "weekly" | "date";
 
 export type ScheduleAccess = {
@@ -310,7 +310,7 @@ export async function publishScheduleDraft(revision: string, batchId: string, ch
     p_batch_id: batchId,
     p_changes: changes.map((entry) => ({
       id: entry.id, student_user_id: entry.student_user_id, lesson_kind: entry.lesson_kind,
-      aircraft_id: entry.lesson_kind === "flight" ? entry.aircraft_id : null,
+      aircraft_id: entry.lesson_kind !== "ground" ? entry.aircraft_id : null,
       start_at: entry.start_at, end_at: entry.end_at, note: entry.note,
       status: entry.status, auto_generated: entry.auto_generated,
     })),
@@ -720,15 +720,15 @@ export function getManualConflictWarnings(input: {
     warnings.push("This lesson is outside the student’s stated availability.");
   }
   if (
-    input.lessonKind === "flight" &&
+    input.lessonKind !== "ground" &&
     input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === input.aircraftId) && overlaps(input.start, input.end, new Date(block.start_at), new Date(block.end_at)))
   ) {
     warnings.push("The selected aircraft is marked unavailable during this time.");
   }
-  if (input.lessonKind === "flight" && input.aircraftStatus && input.aircraftStatus !== "available") {
+  if (input.lessonKind !== "ground" && input.aircraftStatus && input.aircraftStatus !== "available") {
     warnings.push(`The selected aircraft is currently ${input.aircraftStatus.replace("_", " ")}. Booking is still allowed.`);
   }
-  if (input.lessonKind === "flight" && input.aircraftConflict) warnings.push("The selected aircraft is booked by another instructor during this time.");
+  if (input.lessonKind !== "ground" && input.aircraftConflict) warnings.push("The selected aircraft is booked by another instructor during this time.");
   return warnings;
 }
 
@@ -754,7 +754,7 @@ export function generateAutomaticSchedule(input: {
   const allowedWeekdays = input.includeWeekends ? rules.weekdays : rules.weekdays.filter((day) => day <= 5);
   const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) => addCalendarDays(input.weekStart, dayIndex)).filter((date) => allowedWeekdays.includes((date.getDay() + 6) % 7 + 1));
   const occupied = input.existingEntries
-    .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled")
+    .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.lesson_kind !== "solo")
     .map((entry) => ({ start: new Date(entry.start_at), end: new Date(entry.end_at), studentUserId: entry.student_user_id }));
   const drafts: ScheduleDraft[] = [];
   const unscheduled: AutomaticScheduleUnscheduled[] = [];
@@ -841,7 +841,7 @@ export function generateAutomaticSchedule(input: {
             aircraft = selectedAircraft.find((candidate) => {
               const blocked = input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === candidate.id) && overlaps(start,end,new Date(block.start_at),new Date(block.end_at)));
               const externallyReserved = input.aircraftReservations.some((reservation) => reservation.aircraft_id === candidate.id && overlaps(start,end,new Date(reservation.start_at),new Date(reservation.end_at)));
-              const locallyReserved = input.existingEntries.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && item.status !== "cancelled" && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)))
+              const locallyReserved = input.existingEntries.some((item) => item.lesson_kind !== "ground" && item.aircraft_id === candidate.id && item.status !== "cancelled" && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)))
                 || drafts.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)));
               return !blocked && !externallyReserved && !locallyReserved;
             });
