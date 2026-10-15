@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { DetailDrawer } from "@/components/admin/AdminConsole";
+import { filterAvailableAircraft } from "@/lib/aircraft-availability";
 import type { AircraftModelRecord, AircraftRecord } from "@/lib/aircraft";
 import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import { formatUsDate, formatUsMonthYear } from "@/lib/date-format";
@@ -21,9 +22,10 @@ type Props = {
 export default function FleetReportsPanel({
   organizationId,
   organizationName,
-  aircraft,
+  aircraft: allAircraft,
   models,
 }: Props) {
+  const aircraft = useMemo(() => filterAvailableAircraft(allAircraft), [allAircraft]);
   const [assignments, setAssignments] = useState<AircraftInspectionAssignment[]>(
     []
   );
@@ -81,7 +83,7 @@ export default function FleetReportsPanel({
       <div className="border border-slate-200 bg-white">
         <ReportCard
           title="Next inspections"
-          details={`${aircraft.length} aircraft · ${assignments.length} extra items`}
+          details={`${aircraft.length} aircraft · ${assignments.filter((item) => aircraft.some((plane) => plane.id === item.aircraft_id)).length} extra items`}
           disabled={
             aircraft.length === 0 ||
             loadingInspections ||
@@ -99,7 +101,7 @@ export default function FleetReportsPanel({
 
       {aircraft.length === 0 ? (
         <p className="saas-empty-state">
-          Add an aircraft before creating printable aircraft records.
+          No available aircraft.
         </p>
       ) : null}
       {loadingInspections ? (

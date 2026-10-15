@@ -9,6 +9,7 @@ import {
   parseAircraftEnvelopeSet,
   parseAircraftStations,
 } from "@/lib/aircraft";
+import { filterAvailableAircraft, isAircraftAvailable } from "@/lib/aircraft-availability";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import CGEnvelopeChart from "./CGEnvelopeChart";
@@ -401,6 +402,10 @@ function normalizeTailNumber(value) {
 }
 
 function mergeAircraftOptions(sharedAircraft, myAircraft) {
+  const available = filterAvailableAircraft([...(sharedAircraft ?? []), ...(myAircraft ?? [])]);
+  const availableIds = new Set(available.map((aircraft) => aircraft.id));
+  sharedAircraft = (sharedAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
+  myAircraft = (myAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
   const myAircraftIds = new Set((myAircraft ?? []).map((aircraft) => aircraft.id));
   const merged = [
     ...(myAircraft ?? []).map((aircraft) => ({
@@ -490,7 +495,7 @@ export default function WeightBalanceCalculator({
 
       try {
         if (embedded) {
-          const resolvedAircraft = sourceAircraft ?? null;
+          const resolvedAircraft = isAircraftAvailable(sourceAircraft) ? sourceAircraft : null;
 
           setAircraftOptions(resolvedAircraft ? [resolvedAircraft] : []);
           setSavedStudents(sourceStudent ? [sourceStudent] : []);
@@ -554,6 +559,7 @@ export default function WeightBalanceCalculator({
           setActiveWb((current) => ({
             ...current,
             selectedTail: persistedAircraft.id,
+            ...(current.selectedTail !== persistedAircraft.id ? { result: null, status: "" } : {}),
           }));
         } else {
           setAircraftMatchMissing(false);
@@ -573,6 +579,8 @@ export default function WeightBalanceCalculator({
     }
 
     void loadData();
+    window.addEventListener("focus", loadData);
+    return () => window.removeEventListener("focus", loadData);
   }, [
     briefAircraftId,
     embedded,

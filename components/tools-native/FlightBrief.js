@@ -9,6 +9,7 @@ import { fetchSavedPeople } from "@/lib/saved-people";
 import { fetchPersonCertificates } from "@/lib/person-certificates";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchMyStudentCandidates } from "@/lib/student-candidates";
+import { filterAvailableAircraft, isAircraftAvailable } from "@/lib/aircraft-availability";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import {
@@ -104,6 +105,10 @@ function normalizeTailNumber(value) {
 }
 
 function mergeAircraftOptions(sharedAircraft, myAircraft) {
+  const available = filterAvailableAircraft([...(sharedAircraft ?? []), ...(myAircraft ?? [])]);
+  const availableIds = new Set(available.map((aircraft) => aircraft.id));
+  sharedAircraft = (sharedAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
+  myAircraft = (myAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
   const myAircraftIds = new Set((myAircraft ?? []).map((aircraft) => aircraft.id));
   const merged = [
     ...(myAircraft ?? []).map((aircraft) => ({
@@ -1211,6 +1216,7 @@ export default function FlightBrief() {
   const [savedPilotOptions, setSavedPilotOptions] = React.useState([]);
   const [savedInstructorOptions, setSavedInstructorOptions] = React.useState([]);
   const [aircraftOptions, setAircraftOptions] = React.useState([]);
+  const [unavailableAircraft, setUnavailableAircraft] = React.useState([]);
   const [mobileEditingField, setMobileEditingField] = React.useState(null);
 
   useEffect(() => {
@@ -1275,6 +1281,11 @@ export default function FlightBrief() {
     let cancelled = false;
     const supabase = getSupabaseClient();
 
+    function applyAircraftOptions(shared, mine) {
+      setUnavailableAircraft([...shared, ...mine].filter((aircraft) => !isAircraftAvailable(aircraft)));
+      setAircraftOptions(mergeAircraftOptions(shared, mine));
+    }
+
     async function loadSavedPeopleOptions() {
       try {
         const {
@@ -1286,7 +1297,7 @@ export default function FlightBrief() {
           if (!cancelled) {
             setSavedPilotOptions([]);
             setSavedInstructorOptions([]);
-            setAircraftOptions(mergeAircraftOptions(sharedAircraft, []));
+            applyAircraftOptions(sharedAircraft, []);
           }
           return;
         }
@@ -1345,22 +1356,24 @@ export default function FlightBrief() {
 
           setSavedPilotOptions(studentOptions);
           setSavedInstructorOptions(instructorOptions);
-          setAircraftOptions(mergeAircraftOptions([...sharedAircraft, ...organizationAircraft], myAircraft));
+          applyAircraftOptions([...sharedAircraft, ...organizationAircraft], myAircraft);
         }
       } catch {
         const sharedAircraft = await fetchSharedAircraft().catch(() => []);
         if (!cancelled) {
           setSavedPilotOptions([]);
           setSavedInstructorOptions([]);
-          setAircraftOptions(mergeAircraftOptions(sharedAircraft, []));
+          applyAircraftOptions(sharedAircraft, []);
         }
       }
     }
 
     void loadSavedPeopleOptions();
+    window.addEventListener("focus", loadSavedPeopleOptions);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", loadSavedPeopleOptions);
     };
   }, []);
 
@@ -1403,6 +1416,12 @@ export default function FlightBrief() {
     () => getUniqueSavedPeopleByName(savedInstructorOptions),
     [savedInstructorOptions]
   );
+  useEffect(() => {
+    if (matchAircraftByTail(unavailableAircraft, aircraftId)) {
+      setBrief((current) => ({ ...current, aircraftId: "", mxDue: "", mxNow: "" }));
+    }
+  }, [aircraftId, unavailableAircraft, setBrief]);
+
   const aircraftTailOptions = useMemo(() => getUniqueAircraftByTail(aircraftOptions), [aircraftOptions]);
   const selectedSavedAircraft = useMemo(
     () => matchAircraftByTail(aircraftOptions, aircraftId),

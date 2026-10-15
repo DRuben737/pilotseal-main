@@ -1484,7 +1484,18 @@ async function selectAircraftRecords(aircraftIds?: string[]) {
     const { data, error } = await query;
 
     if (!error) {
-      return { data, error: null };
+      const rows = (data ?? []) as unknown as Record<string, unknown>[];
+      if (rows.length === 0) return { data: rows, error: null };
+      const statusResult = await supabase
+        .from("organization_aircraft_maintenance")
+        .select("aircraft_id, operational_status, operational_status_note")
+        .in("aircraft_id", rows.map((row) => String(row.id)));
+      if (statusResult.error) return { data: null, error: statusResult.error };
+      const statuses = new Map((statusResult.data ?? []).map((row) => [row.aircraft_id, row]));
+      return {
+        data: rows.map((row) => ({ ...row, ...(statuses.get(String(row.id)) ?? {}) })),
+        error: null,
+      };
     }
 
     lastError = error;
