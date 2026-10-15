@@ -9,7 +9,7 @@ import {
   parseAircraftEnvelopeSet,
   parseAircraftStations,
 } from "@/lib/aircraft";
-import { filterAvailableAircraft, isAircraftAvailable } from "@/lib/aircraft-availability";
+import { filterVisibleAircraft, isAircraftVisible } from "@/lib/aircraft-availability";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import CGEnvelopeChart from "./CGEnvelopeChart";
@@ -402,7 +402,7 @@ function normalizeTailNumber(value) {
 }
 
 function mergeAircraftOptions(sharedAircraft, myAircraft) {
-  const available = filterAvailableAircraft([...(sharedAircraft ?? []), ...(myAircraft ?? [])]);
+  const available = filterVisibleAircraft([...(sharedAircraft ?? []), ...(myAircraft ?? [])]);
   const availableIds = new Set(available.map((aircraft) => aircraft.id));
   sharedAircraft = (sharedAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
   myAircraft = (myAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
@@ -495,7 +495,7 @@ export default function WeightBalanceCalculator({
 
       try {
         if (embedded) {
-          const resolvedAircraft = isAircraftAvailable(sourceAircraft) ? sourceAircraft : null;
+          const resolvedAircraft = isAircraftVisible(sourceAircraft) ? sourceAircraft : null;
 
           setAircraftOptions(resolvedAircraft ? [resolvedAircraft] : []);
           setSavedStudents(sourceStudent ? [sourceStudent] : []);

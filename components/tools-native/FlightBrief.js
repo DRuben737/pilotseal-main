@@ -9,7 +9,7 @@ import { fetchSavedPeople } from "@/lib/saved-people";
 import { fetchPersonCertificates } from "@/lib/person-certificates";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchMyStudentCandidates } from "@/lib/student-candidates";
-import { filterAvailableAircraft, isAircraftAvailable } from "@/lib/aircraft-availability";
+import { filterVisibleAircraft, isAircraftVisible } from "@/lib/aircraft-availability";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useToolState } from "@/stores/toolState";
 import {
@@ -105,7 +105,7 @@ function normalizeTailNumber(value) {
 }
 
 function mergeAircraftOptions(sharedAircraft, myAircraft) {
-  const available = filterAvailableAircraft([...(sharedAircraft ?? []), ...(myAircraft ?? [])]);
+  const available = filterVisibleAircraft([...(sharedAircraft ?? []), ...(myAircraft ?? [])]);
   const availableIds = new Set(available.map((aircraft) => aircraft.id));
   sharedAircraft = (sharedAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
   myAircraft = (myAircraft ?? []).filter((aircraft) => availableIds.has(aircraft.id));
@@ -1282,7 +1282,7 @@ export default function FlightBrief() {
     const supabase = getSupabaseClient();
 
     function applyAircraftOptions(shared, mine) {
-      setUnavailableAircraft([...shared, ...mine].filter((aircraft) => !isAircraftAvailable(aircraft)));
+      setUnavailableAircraft([...shared, ...mine].filter((aircraft) => !isAircraftVisible(aircraft)));
       setAircraftOptions(mergeAircraftOptions(shared, mine));
     }
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { DetailDrawer } from "@/components/admin/AdminConsole";
-import { filterAvailableAircraft } from "@/lib/aircraft-availability";
+import { filterVisibleAircraft } from "@/lib/aircraft-availability";
 import type { AircraftModelRecord, AircraftRecord } from "@/lib/aircraft";
 import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import { formatUsDate, formatUsMonthYear } from "@/lib/date-format";
@@ -25,7 +25,7 @@ export default function FleetReportsPanel({
   aircraft: allAircraft,
   models,
 }: Props) {
-  const aircraft = useMemo(() => filterAvailableAircraft(allAircraft), [allAircraft]);
+  const aircraft = useMemo(() => filterVisibleAircraft(allAircraft), [allAircraft]);
   const [assignments, setAssignments] = useState<AircraftInspectionAssignment[]>(
     []
   );
@@ -101,7 +101,7 @@ export default function FleetReportsPanel({
 
       {aircraft.length === 0 ? (
         <p className="saas-empty-state">
-          No available aircraft.
+          No aircraft to display.
         </p>
       ) : null}
       {loadingInspections ? (

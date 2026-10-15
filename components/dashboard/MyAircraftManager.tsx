@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { filterVisibleAircraft } from "@/lib/aircraft-availability";
 
 import {
   CompactButton,
@@ -165,6 +166,13 @@ export default function MyAircraftManager() {
   });
   const activeAircraftTab = storedAircraftTab === "organization" && activeOrganization ? "organization" : "mine";
   const isPlatformAdmin = profileRole === "admin";
+  const visibleAircraftIds = useMemo(
+    () => new Set(filterVisibleAircraft([...myAircraft, ...organizationAircraft]).map((aircraft) => aircraft.id)),
+    [myAircraft, organizationAircraft]
+  );
+  const visibleMyAircraft = myAircraft.filter((aircraft) => visibleAircraftIds.has(aircraft.id));
+  const visibleOrganizationAircraft = organizationAircraft.filter((aircraft) => visibleAircraftIds.has(aircraft.id));
+
 
   useEffect(() => {
     let cancelled = false;
@@ -227,9 +235,11 @@ export default function MyAircraftManager() {
     }
 
     void loadData();
+    window.addEventListener("focus", loadData);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", loadData);
     };
   }, [activeOrganization?.id, session?.user?.id]);
 
@@ -683,8 +693,8 @@ export default function MyAircraftManager() {
         id="personal-aircraft-sections"
         label="Aircraft sections"
         items={[
-          { id: "mine", label: "My Aircraft", summary: myAircraft.length },
-          ...(activeOrganization ? [{ id: "organization", label: activeOrganization.name, summary: organizationAircraft.length }] : []),
+          { id: "mine", label: "My Aircraft", summary: visibleMyAircraft.length },
+          ...(activeOrganization ? [{ id: "organization", label: activeOrganization.name, summary: visibleOrganizationAircraft.length }] : []),
         ]}
         activeId={activeAircraftTab}
         onChange={(id) => setStoredAircraftTab(id as typeof storedAircraftTab)}
@@ -702,10 +712,10 @@ export default function MyAircraftManager() {
             <span>Action</span>
           </div>
 
-          {myAircraft.length === 0 ? (
+          {visibleMyAircraft.length === 0 ? (
             <p className="saas-empty-state">No aircraft attached yet.</p>
           ) : (
-            myAircraft.map((aircraft) => (
+            visibleMyAircraft.map((aircraft) => (
               <div key={aircraft.id} className="my-aircraft-row">
                 <div className="my-aircraft-cell my-aircraft-tail">
                   <p className="my-aircraft-primary">{aircraft.tail_number}</p>
@@ -790,10 +800,10 @@ export default function MyAircraftManager() {
               <span>Weight &amp; balance / maintenance</span>
               <span>Access</span>
             </div>
-            {organizationAircraft.length === 0 ? (
-              <p className="saas-empty-state">No organization aircraft yet.</p>
+            {visibleOrganizationAircraft.length === 0 ? (
+              <p className="saas-empty-state">No aircraft to display.</p>
             ) : (
-              organizationAircraft.map((aircraft) => (
+              visibleOrganizationAircraft.map((aircraft) => (
                 <div key={aircraft.id} className="my-aircraft-row">
                   <div className="my-aircraft-cell my-aircraft-tail">
                     <p className="my-aircraft-primary">{aircraft.tail_number}</p>
