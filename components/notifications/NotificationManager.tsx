@@ -1,16 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import styles from "./NotificationInbox.module.css";
 import NotificationPublicationManager from "@/components/notifications/NotificationPublicationManager";
 import NotificationReader from "@/components/notifications/NotificationReader";
 
 import { useEffect, useMemo, useState } from "react";
 
-import { AdminDataTable, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
-import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
+import { DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import OrganizationNotificationPublisher from "@/components/notifications/OrganizationNotificationPublisher";
-import { useOrganization } from "@/components/organizations/OrganizationProvider";
 import { UsDateTimeInput } from "@/components/forms/UsDateInput";
 import {
   createNotification,
@@ -34,7 +32,6 @@ import {
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { formatUsDateTime } from "@/lib/date-format";
-import { hasOrganizationPermission } from "@/lib/organizations";
 
 const priorityOptions: NotificationPriority[] = ["low", "normal", "high", "critical"];
 const statusOptions: NotificationStatus[] = ["draft", "scheduled", "sent"];
@@ -47,17 +44,13 @@ const emptyForm = {
   title: "",
 };
 type InboxFilter = "all" | "unread" | "reminder" | "organization" | "schedule" | "system";
-type NotificationView = "inbox" | "organization";
 
 export default function NotificationManager({
-  initialView = "inbox",
   platformPublishingOnly = false,
 }: {
-  initialView?: NotificationView;
   platformPublishingOnly?: boolean;
 }) {
   const { session } = useAuthSession();
-  const { organizations } = useOrganization();
   const userId = session?.user?.id ?? "";
   const [readingNotification, setReadingNotification] = useState<NotificationRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,16 +66,6 @@ export default function NotificationManager({
   const [inboxQuery, setInboxQuery] = useState("");
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => defaultNotificationPreferences(userId));
   const [savingPreferences, setSavingPreferences] = useState(false);
-  const canPublishOrganization = organizations.some((organization) => hasOrganizationPermission(organization, "notifications"));
-  const [storedView, setStoredView] = usePersistentDashboardView({
-    defaultValue: initialView,
-    enabled: !platformPublishingOnly,
-    storageKey: "notifications",
-    values: ["inbox", "organization"] as const,
-  });
-  const activeView: NotificationView = storedView === "organization" && canPublishOrganization ? "organization" : "inbox";
-  const setActiveView = (value: NotificationView) => setStoredView(value);
-
   const unreadCount = useMemo(
     () => inbox.filter((notification) => !notification.read_at && !notification.delivery_state?.completed_at).length,
     [inbox]
@@ -329,91 +312,56 @@ export default function NotificationManager({
       <NotificationReader notification={readingNotification} userId={userId} onClose={() => setReadingNotification(null)} />
       {status ? <p className="saas-panel text-sm text-slate-600">{status}</p> : null}
 
-      {!platformPublishingOnly && canPublishOrganization ? (
-        <nav className="dashboard-notification-tabs console-page-subnavigation" aria-label="Notification views">
-          <button
-            type="button"
-            aria-current={activeView === "inbox" ? "page" : undefined}
-            className={activeView === "inbox" ? "dashboard-notification-tab-active" : ""}
-            onClick={() => setActiveView("inbox")}
-          >
-            Personal
-          </button>
-          <button
-            type="button"
-            aria-current={activeView === "organization" ? "page" : undefined}
-            className={activeView === "organization" ? "dashboard-notification-tab-active" : ""}
-            onClick={() => setActiveView("organization")}
-          >
-            Organization
-          </button>
-        </nav>
-      ) : null}
-
-      {!platformPublishingOnly && activeView === "inbox" ? <>
-      <ManagementDisclosure id="notification-inbox" eyebrow="Unified inbox" title="Notifications" summary={`${unreadCount} unread`} className="dashboard-data-workspace" defaultOpen actions={<div className="flex gap-2"><button className="ghost-button" type="button" onClick={() => setShowPreferences(true)}>Preferences</button><button className="ghost-button" type="button" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}>
-            Mark all read ({unreadCount})
-          </button></div>}>
-
-        <div className="mt-5 grid gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="search"
-              className="min-w-0 flex-1"
-              value={inboxQuery}
-              onChange={(event) => setInboxQuery(event.target.value)}
-              placeholder="Search title, message, source, type, or priority"
-              aria-label="Search notifications"
-            />
-            {inboxQuery ? (
-              <button className="ghost-button" type="button" onClick={() => setInboxQuery("")}>Clear search</button>
-            ) : null}
+      {!platformPublishingOnly ? <>
+      <section className={styles.inbox} aria-label="Notifications">
+        <header className={styles.header}>
+          <div className={styles.heading}><h2>Inbox</h2><span>{unreadCount} unread</span></div>
+          <div className={styles.actions}>
+            <button className={styles.iconButton} type="button" aria-label="Mark all read" title="Mark all read" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}><InboxIcon name="read" /></button>
+            <button className={styles.iconButton} type="button" aria-label="Preferences" title="Notification preferences" onClick={() => setShowPreferences(true)}><InboxIcon name="settings" /></button>
           </div>
-          <div className="flex flex-wrap gap-2">
+        </header>
+        <div className={styles.toolbar}>
+          <div className={styles.filters} role="group" aria-label="Filter notifications">
             {([
-              ["all", "All"],
-              ["unread", `Unread (${unreadCount})`],
-              ["reminder", "Reminders"],
-              ["organization", "Organization"],
-              ["schedule", "Schedule"],
-              ["system", "Platform"],
+              ["all", "All"], ["unread", "Unread"], ["reminder", "Reminders"],
+              ["organization", "Organization"], ["schedule", "Schedule"], ["system", "Platform"],
             ] as Array<[InboxFilter, string]>).map(([value, label]) => (
-              <button
-                key={value}
-                className={inboxFilter === value ? "secondary-button" : "ghost-button"}
-                type="button"
-                onClick={() => setInboxFilter(value)}
-              >
-                {label}
-              </button>
+              <button key={value} type="button" aria-pressed={inboxFilter === value} onClick={() => setInboxFilter(value)}>{label}</button>
             ))}
           </div>
-          {visibleInbox.length === 0 ? <p className="saas-empty-state">No notifications match this filter.</p> : <AdminDataTable label="Notifications"><thead><tr><th>Title</th><th>Type</th><th>Priority</th><th>Source</th><th>Date</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{visibleInbox.map((notification) => (
-            <tr key={notification.id} className={notification.read_at ? "opacity-70" : "bg-sky-50/40"}>
-              <td><button type="button" className="font-semibold text-slate-900 hover:text-blue-700" onClick={() => void handleRead(notification)}>{notification.title}</button></td>
-              <td>{formatKind(notification.kind)}</td>
-              <td><span className={`data-status data-status-${notification.priority}`}>{notification.priority}</span></td>
-              <td>{notification.source_label || "—"}</td>
-              <td>{formatUsDateTime(notification.created_at)}</td>
-              <td>{notification.delivery_state?.completed_at ? "Completed" : notification.delivery_state?.acknowledged_at ? "Confirmed" : notification.read_at ? "Read" : "New"}</td>
-              <td><div className="data-row-actions">
-                {notification.action_url ? <Link className="secondary-button" href={notification.action_url} onClick={() => void handleRead(notification)}>Open</Link> : null}
-                <button
-                  className="danger-button"
-                  type="button"
-                  disabled={saving}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void handleDeleteInbox(notification);
-                  }}
-                >
-                  Delete
-                </button>
-              </div></td>
-            </tr>
-          ))}</tbody></AdminDataTable>}
+          <div className={styles.search}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg>
+            <input type="search" value={inboxQuery} onChange={event => setInboxQuery(event.target.value)} placeholder="Search notifications" aria-label="Search notifications" />
+          </div>
         </div>
-      </ManagementDisclosure>
+        {visibleInbox.length === 0 ? <div className={styles.empty}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="m4 4-2 10v6h20v-6L20 4H4Z" /><path d="M2 14h6l2 3h4l2-3h6" /></svg>
+          <p>{inboxQuery || inboxFilter !== "all" ? "No matching notifications" : "You're all caught up"}</p>
+          {inboxQuery || inboxFilter !== "all" ? <button type="button" className="ghost-button" onClick={() => { setInboxQuery(""); setInboxFilter("all"); }}>Clear filters</button> : null}
+        </div> : <div className={styles.messages} role="list" aria-label="Notifications">
+          {visibleInbox.map(notification => {
+            const completed = Boolean(notification.delivery_state?.completed_at);
+            const unread = !notification.read_at && !completed;
+            const state = completed ? "Completed" : notification.delivery_state?.acknowledged_at ? "Confirmed" : notification.read_at ? "Read" : "Unread";
+            return <article key={notification.id} role="listitem" className={styles.message} data-unread={unread}>
+              <span className={styles.dot} aria-label={unread ? "Unread" : undefined} />
+              <button type="button" className={styles.content} aria-label={notification.title} onClick={() => void handleRead(notification)}>
+                <span className={styles.title}>{notification.title}{notification.priority === "high" || notification.priority === "critical" ? <span className={styles.priority} data-priority={notification.priority}>{notification.priority === "critical" ? "Critical" : "High priority"}</span> : null}</span>
+                <span className={styles.excerpt}>{notification.message}</span>
+                <span className={styles.meta}><span>{notification.source_label || formatKind(notification.kind)}</span><span aria-hidden="true">·</span><span>{state}</span></span>
+              </button>
+              <div className={styles.trailing}>
+                <time dateTime={notification.created_at}>{formatUsDateTime(notification.created_at)}</time>
+                <div className={styles.rowActions}>
+                  {notification.action_url ? <Link className={styles.iconButton} href={notification.action_url} aria-label={`Open related page for ${notification.title}`} title="Open related page" onClick={() => void handleRead(notification)}><InboxIcon name="open" /></Link> : null}
+                  <button className={styles.iconButton} type="button" disabled={saving} aria-label={`Delete ${notification.title}`} title="Delete notification" onClick={() => void handleDeleteInbox(notification)}><InboxIcon name="delete" /></button>
+                </div>
+              </div>
+            </article>;
+          })}
+        </div>}
+      </section>
 
       <DetailDrawer open={showPreferences} title="Notification preferences" onClose={() => setShowPreferences(false)}>
         <div className="divide-y divide-slate-200 border-y border-slate-200">
@@ -452,10 +400,6 @@ export default function NotificationManager({
         </div>
       </DetailDrawer>
       </> : null}
-
-      {!platformPublishingOnly && activeView === "organization" && canPublishOrganization ? (
-        <OrganizationNotificationPublisher />
-      ) : null}
 
       {platformPublishingOnly && isAdmin ? <NotificationPublicationManager organizationId={null} sourceName="PilotSeal" /> : null}
       {platformPublishingOnly && isAdmin && adminHistory.length > 0 ? (
@@ -507,4 +451,13 @@ function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === "object" && "message" in error) return String(error.message);
   return fallback;
+}
+
+function InboxIcon({ name }: { name: "read" | "settings" | "open" | "delete" }) {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    {name === "read" ? <><path d="M21 10V5H3v14h11M3 5l9 7 9-7" /><path d="m16 17 3 3 4-5" /></> : null}
+    {name === "settings" ? <><path d="m9 3-.6 2.1-1.6.9-2.1-.5-3 5.1 1.5 1.6v1.8l-1.5 1.6 3 5.1 2.1-.5 1.6.9L9 23h6l.6-2.1 1.6-.9 2.1.5 3-5.1-1.5-1.6V12l1.5-1.6-3-5.1-2.1.5-1.6-.9L15 3Z" transform="translate(1 0) scale(.9)" /><circle cx="12" cy="12" r="3" /></> : null}
+    {name === "open" ? <><path d="M14 3h7v7m0-7L10 14M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6" /></> : null}
+    {name === "delete" ? <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></> : null}
+  </svg>;
 }

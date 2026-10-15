@@ -6,11 +6,6 @@ export const metadata = {
   description: "View personal reminders, organization messages, and PilotSeal notices.",
 };
 
-export default async function DashboardNotificationsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ view?: string }>;
-}) {
-  const { view } = await searchParams;
-  return <Suspense fallback={null}><NotificationManager initialView={view === "organization" ? "organization" : "inbox"} /></Suspense>;
+export default function Page() {
+  return <Suspense fallback={null}><NotificationManager /></Suspense>;
 }

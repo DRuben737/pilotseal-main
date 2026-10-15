@@ -116,6 +116,10 @@ try{
  }finally{if(inserted.length)unwrap(await admin.from('notification_delivery_states').delete().eq('user_id',pilotAuth.user.id).in('notification_id',inserted));}
  }
  const organizationContext=await contextFor(pilotAuth.session);const organizationPage=await organizationContext.newPage();
+ await organizationPage.goto(`${appUrl}/console/personal/notifications?view=organization`);
+ await organizationPage.getByRole('button',{name:'Preferences',exact:true}).waitFor();
+ assert.equal(await organizationPage.getByRole('navigation',{name:'Notification views',exact:true}).count(),0,'Personal inbox has no publishing tabs');
+ assert.equal(await organizationPage.getByRole('button',{name:'New notification',exact:true}).count(),0,'Personal inbox does not contain organization publishing');
  await organizationPage.goto(`${appUrl}/console/organization/notifications`);
  try { await organizationPage.getByRole('button',{name:'New notification',exact:true}).click(); } catch(e) { console.log('Organization page:',organizationPage.url(),(await organizationPage.locator('body').innerText()).slice(0,2200)); await organizationPage.screenshot({path:`${output}/organization-failure.png`}); throw e; }
  let orgDrawer=organizationPage.getByRole('dialog',{name:'New notification',exact:true});
@@ -145,8 +149,39 @@ try{
  assert(orgPublication.organization_id,'Organization publication is scoped');
  const orgNotifications=unwrap(await admin.from('notifications').select('recipient_user_id,source_label,kind,action_url').eq('publication_id',orgPublication.id));
  assert.equal(orgNotifications.length,1);assert.equal(orgNotifications[0].recipient_user_id,pilotAuth.user.id);assert.equal(orgNotifications[0].kind,'organization');assert(orgNotifications[0].source_label);assert.equal(orgNotifications[0].action_url,null,'Manual announcements have no business link');
+ const inboxPage=await organizationContext.newPage();
+ await inboxPage.goto(`${appUrl}/console/personal/notifications`);
+ await inboxPage.getByRole('button',{name:`${prefix} organization`,exact:true}).waitFor();
+ for(const width of [390,768,1024,1440]) {
+  await inboxPage.setViewportSize({width,height:1000});
+  assert(await inboxPage.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),`Inbox fits ${width}px`);
+  await inboxPage.screenshot({path:`${output}/inbox-${width}.png`});
+ }
+ const preferencesButton=inboxPage.getByRole('button',{name:'Preferences',exact:true});
+ assert.equal(await preferencesButton.innerText(),'','Preferences is an icon with an accessible name');
+ await preferencesButton.click();
+ const preferencesDrawer=inboxPage.getByRole('dialog',{name:'Notification preferences',exact:true});
+ await preferencesDrawer.waitFor();
+ await inboxPage.keyboard.press('Escape');await preferencesDrawer.waitFor({state:'hidden'});
+ assert(await preferencesButton.evaluate(el=>el===document.activeElement),'Preferences restores keyboard focus');
+ await inboxPage.getByRole('button',{name:'Unread',exact:true}).click();
+ await inboxPage.getByRole('button',{name:`${prefix} organization`,exact:true}).click();
+ const inboxReader=inboxPage.getByRole('dialog',{name:`${prefix} organization`,exact:true});
+ await inboxReader.getByText('Organization announcement for a selected member.',{exact:true}).waitFor();
+ await inboxPage.keyboard.press('Escape');await inboxReader.waitFor({state:'hidden'});
+ await inboxPage.getByRole('button',{name:'All',exact:true}).click();
+ await inboxPage.getByRole('searchbox',{name:'Search notifications',exact:true}).fill('no-synthetic-match-123');
+ await inboxPage.getByText('No matching notifications',{exact:true}).waitFor();
+ await inboxPage.getByRole('button',{name:'Clear filters',exact:true}).click();
+ await inboxPage.getByRole('button',{name:`${prefix} organization`,exact:true}).waitFor();
+ await inboxPage.close();
  let row=organizationPage.getByRole('row').filter({hasText:`${prefix} organization`});
- await row.getByRole('button',{name:'Correct',exact:true}).click();
+ await organizationPage.getByLabel('Publication status',{exact:true}).selectOption('sent');
+ await row.getByRole('button',{name:`${prefix} organization`,exact:true}).click();
+ const detail=organizationPage.getByRole('dialog',{name:`${prefix} organization`,exact:true});
+ await detail.getByText('Organization announcement for a selected member.',{exact:true}).waitFor();
+ await organizationPage.keyboard.press('Escape');await detail.waitFor({state:'hidden'});
+ await row.getByRole('button',{name:'Edit',exact:true}).click();
  orgDrawer=organizationPage.getByRole('dialog',{name:'Edit notification',exact:true});
  try { await orgDrawer.getByLabel('Message',{exact:true}).fill('Corrected organization announcement.'); } catch(e) { console.log('Correction dialogs:',await organizationPage.locator('[role=dialog]').allTextContents()); await organizationPage.screenshot({path:`${output}/correction-failure.png`}); throw e; }
  await orgDrawer.getByRole('button',{name:'Publish correction',exact:true}).click();await orgDrawer.waitFor({state:'hidden'});
@@ -157,6 +192,7 @@ try{
  await row.getByRole('button',{name:'Withdraw',exact:true}).click();
  const withdrawDialog=organizationPage.getByRole('dialog',{name:'Withdraw notification',exact:true});
  await withdrawDialog.getByRole('button',{name:'Withdraw',exact:true}).click();await withdrawDialog.waitFor({state:'hidden'});
+ await organizationPage.getByLabel('Publication status',{exact:true}).selectOption('withdrawn');
  await row.getByRole('cell',{name:'withdrawn',exact:true}).waitFor();
  await organizationContext.close();
  await context.close();

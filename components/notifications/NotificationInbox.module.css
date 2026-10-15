@@ -1,0 +1,57 @@
+.inbox { min-width: 0; color: #303133; }
+.header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 2px 0 10px; }
+.heading { display: flex; align-items: center; gap: 10px; }
+.heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.heading > span { font-size: 12px; color: #909399; }
+.actions { display: flex; gap: 6px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #ebeef5; padding-bottom: 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 3px; }
+.filters button { border: 0; border-radius: 3px; background: transparent; color: #606266; padding: 4px 8px; font-size: 11px; line-height: 18px; cursor: pointer; }
+.filters button:hover { background: #f5f7fa; }
+.filters button[aria-pressed="true"] { background: #ecf5ff; color: #409eff; font-weight: 600; }
+.search { display: flex; align-items: center; gap: 8px; width: 240px; max-width: 100%; border: 1px solid #dcdfe6; border-radius: 3px; padding: 0 10px; color: #909399; background: white; }
+.search input { width: 100%; min-width: 0; height: 28px; border: 0; background: transparent; padding: 0; font-size: 12px; box-shadow: none; }
+.search:focus-within { outline: 2px solid #409eff; outline-offset: 2px; }
+.search input:focus { outline: none; box-shadow: none; }
+.messages { min-width: 0; }
+.message { display: grid; grid-template-columns: 6px minmax(0,1fr) auto; align-items: start; gap: 9px; padding: 9px 8px; border-bottom: 1px solid #ebeef5; transition: background 120ms ease; }
+.message[data-unread="true"] { background: #fff; }
+.message:hover { background: #f5f7fa; }
+.dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; background: transparent; }
+.message[data-unread="true"] .dot { background: #409eff; }
+.content { display: grid; gap: 1px; min-width: 0; border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; color: inherit; }
+.title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; line-height: 17px; overflow-wrap: anywhere; }
+.message[data-unread="true"] .title { font-weight: 600; }
+.message[data-unread="true"] .meta { color: #303133; }
+
+.excerpt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; color: #86868b; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; line-height: 15px; color: #6e6e73; order: -1; }
+.priority { font-size: 10px; font-weight: 500; color: #b88230; }
+.priority[data-priority="critical"] { color: #c45656; }
+.trailing { display: grid; gap: 12px; justify-items: end; }
+.trailing time { font-size: 10px; line-height: 15px; white-space: nowrap; color: #909399; }
+.rowActions { display: flex; gap: 4px; font-size: 11px; line-height: 18px; }
+.rowActions :is(a,button) { padding: 0; border: 0; background: transparent; color: #909399; cursor: pointer; }
+.rowActions a:hover { color: #409eff; }
+.rowActions button:hover { color: #c45656; }
+.inbox button:disabled { cursor: default; opacity: .45; }
+.inbox :is(button,a):focus-visible { outline: 2px solid #409eff; outline-offset: 3px; }
+.empty { display: grid; justify-items: center; gap: 12px; padding: 72px 16px; color: #909399; }
+.empty p { margin: 0; font-size: 13px; }
+@media (max-width: 640px) {
+  .search { width: 100%; }
+  .message { grid-template-columns: 6px minmax(0,1fr); gap: 8px; padding: 9px 4px; }
+  .trailing { grid-column: 2; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .filters button { padding: 4px 7px; }
+}
+
+@media (hover: hover) and (min-width: 641px) {
+  .rowActions { opacity: 0; }
+  .message:hover .rowActions, .message:focus-within .rowActions { opacity: 1; }
+}
+
+.inbox .iconButton { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #86868b; cursor: pointer; }
+.inbox .iconButton:hover { background: #f0f1f3; color: #303133; }
+.rowActions button.iconButton:hover { color: #c45656; }
+.trailing { gap: 4px; }
+@media (pointer: coarse) { .inbox .iconButton { width: 36px; height: 36px; } }

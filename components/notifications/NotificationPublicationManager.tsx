@@ -21,6 +21,8 @@ export default function NotificationPublicationManager({ organizationId, sourceN
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [detail, setDetail] = useState<NotificationPublication | null>(null);
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,16 +73,21 @@ export default function NotificationPublicationManager({ organizationId, sourceN
     catch (e) { setError(errorMessage(e)); }
     finally { savingRef.current = false; setSaving(false); }
   }
-  const visible = history.filter(p => `${p.title} ${p.message} ${p.status}`.toLowerCase().includes(query.toLowerCase()));
+  const publicationStatus = (p: NotificationPublication) => p.status === "scheduled" && p.scheduled_at && Date.parse(p.scheduled_at) <= Date.now() ? "sent" : p.status;
+  const visible = history.filter(p => (filter === "all" || publicationStatus(p) === filter)).filter(p => `${p.title} ${p.message} ${p.status}`.toLowerCase().includes(query.toLowerCase()));
   return <section className="grid min-w-0 gap-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold">{sourceName} notifications</h2><CompactButton type="button" tone="primary" onClick={() => edit()}>New notification</CompactButton></div>
     {status ? <p role="status" className="text-sm text-slate-600">{status}</p> : null}
     {error && !open && !withdraw ? <p role="alert" className="text-sm text-rose-700">{error}</p> : null}
+    <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">Publication history</h3><select aria-label="Publication status" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="sent">Sent</option><option value="draft">Drafts</option><option value="scheduled">Scheduled</option><option value="withdrawn">Withdrawn</option></select></div>
     <input aria-label="Search published notifications" type="search" placeholder="Search notifications" value={query} onChange={e => setQuery(e.target.value)} />
     {loading ? <p className="text-sm text-slate-500">Loading notifications…</p> : !visible.length ? <p className="saas-empty-state">No notifications.</p> : <AdminDataTable label="Published notifications"><thead><tr><th>Title</th><th>Status</th><th>Audience</th><th>Published</th><th>Expires</th><th aria-label="Actions" /></tr></thead><tbody>{visible.map(p => <tr key={p.id}>
-      <td className="font-medium">{p.title}</td><td>{p.status === "scheduled" && p.scheduled_at && Date.parse(p.scheduled_at) <= Date.now() ? "sent" : p.status}</td><td>{p.audience_user_ids ? `${p.audience_user_ids.length} selected` : "All members"}</td><td>{p.scheduled_at ? new Date(p.scheduled_at).toLocaleString() : new Date(p.created_at).toLocaleString()}</td><td>{p.expires_at ? new Date(p.expires_at).toLocaleString() : "—"}</td>
-      <td><div className="data-row-actions"><CompactButton type="button" onClick={() => edit(p)}>{p.status === "draft" ? "Edit" : "Correct"}</CompactButton><CompactButton type="button" disabled={reportLoading} onClick={() => void showReport(p)}>Receipts</CompactButton>{p.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setError(""); setWithdraw(p); }}>Withdraw</CompactButton> : null}</div></td>
+      <td className="font-medium"><button type="button" className="text-left hover:text-blue-700" onClick={() => setDetail(p)}>{p.title}</button></td><td>{publicationStatus(p)}</td><td>{p.audience_user_ids ? `${p.audience_user_ids.length} selected` : "All members"}</td><td>{p.scheduled_at ? new Date(p.scheduled_at).toLocaleString() : new Date(p.created_at).toLocaleString()}</td><td>{p.expires_at ? new Date(p.expires_at).toLocaleString() : "—"}</td>
+      <td><div className="data-row-actions"><CompactButton type="button" onClick={() => edit(p)}>{p.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" disabled={reportLoading} onClick={() => void showReport(p)}>Receipts</CompactButton>{p.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setError(""); setWithdraw(p); }}>Withdraw</CompactButton> : null}</div></td>
     </tr>)}</tbody></AdminDataTable>}
+    <DetailDrawer open={Boolean(detail)} title={detail?.title ?? "Notification"} onClose={() => setDetail(null)}>
+      {detail ? <div className="grid gap-4"><p className="text-sm text-slate-500">{publicationStatus(detail)} · {detail.audience_user_ids ? `${detail.audience_user_ids.length} recipients` : "All members"}</p><p className="whitespace-pre-wrap break-words text-sm">{detail.message}</p><div className="flex flex-wrap gap-2"><CompactButton type="button" onClick={() => { setDetail(null); edit(detail); }}>{detail.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" onClick={() => { setDetail(null); void showReport(detail); }}>Receipts</CompactButton>{detail.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setDetail(null); setError(""); setWithdraw(detail); }}>Withdraw</CompactButton> : null}</div></div> : null}
+    </DetailDrawer>
     <DetailDrawer open={open} title={form.id ? "Edit notification" : "New notification"} onClose={() => { if (!saving) setOpen(false); }}>
       <form onSubmit={event => void save(event)} className="grid gap-3">
         {error ? <p role="alert" className="text-sm text-rose-700">{error}</p> : null}

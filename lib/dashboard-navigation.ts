@@ -11,7 +11,6 @@ export type DashboardNavChild = {
   organizationRequired?: boolean;
   organizationManagerOnly?: boolean;
   organizationPermission?: OrganizationPermission;
-  organizationNotificationPublisherOnly?: boolean;
 };
 
 export type DashboardNavItem = {
@@ -40,10 +39,7 @@ export const dashboardPrimaryNavigation: DashboardNavItem[] = [
     { label: "Shared with me", value: "received" },
     { label: "Organization endorsements", value: "organization", organizationManagerOnly: true },
   ] },
-  { href: "/console/personal/notifications", label: "Notifications", access: "all", children: [
-    { label: "Personal", value: "inbox", default: true },
-    { label: "Organization", value: "organization", organizationNotificationPublisherOnly: true },
-  ] },
+  { href: "/console/personal/notifications", label: "Notifications", access: "all" },
   { href: "/console/personal/account", label: "Account", access: "all" },
 ];
 

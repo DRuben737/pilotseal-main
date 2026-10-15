@@ -22,7 +22,7 @@ import { fetchEnabledFeatureIds, type OptionalFeatureId } from "@/lib/dashboard-
 import { fetchCurrentProfile } from "@/lib/profile";
 import { fetchDefaultCfi } from "@/lib/saved-people";
 import { getSupabaseClient } from "@/lib/supabase";
-import { canManageOrganization, hasOrganizationPermission } from "@/lib/organizations";
+import { canManageOrganization } from "@/lib/organizations";
 import {
   fetchUnreadNotificationCount,
   refreshMyProfileReminders,
@@ -458,16 +458,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     ? activeOrganizationId
     : organizationContextOptions[0]?.id ?? "";
   const canManageActiveOrganization = canManageOrganization(activeManagedOrganization?.member_role);
-  const canPublishOrganizationNotifications = organizations.some((organization) => (
-    hasOrganizationPermission(organization, "notifications")
-  ));
-
   function visibleChildren(item: DashboardNavItem) {
     return (item.children ?? []).filter((child) => {
       if (child.organizationRequired && !organizations.length) return false;
       if (child.organizationManagerOnly && !canManageActiveOrganization) return false;
       if (child.organizationPermission && !organizationPermissions.includes(child.organizationPermission)) return false;
-      if (child.organizationNotificationPublisherOnly && !canPublishOrganizationNotifications) return false;
       return true;
     });
   }
