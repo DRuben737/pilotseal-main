@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import NotificationExperience from "@/components/notifications/NotificationExperience";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import OrganizationProvider from "@/components/organizations/OrganizationProvider";
 import { getSiteUrl } from "@/lib/seo";
@@ -53,6 +54,7 @@ export default function RootLayout({
           <AuthSessionProvider>
             <OrganizationProvider>
               {children}
+              <NotificationExperience />
             </OrganizationProvider>
           </AuthSessionProvider>
         </ToolProvider>

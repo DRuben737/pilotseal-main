@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import NotificationPublicationManager from "@/components/notifications/NotificationPublicationManager";
+import NotificationReader from "@/components/notifications/NotificationReader";
+
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminDataTable, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
@@ -56,6 +59,7 @@ export default function NotificationManager({
   const { session } = useAuthSession();
   const { organizations } = useOrganization();
   const userId = session?.user?.id ?? "";
+  const [readingNotification, setReadingNotification] = useState<NotificationRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -80,14 +84,14 @@ export default function NotificationManager({
   const setActiveView = (value: NotificationView) => setStoredView(value);
 
   const unreadCount = useMemo(
-    () => inbox.filter((notification) => !notification.read_at).length,
+    () => inbox.filter((notification) => !notification.read_at && !notification.delivery_state?.completed_at).length,
     [inbox]
   );
   const visibleInbox = useMemo(() => {
     const filteredByKind = inboxFilter === "all"
       ? inbox
       : inboxFilter === "unread"
-        ? inbox.filter((notification) => !notification.read_at)
+        ? inbox.filter((notification) => !notification.read_at && !notification.delivery_state?.completed_at)
         : inbox.filter((notification) => notification.kind === inboxFilter);
     const needle = inboxQuery.trim().toLowerCase();
     if (!needle) return filteredByKind;
@@ -174,6 +178,7 @@ export default function NotificationManager({
     setStatus("");
     try {
       const nextPreferences = await updateNotificationPreferences(userId, {
+        delivery_modes: preferences.delivery_modes,
         personal_reminders_enabled: preferences.personal_reminders_enabled,
         organization_messages_enabled: preferences.organization_messages_enabled,
         platform_notices_enabled: preferences.platform_notices_enabled,
@@ -205,6 +210,7 @@ export default function NotificationManager({
   }
 
   async function handleRead(notification: NotificationRecord) {
+    setReadingNotification(notification);
     if (!userId || notification.read_at) return;
     try {
       await markNotificationRead(notification.id, userId);
@@ -223,7 +229,7 @@ export default function NotificationManager({
     setSaving(true);
     try {
       await markAllNotificationsRead(
-        inbox.filter((notification) => !notification.read_at).map((notification) => notification.id),
+        inbox.filter((notification) => !notification.read_at && !notification.delivery_state?.completed_at).map((notification) => notification.id),
         userId
       );
       await refreshInbox();
@@ -320,6 +326,7 @@ export default function NotificationManager({
 
   return (
     <div className="grid gap-6">
+      <NotificationReader notification={readingNotification} userId={userId} onClose={() => setReadingNotification(null)} />
       {status ? <p className="saas-panel text-sm text-slate-600">{status}</p> : null}
 
       {!platformPublishingOnly && canPublishOrganization ? (
@@ -388,7 +395,7 @@ export default function NotificationManager({
               <td><span className={`data-status data-status-${notification.priority}`}>{notification.priority}</span></td>
               <td>{notification.source_label || "—"}</td>
               <td>{formatUsDateTime(notification.created_at)}</td>
-              <td>{notification.read_at ? "Read" : "New"}</td>
+              <td>{notification.delivery_state?.completed_at ? "Completed" : notification.delivery_state?.acknowledged_at ? "Confirmed" : notification.read_at ? "Read" : "New"}</td>
               <td><div className="data-row-actions">
                 {notification.action_url ? <Link className="secondary-button" href={notification.action_url} onClick={() => void handleRead(notification)}>Open</Link> : null}
                 <button
@@ -417,12 +424,20 @@ export default function NotificationManager({
             ["platform_notices_enabled", "Platform notices", "General PilotSeal announcements and non-critical platform information."],
           ] as Array<[keyof Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled" | "schedule_notifications_enabled">, string, string]>).map(([key, label, description]) => (
             <label key={key} className="grid cursor-pointer grid-cols-[1fr_auto] items-center gap-4 px-1 py-3">
-              <input
-                type="checkbox"
-                className="col-start-2 row-start-1 h-4 w-4 accent-sky-600"
-                checked={preferences[key]}
-                onChange={(event) => setPreferences((current) => ({ ...current, [key]: event.target.checked }))}
-              />
+              <select
+                className="col-start-2 row-start-1 max-w-40 text-sm"
+                aria-label={`${label} delivery`}
+                value={!preferences[key] ? "off" : preferences.delivery_modes[key === "personal_reminders_enabled" ? "reminder" : key === "organization_messages_enabled" ? "organization" : key === "schedule_notifications_enabled" ? "schedule" : "system"]}
+                onChange={(event) => {
+                  const mode = event.target.value as "instant" | "inbox" | "off";
+                  const kind = key === "personal_reminders_enabled" ? "reminder" : key === "organization_messages_enabled" ? "organization" : key === "schedule_notifications_enabled" ? "schedule" : "system";
+                  setPreferences(current => ({ ...current, [key]: mode !== "off", delivery_modes: { ...current.delivery_modes, [kind]: mode } }));
+                }}
+              >
+                <option value="instant">Instant alerts</option>
+                <option value="inbox">Inbox only</option>
+                <option value="off">Off</option>
+              </select>
               <span className="col-start-1 row-start-1">
                 <span className="block text-sm font-semibold text-slate-900">{label}</span>
                 <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span>
@@ -442,9 +457,10 @@ export default function NotificationManager({
         <OrganizationNotificationPublisher />
       ) : null}
 
-      {platformPublishingOnly && isAdmin ? (
+      {platformPublishingOnly && isAdmin ? <NotificationPublicationManager organizationId={null} sourceName="PilotSeal" /> : null}
+      {platformPublishingOnly && isAdmin && adminHistory.length > 0 ? (
         <>
-        <ManagementDisclosure id="platform-notices" eyebrow="Platform administration" title="Notices" summary={`${adminHistory.length}`} actions={<button className="primary-button" type="button" onClick={() => { resetForm(); setShowComposer(true); }}>New notice</button>}>
+        <ManagementDisclosure id="platform-notices" eyebrow="Platform administration" title="Earlier platform notices" summary={`${adminHistory.length}`}>
           <div className="grid gap-3">
             <DetailDrawer open={showComposer} title={form.id ? "Edit platform notice" : "Create platform notice"} onClose={() => setShowComposer(false)}>
           <article>

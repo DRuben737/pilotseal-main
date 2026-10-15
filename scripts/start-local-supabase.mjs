@@ -4,6 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const supabaseBinary = path.join(root, "node_modules", ".bin", "supabase");
 const networkName = "pilotseal-local";
+const withRealtime = process.argv.includes("--with-realtime");
 
 const networkInspection = spawnSync(
   "docker",
@@ -38,7 +39,7 @@ const result = spawnSync(
     "--network-id",
     networkName,
     "-x",
-    "logflare,imgproxy,realtime,vector",
+    withRealtime ? "logflare,imgproxy,vector" : "logflare,imgproxy,realtime,vector",
   ],
   {
     cwd: root,
@@ -53,6 +54,10 @@ if (result.status !== 0) {
   );
 }
 
+const realtime = spawnSync("docker", ["inspect", "--format", "{{.State.Running}}", "supabase_realtime_pilotseal"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+const realtimeRunning = realtime.status === 0 && realtime.stdout.trim() === "true";
+if (withRealtime && !realtimeRunning) throw new Error("Realtime is not running. Stop the local stack, then rerun with --with-realtime.");
+
 console.log(
-  "Local Supabase is running on the localhost-only pilotseal-local network with Analytics, Vector, Realtime, and Imgproxy disabled; Storage is enabled.",
+  `Local Supabase is running on the localhost-only pilotseal-local network with Analytics, Vector, and Imgproxy disabled; Storage is enabled; Realtime is ${realtimeRunning ? "enabled" : "disabled"}.`,
 );

@@ -1,0 +1,11 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(6);
+select ok(exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='notifications'),'notification changes are published');
+select ok(exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='notification_reads'),'read changes are published');
+select ok(exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='notification_preferences'),'preference changes are published');
+select ok((select relrowsecurity from pg_class where oid='public.notifications'::regclass),'notification RLS remains enabled');
+select ok((select relrowsecurity from pg_class where oid='public.notification_reads'::regclass),'read RLS remains enabled');
+select ok((select relrowsecurity from pg_class where oid='public.notification_preferences'::regclass),'preference RLS remains enabled');
+select * from finish();
+rollback;

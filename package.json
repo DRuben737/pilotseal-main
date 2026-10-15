@@ -35,7 +35,12 @@
     "prepare:sky-art": "node scripts/prepare-sky-art.mjs",
     "test:sky-art": "tsx --test scripts/test-sky-art.ts",
     "prebuild": "npm run prepare:sky-art",
-    "test:sky-art-ui:local": "node scripts/assert-local-targets.mjs && node scripts/test-sky-art-ui.mjs"
+    "test:sky-art-ui:local": "node scripts/assert-local-targets.mjs && node scripts/test-sky-art-ui.mjs",
+    "test:notifications": "node --test scripts/test-notification-presentation.mjs scripts/test-notification-audience.mjs",
+    "test:notifications:ui:local": "node scripts/test-notifications-ui-local.mjs",
+    "test:notifications:realtime:local": "node scripts/test-notification-realtime-local.mjs",
+    "test:notifications:sync:local": "node scripts/test-notification-sync-ui-local.mjs",
+    "test:notifications:timing:local": "node scripts/test-notification-timing-ui-local.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

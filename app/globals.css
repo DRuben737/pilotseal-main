@@ -9908,3 +9908,13 @@ summary:focus-visible {
     white-space: nowrap;
   }
 }
+
+.notification-push {
+  position: fixed; top: max(20px, env(safe-area-inset-top)); right: 24px;
+  z-index: 80; width: min(360px, calc(100vw - 32px)); padding: 16px;
+  border: 1px solid #dbe3ed; border-radius: 12px; background: white;
+  box-shadow: 0 12px 36px rgb(15 23 42 / 14%); animation: notification-arrive 180ms ease-out;
+}
+@keyframes notification-arrive { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 640px) { .notification-push { right: 16px; top: max(12px, env(safe-area-inset-top)); } }
+@media (prefers-reduced-motion: reduce) { .notification-push { animation: none; } }

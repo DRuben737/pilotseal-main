@@ -1,10 +1,16 @@
+import { notificationUtcTimestamp } from "@/lib/notification-presentation";
 import { getSupabaseClient } from "@/lib/supabase";
 
 export type NotificationPriority = "low" | "normal" | "high" | "critical";
 export type NotificationStatus = "draft" | "scheduled" | "sent";
 export type NotificationKind = "system" | "reminder" | "organization" | "schedule";
 
+export type NotificationDeliveryMode = "instant" | "inbox" | "off";
+export type NotificationDeliveryModes = Record<NotificationKind, NotificationDeliveryMode>;
+export const defaultDeliveryModes: NotificationDeliveryModes = { system: "instant", organization: "instant", schedule: "instant", reminder: "inbox" };
+
 export type NotificationPreferences = {
+  delivery_modes: NotificationDeliveryModes;
   user_id: string;
   personal_reminders_enabled: boolean;
   organization_messages_enabled: boolean;
@@ -15,6 +21,7 @@ export type NotificationPreferences = {
 
 export function defaultNotificationPreferences(userId: string): NotificationPreferences {
   return {
+    delivery_modes: { ...defaultDeliveryModes },
     user_id: userId,
     personal_reminders_enabled: true,
     organization_messages_enabled: true,
@@ -25,6 +32,12 @@ export function defaultNotificationPreferences(userId: string): NotificationPref
 }
 
 export type NotificationRecord = {
+  is_active: boolean;
+  delivery_state?: NotificationDeliveryState;
+  expires_at: string | null;
+  event_key: string | null;
+  requires_acknowledgement: boolean;
+  withdrawn_at: string | null;
   created_at: string;
   created_by: string;
   id: string;
@@ -59,9 +72,10 @@ type NotificationUpdate = {
 };
 
 const notificationSelect =
-  "id, title, message, priority, status, scheduled_at, created_at, created_by, kind, recipient_user_id, organization_id, source_label, action_url";
+  "id, title, message, priority, status, scheduled_at, created_at, created_by, kind, recipient_user_id, organization_id, source_label, action_url, expires_at, event_key, requires_acknowledgement, withdrawn_at, is_active";
 
 const notificationInboxChangedEvent = "pilotseal:notification-inbox-changed";
+let notificationSubscriptionSequence = 0;
 
 function broadcastNotificationInboxChange(userId: string) {
   if (typeof window === "undefined") return;
@@ -79,8 +93,13 @@ function normalizeNotification(
 ): NotificationRecord {
   const id = String(value.id ?? "");
   return {
+    is_active: value.is_active !== false,
+    expires_at: typeof value.expires_at === "string" ? value.expires_at : null,
+    event_key: typeof value.event_key === "string" ? value.event_key : null,
+    requires_acknowledgement: value.requires_acknowledgement === true,
+    withdrawn_at: typeof value.withdrawn_at === "string" ? value.withdrawn_at : null,
     action_url: typeof value.action_url === "string" ? value.action_url : null,
-    created_at: String(value.created_at ?? ""),
+    created_at: notificationUtcTimestamp(value.created_at) ?? "",
     created_by: String(value.created_by ?? ""),
     id,
     kind: (
@@ -93,7 +112,7 @@ function normalizeNotification(
     priority: String(value.priority ?? "normal") as NotificationPriority,
     recipient_user_id: typeof value.recipient_user_id === "string" ? value.recipient_user_id : null,
     read_at: readsByNotificationId.get(id) ?? null,
-    scheduled_at: typeof value.scheduled_at === "string" ? value.scheduled_at : null,
+    scheduled_at: notificationUtcTimestamp(value.scheduled_at),
     source_label: typeof value.source_label === "string" ? value.source_label : null,
     status: String(value.status ?? "sent") as NotificationStatus,
     title: String(value.title ?? "Notification"),
@@ -120,7 +139,7 @@ function mapNotificationPayload(input: NotificationInput | NotificationUpdate) {
   }
 
   if ("scheduledAt" in input) {
-    payload.scheduled_at = input.scheduledAt || null;
+    payload.scheduled_at = input.scheduledAt ? new Date(input.scheduledAt).toISOString() : null;
   }
 
   if ("createdBy" in input) {
@@ -148,12 +167,11 @@ export async function fetchActiveNotifications() {
 
 export async function fetchInboxNotifications(userId: string) {
   const supabase = getSupabaseClient();
-  const [notificationsResult, readsResult, deletionsResult, preferences] = await Promise.all([
+  const [notificationsResult, readsResult, deletionsResult, preferences, deliveryStates] = await Promise.all([
     supabase
       .from("notifications")
       .select(notificationSelect)
       .eq("status", "sent")
-      .eq("is_active", true)
       .order("created_at", { ascending: false }),
     supabase
       .from("notification_reads")
@@ -164,6 +182,7 @@ export async function fetchInboxNotifications(userId: string) {
       .select("notification_id")
       .eq("user_id", userId),
     fetchNotificationPreferences(userId),
+    fetchNotificationDeliveryStates(userId),
   ]);
 
   if (notificationsResult.error) throw notificationsResult.error;
@@ -176,13 +195,19 @@ export async function fetchInboxNotifications(userId: string) {
   const deletedNotificationIds = new Set(
     (deletionsResult.data ?? []).map((deletion) => String(deletion.notification_id))
   );
+  const states = new Map(deliveryStates.map(state => [state.notification_id, state]));
   return (notificationsResult.data ?? [])
     .map((value) => normalizeNotification(value as Record<string, unknown>, readsByNotificationId))
+    .map(notification => ({ ...notification, delivery_state: states.get(notification.id) }))
+    .filter(notification => notification.is_active || notification.delivery_state?.completed_at)
+    .filter((notification) => !notification.withdrawn_at && (!notification.expires_at || Date.parse(notification.expires_at) > Date.now()))
+    .filter((notification) => !notification.scheduled_at || Date.parse(notification.scheduled_at) <= Date.now())
     .filter((notification) => !deletedNotificationIds.has(notification.id))
     .filter((notification) => notification.priority === "critical" || isNotificationKindEnabled(notification.kind, preferences));
 }
 
 function isNotificationKindEnabled(kind: NotificationKind, preferences: NotificationPreferences) {
+  if (preferences.delivery_modes?.[kind] === "off") return false;
   if (kind === "reminder") return preferences.personal_reminders_enabled;
   if (kind === "organization") return preferences.organization_messages_enabled;
   if (kind === "schedule") return preferences.schedule_notifications_enabled;
@@ -193,7 +218,7 @@ export async function fetchNotificationPreferences(userId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("notification_preferences")
-    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, schedule_notifications_enabled, updated_at")
+    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, schedule_notifications_enabled, delivery_modes, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -203,7 +228,7 @@ export async function fetchNotificationPreferences(userId: string) {
 
 export async function updateNotificationPreferences(
   userId: string,
-  preferences: Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled" | "schedule_notifications_enabled">
+  preferences: Pick<NotificationPreferences, "personal_reminders_enabled" | "organization_messages_enabled" | "platform_notices_enabled" | "schedule_notifications_enabled"> & Partial<Pick<NotificationPreferences, "delivery_modes">>
 ) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -213,7 +238,7 @@ export async function updateNotificationPreferences(
       ...preferences,
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" })
-    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, schedule_notifications_enabled, updated_at")
+    .select("user_id, personal_reminders_enabled, organization_messages_enabled, platform_notices_enabled, schedule_notifications_enabled, delivery_modes, updated_at")
     .single();
 
   if (error) throw error;
@@ -230,7 +255,7 @@ export async function refreshMyProfileReminders() {
 
 export async function fetchUnreadNotificationCount(userId: string) {
   const notifications = await fetchInboxNotifications(userId);
-  return notifications.filter((notification) => !notification.read_at).length;
+  return notifications.filter((notification) => !notification.read_at && !notification.delivery_state?.completed_at).length;
 }
 
 export function subscribeToNotificationChanges(userId: string, onChange: () => void) {
@@ -244,8 +269,14 @@ export function subscribeToNotificationChanges(userId: string, onChange: () => v
     window.addEventListener(notificationInboxChangedEvent, handleLocalChange);
   }
 
+  // Scheduled publication and expiry change eligibility without a row mutation.
+  // Refresh every consumer as time passes, including inbox-only sources.
+  const interval = typeof window !== "undefined" ? window.setInterval(onChange, 15000) : null;
+  const handleVisibility = () => { if (document.visibilityState === "visible") onChange(); };
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", handleVisibility);
+
   const channel = supabase
-    .channel(`notification-inbox:${userId}`)
+    .channel(`notification-inbox:${userId}:${++notificationSubscriptionSequence}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "notifications" },
@@ -266,12 +297,19 @@ export function subscribeToNotificationChanges(userId: string, onChange: () => v
       { event: "*", schema: "public", table: "notification_preferences", filter: `user_id=eq.${userId}` },
       onChange
     )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "notification_delivery_states", filter: `user_id=eq.${userId}` },
+      onChange
+    )
     .subscribe();
 
   return () => {
     if (typeof window !== "undefined") {
       window.removeEventListener(notificationInboxChangedEvent, handleLocalChange);
     }
+    if (interval !== null) window.clearInterval(interval);
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", handleVisibility);
     void supabase.removeChannel(channel);
   };
 }
@@ -410,4 +448,54 @@ export async function fetchOrganizationNotificationRecipientCount(organizationId
   });
   if (error) throw error;
   return Number(data ?? 0);
+}
+
+export type NotificationDeliveryState = {
+  notification_id: string;
+  displayed_at: string | null;
+  dismissed_at: string | null;
+  acknowledged_at: string | null;
+  completed_at: string | null;
+};
+
+export async function fetchNotificationDeliveryStates(userId: string) {
+  const { data, error } = await getSupabaseClient()
+    .from("notification_delivery_states")
+    .select("notification_id, displayed_at, dismissed_at, acknowledged_at, completed_at")
+    .eq("user_id", userId);
+  if (error) throw error;
+  return (data ?? []) as NotificationDeliveryState[];
+}
+
+export async function claimNotificationDelivery(notificationId: string) {
+  const { data, error } = await getSupabaseClient().rpc("claim_notification_delivery", {
+    p_notification_id: notificationId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
+export async function updateNotificationDeliveryState(
+  notificationId: string,
+  userId: string,
+  state: "dismissed_at" | "acknowledged_at" | "completed_at",
+) {
+  const { error } = await getSupabaseClient().from("notification_delivery_states")
+    .upsert({ notification_id: notificationId, user_id: userId, [state]: new Date().toISOString() },
+      { onConflict: "notification_id,user_id" });
+  if (error) throw error;
+  broadcastNotificationInboxChange(userId);
+}
+
+export async function reserveNotificationDeliveries(notificationIds: string[], token: string) {
+  const { data, error } = await getSupabaseClient().rpc("reserve_notification_deliveries", {
+    p_notification_ids: notificationIds.slice(0, 100), p_token: token,
+  });
+  if (error) throw error;
+  return (data ?? []) as string[];
+}
+
+export async function confirmNotificationDeliveries(token: string) {
+  const { error } = await getSupabaseClient().rpc("confirm_notification_deliveries", { p_token: token });
+  if (error) throw error;
 }
