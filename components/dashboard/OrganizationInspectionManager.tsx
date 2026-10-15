@@ -274,12 +274,12 @@ export default function OrganizationInspectionManager({ organizationId, aircraft
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <select
-          aria-label="Aircraft family"
+          aria-label="Aircraft type"
           className="h-8 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-900"
           value={aircraftFamilyFilter}
           onChange={(event) => setAircraftFamilyFilter(event.target.value)}
         >
-          <option value="all">All aircraft families</option>
+          <option value="all">All aircraft types</option>
           {aircraftFamilyGroups.map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}
         </select>
         <div className="flex flex-wrap justify-end gap-2">

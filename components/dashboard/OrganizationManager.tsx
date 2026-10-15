@@ -51,6 +51,7 @@ import OrganizationEndorsementRequests from "@/components/dashboard/Organization
 import EndorsementRecordsManager from "@/components/dashboard/EndorsementRecordsManager";
 import OrganizationInspectionManager from "@/components/dashboard/OrganizationInspectionManager";
 import OrganizationMemberReviewAccess from "@/components/dashboard/OrganizationMemberReviewAccess";
+import AircraftStatusEditor from "@/components/dashboard/AircraftStatusEditor";
 import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
 import {
   AdminDataTable,
@@ -2154,17 +2155,17 @@ export default function OrganizationManager({
 
       {view === "fleet" && canManageFleet && activeFleetWorkspace === "aircraft" ? (<FleetWorkspacePanel
         title="Organization aircraft"
-        description={`Aircraft available to members of ${activeOrganization.name}.`}
-        summary={`${filteredAircraftFamilyGroups.length} aircraft families`}
+        description={`Aircraft in ${activeOrganization.name}.`}
+        summary={`${filteredAircraftFamilyGroups.length} aircraft ${filteredAircraftFamilyGroups.length === 1 ? "type" : "types"}`}
       >
         <CompactToolbar
-          resultLabel={`${filteredAircraftFamilyGroups.length} families`}
+          resultLabel={`${filteredAircraftFamilyGroups.length} ${filteredAircraftFamilyGroups.length === 1 ? "type" : "types"}`}
           actions={<CompactButton type="button" tone="primary" onClick={startCreateAircraft}>Add aircraft</CompactButton>}
         >
           <input
             type="search"
             className="h-8 w-full max-w-72 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-            placeholder="Search family, model, or tail number"
+            placeholder="Search type, model, or tail number"
             value={aircraftQuery}
             onChange={(event) => {
               setAircraftQuery(event.target.value);
@@ -2249,7 +2250,7 @@ export default function OrganizationManager({
               <table className="w-full min-w-[860px] border-collapse text-left text-xs">
                 <thead className="bg-slate-100 font-semibold text-slate-700">
                   <tr>
-                    <GridHeader className="w-36">Flight status</GridHeader>
+                    <GridHeader className="w-36">Status</GridHeader>
                     <GridHeader className="min-w-52">Status note</GridHeader>
                     <GridHeader className="w-24">Meter</GridHeader>
                     <GridHeader className="w-24">Reading</GridHeader>
@@ -2264,7 +2265,7 @@ export default function OrganizationManager({
                         <option value="available">Available</option>
                         <option value="away">Away</option>
                         <option value="in_maintenance">In maintenance</option>
-                        <option value="grounded">Grounded — no dispatch</option>
+                        <option value="grounded">Grounded</option>
                       </select>
                     </GridCell>
                     <GridCell><AircraftWorksheetInput ariaLabel="Aircraft status note" value={aircraftForm.operational_status_note} onChange={(value) => updateAircraftField("operational_status_note", value)} placeholder={aircraftForm.operational_status === "grounded" ? "Grounding reason required" : "Optional"} required={aircraftForm.operational_status === "grounded"} /></GridCell>
@@ -2314,7 +2315,7 @@ export default function OrganizationManager({
                 ) : null}
               </div>
               <div className="flex gap-2">
-                <button className="ghost-button" type="button" onClick={closeAircraftWorkspaceDialog}>{selectedAircraftFamily ? "Back to family" : "Cancel"}</button>
+                <button className="ghost-button" type="button" onClick={closeAircraftWorkspaceDialog}>{selectedAircraftFamily ? "Back to type" : "Cancel"}</button>
                 <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save aircraft"}</button>
               </div>
             </div>
@@ -2342,23 +2343,19 @@ export default function OrganizationManager({
                 className="text-xs font-semibold text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 onClick={() => selectAircraftFamily("")}
               >
-                ← All aircraft families
+                ← All aircraft types
               </button>
               <span className="text-xs text-slate-600">{selectedAircraftFamily.label} · {selectedAircraftFamily.items.length} aircraft</span>
             </div>
             <div className="grid border-x border-t border-slate-200 bg-white md:hidden">
               {visibleFamilyAircraft.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="grid min-h-12 gap-0.5 border-b border-slate-200 px-3 py-2 text-left hover:bg-slate-50 focus-visible:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600"
-                  onClick={() => startEditAircraft(item)}
-                >
-                  <span className="text-sm font-semibold text-slate-950">{item.tail_number}</span>
-                  <span className="text-xs text-slate-500">
-                    {modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"} · {formatOperationalStatus(item.operational_status)}
-                  </span>
-                </button>
+                <div key={item.id} className="flex min-h-12 items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
+                  <button type="button" className="grid gap-0.5 text-left focus-visible:outline-2 focus-visible:outline-blue-600" onClick={() => startEditAircraft(item)}>
+                    <span className="text-sm font-semibold text-blue-700">{item.tail_number}</span>
+                    <span className="text-xs text-slate-500">{modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</span>
+                  </button>
+                  <AircraftStatusEditor aircraft={item} organizationId={activeOrganization.id} onSaved={(change) => setAircraft((current) => current.map((row) => row.id === item.id ? { ...row, ...change } : row))} />
+                </div>
               ))}
             </div>
             <div className="hidden md:block">
@@ -2366,7 +2363,7 @@ export default function OrganizationManager({
                 <thead className="bg-slate-100 text-xs font-semibold text-slate-700">
                   <tr>
                     <th className="border-b border-slate-200 px-3 py-2">Tail number</th>
-                    <th className="border-b border-slate-200 px-3 py-2">Exact model</th>
+                    <th className="border-b border-slate-200 px-3 py-2">Model</th>
                     <th className="border-b border-slate-200 px-3 py-2">Status</th>
                     <th className="border-b border-slate-200 px-3 py-2">Next due</th>
                   </tr>
@@ -2380,7 +2377,7 @@ export default function OrganizationManager({
                         </button>
                       </td>
                       <td className="px-3 py-2 text-xs text-slate-700">{modelNames.get(item.model_id ?? "") ?? item.model?.name ?? "Unknown model"}</td>
-                      <td className="px-3 py-2"><StatusBadge tone={aircraftStatusTone(item.operational_status)}>{formatOperationalStatus(item.operational_status)}</StatusBadge></td>
+                      <td className="px-3 py-2"><AircraftStatusEditor aircraft={item} organizationId={activeOrganization.id} onSaved={(change) => setAircraft((current) => current.map((row) => row.id === item.id ? { ...row, ...change } : row))} /></td>
                       <td className="px-3 py-2 text-xs text-slate-600">{nextAircraftDue(item)}</td>
                     </tr>
                   ))}
@@ -2392,7 +2389,7 @@ export default function OrganizationManager({
         ) : (
           <>
             <AdminNameList
-              label="Aircraft families"
+              label="Aircraft types"
               emptyLabel={aircraft.length === 0 ? "No organization aircraft yet." : "No aircraft match these filters."}
               items={visibleAircraftFamilyGroups.map((group) => ({
                 id: group.key,
@@ -3213,24 +3210,6 @@ function monthEndDate(value: string) {
   const month = Number(match[2]);
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
-}
-
-function formatOperationalStatus(value?: AircraftOperationalStatus) {
-  return {
-    available: "Available for flight",
-    away: "Away or unavailable",
-    in_maintenance: "In maintenance",
-    grounded: "Grounded — do not dispatch",
-  }[value ?? "available"];
-}
-
-function aircraftStatusTone(
-  value?: AircraftOperationalStatus
-): "success" | "info" | "warning" | "danger" {
-  if (value === "grounded") return "danger";
-  if (value === "in_maintenance") return "warning";
-  if (value === "away") return "info";
-  return "success";
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
