@@ -136,6 +136,26 @@
 .quickAvailability > button { width: 100%; min-height: 48px; justify-content: center; }
 .individualDays { margin-top: 22px; border-top: 1px solid #e5e5ea; }
 .individualDays summary { padding: 18px 0; color: #0066cc; font-size: 13px; cursor: pointer; list-style-position: inside; }
+.weeklyEditor { border-top: 1px solid var(--schedule-line); }
+.weeklyEditorDay { display: grid; grid-template-columns: 120px minmax(0,1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--schedule-line); }
+.weeklyEditorDay > header { display: flex; align-items: center; justify-content: space-between; gap: 6px; align-self: start; min-height: 38px; }
+.weeklyEditorDay > header strong { font-size: 13px; font-weight: 600; }
+.weeklyEditorRows { display: grid; gap: 6px; }
+.weeklyEditorRow { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto; align-items: center; gap: 7px; }
+.weeklyEditorRow input { min-width: 0; }
+.weeklyEditorRow > span, .unavailableLabel { color: var(--schedule-muted); font-size: 12px; }
+.unavailableLabel { align-self: center; min-height: 38px; line-height: 38px; }
+.accessToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--schedule-line); color: var(--schedule-muted); font-size: 12px; }
+.accessList, .accessPickerList { display: grid; }
+.accessRow, .accessPickerList label { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 7px 0; border-bottom: 1px solid var(--schedule-line); }
+.accessRow > span, .accessPickerList label > span { min-width: 0; }
+.accessRow strong, .accessPickerList strong { display: block; color: var(--schedule-ink); font-size: 13px; font-weight: 600; }
+.accessRow small, .accessPickerList small { display: block; color: var(--schedule-muted); font-size: 11px; }
+.accessRow button { margin-left: auto; }
+.accessPicker { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--schedule-line); }
+.accessSearch { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; }
+.accessSearch input { width: 100%; min-height: 38px; border: 1px solid #cfd8e3; border-radius: 6px; padding: 7px 9px; font: inherit; font-size: 13px; }
+.accessPickerList { max-height: 280px; overflow: auto; }
 .formSection { padding: 14px 0; border-top: 1px solid var(--schedule-line); }
 .formSection:last-child { border-bottom: 1px solid var(--schedule-line); }
 .autoUtility, .sectionHeading { display: flex; align-items: center; gap: 5px; }
@@ -217,6 +237,11 @@
   .availabilityPeriods { display: flex; flex-wrap: wrap; justify-content: flex-end; }
   .availabilityPeriods button { width: auto; min-height: 38px; padding: 6px 9px; font-size: 11px; }
   .availabilityPeriods > span { font-size: 11px; }
+  .weeklyEditorDay { grid-template-columns: 1fr; gap: 5px; padding: 9px 0; }
+  .weeklyEditorDay > header { min-height: 30px; }
+  .weeklyEditorRow { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto; gap: 5px; }
+  .weeklyEditorRow .nativePicker { min-height: 36px; }
+  .accessPickerList { max-height: 45dvh; }
 }
 
 @media (prefers-reduced-motion: reduce) {

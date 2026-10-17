@@ -143,7 +143,7 @@ const unavailable=generateAutomaticSchedule({...autoInput,slots:[],blocks:[],req
 assert.equal(unavailable.studentUserId,'a');
 assert.equal(unavailable.scheduled,0);
 assert.match(unavailable.reason,/No availability/);
-const teachingRules={cfi_user_id:'cfi',start_minute:480,latest_start_minute:719,end_minute:720,max_daily_teaching_min:480,weekdays:[1]};
+const teachingRules={cfi_user_id:'cfi',start_minute:480,latest_start_minute:719,end_minute:720,max_daily_span_min:1440,max_daily_teaching_min:480,weekdays:[1]};
 const laterSlot={student_user_id:'a',scope:'weekly',weekday:1,start_minute:540,end_minute:1020,timezone:'America/New_York'};
 assert.equal(new Date(generateAutomaticSchedule({...autoInput,slots:[laterSlot],blocks:[]}).drafts[0].start_at).getHours(),9,'default rules keep later student start times available');
 const taught=generateAutomaticSchedule({...autoInput,blocks:[],teachingRules}).drafts;
@@ -154,7 +154,9 @@ assert.equal(fourPmEnd.drafts.length,0,'a 16:00 teaching end never allows a 16:0
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],teachingRules:{...teachingRules,weekdays:[2]}}).drafts.length,0,'disabled teaching days are not used');
 const wideWindowRules={...defaultTeachingRules,start_minute:420,latest_start_minute:1079,end_minute:1080,max_daily_teaching_min:240,weekdays:[1]};
 const wideWindow=generateAutomaticSchedule({...autoInput,access:[compactAccess[0],compactAccess[1]],slots:[compactSlots[0],{...compactSlots[1],start_minute:960,end_minute:1080}],blocks:[],teachingRules:wideWindowRules,requests:[{studentUserId:'compact-a',flightSessions:1,groundSessions:0},{studentUserId:'compact-b',flightSessions:1,groundSessions:0}]});
-assert.equal(wideWindow.drafts.length,2,'the configured teaching window does not add a separate first-to-last span limit');
+assert.equal(wideWindow.drafts.length,2,'a permissive daily span allows lessons across the configured window');
+const limitedSpan=generateAutomaticSchedule({...autoInput,access:[compactAccess[0],compactAccess[1]],slots:[compactSlots[0],{...compactSlots[1],start_minute:960,end_minute:1080}],blocks:[],teachingRules:{...wideWindowRules,max_daily_span_min:480},requests:[{studentUserId:'compact-a',flightSessions:1,groundSessions:0},{studentUserId:'compact-b',flightSessions:1,groundSessions:0}]});
+assert.equal(limitedSpan.drafts.length,1,'the instructor-defined daily span limits first-to-last lesson time');
 const ownTimeOff={id:'time-off',cfi_user_id:'cfi',start_at:a.start_at,end_at:a.end_at,note:'Vacation'};
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],instructorTimeOff:[ownTimeOff]}).drafts[0].start_at,new Date(a.end_at).toISOString(),'automatic scheduling skips instructor time off');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],instructorTimeOff:[{...ownTimeOff,end_at:'2026-09-21T04:00:00Z'}]}).drafts.length,0,'a full-week vacation prevents automatic additions');

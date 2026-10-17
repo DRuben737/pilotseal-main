@@ -85,6 +85,7 @@ export type TeachingRules = {
   start_minute: number;
   latest_start_minute: number;
   end_minute: number;
+  max_daily_span_min: number;
   max_daily_teaching_min: number;
   weekdays: number[];
 };
@@ -97,12 +98,12 @@ export type InstructorTimeOff = {
   note: string;
 };
 
-export const defaultTeachingRules = { start_minute: 420, latest_start_minute: 959, end_minute: 960, max_daily_teaching_min: 480, weekdays: [1, 2, 3, 4, 5] };
+export const defaultTeachingRules = { start_minute: 0, latest_start_minute: 1439, end_minute: 1440, max_daily_span_min: 1440, max_daily_teaching_min: 1440, weekdays: [1, 2, 3, 4, 5, 6, 7] };
 
 export async function fetchInstructorScheduleSettings(cfiUserId: string, rangeStart: Date, rangeEnd: Date) {
   const supabase = getSupabaseClient();
   const [rulesResult, timeOffResult] = await Promise.all([
-    supabase.from("cfi_schedule_teaching_rules").select("cfi_user_id, start_minute, latest_start_minute, end_minute, max_daily_teaching_min, weekdays").eq("cfi_user_id", cfiUserId).maybeSingle(),
+    supabase.from("cfi_schedule_teaching_rules").select("cfi_user_id, start_minute, latest_start_minute, end_minute, max_daily_span_min, max_daily_teaching_min, weekdays").eq("cfi_user_id", cfiUserId).maybeSingle(),
     supabase.from("cfi_schedule_time_off").select("id, cfi_user_id, start_at, end_at, note").eq("cfi_user_id", cfiUserId).lt("start_at", rangeEnd.toISOString()).gt("end_at", rangeStart.toISOString()).order("start_at"),
   ]);
   if (rulesResult.error) throw rulesResult.error;
@@ -836,6 +837,9 @@ export function generateAutomaticSchedule(input: {
           if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;
           const teachingMinutes = setting.durationMin + items.reduce((total, item) => total + (item.end.getTime() - item.start.getTime()) / 60_000, 0);
           if (teachingMinutes > rules.max_daily_teaching_min) continue;
+          const spanStart = items.reduce((earliest, item) => Math.min(earliest, item.start.getTime()), start.getTime());
+          const spanEnd = items.reduce((latest, item) => Math.max(latest, item.end.getTime()), end.getTime());
+          if ((spanEnd - spanStart) / 60_000 > rules.max_daily_span_min) continue;
           let aircraft: ScheduleAircraft | undefined;
           if (setting.lessonKind === "flight") {
             aircraft = selectedAircraft.find((candidate) => {
