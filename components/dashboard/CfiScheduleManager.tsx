@@ -174,7 +174,7 @@ export default function CfiScheduleManager() {
   const [eligibility, setEligibility] = useState<ScheduleEligibility | null>(null);
   const [availabilityReview, setAvailabilityReview] = useState<AvailabilityReview | null>(null);
   const [reviewChecked, setReviewChecked] = useState(false);
-  const [availabilityReturn, setAvailabilityReturn] = useState<DrawerMode>(null);
+  const [drawerReturn, setDrawerReturn] = useState<DrawerMode>(null);
   const promptedReview = useRef("");
   const [detailEntry, setDetailEntry] = useState<ScheduleEntry | null>(null);
   const entries = useMemo(() => applyScheduleOperations(publishedEntries, operations), [publishedEntries, operations]);
@@ -614,7 +614,7 @@ export default function CfiScheduleManager() {
   }
 
   function openAvailabilityDrawer(scope: "weekly" | "date", weekday = 1, date = localDateKey(new Date()), studentId = isCfiView ? availabilityStudentId : studentViews.find((item) => item.cfi_user_id === activeCfiId)?.student_user_id ?? userId) {
-    if (drawer !== "availability") setAvailabilityReturn(drawer === "weekly" || drawer === "review" ? drawer : null);
+    if (drawer !== "availability") setDrawerReturn(drawer);
     setReviewChecked(false);
     setAvailabilityStudentId(studentId);
     setAvailabilityScope(scope);
@@ -667,7 +667,8 @@ export default function CfiScheduleManager() {
         });
       }
       await loadWeekData(activeCfiId);
-      setDrawer(availabilityReturn);
+      setDrawer(drawerReturn);
+      setDrawerReturn(null);
       setMessage(availabilityScope === "weekly" && autofillDates ? `Saved and filled ${filled} dates.` : "Availability saved.");
     } catch (availabilityError) {
       setError(getErrorMessage(availabilityError, "Unable to save availability."));
@@ -684,7 +685,8 @@ export default function CfiScheduleManager() {
       if (student.storage_kind === "person") await clearPersonAvailabilityDate(activeCfiId, student.saved_person_id, availabilityDate);
       else await removeDateAvailabilityOverride(activeCfiId, student.student_user_id, availabilityDate);
       await loadWeekData(activeCfiId);
-      setDrawer(availabilityReturn);
+      setDrawer(drawerReturn);
+      setDrawerReturn(null);
       setMessage("Date now uses your general availability.");
     } catch (clearError) {
       setError(getErrorMessage(clearError, "Unable to clear the override."));
@@ -943,6 +945,7 @@ export default function CfiScheduleManager() {
 
   function openTeachingDrawer() {
     setError("");
+    if (drawer !== "teaching") setDrawerReturn(drawer);
     const teachingWindowMinutes = Math.max(1, teachingRules.end_minute - teachingRules.start_minute);
     setRuleForm({ ...teachingRules, max_daily_span_min: teachingWindowMinutes, max_daily_teaching_min: Math.min(teachingRules.max_daily_teaching_min, teachingWindowMinutes) });
     setTimeOffForm({ startDate: selectedDate, endDate: selectedDate, start: minutesToTime(teachingRules.start_minute), end: minutesToAvailabilityEnd(teachingRules.end_minute), allDay: true, note: "" });
@@ -1081,6 +1084,7 @@ export default function CfiScheduleManager() {
   }
 
   function openStudentSettings(student: ScheduleAccess) {
+    if (drawer !== "settings") setDrawerReturn(drawer);
     const weekOverride = weekOverrides.find((item) => item.student_user_id === student.student_user_id);
     setSettingsStudentId(student.student_user_id);
     setSettingsForm({
@@ -1123,7 +1127,8 @@ export default function CfiScheduleManager() {
       }
       await loadIdentityData();
       await loadWeekData(activeCfiId);
-      setDrawer(null);
+      setDrawer(drawerReturn);
+      setDrawerReturn(null);
       setMessage("Student schedule settings saved.");
     } catch (settingsError) {
       setError(getErrorMessage(settingsError, "Unable to save student settings."));
@@ -1428,7 +1433,7 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex justify-end gap-2"><button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={requestPermissionApply}>Apply changes</button></div>
       </DetailDrawer>
 
-      <DetailDrawer compact open={drawer === "availability"} onClose={() => setDrawer(null)} title="Availability" description={availabilityScope === "weekly" ? "Edit the whole week." : "Override one date."}>
+      <DetailDrawer compact open={drawer === "availability"} onClose={() => { setDrawer(drawerReturn); setDrawerReturn(null); }} title="Availability" description={availabilityScope === "weekly" ? "Edit the whole week." : "Override one date."}>
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         {isCfiView ? <p className={styles.availabilityStudentName}>{cfiAccess.find((item) => item.student_user_id === availabilityStudentId)?.student_name}</p> : null}
         <div className={styles.availabilityModeBar}>
@@ -1444,7 +1449,7 @@ export default function CfiScheduleManager() {
           {availabilityRows.map((row, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" value={row.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, start: event.target.value } : item))} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} data-native-picker type="time" value={row.end} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setAvailabilityRows((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, end: event.target.value } : item))} /></label><button className="ghost-button" type="button" onClick={() => setAvailabilityRows((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}
           <button className="secondary-button justify-self-start" type="button" onClick={() => setAvailabilityRows((current) => [...current, { start: "", end: "" }])}>＋ Add time</button>
         </div>}
-        <div className="mt-5 flex flex-wrap justify-end gap-2">{availabilityScope === "date" && overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === availabilityDate) ? <button className="ghost-button" type="button" disabled={saving} onClick={() => void clearDateOverride()}>Use general rule</button> : null}<button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAvailability()}>{saving ? "Saving…" : "Apply"}</button></div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">{availabilityScope === "date" && overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === availabilityDate) ? <button className="ghost-button" type="button" disabled={saving} onClick={() => void clearDateOverride()}>Use general rule</button> : null}<button className="ghost-button" type="button" onClick={() => { setDrawer(drawerReturn); setDrawerReturn(null); }}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAvailability()}>{saving ? "Saving…" : "Apply"}</button></div>
       </DetailDrawer>
 
       <DetailDrawer compact open={drawer === "lesson"} onClose={() => { setDrawer(null); setResumeLessons([]); }} title={lesson.id ? "Edit lesson" : "Add lesson"} description="Changes stay unpublished until Review & publish.">
@@ -1484,7 +1489,7 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex flex-wrap justify-end gap-2">{editingBlockId ? <button className="ghost-button mr-auto text-rose-700" type="button" disabled={saving} onClick={() => setDeleteBlockId(editingBlockId)}>Remove block</button> : null}<button className="ghost-button" type="button" disabled={saving} onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving || !blockForm.aircraftId} onClick={() => void saveBlock()}>{saving ? "Saving…" : editingBlockId ? "Save changes" : "Add block"}</button></div>
       </DetailDrawer>
 
-      <DetailDrawer compact open={drawer === "teaching"} onClose={() => { if (!saving) setDrawer(null); }} title="My teaching time" description="Usual hours and unavailable time.">
+      <DetailDrawer compact open={drawer === "teaching"} onClose={() => { if (!saving) { setDrawer(drawerReturn); setDrawerReturn(null); } }} title="My teaching time" description="Usual hours and unavailable time.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         <section className={styles.formSection}>
           <h3 className="text-sm font-semibold text-slate-900">Usual week</h3>
@@ -1533,9 +1538,9 @@ export default function CfiScheduleManager() {
         })}</div><button className="primary-button mt-4" type="button" disabled={saving || !autoDrafts.length} onClick={() => void confirmAutomaticSchedule()}>{saving ? "Saving…" : `Add ${autoDrafts.length} lesson${autoDrafts.length === 1 ? "" : "s"} to draft`}</button></section> : null}
       </DetailDrawer>
 
-      <DetailDrawer compact open={drawer === "settings"} onClose={() => setDrawer(null)} title="Student schedule settings" description="Set the general target and optional override for the selected week.">
+      <DetailDrawer compact open={drawer === "settings"} onClose={() => { setDrawer(drawerReturn); setDrawerReturn(null); }} title="Student schedule settings" description="Set the general target and optional override for the selected week.">
         <div className="grid gap-3"><div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>General weekly sessions</span><input type="number" min={0} max={14} value={settingsForm.weeklySessions} onChange={(event) => setSettingsForm((current) => ({ ...current, weeklySessions: Number(event.target.value) }))} /></label><label className="saas-field"><span>Default duration</span><select value={settingsForm.durationMin} onChange={(event) => setSettingsForm((current) => ({ ...current, durationMin: Number(event.target.value) }))}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div><label className="saas-field"><span>Calendar color</span><input type="color" value={settingsForm.color} onChange={(event) => setSettingsForm((current) => ({ ...current, color: event.target.value }))} /></label><label className="flex items-center gap-2 text-sm font-semibold text-slate-800"><input type="checkbox" checked={settingsForm.useWeekOverride} onChange={(event) => setSettingsForm((current) => ({ ...current, useWeekOverride: event.target.checked }))} /> Override {formatDate(weekStart)} week</label>{settingsForm.useWeekOverride ? <div className="grid grid-cols-2 gap-3 border-y border-slate-200 py-3"><label className="saas-field"><span>Week sessions</span><input type="number" min={0} max={14} value={settingsForm.weekSessions} onChange={(event) => setSettingsForm((current) => ({ ...current, weekSessions: Number(event.target.value) }))} /></label><label className="saas-field"><span>Week duration</span><select value={settingsForm.weekDurationMin} onChange={(event) => setSettingsForm((current) => ({ ...current, weekDurationMin: Number(event.target.value) }))}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div> : null}</div>
-        <div className="mt-5 flex justify-end gap-2"><button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveStudentSettings()}>Apply</button></div>
+        <div className="mt-5 flex justify-end gap-2"><button className="ghost-button" type="button" onClick={() => { setDrawer(drawerReturn); setDrawerReturn(null); }}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveStudentSettings()}>Apply</button></div>
       </DetailDrawer>
 
       <ConfirmDialog open={confirmPermissions} title="Update schedule access?" description="Students whose access is removed will stop seeing this schedule. Existing schedule data is retained." confirmLabel="Apply changes" busy={saving} destructive onCancel={() => setConfirmPermissions(false)} onConfirm={() => void applyPermissions()} />
