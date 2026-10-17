@@ -68,10 +68,12 @@ assert.equal(scheduleHasOverlap([...original,{...solo,student_user_id:'a'}]),tru
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');
 const scheduleCompiled = ts.transpileModule(scheduleSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { availabilityEndToMinutes, defaultTeachingRules, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
+const { availabilityEndToMinutes, defaultTeachingRules, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd, normalizeAvailabilityTimeRows } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
 assert.equal(availabilityEndToMinutes('00:00'),1440,'native midnight end time saves as the end of the day');
 assert.equal(minutesToAvailabilityEnd(1440),'00:00','end-of-day availability loads into a valid native time input');
 assert.equal(availabilityEndToMinutes('18:30'),1110,'ordinary end times keep their minute value');
+assert.deepEqual(normalizeAvailabilityTimeRows([{start:'',end:''},{start:'09:00',end:'14:00'}]),[{startMinute:540,endMinute:840}],'a completely blank availability row is ignored');
+assert.throws(()=>normalizeAvailabilityTimeRows([{start:'09:00',end:''}]),/incomplete time/,'a partially completed availability row still requires attention');
 const slots = [{ student_user_id:'a', scope:'weekly', weekday:1, start_minute:420, end_minute:900, timezone:'America/New_York' }];
 const aircraftBlock = { id:'resource', cfi_user_id:'cfi', aircraft_id:'plane-1', start_at:a.start_at, end_at:a.end_at, note:'' };
 const aircraft=[{id:'plane-1',tail_number:'N101PS',model_name:'C172',organization_id:null,operational_status:'available',operational_status_note:null,status_updated_at:null},{id:'plane-2',tail_number:'N202PS',model_name:'PA-28',organization_id:null,operational_status:'grounded',operational_status_note:'Inspection',status_updated_at:null}];

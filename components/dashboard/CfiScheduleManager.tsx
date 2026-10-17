@@ -32,6 +32,7 @@ import {
   localDateKey,
   minutesToTime,
   minutesToAvailabilityEnd,
+  normalizeAvailabilityTimeRows,
   publishScheduleDraft,
   saveTeachingRules,
   removeDateAvailabilityOverride,
@@ -72,13 +73,6 @@ type AutoRequestRow = AutomaticScheduleRequest & { selected: boolean };
 
 const weekdayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const emptyWeeklyAvailability = (): WeeklyAvailabilityRows => Object.fromEntries(weekdayLabels.map((_, index) => [index + 1, []]));
-
-function normalizeAvailabilityRows(rows: AvailabilityRow[]) {
-  return rows.map((row) => {
-    if (!row.start || !row.end) throw new Error("Choose both a start and end time.");
-    return { startMinute: timeToMinutes(row.start), endMinute: availabilityEndToMinutes(row.end) };
-  });
-}
 const emptyLesson = {
   id: "",
   originalStartAt: "",
@@ -208,6 +202,8 @@ export default function CfiScheduleManager() {
   const [availabilityDate, setAvailabilityDate] = useState(localDateKey(new Date()));
   const [availabilityRows, setAvailabilityRows] = useState<AvailabilityRow[]>([{ start: "07:00", end: "15:00" }]);
   const [weeklyAvailabilityRows, setWeeklyAvailabilityRows] = useState<WeeklyAvailabilityRows>(emptyWeeklyAvailability);
+  const [availabilityWeeklyTarget, setAvailabilityWeeklyTarget] = useState(3);
+  const [initialAvailabilityWeeklyTarget, setInitialAvailabilityWeeklyTarget] = useState(3);
   const [quickWeekdays, setQuickWeekdays] = useState([1, 2, 3, 4, 5]);
   const [quickAvailability, setQuickAvailability] = useState({ start: "07:00", end: "15:00" });
   const [autofillDates, setAutofillDates] = useState(true);
@@ -615,6 +611,13 @@ export default function CfiScheduleManager() {
 
   function openAvailabilityDrawer(scope: "weekly" | "date", weekday = 1, date = localDateKey(new Date()), studentId = isCfiView ? availabilityStudentId : studentViews.find((item) => item.cfi_user_id === activeCfiId)?.student_user_id ?? userId) {
     if (drawer !== "availability") setDrawerReturn(drawer);
+    if (drawer !== "availability" || availabilityStudentId !== studentId) {
+      const student = isCfiView ? cfiAccess.find((item) => item.student_user_id === studentId) : studentViews.find((item) => item.student_user_id === studentId);
+      const weekOverride = weekOverrides.find((item) => item.student_user_id === studentId);
+      const target = weekOverride?.target_sessions ?? student?.default_weekly_sessions ?? 0;
+      setAvailabilityWeeklyTarget(target);
+      setInitialAvailabilityWeeklyTarget(target);
+    }
     setReviewChecked(false);
     setAvailabilityStudentId(studentId);
     setAvailabilityScope(scope);
@@ -646,13 +649,17 @@ export default function CfiScheduleManager() {
   async function saveAvailability() {
     const studentAccess = isCfiView ? cfiAccess.find((item) => item.student_user_id === availabilityStudentId) : studentViews.find((item) => item.cfi_user_id === activeCfiId);
     if (!studentAccess) return;
+    if (isCfiView && (!Number.isInteger(availabilityWeeklyTarget) || availabilityWeeklyTarget < 0 || availabilityWeeklyTarget > 14)) {
+      setError("Weekly target must be between 0 and 14.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       const personId = studentAccess.storage_kind === "person" ? studentAccess.saved_person_id : undefined;
       let filled = 0;
       if (availabilityScope === "weekly") {
-        const normalizedWeek = Object.fromEntries(weekdayLabels.map((_, index) => [index + 1, normalizeAvailabilityRows(weeklyAvailabilityRows[index + 1])]));
+        const normalizedWeek = Object.fromEntries(weekdayLabels.map((_, index) => [index + 1, normalizeAvailabilityTimeRows(weeklyAvailabilityRows[index + 1])]));
         for (let weekday = 1; weekday <= 7; weekday += 1) {
           filled += await saveScheduleAvailability({
             personId, cfiUserId: activeCfiId, timezone: browserTimeZone(), scope: "weekly",
@@ -660,11 +667,42 @@ export default function CfiScheduleManager() {
           });
         }
       } else {
-        const normalized = normalizeAvailabilityRows(availabilityRows);
+        const normalized = normalizeAvailabilityTimeRows(availabilityRows);
         filled = await saveScheduleAvailability({
           personId, cfiUserId: activeCfiId, timezone: browserTimeZone(), scope: "date",
           weekday: availabilityWeekday, date: availabilityDate, slots: normalized, autofill: false,
         });
+      }
+      if (isCfiView && availabilityWeeklyTarget !== initialAvailabilityWeeklyTarget) {
+        const weekOverride = weekOverrides.find((item) => item.student_user_id === studentAccess.student_user_id);
+        if (studentAccess.storage_kind === "person") {
+          await savePersonScheduleSettings(activeCfiId, studentAccess.saved_person_id, {
+            weeklySessions: weekOverride ? studentAccess.default_weekly_sessions : availabilityWeeklyTarget,
+            durationMin: studentAccess.default_duration_min,
+            color: studentAccess.color,
+            useWeekOverride: Boolean(weekOverride),
+            weekStart: localDateKey(weekStart),
+            weekSessions: weekOverride ? availabilityWeeklyTarget : studentAccess.default_weekly_sessions,
+            weekDurationMin: weekOverride?.duration_min ?? studentAccess.default_duration_min,
+          });
+        } else if (weekOverride) {
+          await upsertWeekOverride({
+            cfi_user_id: activeCfiId,
+            student_user_id: studentAccess.student_user_id,
+            week_start: localDateKey(weekStart),
+            target_sessions: availabilityWeeklyTarget,
+            duration_min: weekOverride.duration_min,
+          });
+        } else {
+          await updateStudentScheduleDefaults({
+            cfiUserId: activeCfiId,
+            studentUserId: studentAccess.student_user_id,
+            weeklySessions: availabilityWeeklyTarget,
+            durationMin: studentAccess.default_duration_min,
+            color: studentAccess.color,
+          });
+        }
+        await loadIdentityData();
       }
       await loadWeekData(activeCfiId);
       setDrawer(drawerReturn);
@@ -1435,7 +1473,7 @@ export default function CfiScheduleManager() {
 
       <DetailDrawer compact open={drawer === "availability"} onClose={() => { setDrawer(drawerReturn); setDrawerReturn(null); }} title="Availability" description={availabilityScope === "weekly" ? "Edit the whole week." : "Override one date."}>
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
-        {isCfiView ? <p className={styles.availabilityStudentName}>{cfiAccess.find((item) => item.student_user_id === availabilityStudentId)?.student_name}</p> : null}
+        {isCfiView ? <div className={styles.availabilityStudentBar}><p className={styles.availabilityStudentName}>{cfiAccess.find((item) => item.student_user_id === availabilityStudentId)?.student_name}</p><label className={styles.weeklyTargetField}><span>Weekly target</span><input aria-label="Weekly target" type="number" inputMode="numeric" min={0} max={14} disabled={saving || hasDraft} value={availabilityWeeklyTarget} onChange={(event) => setAvailabilityWeeklyTarget(Number(event.target.value))} /><span>lessons</span></label></div> : null}
         <div className={styles.availabilityModeBar}>
           <div className={styles.modeSwitch} aria-label="Availability scope"><button type="button" aria-pressed={availabilityScope === "weekly"} onClick={() => openAvailabilityDrawer("weekly", availabilityWeekday)}>Usual week</button><button type="button" aria-pressed={availabilityScope === "date"} onClick={() => openAvailabilityDrawer("date", 1, availabilityDate)}>One date</button></div>
           {availabilityScope === "weekly" ? <label className={styles.repeatToggle}><input type="checkbox" checked={autofillDates} onChange={(event) => setAutofillDates(event.target.checked)} />Fill next 4 weeks</label> : null}

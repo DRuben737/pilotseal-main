@@ -225,6 +225,16 @@ export function availabilityEndToMinutes(value: string) {
   return value === "00:00" ? 1440 : timeToMinutes(value);
 }
 
+export function normalizeAvailabilityTimeRows(rows: Array<{ start: string; end: string }>) {
+  return rows.flatMap((row) => {
+    const start = row.start.trim();
+    const end = row.end.trim();
+    if (!start && !end) return [];
+    if (!start || !end) throw new Error("Finish the incomplete time or remove it.");
+    return [{ startMinute: timeToMinutes(start), endMinute: availabilityEndToMinutes(end) }];
+  });
+}
+
 export function minutesToAvailabilityEnd(value: number) {
   return value === 1440 ? "00:00" : minutesToTime(value);
 }

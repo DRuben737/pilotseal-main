@@ -150,7 +150,11 @@
 .quickAvailability > button { width: 100%; min-height: 48px; justify-content: center; }
 .individualDays { margin-top: 22px; border-top: 1px solid #e5e5ea; }
 .individualDays summary { padding: 18px 0; color: #0066cc; font-size: 13px; cursor: pointer; list-style-position: inside; }
-.availabilityStudentName { margin: 0 0 8px; color: var(--schedule-ink); font-size: 13px; font-weight: 600; }
+.availabilityStudentBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 620px; margin-bottom: 8px; }
+.availabilityStudentName { margin: 0; color: var(--schedule-ink); font-size: 13px; font-weight: 600; }
+.weeklyTargetField { display: flex; align-items: center; gap: 6px; color: var(--schedule-muted); font-size: 12px; white-space: nowrap; }
+.weeklyTargetField input { width: 50px; min-height: 32px; border: 1px solid #cfd8e3; border-radius: 6px; background: #fff; padding: 4px 6px; color: var(--schedule-ink); font: inherit; text-align: center; }
+.weeklyTargetField input:focus-visible { outline: 2px solid #0a66c2; outline-offset: 1px; }
 .availabilityModeBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--schedule-line); }
 .modeSwitch { display: inline-flex; border: 1px solid #cfd8e3; }
 .modeSwitch button { min-height: 32px; padding: 5px 10px; border: 0; border-right: 1px solid #cfd8e3; background: #fff; color: var(--schedule-muted); font: inherit; font-size: 12px; cursor: pointer; }
@@ -269,6 +273,7 @@
   .weeklyEditorRow input { width: 100%; }
   .weeklyEditorRow .nativePicker { min-height: 36px; }
   .availabilityModeBar { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .availabilityStudentBar { align-items: flex-start; flex-direction: column; gap: 7px; }
   .teachingTimeGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .teachingLimit { max-width: none; }
   .accessPickerList { max-height: 45dvh; }
