@@ -1164,7 +1164,8 @@ export default function CfiScheduleManager() {
       aircraft_conflict: false, start_at: item.start_at, end_at: item.end_at, note: item.note, auto_generated: false, status: "scheduled", is_own: true })),
   ] : entries;
   const visibleEntriesForDate = (day: Date) => calendarEntries.filter(entry =>
-    (isCfiView || calendarView || entry.is_own) && entry.status === "scheduled"
+    (calendarView || (entry.entry_type === "lesson" && (isCfiView || entry.is_own)))
+    && entry.status === "scheduled"
     && Date.parse(entry.start_at) < new Date(`${localDateKey(addCalendarDays(day,1))}T00:00:00`).getTime()
     && Date.parse(entry.end_at) > new Date(`${localDateKey(day)}T00:00:00`).getTime()
   ).sort((a,b)=>Date.parse(a.start_at)-Date.parse(b.start_at));
