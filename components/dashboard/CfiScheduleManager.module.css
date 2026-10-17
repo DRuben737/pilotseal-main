@@ -159,9 +159,10 @@
 .repeatToggle { display: flex; align-items: center; gap: 7px; color: var(--schedule-muted); font-size: 12px; cursor: pointer; }
 .repeatToggle input { margin: 0; }
 .weeklyEditor { max-width: 620px; border-top: 1px solid var(--schedule-line); }
-.weeklyEditorDay { display: grid; grid-template-columns: 118px minmax(0,1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--schedule-line); }
+.weeklyEditorDay { display: grid; grid-template-columns: 148px minmax(0,1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--schedule-line); }
 .weeklyEditorDay > header { display: flex; align-items: center; justify-content: space-between; gap: 6px; align-self: start; min-height: 38px; }
 .weeklyEditorDay > header strong { font-size: 13px; font-weight: 600; }
+.weeklyEditorDay > header .textButton { min-height: 32px; padding: 4px 6px; white-space: nowrap; }
 .weeklyEditorRows { display: grid; gap: 6px; }
 .weeklyEditorRow { display: grid; grid-template-columns: 132px 12px 132px auto; align-items: center; justify-content: start; gap: 7px; }
 .weeklyEditorRow input { width: 132px; min-width: 0; }
