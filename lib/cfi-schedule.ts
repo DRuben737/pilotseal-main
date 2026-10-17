@@ -837,9 +837,6 @@ export function generateAutomaticSchedule(input: {
           if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;
           const teachingMinutes = setting.durationMin + items.reduce((total, item) => total + (item.end.getTime() - item.start.getTime()) / 60_000, 0);
           if (teachingMinutes > rules.max_daily_teaching_min) continue;
-          const spanStart = items.reduce((earliest, item) => Math.min(earliest, item.start.getTime()), start.getTime());
-          const spanEnd = items.reduce((latest, item) => Math.max(latest, item.end.getTime()), end.getTime());
-          if ((spanEnd - spanStart) / 60_000 > rules.max_daily_span_min) continue;
           let aircraft: ScheduleAircraft | undefined;
           if (setting.lessonKind === "flight") {
             aircraft = selectedAircraft.find((candidate) => {
@@ -920,7 +917,7 @@ export function generateAutomaticSchedule(input: {
           ? "No availability is set for the selected days."
           : setting.lessonKind === "flight" && selectedAircraft.length === 0
             ? "Choose at least one aircraft for Flight lessons."
-            : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, aircraft availability, and the daily teaching span.",
+            : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, and aircraft availability.",
       });
     }
   }

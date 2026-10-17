@@ -132,6 +132,18 @@ function lessonDropMode(clientY: number, top: number, height: number, allowSwap:
   return "swap";
 }
 
+function updateTeachingWindow(current: TeachingRules, startMinute: number, endMinute: number): TeachingRules {
+  const windowMinutes = endMinute - startMinute;
+  return {
+    ...current,
+    start_minute: startMinute,
+    end_minute: endMinute,
+    latest_start_minute: Math.max(startMinute, endMinute - 1),
+    max_daily_span_min: Math.max(1, windowMinutes),
+    max_daily_teaching_min: windowMinutes > 0 ? Math.min(current.max_daily_teaching_min, windowMinutes) : current.max_daily_teaching_min,
+  };
+}
+
 export default function CfiScheduleManager() {
   const { session } = useAuthSession();
   const userId = session?.user?.id ?? "";
@@ -931,7 +943,8 @@ export default function CfiScheduleManager() {
 
   function openTeachingDrawer() {
     setError("");
-    setRuleForm({ ...teachingRules });
+    const teachingWindowMinutes = Math.max(1, teachingRules.end_minute - teachingRules.start_minute);
+    setRuleForm({ ...teachingRules, max_daily_span_min: teachingWindowMinutes, max_daily_teaching_min: Math.min(teachingRules.max_daily_teaching_min, teachingWindowMinutes) });
     setTimeOffForm({ startDate: selectedDate, endDate: selectedDate, start: minutesToTime(teachingRules.start_minute), end: minutesToAvailabilityEnd(teachingRules.end_minute), allDay: true, note: "" });
     setDrawer("teaching");
   }
@@ -953,10 +966,12 @@ export default function CfiScheduleManager() {
       ...ruleForm,
       cfi_user_id: userId,
       latest_start_minute: Math.max(ruleForm.start_minute, ruleForm.end_minute - 1),
+      max_daily_span_min: ruleForm.end_minute - ruleForm.start_minute,
       weekdays: [...new Set(ruleForm.weekdays)].sort((a, b) => a - b),
     };
-    if (!normalized.weekdays.length || normalized.end_minute <= normalized.start_minute || normalized.max_daily_span_min < 1 || normalized.max_daily_span_min > 1440 || normalized.max_daily_teaching_min < 1 || normalized.max_daily_teaching_min > 1440) {
-      setError("Choose at least one day, an end after the start, and daily limits up to 24 hours.");
+    const teachingWindowMinutes = normalized.end_minute - normalized.start_minute;
+    if (!normalized.weekdays.length || teachingWindowMinutes < 1 || normalized.max_daily_teaching_min < 1 || normalized.max_daily_teaching_min > teachingWindowMinutes) {
+      setError("Choose at least one day, an end after the start, and a daily teaching limit within those hours.");
       return;
     }
     setSaving(true);
@@ -1413,11 +1428,13 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex justify-end gap-2"><button className="ghost-button" type="button" onClick={() => setDrawer(null)}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={requestPermissionApply}>Apply changes</button></div>
       </DetailDrawer>
 
-      <DetailDrawer compact open={drawer === "availability"} onClose={() => setDrawer(null)} title="Availability" description={availabilityScope === "weekly" ? "Edit the whole week." : "Override one date."} width={availabilityScope === "weekly" ? "wide" : undefined}>
+      <DetailDrawer compact open={drawer === "availability"} onClose={() => setDrawer(null)} title="Availability" description={availabilityScope === "weekly" ? "Edit the whole week." : "Override one date."}>
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
-        {isCfiView ? <p className="mb-3 text-sm font-semibold">{cfiAccess.find((item) => item.student_user_id === availabilityStudentId)?.student_name}</p> : null}
-        <div className="mb-3 flex gap-2"><button type="button" className={availabilityScope === "weekly" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("weekly", availabilityWeekday)}>Usual week</button><button type="button" className={availabilityScope === "date" ? "primary-button" : "ghost-button"} onClick={() => openAvailabilityDrawer("date", 1, availabilityDate)}>One date</button></div>
-        {availabilityScope === "weekly" ? <label className="mb-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={autofillDates} onChange={(event) => setAutofillDates(event.target.checked)} />Repeat for 4 weeks</label> : null}
+        {isCfiView ? <p className={styles.availabilityStudentName}>{cfiAccess.find((item) => item.student_user_id === availabilityStudentId)?.student_name}</p> : null}
+        <div className={styles.availabilityModeBar}>
+          <div className={styles.modeSwitch} aria-label="Availability scope"><button type="button" aria-pressed={availabilityScope === "weekly"} onClick={() => openAvailabilityDrawer("weekly", availabilityWeekday)}>Usual week</button><button type="button" aria-pressed={availabilityScope === "date"} onClick={() => openAvailabilityDrawer("date", 1, availabilityDate)}>One date</button></div>
+          {availabilityScope === "weekly" ? <label className={styles.repeatToggle}><input type="checkbox" checked={autofillDates} onChange={(event) => setAutofillDates(event.target.checked)} />Fill next 4 weeks</label> : null}
+        </div>
         {availabilityScope === "weekly" ? <div className={styles.weeklyEditor}>{weekdayLabels.map((label, index) => {
           const weekday = index + 1;
           const rows = weeklyAvailabilityRows[weekday];
@@ -1472,9 +1489,9 @@ export default function CfiScheduleManager() {
         <section className={styles.formSection}>
           <h3 className="text-sm font-semibold text-slate-900">Usual week</h3>
           <div className={styles.compactChecks} role="group" aria-label="Teaching days">{weekdayLabels.map((label, index) => <label key={label}><input type="checkbox" checked={ruleForm.weekdays.includes(index + 1)} onChange={(event) => setRuleForm((current) => ({ ...current, weekdays: event.target.checked ? [...current.weekdays, index + 1] : current.weekdays.filter((day) => day !== index + 1) }))} />{label.slice(0, 3)}</label>)}</div>
-          <div className="mt-3 grid grid-cols-2 gap-3"><label className="saas-field"><span>Start</span><input className={styles.nativePicker} type="time" value={minutesToTime(ruleForm.start_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => setRuleForm((current) => ({ ...current, start_minute: timeToMinutes(event.target.value) }))} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} type="time" value={minutesToAvailabilityEnd(ruleForm.end_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { const endMinute = availabilityEndToMinutes(event.target.value); setRuleForm((current) => ({ ...current, end_minute: endMinute, latest_start_minute: Math.max(current.start_minute, endMinute - 1) })); }} /></label></div>
-          <div className="mt-3 grid grid-cols-2 gap-3"><label className="saas-field"><span>Maximum daily span</span><input type="number" inputMode="decimal" step={0.25} value={ruleForm.max_daily_span_min / 60} onChange={(event) => setRuleForm((current) => ({ ...current, max_daily_span_min: Math.round(Number(event.target.value) * 60) }))} /></label><label className="saas-field"><span>Maximum teaching hours</span><input type="number" inputMode="decimal" step={0.25} value={ruleForm.max_daily_teaching_min / 60} onChange={(event) => setRuleForm((current) => ({ ...current, max_daily_teaching_min: Math.round(Number(event.target.value) * 60) }))} /></label></div>
-          <div className="mt-3 flex justify-end"><button className="primary-button" type="button" disabled={saving} onClick={() => void confirmTeachingRules()}>{saving ? "Saving…" : "Save usual week"}</button></div>
+          <div className={styles.teachingTimeGrid}><label className="saas-field"><span>Start</span><input className={styles.nativePicker} type="time" value={minutesToTime(ruleForm.start_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { const startMinute = timeToMinutes(event.target.value); setRuleForm((current) => updateTeachingWindow(current, startMinute, current.end_minute)); }} /></label><label className="saas-field"><span>End</span><input className={styles.nativePicker} type="time" value={minutesToAvailabilityEnd(ruleForm.end_minute)} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { const endMinute = availabilityEndToMinutes(event.target.value); setRuleForm((current) => updateTeachingWindow(current, current.start_minute, endMinute)); }} /></label></div>
+          <label className={`saas-field ${styles.teachingLimit}`}><span>Daily teaching limit</span><input type="number" inputMode="decimal" min={0.25} max={Math.max(0.25, (ruleForm.end_minute - ruleForm.start_minute) / 60)} step={0.25} value={ruleForm.max_daily_teaching_min / 60} onChange={(event) => setRuleForm((current) => ({ ...current, max_daily_teaching_min: Math.round(Number(event.target.value) * 60) }))} /></label>
+          <div className={styles.formActions}><button className="primary-button" type="button" disabled={saving} onClick={() => void confirmTeachingRules()}>{saving ? "Saving…" : "Save usual week"}</button></div>
         </section>
         <section className={styles.formSection}>
           <h3 className="text-sm font-semibold text-slate-900">Unavailable time</h3><p className="mt-1 text-sm text-slate-600">Use the same date for a short break, or a date range for vacation.</p>
