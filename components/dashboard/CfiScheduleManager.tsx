@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import {
   ConfirmDialog,
@@ -108,7 +109,6 @@ type DrawerMode =
   | "aircraft-preferences"
   | "lesson"
   | "subject-picker"
-  | "subject-preview"
   | "block"
   | "auto"
   | "teaching"
@@ -219,6 +219,7 @@ function updateTeachingWindow(
 }
 
 export default function CfiScheduleManager() {
+  const pathname = usePathname();
   const { session } = useAuthSession();
   const userId = session?.user?.id ?? "";
   const [featureEnabled, setFeatureEnabled] = useState<boolean | null>(null);
@@ -252,6 +253,7 @@ export default function CfiScheduleManager() {
   const [agendaDays, setAgendaDays] = useState(14);
   const [layout, setLayout] = useState<"list" | "calendar">("calendar");
   const layoutWasSelected = useRef(false);
+  const pendingReturn = useRef<{ entryId: string; scrollY: number } | null>(null);
   const [eligibility, setEligibility] = useState<ScheduleEligibility | null>(
     null,
   );
@@ -351,7 +353,6 @@ export default function CfiScheduleManager() {
     [],
   );
   const [subjectSearch, setSubjectSearch] = useState("");
-  const [previewSubjectId, setPreviewSubjectId] = useState("");
   const [blockForm, setBlockForm] = useState({
     date: localDateKey(new Date()),
     start: "07:00",
@@ -453,12 +454,51 @@ export default function CfiScheduleManager() {
         ].some((value) => value.toLowerCase().includes(normalized)),
     );
   }, [subjectSearch, trainingSubjects]);
-  const previewTrainingSubject =
-    trainingSubjects.find((subject) => subject.id === previewSubjectId) ??
-    detailEntry?.training_subjects?.find(
-      (subject) => subject.subject_id === previewSubjectId,
-    )?.subject_snapshot ??
-    null;
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem("pilotseal:schedule-return");
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as Record<string, unknown>;
+      if (saved.pathname !== pathname) return;
+      if (typeof saved.selectedDate === "string")
+        setSelectedDate(saved.selectedDate);
+      if (typeof saved.agendaStart === "string")
+        setAgendaStart(saved.agendaStart);
+      if (typeof saved.agendaDays === "number") setAgendaDays(saved.agendaDays);
+      if (saved.layout === "list" || saved.layout === "calendar") {
+        layoutWasSelected.current = true;
+        setLayout(saved.layout);
+      }
+      if (typeof saved.weekStart === "string") {
+        const restoredWeek = new Date(`${saved.weekStart}T12:00:00`);
+        if (!Number.isNaN(restoredWeek.getTime())) setWeekStart(restoredWeek);
+      }
+      if (typeof saved.entryId === "string") {
+        pendingReturn.current = {
+          entryId: saved.entryId,
+          scrollY: typeof saved.scrollY === "number" ? saved.scrollY : 0,
+        };
+      }
+    } catch {
+      sessionStorage.removeItem("pilotseal:schedule-return");
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    const pending = pendingReturn.current;
+    if (!pending || loading) return;
+    const restored = entries.find((entry) => entry.id === pending.entryId);
+    if (!restored) return;
+    // Returning from a Training Guide lesson should restore the lesson itself,
+    // not let the automatic availability reminder replace its details drawer.
+    promptedReview.current = activeCfiId;
+    setDetailEntry(restored);
+    setDrawer("details");
+    pendingReturn.current = null;
+    sessionStorage.removeItem("pilotseal:schedule-return");
+    requestAnimationFrame(() => window.scrollTo({ top: pending.scrollY }));
+  }, [activeCfiId, entries, loading]);
   useEffect(() => {
     const phoneViewport = window.matchMedia("(max-width: 600px)");
     const applyResponsiveDefault = () => {
@@ -3283,44 +3323,30 @@ export default function CfiScheduleManager() {
                     return (
                       <div
                         key={item.subject_id}
-                        className="border border-slate-200 bg-slate-50 p-3 text-sm"
+                        className="text-sm"
                       >
-                        <strong>
-                          {snapshot?.certificate_code
-                            ? `${snapshot.certificate_code} · `
-                            : ""}
-                          {snapshot?.title ?? "Training subject"}
-                        </strong>
-                        {snapshot?.task_code ? (
-                          <span className="ml-2 font-mono text-xs text-slate-500">
-                            {snapshot.task_code}
-                          </span>
-                        ) : null}
-                        {snapshot?.components?.length ? (
-                          <p className="mt-1 text-xs text-slate-600">
-                            {snapshot.components
-                              .map((component) => component.title)
-                              .join(" · ")}
-                          </p>
-                        ) : null}
-                        {item.personal_note ? (
-                          <p className="mt-2 whitespace-pre-wrap border-l-2 border-blue-500 pl-2 text-slate-700">
-                            {item.personal_note}
-                          </p>
-                        ) : null}
-                        {snapshot ? (
-                          <button
-                            type="button"
-                            className="mt-2 text-xs font-semibold text-blue-700"
-                            onClick={() => {
-                              setPreviewSubjectId(item.subject_id);
-                              setDrawerReturn("details");
-                              setDrawer("subject-preview");
-                            }}
-                          >
-                            View standards and preparation
-                          </button>
-                        ) : null}
+                        <Link
+                          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 border border-slate-200 bg-white px-3 py-2 font-semibold text-blue-800 transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                          href={`/console/personal/training-guide/${item.subject_id}?instructor=${encodeURIComponent(detailEntry.assigned_instructor_user_id ?? item.instructor_guide_snapshot?.instructor_user_id ?? detailEntry.scheduled_by_user_id ?? "")}${item.organization_id ? `&organization=${encodeURIComponent(item.organization_id)}` : ""}&returnTo=${encodeURIComponent(pathname)}`}
+                          onClick={() => {
+                            sessionStorage.setItem(
+                              "pilotseal:schedule-return",
+                              JSON.stringify({
+                                pathname,
+                                selectedDate,
+                                layout,
+                                weekStart: localDateKey(weekStart),
+                                agendaStart,
+                                agendaDays,
+                                entryId: detailEntry.id,
+                                scrollY: window.scrollY,
+                              }),
+                            );
+                          }}
+                        >
+                          <span>{snapshot?.title ?? "Training subject"}</span>
+                          <span aria-hidden="true">→</span>
+                        </Link>
                       </div>
                     );
                   })}
@@ -4095,20 +4121,12 @@ export default function CfiScheduleManager() {
                       className="border border-slate-200 bg-white p-2"
                     >
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 text-left text-sm font-semibold text-blue-800"
-                          onClick={() => {
-                            setPreviewSubjectId(item.subject_id);
-                            setDrawerReturn("lesson");
-                            setDrawer("subject-preview");
-                          }}
-                        >
+                        <strong className="min-w-0 flex-1 text-left text-sm font-semibold text-slate-900">
                           {subject?.certificate_code
                             ? `${subject.certificate_code} · `
                             : ""}
                           {subject?.title ?? "Training subject"}
-                        </button>
+                        </strong>
                         <button
                           type="button"
                           className="text-xs text-slate-600"
@@ -4336,17 +4354,6 @@ export default function CfiScheduleManager() {
                       </small>
                     </span>
                   </label>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-blue-700"
-                    onClick={() => {
-                      setPreviewSubjectId(subject.id);
-                      setDrawerReturn("subject-picker");
-                      setDrawer("subject-preview");
-                    }}
-                  >
-                    Preview
-                  </button>
                 </div>
               );
             })
@@ -4361,101 +4368,6 @@ export default function CfiScheduleManager() {
             Done · {lesson.trainingSubjects.length} selected
           </button>
         </div>
-      </DetailDrawer>
-
-      <DetailDrawer
-        compact
-        open={drawer === "subject-preview" && Boolean(previewTrainingSubject)}
-        onClose={() => {
-          setDrawer(drawerReturn ?? "lesson");
-          setDrawerReturn(null);
-        }}
-        title={previewTrainingSubject?.title ?? "Training subject"}
-        description={
-          previewTrainingSubject
-            ? `${previewTrainingSubject.certificate_code} · ${previewTrainingSubject.task_code} · ${previewTrainingSubject.acs_document}`
-            : undefined
-        }
-      >
-        {previewTrainingSubject ? (
-          <div className="grid gap-4">
-            {previewTrainingSubject.components.length ? (
-              <div className="flex flex-wrap gap-2">
-                {previewTrainingSubject.components.map((component) => (
-                  <span
-                    key={component.key}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
-                  >
-                    {component.title}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {(["knowledge", "risk_management", "skills"] as const).map(
-              (group) => (
-                <section key={group} className="border border-slate-200">
-                  <h3 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    {group === "risk_management" ? "Risk Management" : group}
-                  </h3>
-                  <div className="divide-y divide-slate-100">
-                    {previewTrainingSubject.standards[group].map((standard) => (
-                      <div
-                        key={standard.code}
-                        className="grid gap-1 px-3 py-2 text-sm sm:grid-cols-[7rem_1fr]"
-                      >
-                        <strong className="font-mono text-xs text-slate-700">
-                          {standard.code}
-                        </strong>
-                        <span>{standard.text}</span>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ),
-            )}
-            <section>
-              <h3 className="mb-2 text-sm font-semibold">
-                Official references
-              </h3>
-              <div className="divide-y divide-slate-100 border border-slate-200">
-                {previewTrainingSubject.references.map((reference) => (
-                  <a
-                    key={reference.id ?? reference.title}
-                    href={reference.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
-                  >
-                    <span>{reference.title}</span>
-                    <span>
-                      {[reference.chapter, reference.page_label]
-                        .filter(Boolean)
-                        .join(" · ")}{" "}
-                      ↗
-                    </span>
-                  </a>
-                ))}
-              </div>
-            </section>
-            {drawerReturn === "subject-picker" || drawerReturn === "lesson" ? (
-              <button
-                type="button"
-                className="secondary-button justify-self-start"
-                onClick={() => {
-                  toggleLessonSubject(previewTrainingSubject);
-                  setDrawer(drawerReturn ?? "lesson");
-                  setDrawerReturn(null);
-                }}
-              >
-                {lesson.trainingSubjects.some(
-                  (item) => item.subject_id === previewTrainingSubject.id,
-                )
-                  ? "Remove from lesson"
-                  : "Add to lesson"}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
       </DetailDrawer>
 
       <DetailDrawer

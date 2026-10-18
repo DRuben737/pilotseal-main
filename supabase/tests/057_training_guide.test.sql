@@ -7,10 +7,14 @@ select has_table('public', 'organization_training_guides', 'organization guidanc
 select has_table('public', 'instructor_training_guides', 'instructor guidance exists');
 select has_table('public', 'training_subject_notes', 'organization-scoped student notes exist');
 select has_table('public', 'cfi_schedule_event_subjects', 'schedule subject links exist');
-select has_table('private', 'training_guide_student_assignments', 'durable student subject access exists');
+select has_table('private', 'training_guide_subject_access', 'permanent student subject access exists');
+select has_table('private', 'training_guide_instructor_access', 'permanent instructor module access exists');
+select has_table('private', 'training_guide_student_progress', 'guided study progress exists');
 select has_function('public', 'publish_cfi_schedule_draft_v3', array['bigint','uuid','jsonb'], 'schedule publishing accepts training subjects');
 select has_function('public', 'list_my_instructor_training_guides', array['uuid','uuid'], 'students can read guidance from assigned instructors');
-select has_function('public', 'list_my_training_guide_subjects', array['uuid'], 'student catalog is derived from scheduled lessons');
+select has_function('public', 'list_my_training_guide_subjects', array['uuid'], 'student catalog is derived from permanent access');
+select has_function('public', 'get_my_training_guide_subject', array['uuid'], 'student can open an assigned subject');
+select has_function('public', 'save_my_training_guide_progress', array['uuid','text','text[]'], 'student can save a study bookmark');
 
 select set_config('training_guide.cfi',(select id::text from public.profiles where email='instructor.one@example.test'),true);
 select set_config('training_guide.student',(select id::text from public.profiles where email='pilot.one@example.test'),true);
@@ -38,6 +42,7 @@ select is(
 
 insert into public.organization_members(organization_id,user_id,role,teaching_role,added_by)
 values
+  (current_setting('training_guide.organization')::uuid,current_setting('training_guide.admin')::uuid,'member','instructor',current_setting('training_guide.admin')::uuid),
   (current_setting('training_guide.organization')::uuid,current_setting('training_guide.cfi')::uuid,'member','instructor',current_setting('training_guide.admin')::uuid),
   (current_setting('training_guide.organization')::uuid,current_setting('training_guide.student')::uuid,'member','student',current_setting('training_guide.admin')::uuid)
 on conflict(organization_id,user_id) do update
@@ -86,15 +91,39 @@ values(
 );
 
 select set_config('request.jwt.claim.sub',current_setting('training_guide.cfi'),true);
-insert into public.instructor_training_guides(organization_id,instructor_user_id,subject_id,explanation,key_points,resources)
+insert into public.instructor_training_guides(organization_id,instructor_user_id,subject_id,explanation,key_points,resources,steps)
 values(
   current_setting('training_guide.organization')::uuid,
   auth.uid(),
   current_setting('training_guide.subject')::uuid,
   'Instructor explanation',
   array['Correct for wind early'],
-  '[{"title":"Video","url":"https://www.youtube.com/watch?v=test"}]'::jsonb
+  '[{"title":"Video","url":"https://www.youtube.com/watch?v=test"}]'::jsonb,
+  '[{"id":"read-wind","title":"Read the wind","prepare":"Read the assigned AFH pages.","method":"Mark the wind direction for every leg.","focus_questions":["Where is groundspeed highest?"],"expected_result":"Explain the correction without notes.","component_keys":["rectangular-course"],"resources":[]},{"id":"chair-fly","title":"Chair-fly the maneuver","prepare":"Sketch the ground track.","method":"Talk through every correction.","focus_questions":[],"expected_result":"Describe all four legs.","component_keys":["rectangular-course"],"resources":[]}]'::jsonb
 );
+
+select set_config('request.jwt.claim.sub',current_setting('training_guide.admin'),true);
+insert into public.instructor_training_guides(organization_id,instructor_user_id,subject_id,explanation,key_points,resources,steps)
+values(
+  current_setting('training_guide.organization')::uuid,
+  auth.uid(),
+  current_setting('training_guide.subject')::uuid,
+  'Second instructor explanation',
+  array[]::text[],
+  '[]'::jsonb,
+  '[{"id":"admin-step","title":"Second instructor item","prepare":"Read the assigned material.","method":"Write a short outline.","focus_questions":["What changes with the wind?"],"expected_result":"Explain the correction.","component_keys":[],"resources":[]}]'::jsonb
+);
+
+reset role;
+select private.grant_training_guide_access(
+  current_setting('training_guide.student')::uuid,
+  current_setting('training_guide.subject')::uuid,
+  current_setting('training_guide.admin')::uuid,
+  current_setting('training_guide.organization')::uuid,
+  timezone('utc', now())
+);
+set local role authenticated;
+select set_config('request.jwt.claim.sub',current_setting('training_guide.cfi'),true);
 
 select set_config('training_guide.revision',public.get_cfi_schedule_snapshot_v2('2026-10-25','2026-10-27')->>'revision',true);
 select lives_ok($$select public.publish_cfi_schedule_draft_v3(
@@ -150,7 +179,7 @@ select lives_ok($$select public.publish_cfi_schedule_draft_v3(
       'personal_note','Cancelled lesson subject'
     ))
   ))
-)$$,'cancelling a lesson removes it from Training Guide access');
+)$$,'cancelling a lesson does not fail after permanent access was granted');
 
 select is(
   (select subject_snapshot->>'acs_document' from public.cfi_schedule_event_subjects where event_id='57000000-0000-4000-8000-000000000011'),
@@ -166,18 +195,86 @@ select is(
 select set_config('request.jwt.claim.sub',current_setting('training_guide.student'),true);
 select is(
   jsonb_array_length(public.list_my_training_guide_subjects(current_setting('training_guide.organization')::uuid)),
-  1,
-  'student catalog includes scheduled subjects but excludes unrelated and cancelled subjects'
+  2,
+  'every published assignment remains permanently available after cancellation'
 );
 select is(
-  public.list_my_training_guide_subjects(current_setting('training_guide.organization')::uuid)->0->'subject'->>'task_code',
+  (select item->'subject'->>'task_code'
+   from jsonb_array_elements(public.list_my_training_guide_subjects(current_setting('training_guide.organization')::uuid)) item
+   where item->'subject'->>'task_code' = 'PA.V.B'),
   'PA.V.B',
   'student catalog returns the scheduled subject'
 );
 select is(
-  public.list_my_training_guide_subjects(current_setting('training_guide.organization')::uuid)->0->'subject'->'study_guide'->>'why',
+  (select item->'subject'->'study_guide'->>'why'
+   from jsonb_array_elements(public.list_my_training_guide_subjects(current_setting('training_guide.organization')::uuid)) item
+   where item->'subject'->>'task_code' = 'PA.V.B'),
   'They build wind awareness, coordinated control, division of attention, and the ground-track judgment used in the airport traffic pattern.',
   'student catalog includes the guided why explanation'
+);
+select is(
+  jsonb_array_length(public.get_my_training_guide_subject(current_setting('training_guide.subject')::uuid)->'instructor_modules'),
+  2,
+  'all assigned instructor content is exposed as separate modules inside the subject'
+);
+select is(
+  (select module->'guide'->'steps'->0->>'id'
+   from jsonb_array_elements(public.get_my_training_guide_subject(current_setting('training_guide.subject')::uuid)->'instructor_modules') module
+   where module->>'instructor_user_id' = current_setting('training_guide.cfi')),
+  'read-wind',
+  'the student receives the instructor guided-study steps'
+);
+select set_config(
+  'training_guide.module_access',
+  (select module->>'access_id'
+   from jsonb_array_elements(public.get_my_training_guide_subject(current_setting('training_guide.subject')::uuid)->'instructor_modules') module
+   where module->>'instructor_user_id' = current_setting('training_guide.cfi')),
+  true
+);
+select lives_ok(
+  format(
+    'select public.save_my_training_guide_progress(%L,%L,array[%L])',
+    current_setting('training_guide.module_access'),
+    'chair-fly',
+    'read-wind'
+  ),
+  'student saves a cross-device bookmark and completed step'
+);
+select is(
+  (select module->'progress'->>'current_step_id'
+   from jsonb_array_elements(public.get_my_training_guide_subject(current_setting('training_guide.subject')::uuid)->'instructor_modules') module
+   where module->>'instructor_user_id' = current_setting('training_guide.cfi')),
+  'chair-fly',
+  'the current study step is restored from durable progress'
+);
+select is(
+  (select module->'progress'->'completed_step_ids'->>0
+   from jsonb_array_elements(public.get_my_training_guide_subject(current_setting('training_guide.subject')::uuid)->'instructor_modules') module
+   where module->>'instructor_user_id' = current_setting('training_guide.cfi')),
+  'read-wind',
+  'completed steps are restored from durable progress'
+);
+select set_config(
+  'training_guide.second_module_access',
+  (select module->>'access_id'
+   from jsonb_array_elements(public.get_my_training_guide_subject(current_setting('training_guide.subject')::uuid)->'instructor_modules') module
+   where module->>'instructor_user_id' = current_setting('training_guide.admin')),
+  true
+);
+select lives_ok(
+  format(
+    'select public.save_my_training_guide_progress(%L,%L,array[]::text[])',
+    current_setting('training_guide.second_module_access'),
+    'admin-step'
+  ),
+  'the second instructor module saves its own bookmark'
+);
+select is(
+  (select module->'progress'->>'current_step_id'
+   from jsonb_array_elements(public.get_my_training_guide_subject(current_setting('training_guide.subject')::uuid)->'instructor_modules') module
+   where module->>'instructor_user_id' = current_setting('training_guide.cfi')),
+  'chair-fly',
+  'saving a second instructor module does not overwrite the first module progress'
 );
 select is(
   (select item->>'personal_note'
@@ -248,13 +345,8 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub',current_setting('training_guide.student'),true);
 select is(
   jsonb_array_length(public.list_my_training_guide_subjects(current_setting('training_guide.organization')::uuid)),
-  1,
-  'completed subject access survives Schedule history cleanup'
-);
-select is(
-  public.list_my_training_guide_subjects(current_setting('training_guide.organization')::uuid)->0->>'access_state',
-  'completed',
-  'a past retained assignment is shown as completed'
+  2,
+  'permanent subject access survives Schedule history cleanup without a course status'
 );
 
 reset role;

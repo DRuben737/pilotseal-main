@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useEffect,
   useMemo,
@@ -91,6 +92,30 @@ const blankSubject = (): TrainingSubject => ({
   sort_order: 0,
   references: [],
 });
+
+type InstructorStepDraft = {
+  id: string;
+  title: string;
+  prepare: string;
+  method: string;
+  focusQuestions: string;
+  expectedResult: string;
+  componentKeys: string[];
+  resources: string;
+};
+
+function blankInstructorStep(): InstructorStepDraft {
+  return {
+    id: crypto.randomUUID(),
+    title: "",
+    prepare: "",
+    method: "",
+    focusQuestions: "",
+    expectedResult: "",
+    componentKeys: [],
+    resources: "",
+  };
+}
 
 function errorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
@@ -807,6 +832,7 @@ export default function TrainingGuideManager({
     explanation: "",
     keyPoints: "",
     resources: "",
+    steps: [] as InstructorStepDraft[],
   });
   const [communityForm, setCommunityForm] = useState({
     id: "",
@@ -816,6 +842,7 @@ export default function TrainingGuideManager({
   const [studentNoteForm, setStudentNoteForm] = useState({
     id: "",
     studentUserId: "",
+    stepId: "",
     body: "",
   });
 
@@ -832,9 +859,8 @@ export default function TrainingGuideManager({
     workspace === "organization" ? organizationId || null : null;
   const isStudentStudy = Boolean(
     workspace === "personal" &&
-    isStudent &&
-    organizationId &&
-    personalMode === "study",
+    personalMode === "study" &&
+    (isStudent || studentSubjectAccess.length > 0),
   );
   const visibleSubjects = useMemo(
     () =>
@@ -842,13 +868,6 @@ export default function TrainingGuideManager({
         ? studentSubjectAccess.map((access) => access.subject)
         : subjects,
     [isStudentStudy, studentSubjectAccess, subjects],
-  );
-  const accessBySubjectId = useMemo(
-    () =>
-      new Map(
-        studentSubjectAccess.map((access) => [access.subject.id, access]),
-      ),
-    [studentSubjectAccess],
   );
   const certificates = useMemo(
     () =>
@@ -904,7 +923,7 @@ export default function TrainingGuideManager({
       organizationId && isInstructor
         ? fetchOrganizationStudents(organizationId)
         : Promise.resolve([]),
-      workspace === "personal" && organizationId && isStudent
+      workspace === "personal"
         ? fetchMyTrainingGuideSubjects(organizationId)
         : Promise.resolve([]),
       fetchScheduleEligibility(),
@@ -1013,6 +1032,16 @@ export default function TrainingGuideManager({
       explanation: selectedInstructorGuide?.explanation ?? "",
       keyPoints: selectedInstructorGuide?.key_points.join("\n") ?? "",
       resources: resourcesToText(selectedInstructorGuide?.resources ?? []),
+      steps: (selectedInstructorGuide?.steps ?? []).map((step) => ({
+        id: step.id,
+        title: step.title,
+        prepare: step.prepare,
+        method: step.method,
+        focusQuestions: step.focus_questions.join("\n"),
+        expectedResult: step.expected_result,
+        componentKeys: [...step.component_keys],
+        resources: resourcesToText(step.resources),
+      })),
     });
     setDrawer("instructor-editor");
   }
@@ -1090,6 +1119,21 @@ export default function TrainingGuideManager({
     setSaving(true);
     setStatus("");
     try {
+      if (!instructorForm.steps.length)
+        throw new Error("Add at least one guided study item.");
+      if (
+        instructorForm.steps.some(
+          (step) =>
+            !step.title.trim() ||
+            !step.prepare.trim() ||
+            !step.method.trim() ||
+            !step.focusQuestions.trim() ||
+            !step.expectedResult.trim(),
+        )
+      )
+        throw new Error(
+          "Each item needs a title, preparation, study method, question, and expected result.",
+        );
       await saveInstructorTrainingGuide({
         id: instructorForm.id,
         organization_id: instructorGuideOrganizationId,
@@ -1098,6 +1142,19 @@ export default function TrainingGuideManager({
         explanation: instructorForm.explanation,
         key_points: instructorForm.keyPoints.split("\n"),
         resources: parseResources(instructorForm.resources),
+        steps: instructorForm.steps.map((step) => ({
+          id: step.id,
+          title: step.title.trim(),
+          prepare: step.prepare.trim(),
+          method: step.method.trim(),
+          focus_questions: step.focusQuestions
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          expected_result: step.expectedResult.trim(),
+          component_keys: step.componentKeys,
+          resources: parseResources(step.resources),
+        })),
       });
       await reload();
       setDrawer("subject");
@@ -1154,6 +1211,7 @@ export default function TrainingGuideManager({
         subject_id: selectedSubject.id,
         instructor_user_id: userId,
         student_user_id: studentNoteForm.studentUserId,
+        step_id: studentNoteForm.stepId || null,
         body: studentNoteForm.body,
       });
       await loadSubjectNotes(selectedSubject.id);
@@ -1271,8 +1329,7 @@ export default function TrainingGuideManager({
                   No subjects are available yet
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
-                  A subject appears here after it is added to one of your
-                  scheduled or completed lessons.
+                  A subject appears here after it is added to a published lesson.
                 </p>
               </div>
             ) : (
@@ -1293,33 +1350,20 @@ export default function TrainingGuideManager({
                     </span>
                   </div>
                   <div className="divide-y divide-slate-200 border border-slate-200 bg-white">
-                    {categorySubjects.map((subject) => {
-                      const access = accessBySubjectId.get(subject.id);
-                      return (
-                        <button
+                    {categorySubjects.map((subject) => (
+                        <Link
                           key={subject.id}
-                          type="button"
                           className="flex min-h-14 w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
-                          onClick={() => void openSubject(subject)}
+                          href={`/console/personal/training-guide/${subject.id}`}
                         >
                           <span>
                             <strong className="block text-sm text-slate-900">
                               {subject.title}
                             </strong>
-                            <span className="mt-0.5 block font-mono text-xs text-slate-500">
-                              {subject.task_code}
-                            </span>
                           </span>
-                          <span
-                            className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${access?.access_state === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"}`}
-                          >
-                            {access?.access_state === "completed"
-                              ? "Completed"
-                              : "Scheduled"}
-                          </span>
-                        </button>
-                      );
-                    })}
+                          <span aria-hidden="true" className="text-blue-700">→</span>
+                        </Link>
+                    ))}
                   </div>
                 </section>
               ))
@@ -1345,7 +1389,9 @@ export default function TrainingGuideManager({
 
       <DetailDrawer
         compact
-        open={drawer === "subject" && Boolean(selectedSubject)}
+        open={
+          !isStudentStudy && drawer === "subject" && Boolean(selectedSubject)
+        }
         onClose={() => setDrawer(null)}
         title={selectedSubject?.title ?? "Training subject"}
         description={
@@ -1528,6 +1574,16 @@ export default function TrainingGuideManager({
                       No instructor guidance.
                     </p>
                   )}
+                  {selectedInstructorGuide?.steps.length ? (
+                    <ol className="mt-3 divide-y divide-slate-100 border border-slate-200 bg-white">
+                      {selectedInstructorGuide.steps.map((step, index) => (
+                        <li key={step.id} className="flex min-h-9 items-center gap-3 px-3 py-2 text-sm text-slate-800">
+                          <span className="font-semibold text-slate-500">{index + 1}</span>
+                          <span>{step.title}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
                   {selectedInstructorGuide?.key_points.length ? (
                     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
                       {selectedInstructorGuide.key_points.map((point) => (
@@ -1625,6 +1681,7 @@ export default function TrainingGuideManager({
                           id: "",
                           studentUserId:
                             organizationStudents[0]?.student_user_id ?? "",
+                          stepId: "",
                           body: "",
                         });
                         setDrawer("student-note");
@@ -1664,6 +1721,7 @@ export default function TrainingGuideManager({
                                 setStudentNoteForm({
                                   id: note.id,
                                   studentUserId: note.student_user_id,
+                                  stepId: note.step_id ?? "",
                                   body: note.body,
                                 });
                                 setDrawer("student-note");
@@ -2031,67 +2089,6 @@ export default function TrainingGuideManager({
               onChange={(event) => setComponentText(event.target.value)}
             />
           </label>
-          <div className="border-t border-slate-200 pt-3">
-            <h3 className="text-sm font-semibold text-slate-950">
-              Guided study sequence
-            </h3>
-          </div>
-          <label className="saas-field">
-            <span>What it is</span>
-            <textarea
-              rows={3}
-              value={subjectForm.study_guide.what}
-              onChange={(event) =>
-                setSubjectForm((current) => ({
-                  ...current,
-                  study_guide: {
-                    ...current.study_guide,
-                    what: event.target.value,
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="saas-field">
-            <span>Why it matters</span>
-            <textarea
-              rows={3}
-              value={subjectForm.study_guide.why}
-              onChange={(event) =>
-                setSubjectForm((current) => ({
-                  ...current,
-                  study_guide: {
-                    ...current.study_guide,
-                    why: event.target.value,
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="saas-field">
-            <span>How to prepare · one step per line</span>
-            <textarea
-              rows={5}
-              value={studyHowText}
-              onChange={(event) => setStudyHowText(event.target.value)}
-            />
-          </label>
-          <label className="saas-field">
-            <span>What proficiency looks like</span>
-            <textarea
-              rows={3}
-              value={subjectForm.study_guide.proficiency}
-              onChange={(event) =>
-                setSubjectForm((current) => ({
-                  ...current,
-                  study_guide: {
-                    ...current.study_guide,
-                    proficiency: event.target.value,
-                  },
-                }))
-              }
-            />
-          </label>
           {(
             [
               "knowledge",
@@ -2243,9 +2240,9 @@ export default function TrainingGuideManager({
       >
         <div className="grid gap-3">
           <label className="saas-field">
-            <span>Explanation</span>
+            <span>Module introduction · optional</span>
             <textarea
-              rows={10}
+              rows={4}
               maxLength={12000}
               value={instructorForm.explanation}
               onChange={(event) =>
@@ -2256,19 +2253,144 @@ export default function TrainingGuideManager({
               }
             />
           </label>
-          <label className="saas-field">
-            <span>Key points · one per line</span>
-            <textarea
-              rows={6}
-              value={instructorForm.keyPoints}
-              onChange={(event) =>
-                setInstructorForm((current) => ({
-                  ...current,
-                  keyPoints: event.target.value,
-                }))
-              }
-            />
-          </label>
+          <section className="border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-950">Guided study items</h3>
+                <p className="mt-0.5 text-xs text-slate-600">Students see one item at a time in this order.</p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button min-h-9"
+                onClick={() =>
+                  setInstructorForm((current) => ({
+                    ...current,
+                    steps: [...current.steps, blankInstructorStep()],
+                  }))
+                }
+              >
+                Add item
+              </button>
+            </div>
+            <div className="mt-3 grid gap-3">
+              {!instructorForm.steps.length ? (
+                <p className="border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
+                  Add the first preparation item to publish a useful student guide.
+                </p>
+              ) : (
+                instructorForm.steps.map((step, index) => {
+                  const updateStep = (patch: Partial<InstructorStepDraft>) =>
+                    setInstructorForm((current) => ({
+                      ...current,
+                      steps: current.steps.map((item) =>
+                        item.id === step.id ? { ...item, ...patch } : item,
+                      ),
+                    }));
+                  return (
+                    <article key={step.id} className="border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <strong className="text-sm text-slate-900">Item {index + 1}</strong>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            className="ghost-button min-h-9 px-2"
+                            disabled={index === 0}
+                            aria-label={`Move item ${index + 1} up`}
+                            onClick={() =>
+                              setInstructorForm((current) => {
+                                const steps = [...current.steps];
+                                [steps[index - 1], steps[index]] = [steps[index], steps[index - 1]];
+                                return { ...current, steps };
+                              })
+                            }
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button min-h-9 px-2"
+                            disabled={index === instructorForm.steps.length - 1}
+                            aria-label={`Move item ${index + 1} down`}
+                            onClick={() =>
+                              setInstructorForm((current) => {
+                                const steps = [...current.steps];
+                                [steps[index], steps[index + 1]] = [steps[index + 1], steps[index]];
+                                return { ...current, steps };
+                              })
+                            }
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button min-h-9 px-2 text-rose-700"
+                            onClick={() => {
+                              if (!window.confirm("Remove this guided study item?")) return;
+                              setInstructorForm((current) => ({
+                                ...current,
+                                steps: current.steps.filter((item) => item.id !== step.id),
+                              }));
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3">
+                        <label className="saas-field">
+                          <span>Item title</span>
+                          <input value={step.title} maxLength={160} onChange={(event) => updateStep({ title: event.target.value })} />
+                        </label>
+                        <label className="saas-field">
+                          <span>What to prepare</span>
+                          <textarea rows={4} value={step.prepare} onChange={(event) => updateStep({ prepare: event.target.value })} />
+                        </label>
+                        <label className="saas-field">
+                          <span>How to work through it</span>
+                          <textarea rows={4} value={step.method} onChange={(event) => updateStep({ method: event.target.value })} />
+                        </label>
+                        <label className="saas-field">
+                          <span>Questions to work through · one per line</span>
+                          <textarea rows={4} value={step.focusQuestions} onChange={(event) => updateStep({ focusQuestions: event.target.value })} />
+                        </label>
+                        <label className="saas-field">
+                          <span>What the student should be able to produce</span>
+                          <textarea rows={3} value={step.expectedResult} onChange={(event) => updateStep({ expectedResult: event.target.value })} />
+                        </label>
+                        {selectedSubject?.components.length ? (
+                          <fieldset>
+                            <legend className="text-xs font-semibold text-slate-700">Related maneuvers</legend>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {selectedSubject.components.map((component) => (
+                                <label key={component.key} className="flex min-h-9 cursor-pointer items-center gap-2 border border-slate-200 bg-white px-2 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={step.componentKeys.includes(component.key)}
+                                    onChange={(event) =>
+                                      updateStep({
+                                        componentKeys: event.target.checked
+                                          ? [...step.componentKeys, component.key]
+                                          : step.componentKeys.filter((key) => key !== component.key),
+                                      })
+                                    }
+                                  />
+                                  {component.title}
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        ) : null}
+                        <label className="saas-field">
+                          <span>Item resources · title | https://…</span>
+                          <textarea rows={3} value={step.resources} onChange={(event) => updateStep({ resources: event.target.value })} />
+                        </label>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </section>
           <label className="saas-field">
             <span>Resources · title | https://…</span>
             <textarea
@@ -2328,6 +2450,25 @@ export default function TrainingGuideManager({
                   value={student.student_user_id}
                 >
                   {student.account_nickname}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="saas-field">
+            <span>Related study item · optional</span>
+            <select
+              value={studentNoteForm.stepId}
+              onChange={(event) =>
+                setStudentNoteForm((current) => ({
+                  ...current,
+                  stepId: event.target.value,
+                }))
+              }
+            >
+              <option value="">Whole subject</option>
+              {(selectedInstructorGuide?.steps ?? []).map((step) => (
+                <option key={step.id} value={step.id}>
+                  {step.title}
                 </option>
               ))}
             </select>

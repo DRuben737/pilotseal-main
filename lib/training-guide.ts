@@ -53,16 +53,37 @@ export type TrainingSubject = {
   updated_at?: string;
 };
 
-export type StudentTrainingSubjectAccess = {
-  subject: TrainingSubject;
-  access_state: "scheduled" | "completed";
-  next_scheduled_at: string | null;
-  last_flown_at: string | null;
-};
-
 export type TrainingResource = {
   title: string;
   url: string;
+};
+
+export type TrainingGuideStep = {
+  id: string;
+  title: string;
+  prepare: string;
+  method: string;
+  focus_questions: string[];
+  expected_result: string;
+  component_keys: string[];
+  resources: TrainingResource[];
+};
+
+export type TrainingGuideProgress = {
+  current_step_id: string | null;
+  completed_step_ids: string[];
+  last_opened_at: string | null;
+  updated_at: string | null;
+};
+
+export type StudentTrainingGuideModule = {
+  access_id: string;
+  instructor_user_id: string;
+  instructor_name: string;
+  organization_id: string | null;
+  last_assigned_at: string;
+  guide?: InstructorTrainingGuide;
+  progress?: TrainingGuideProgress;
 };
 
 export type OrganizationTrainingGuide = {
@@ -83,6 +104,7 @@ export type InstructorTrainingGuide = {
   explanation: string;
   key_points: string[];
   resources: TrainingResource[];
+  steps: TrainingGuideStep[];
   updated_at?: string;
 };
 
@@ -92,6 +114,7 @@ export type StudentTrainingSubjectNote = {
   subject_id: string;
   instructor_user_id: string;
   student_user_id: string;
+  step_id: string | null;
   body: string;
   updated_at: string;
 };
@@ -119,6 +142,13 @@ export type ScheduleTrainingSubject = {
     (Partial<InstructorTrainingGuide> & { instructor_name?: string }) | null;
 };
 
+export type StudentTrainingSubjectAccess = {
+  subject: TrainingSubject;
+  instructor_modules: StudentTrainingGuideModule[];
+};
+
+export type StudentTrainingGuideSubject = StudentTrainingSubjectAccess;
+
 const emptyStandards: TrainingSubject["standards"] = {
   knowledge: [],
   risk_management: [],
@@ -134,6 +164,98 @@ function normalizeResources(value: unknown): TrainingResource[] {
     const url = String(record.url ?? "").trim();
     return title && /^https:\/\//i.test(url) ? [{ title, url }] : [];
   });
+}
+
+function normalizeSteps(value: unknown): TrainingGuideStep[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const id = String(record.id ?? `step-${index + 1}`).trim();
+    const title = String(record.title ?? "").trim();
+    if (!id || !title) return [];
+    return [
+      {
+        id,
+        title,
+        prepare: String(record.prepare ?? ""),
+        method: String(record.method ?? ""),
+        focus_questions: Array.isArray(record.focus_questions)
+          ? record.focus_questions.map(String).filter(Boolean)
+          : [],
+        expected_result: String(record.expected_result ?? ""),
+        component_keys: Array.isArray(record.component_keys)
+          ? record.component_keys.map(String).filter(Boolean)
+          : [],
+        resources: normalizeResources(record.resources),
+      },
+    ];
+  });
+}
+
+function normalizeInstructorGuide(
+  row: Record<string, unknown>,
+): InstructorTrainingGuide {
+  return {
+    id: String(row.id ?? ""),
+    organization_id:
+      typeof row.organization_id === "string" ? row.organization_id : null,
+    instructor_user_id: String(row.instructor_user_id ?? ""),
+    instructor_name:
+      typeof row.instructor_name === "string" ? row.instructor_name : undefined,
+    subject_id: String(row.subject_id ?? ""),
+    explanation: String(row.explanation ?? ""),
+    key_points: Array.isArray(row.key_points) ? row.key_points.map(String) : [],
+    resources: normalizeResources(row.resources),
+    steps: normalizeSteps(row.steps),
+    updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
+  };
+}
+
+function normalizeStudentModule(
+  value: unknown,
+  subjectId: string,
+): StudentTrainingGuideModule | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const rawGuide =
+    row.guide && typeof row.guide === "object"
+      ? (row.guide as Record<string, unknown>)
+      : null;
+  const rawProgress =
+    row.progress && typeof row.progress === "object"
+      ? (row.progress as Record<string, unknown>)
+      : null;
+  return {
+    access_id: String(row.access_id ?? ""),
+    instructor_user_id: String(row.instructor_user_id ?? ""),
+    instructor_name: String(row.instructor_name ?? "Instructor"),
+    organization_id:
+      typeof row.organization_id === "string" ? row.organization_id : null,
+    last_assigned_at: String(row.last_assigned_at ?? ""),
+    guide: rawGuide
+      ? normalizeInstructorGuide({ ...rawGuide, subject_id: subjectId })
+      : undefined,
+    progress: rawProgress
+      ? {
+          current_step_id:
+            typeof rawProgress.current_step_id === "string"
+              ? rawProgress.current_step_id
+              : null,
+          completed_step_ids: Array.isArray(rawProgress.completed_step_ids)
+            ? rawProgress.completed_step_ids.map(String)
+            : [],
+          last_opened_at:
+            typeof rawProgress.last_opened_at === "string"
+              ? rawProgress.last_opened_at
+              : null,
+          updated_at:
+            typeof rawProgress.updated_at === "string"
+              ? rawProgress.updated_at
+              : null,
+        }
+      : undefined,
+  };
 }
 
 function normalizeSubject(
@@ -194,33 +316,60 @@ function normalizeSubject(
   };
 }
 
-export async function fetchMyTrainingGuideSubjects(organizationId: string) {
-  if (!organizationId) return [] as StudentTrainingSubjectAccess[];
+export async function fetchMyTrainingGuideSubjects(organizationId?: string) {
   const { data, error } = await getSupabaseClient().rpc(
     "list_my_training_guide_subjects",
-    { p_organization_id: organizationId },
+    { p_organization_id: organizationId || null },
   );
   if (error) throw error;
   return (Array.isArray(data) ? data : []).flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const record = item as Record<string, unknown>;
     if (!record.subject || typeof record.subject !== "object") return [];
-    return [
-      {
-        subject: normalizeSubject(record.subject as Record<string, unknown>),
-        access_state:
-          record.access_state === "completed" ? "completed" : "scheduled",
-        next_scheduled_at:
-          typeof record.next_scheduled_at === "string"
-            ? record.next_scheduled_at
-            : null,
-        last_flown_at:
-          typeof record.last_flown_at === "string"
-            ? record.last_flown_at
-            : null,
-      } satisfies StudentTrainingSubjectAccess,
-    ];
+    const subject = normalizeSubject(record.subject as Record<string, unknown>);
+    const modules = Array.isArray(record.instructor_modules)
+      ? record.instructor_modules
+          .map((module) => normalizeStudentModule(module, subject.id))
+          .filter((module): module is StudentTrainingGuideModule => Boolean(module))
+      : [];
+    return [{ subject, instructor_modules: modules }];
   });
+}
+
+export async function fetchMyTrainingGuideSubject(subjectId: string) {
+  const { data, error } = await getSupabaseClient().rpc(
+    "get_my_training_guide_subject",
+    { p_subject_id: subjectId },
+  );
+  if (error) throw error;
+  if (!data || typeof data !== "object")
+    throw new Error("Training subject is unavailable.");
+  const record = data as Record<string, unknown>;
+  if (!record.subject || typeof record.subject !== "object")
+    throw new Error("Training subject is unavailable.");
+  const subject = normalizeSubject(record.subject as Record<string, unknown>);
+  const modules = Array.isArray(record.instructor_modules)
+    ? record.instructor_modules
+        .map((module) => normalizeStudentModule(module, subject.id))
+        .filter((module): module is StudentTrainingGuideModule => Boolean(module))
+    : [];
+  return { subject, instructor_modules: modules } satisfies StudentTrainingGuideSubject;
+}
+
+export async function saveMyTrainingGuideProgress(input: {
+  moduleAccessId: string;
+  currentStepId: string | null;
+  completedStepIds: string[];
+}) {
+  const { error } = await getSupabaseClient().rpc(
+    "save_my_training_guide_progress",
+    {
+      p_module_access_id: input.moduleAccessId,
+      p_current_step_id: input.currentStepId,
+      p_completed_step_ids: input.completedStepIds,
+    },
+  );
+  if (error) throw error;
 }
 
 export async function fetchTrainingSubjects(
@@ -335,17 +484,7 @@ export async function fetchMyInstructorTrainingGuides(
     : query.is("organization_id", null);
   const { data, error } = await query;
   if (error) throw error;
-  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
-    id: String(row.id),
-    organization_id:
-      typeof row.organization_id === "string" ? row.organization_id : null,
-    instructor_user_id: String(row.instructor_user_id),
-    subject_id: String(row.subject_id),
-    explanation: String(row.explanation ?? ""),
-    key_points: Array.isArray(row.key_points) ? row.key_points.map(String) : [],
-    resources: normalizeResources(row.resources),
-    updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
-  }));
+  return ((data ?? []) as Record<string, unknown>[]).map(normalizeInstructorGuide);
 }
 
 export async function saveInstructorTrainingGuide(
@@ -358,6 +497,7 @@ export async function saveInstructorTrainingGuide(
     explanation: input.explanation.trim(),
     key_points: input.key_points.map((point) => point.trim()).filter(Boolean),
     resources: input.resources,
+    steps: input.steps,
   };
   const query = input.id
     ? getSupabaseClient()
@@ -403,24 +543,15 @@ export async function fetchMyAssignedInstructorTrainingGuides(
     },
   );
   if (error) throw error;
-  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
-    id: String(row.id ?? ""),
-    organization_id: String(row.organization_id ?? "") || null,
-    instructor_user_id: String(row.instructor_user_id ?? ""),
-    instructor_name: String(row.instructor_name ?? "Instructor"),
-    subject_id: String(row.subject_id ?? ""),
-    explanation: String(row.explanation ?? ""),
-    key_points: Array.isArray(row.key_points)
-      ? row.key_points.map((point) => String(point))
-      : [],
-    resources: normalizeResources(row.resources),
-    updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
-  })) satisfies InstructorTrainingGuide[];
+  return ((data ?? []) as Record<string, unknown>[]).map(
+    normalizeInstructorGuide,
+  );
 }
 
 export async function saveStudentTrainingSubjectNote(
-  input: Omit<StudentTrainingSubjectNote, "id" | "updated_at"> & {
+  input: Omit<StudentTrainingSubjectNote, "id" | "updated_at" | "step_id"> & {
     id?: string;
+    step_id?: string | null;
   },
 ) {
   const payload = {
@@ -428,6 +559,7 @@ export async function saveStudentTrainingSubjectNote(
     subject_id: input.subject_id,
     instructor_user_id: input.instructor_user_id,
     student_user_id: input.student_user_id,
+    step_id: input.step_id ?? null,
     body: input.body.trim(),
   };
   const query = input.id
