@@ -64,6 +64,10 @@ const solo={...lesson('solo','07:30','08:30'),lesson_kind:'solo',aircraft_id:'pl
 assert.equal(scheduleHasOverlap([...original,solo]),false,'a Solo lesson does not occupy the instructor');
 assert.deepEqual(scheduleConflictsForLesson([...original,solo],'solo'),[],'Solo may overlap another student’s instructed lesson');
 assert.equal(scheduleHasOverlap([...original,{...solo,student_user_id:'a'}]),true,'the same student cannot overlap their Solo with another lesson');
+const delegated={...a,id:'delegated',student_user_id:'delegated-student',assigned_instructor_user_id:'other-cfi',schedule_owner_user_id:'cfi',occupies_instructor_time:false};
+const owned={...a,id:'owned',student_user_id:'owned-student',assigned_instructor_user_id:'cfi',schedule_owner_user_id:'cfi',occupies_instructor_time:true};
+assert.equal(scheduleHasOverlap([delegated,owned]),false,'a lesson assigned to another instructor does not occupy the scheduling instructor');
+assert.equal(scheduleHasOverlap([{...delegated,student_user_id:'same-student'},{...owned,student_user_id:'same-student'}]),true,'a student still cannot have overlapping lessons with different instructors');
 // Pure scheduling checks: no database or network calls.
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');
@@ -91,6 +95,11 @@ assert.equal(generated.length,1);
 assert.equal(Date.parse(generated[0].start_at),Date.parse(a.end_at),'automatic flight starts after the aircraft block');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[]}).drafts[0].start_at,new Date(a.start_at).toISOString(),'removing the block releases the earlier slot');
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],selectedAircraftIds:['plane-2']}).drafts.length,0,'unavailable aircraft are excluded even if a stale selection includes them');
+const preferredAircraftResult=generateAutomaticSchedule({...autoInput,blocks:[],aircraft:aircraft.map((item)=>({...item,operational_status:'available'})),selectedAircraftIds:['plane-1','plane-2'],aircraftPreferences:[{cfi_user_id:'cfi',student_user_id:'a',aircraft_id:'plane-2'}]});
+assert.equal(preferredAircraftResult.drafts[0].aircraft_id,'plane-2','automatic scheduling honors a student aircraft preference within the instructor selection');
+const unmatchedPreference=generateAutomaticSchedule({...autoInput,blocks:[],aircraft:aircraft.map((item)=>({...item,operational_status:'available'})),selectedAircraftIds:['plane-1'],aircraftPreferences:[{cfi_user_id:'cfi',student_user_id:'a',aircraft_id:'plane-2'}]});
+assert.equal(unmatchedPreference.drafts.length,0,'automatic scheduling does not substitute a different aircraft when a preference is set');
+assert.match(unmatchedPreference.unscheduled[0].reason,/preferences/);
 const secondAccess={student_user_id:'b',student_name:'Second student',default_duration_min:120,default_weekly_sessions:4};
 const selective=generateAutomaticSchedule({...autoInput,access:[...autoInput.access,secondAccess],slots:[...slots,{student_user_id:'b',scope:'weekly',weekday:1,start_minute:420,end_minute:900,timezone:'America/New_York'},{student_user_id:'b',scope:'weekly',weekday:2,start_minute:420,end_minute:900,timezone:'America/New_York'}],blocks:[],requests:[{studentUserId:'b',flightSessions:1,groundSessions:1}]});
 assert.equal(selective.drafts.length,2,'the requested number controls additions instead of the saved weekly goal');

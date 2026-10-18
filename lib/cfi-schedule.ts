@@ -66,6 +66,24 @@ export type ScheduleEntry = {
   auto_generated: boolean;
   status: "scheduled" | "cancelled";
   is_own: boolean;
+  schedule_owner_user_id?: string;
+  assigned_instructor_user_id?: string;
+  assigned_instructor_name?: string;
+  scheduled_by_user_id?: string;
+  scheduled_by_name?: string;
+  occupies_instructor_time?: boolean;
+  can_edit?: boolean;
+};
+
+export type ScheduleAircraftPreference = {
+  cfi_user_id: string;
+  student_user_id: string;
+  aircraft_id: string;
+};
+
+export type ScheduleAssignmentInstructor = {
+  user_id: string;
+  name: string;
 };
 
 export type UnavailableBlock = {
@@ -154,6 +172,8 @@ export type ScheduleDraft = {
   auto_generated: boolean;
   aircraft_id: string | null;
   aircraft_tail_number?: string | null;
+  assigned_instructor_user_id?: string;
+  assigned_instructor_name?: string;
 };
 
 export type AutomaticScheduleRequest = {
@@ -304,30 +324,64 @@ export type ScheduleEditorSnapshot = {
   access: ScheduleAccess[];
   aircraft: ScheduleAircraft[];
   aircraftReservations: AircraftReservation[];
+  aircraftPreferences: ScheduleAircraftPreference[];
+  assignmentInstructors: ScheduleAssignmentInstructor[];
 };
 
 export async function fetchScheduleEditorSnapshot(rangeStart: Date, rangeEnd: Date, cfiUserId?: string) {
-  const { data, error } = await getSupabaseClient().rpc("get_cfi_schedule_snapshot_v2", {
+  const parameters = {
     p_range_start: rangeStart.toISOString(), p_range_end: rangeEnd.toISOString(),
     ...(cfiUserId ? { p_cfi_id: cfiUserId } : {}),
-  });
-  if (error) throw error;
-  return data as ScheduleEditorSnapshot;
+  };
+  const [snapshotResult, collaborationResult] = await Promise.all([
+    getSupabaseClient().rpc("get_cfi_schedule_snapshot_v2", parameters),
+    getSupabaseClient().rpc("get_cfi_schedule_collaboration", parameters),
+  ]);
+  if (snapshotResult.error) throw snapshotResult.error;
+  if (collaborationResult.error) throw collaborationResult.error;
+  const snapshot = snapshotResult.data as ScheduleEditorSnapshot;
+  const collaboration = collaborationResult.data as {
+    aircraft: ScheduleAircraft[];
+    aircraftPreferences: ScheduleAircraftPreference[];
+    assignmentInstructors: ScheduleAssignmentInstructor[];
+    assignmentMetadata: Array<Partial<ScheduleEntry> & { id: string }>;
+    assignedEntries: ScheduleEntry[];
+  };
+  const metadata = new Map((collaboration.assignmentMetadata ?? []).map((item) => [item.id, item]));
+  const entries = [...(snapshot.entries ?? []), ...(collaboration.assignedEntries ?? [])]
+    .filter((entry, index, all) => all.findIndex((candidate) => candidate.id === entry.id) === index)
+    .map((entry) => ({ ...entry, ...(metadata.get(entry.id) ?? {}) }));
+  return {
+    ...snapshot,
+    entries,
+    aircraft: collaboration.aircraft ?? snapshot.aircraft ?? [],
+    aircraftPreferences: collaboration.aircraftPreferences ?? [],
+    assignmentInstructors: collaboration.assignmentInstructors ?? [],
+  };
 }
 
 export async function publishScheduleDraft(revision: string, batchId: string, changes: ScheduleEntry[]) {
-  const { data, error } = await getSupabaseClient().rpc("publish_cfi_schedule_draft", {
+  const { data, error } = await getSupabaseClient().rpc("publish_cfi_schedule_draft_v2", {
     p_expected_revision: revision,
     p_batch_id: batchId,
     p_changes: changes.map((entry) => ({
       id: entry.id, student_user_id: entry.student_user_id, lesson_kind: entry.lesson_kind,
       aircraft_id: entry.lesson_kind !== "ground" ? entry.aircraft_id : null,
+      assigned_instructor_user_id: entry.assigned_instructor_user_id,
       start_at: entry.start_at, end_at: entry.end_at, note: entry.note,
       status: entry.status, auto_generated: entry.auto_generated,
     })),
   });
   if (error) throw error;
   return String(data);
+}
+
+export async function saveScheduleAircraftPreferences(cfiUserId: string, aircraftIds: string[]) {
+  const { error } = await getSupabaseClient().rpc("save_cfi_schedule_aircraft_preferences", {
+    p_cfi_id: cfiUserId,
+    p_aircraft_ids: aircraftIds,
+  });
+  if (error) throw error;
 }
 
 export async function saveScheduleAvailability(input: {
@@ -756,6 +810,7 @@ export function generateAutomaticSchedule(input: {
   requests?: AutomaticScheduleRequest[];
   aircraft: ScheduleAircraft[];
   selectedAircraftIds: string[];
+  aircraftPreferences?: ScheduleAircraftPreference[];
   aircraftReservations: AircraftReservation[];
   teachingRules?: TeachingRules;
   instructorTimeOff?: InstructorTimeOff[];
@@ -765,7 +820,7 @@ export function generateAutomaticSchedule(input: {
   const allowedWeekdays = input.includeWeekends ? rules.weekdays : rules.weekdays.filter((day) => day <= 5);
   const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) => addCalendarDays(input.weekStart, dayIndex)).filter((date) => allowedWeekdays.includes((date.getDay() + 6) % 7 + 1));
   const occupied = input.existingEntries
-    .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.lesson_kind !== "solo")
+    .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.lesson_kind !== "solo" && entry.occupies_instructor_time !== false)
     .map((entry) => ({ start: new Date(entry.start_at), end: new Date(entry.end_at), studentUserId: entry.student_user_id }));
   const drafts: ScheduleDraft[] = [];
   const unscheduled: AutomaticScheduleUnscheduled[] = [];
@@ -812,6 +867,9 @@ export function generateAutomaticSchedule(input: {
         overrideDates: input.overrideDates,
       }).length > 0).length,
       usedDays,
+      preferredAircraftIds: input.aircraftPreferences
+        ?.filter((item) => item.student_user_id === access.student_user_id)
+        .map((item) => item.aircraft_id) ?? [],
     }));
   });
 
@@ -849,7 +907,10 @@ export function generateAutomaticSchedule(input: {
           if (teachingMinutes > rules.max_daily_teaching_min) continue;
           let aircraft: ScheduleAircraft | undefined;
           if (setting.lessonKind === "flight") {
-            aircraft = selectedAircraft.find((candidate) => {
+            const studentAircraft = setting.preferredAircraftIds.length
+              ? selectedAircraft.filter((candidate) => setting.preferredAircraftIds.includes(candidate.id))
+              : selectedAircraft;
+            aircraft = studentAircraft.find((candidate) => {
               const blocked = input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === candidate.id) && overlaps(start,end,new Date(block.start_at),new Date(block.end_at)));
               const externallyReserved = input.aircraftReservations.some((reservation) => reservation.aircraft_id === candidate.id && overlaps(start,end,new Date(reservation.start_at),new Date(reservation.end_at)));
               const locallyReserved = input.existingEntries.some((item) => item.lesson_kind !== "ground" && item.aircraft_id === candidate.id && item.status !== "cancelled" && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)))
@@ -908,6 +969,7 @@ export function generateAutomaticSchedule(input: {
       end_at: placement.end.toISOString(),
       note: "Auto-scheduled",
       auto_generated: true,
+      assigned_instructor_user_id: input.cfiUserId,
     });
     setting.remaining -= 1;
     setting.usedDays.add(localDateKey(placement.start));
@@ -927,6 +989,9 @@ export function generateAutomaticSchedule(input: {
           ? "No availability is set for the selected days."
           : setting.lessonKind === "flight" && selectedAircraft.length === 0
             ? "Choose at least one aircraft for Flight lessons."
+            : setting.lessonKind === "flight" && setting.preferredAircraftIds.length > 0
+              && !selectedAircraft.some((aircraft) => setting.preferredAircraftIds.includes(aircraft.id))
+              ? "None of the selected aircraft match this student’s preferences."
             : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, and aircraft availability.",
       });
     }

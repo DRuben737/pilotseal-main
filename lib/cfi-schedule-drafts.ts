@@ -1,6 +1,6 @@
 import type { LessonKind, ScheduleEntry } from "./cfi-schedule";
 
-export type LessonEdit = { start_at: string; end_at: string; lesson_kind: LessonKind; note: string; aircraft_id: string | null; aircraft_tail_number?: string | null; aircraft_status?: ScheduleEntry["aircraft_status"] };
+export type LessonEdit = { start_at: string; end_at: string; lesson_kind: LessonKind; note: string; aircraft_id: string | null; aircraft_tail_number?: string | null; aircraft_status?: ScheduleEntry["aircraft_status"]; assigned_instructor_user_id?: string; assigned_instructor_name?: string; occupies_instructor_time?: boolean };
 export type ScheduleOperation =
   | { type: "edit"; id: string; values: LessonEdit }
   | { type: "add"; entry: ScheduleEntry }
@@ -35,7 +35,7 @@ export function scheduleChanges(original: ScheduleEntry[], current: ScheduleEntr
   for (const [id, before] of beforeById) {
     const after = afterById.get(id);
     if (!after) result.push({ before, after: { ...before, status: "cancelled" } });
-    else if (Date.parse(before.start_at) !== Date.parse(after.start_at) || Date.parse(before.end_at) !== Date.parse(after.end_at) || before.lesson_kind !== after.lesson_kind || before.aircraft_id !== after.aircraft_id || before.note !== after.note) result.push({ before, after });
+    else if (Date.parse(before.start_at) !== Date.parse(after.start_at) || Date.parse(before.end_at) !== Date.parse(after.end_at) || before.lesson_kind !== after.lesson_kind || before.aircraft_id !== after.aircraft_id || before.assigned_instructor_user_id !== after.assigned_instructor_user_id || before.note !== after.note) result.push({ before, after });
   }
   for (const [id, after] of afterById) if (!beforeById.has(id)) result.push({ before: null, after });
   return result;
@@ -49,7 +49,10 @@ export function scheduleHasOverlap(entries: ScheduleEntry[]) {
 function lessonsConflict(left: ScheduleEntry, right: ScheduleEntry) {
   const overlaps = Date.parse(left.start_at) < Date.parse(right.end_at) && Date.parse(left.end_at) > Date.parse(right.start_at);
   if (!overlaps) return false;
-  return left.student_user_id === right.student_user_id || (left.lesson_kind !== "solo" && right.lesson_kind !== "solo");
+  if (left.student_user_id === right.student_user_id) return true;
+  const leftInstructor = left.assigned_instructor_user_id ?? left.schedule_owner_user_id ?? "current-schedule";
+  const rightInstructor = right.assigned_instructor_user_id ?? right.schedule_owner_user_id ?? "current-schedule";
+  return leftInstructor === rightInstructor && left.lesson_kind !== "solo" && right.lesson_kind !== "solo";
 }
 
 export function scheduleConflictsForLesson(entries: ScheduleEntry[], lessonId: string) {

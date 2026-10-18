@@ -34,6 +34,7 @@ import {
   minutesToAvailabilityEnd,
   normalizeAvailabilityTimeRows,
   publishScheduleDraft,
+  saveScheduleAircraftPreferences,
   saveTeachingRules,
   removeDateAvailabilityOverride,
   removeWeekOverride,
@@ -49,6 +50,8 @@ import {
   type AutomaticScheduleUnscheduled,
   type AircraftReservation,
   type ScheduleAircraft,
+  type ScheduleAircraftPreference,
+  type ScheduleAssignmentInstructor,
   type LessonKind,
   type LinkedScheduleCandidate,
   type ScheduleAccess,
@@ -66,7 +69,7 @@ import { fetchEnabledFeatureIds, fetchScheduleEligibility, updateEnabledFeatureI
 import { fetchSavedPeople, fetchSavedPersonAccountLinks } from "@/lib/saved-people";
 import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 
-type DrawerMode = "review" | "students" | "availability-overview" | "weekly" | "details" | "access" | "availability" | "lesson" | "block" | "auto" | "teaching" | "settings" | "publish" | null;
+type DrawerMode = "review" | "students" | "availability-overview" | "weekly" | "details" | "access" | "availability" | "aircraft-preferences" | "lesson" | "block" | "auto" | "teaching" | "settings" | "publish" | null;
 type AvailabilityRow = { start: string; end: string };
 type WeeklyAvailabilityRows = Record<number, AvailabilityRow[]>;
 type AutoRequestRow = AutomaticScheduleRequest & { selected: boolean };
@@ -83,6 +86,7 @@ const emptyLesson = {
   durationMin: 120,
   note: "",
   aircraftId: "",
+  assignedInstructorId: "",
 };
 
 function localDateTimeValue(input: Date) {
@@ -184,6 +188,9 @@ export default function CfiScheduleManager() {
   const [timeOffForm, setTimeOffForm] = useState({ startDate: localDateKey(new Date()), endDate: localDateKey(new Date()), start: "00:00", end: "00:00", allDay: true, note: "" });
   const [aircraft, setAircraft] = useState<ScheduleAircraft[]>([]);
   const [aircraftReservations, setAircraftReservations] = useState<AircraftReservation[]>([]);
+  const [aircraftPreferences, setAircraftPreferences] = useState<ScheduleAircraftPreference[]>([]);
+  const [assignmentInstructors, setAssignmentInstructors] = useState<ScheduleAssignmentInstructor[]>([]);
+  const [aircraftPreferenceDraft, setAircraftPreferenceDraft] = useState<string[]>([]);
   const [drawer, setDrawer] = useState<DrawerMode>(null);
   const [lessonDropTarget, setLessonDropTarget] = useState<{ id: string; mode: "before" | "swap" | "after" } | null>(null);
   const [dayDropTarget, setDayDropTarget] = useState("");
@@ -229,7 +236,7 @@ export default function CfiScheduleManager() {
       && (!query || candidate.student_name.toLocaleLowerCase().includes(query)));
   }, [accessSearch, linkedCandidates, permissionDraft]);
   const aircraftOptionGroups = useMemo(() =>
-    groupByAircraftFamily(aircraft, (item) => item.model_name)
+    groupByAircraftFamily(aircraft.filter((item) => item.operational_status !== "away"), (item) => item.model_name)
       .map((group) => ({
         ...group,
         items: [...group.items].sort((left, right) => compareAircraftLabels(left.tail_number, right.tail_number)),
@@ -309,6 +316,8 @@ export default function CfiScheduleManager() {
     setBlocks(snapshot.blocks);
     setAircraft(snapshot.aircraft ?? []);
     setAircraftReservations(snapshot.aircraftReservations ?? []);
+    setAircraftPreferences(snapshot.aircraftPreferences ?? []);
+    setAssignmentInstructors(snapshot.assignmentInstructors ?? []);
     setAccess((current) => [...current.filter((item) => item.caller_role === "student"), ...snapshot.access]);
     setStale(false);
   }
@@ -357,8 +366,10 @@ export default function CfiScheduleManager() {
     setOverrideDates(snapshot.overrideDates);
     setWeekOverrides(snapshot.weekOverrides.filter((item) => item.week_start === localDateKey(weekStart)));
     setBlocks([]);
-    setAircraft([]);
+    setAircraft(snapshot.aircraft ?? []);
     setAircraftReservations([]);
+    setAircraftPreferences(snapshot.aircraftPreferences ?? []);
+    setAssignmentInstructors([]);
   }
 
   async function reload() {
@@ -456,7 +467,7 @@ export default function CfiScheduleManager() {
     return {
       type: "edit",
       id: entry.id,
-      values: { start_at: entry.start_at, end_at: entry.end_at, lesson_kind: entry.lesson_kind ?? "flight", note: entry.note, aircraft_id: entry.aircraft_id, aircraft_tail_number: entry.aircraft_tail_number, aircraft_status: entry.aircraft_status },
+      values: { start_at: entry.start_at, end_at: entry.end_at, lesson_kind: entry.lesson_kind ?? "flight", note: entry.note, aircraft_id: entry.aircraft_id, aircraft_tail_number: entry.aircraft_tail_number, aircraft_status: entry.aircraft_status, assigned_instructor_user_id: entry.assigned_instructor_user_id, assigned_instructor_name: entry.assigned_instructor_name, occupies_instructor_time: entry.occupies_instructor_time },
     };
   }
 
@@ -646,6 +657,32 @@ export default function CfiScheduleManager() {
     setDrawer("availability");
   }
 
+  function openAircraftPreferences() {
+    const student = studentViews.find((item) => item.cfi_user_id === activeCfiId);
+    if (!student) return;
+    setAircraftPreferenceDraft(aircraftPreferences
+      .filter((item) => item.cfi_user_id === activeCfiId && item.student_user_id === student.student_user_id)
+      .map((item) => item.aircraft_id));
+    setDrawerReturn(drawer);
+    setDrawer("aircraft-preferences");
+  }
+
+  async function saveAircraftPreferences() {
+    setSaving(true);
+    setError("");
+    try {
+      await saveScheduleAircraftPreferences(activeCfiId, aircraftPreferenceDraft);
+      await loadWeekData(activeCfiId);
+      setDrawer(drawerReturn);
+      setDrawerReturn(null);
+      setMessage(aircraftPreferenceDraft.length ? "Aircraft preferences saved." : "Aircraft preferences cleared. Your instructor’s selections will be used.");
+    } catch (failure) {
+      setError(getErrorMessage(failure, "Unable to save aircraft preferences."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveAvailability() {
     const studentAccess = isCfiView ? cfiAccess.find((item) => item.student_user_id === availabilityStudentId) : studentViews.find((item) => item.cfi_user_id === activeCfiId);
     if (!studentAccess) return;
@@ -772,7 +809,7 @@ export default function CfiScheduleManager() {
   function openNewLesson(date = localDateKey(weekStart), start = "08:00", studentUserId = activeStudents[0]?.student_user_id ?? "") {
     if (!weekReady) return;
     ++loadGeneration.current;
-    setLesson({ ...emptyLesson, studentUserId, date, start });
+    setLesson({ ...emptyLesson, studentUserId, date, start, assignedInstructorId: userId });
     setResumeLessons([]);
     setLessonWarnings([]);
     setDrawer("lesson");
@@ -792,7 +829,8 @@ export default function CfiScheduleManager() {
       start: localDateTimeValue(start).slice(11),
       durationMin: Math.round((end.getTime() - start.getTime()) / 60_000),
       note: entry.note,
-      aircraftId: entry.aircraft_id ?? "",
+      aircraftId: aircraft.some((item) => item.id === entry.aircraft_id && item.operational_status !== "away") ? entry.aircraft_id ?? "" : "",
+      assignedInstructorId: entry.assigned_instructor_user_id ?? userId,
     });
     setLessonWarnings(entryWarnings(entry));
     setResumeLessons([]);
@@ -808,16 +846,21 @@ export default function CfiScheduleManager() {
   function lessonOperation(newId = "draft-new-preview"): ScheduleOperation {
     const { start, end } = lessonTimes();
     const selectedAircraft = aircraft.find((item) => item.id === lesson.aircraftId);
+    const assignedInstructor = assignmentInstructors.find((item) => item.user_id === lesson.assignedInstructorId);
     const values = { start_at: start.toISOString(), end_at: end.toISOString(), lesson_kind: lesson.kind, note: lesson.note,
       aircraft_id: lesson.kind !== "ground" ? lesson.aircraftId || null : null,
       aircraft_tail_number: lesson.kind !== "ground" ? selectedAircraft?.tail_number ?? null : null,
-      aircraft_status: lesson.kind !== "ground" ? selectedAircraft?.operational_status ?? null : null };
+      aircraft_status: lesson.kind !== "ground" ? selectedAircraft?.operational_status ?? null : null,
+      assigned_instructor_user_id: lesson.assignedInstructorId || userId,
+      assigned_instructor_name: assignedInstructor?.name ?? "Me",
+      occupies_instructor_time: (lesson.assignedInstructorId || userId) === userId };
     if (lesson.id) return { type: "edit", id: lesson.id, values };
     const student = activeStudents.find((item) => item.student_user_id === lesson.studentUserId);
     return { type: "add", entry: {
       ...values, id: newId, entry_type: "lesson", student_user_id: lesson.studentUserId,
       student_name: student?.student_name ?? "Student", auto_generated: false, status: "scheduled", is_own: false,
       aircraft_status_note: selectedAircraft?.operational_status_note ?? null, aircraft_conflict: false, unavailable_kind: null,
+      schedule_owner_user_id: userId, scheduled_by_user_id: userId, can_edit: true,
     } };
   }
 
@@ -838,14 +881,14 @@ export default function CfiScheduleManager() {
       aircraftStatus, aircraftConflict: isCfiView ? externalConflict : entry.aircraft_conflict,
     });
     const startMinute = start.getHours() * 60 + start.getMinutes();
-    if (isCfiView) {
+    if (isCfiView && entry.occupies_instructor_time !== false) {
       const endMinute = end.getHours() * 60 + end.getMinutes();
       const weekday = (start.getDay() + 6) % 7 + 1;
       if (!teachingRules.weekdays.includes(weekday) || startMinute < teachingRules.start_minute || endMinute > teachingRules.end_minute) warnings.push("Outside your teaching days or hours.");
       if (instructorTimeOff.some((item) => start < new Date(item.end_at) && end > new Date(item.start_at))) warnings.push("Overlaps your unavailable time.");
     }
     if (localDateKey(start) !== localDateKey(end)) warnings.push("This lesson crosses into another calendar day.");
-    const dayLessons = schedule.filter((item) => item.entry_type === "lesson" && item.status === "scheduled" && localDateKey(new Date(item.start_at)) === localDateKey(start));
+    const dayLessons = schedule.filter((item) => item.entry_type === "lesson" && item.status === "scheduled" && item.occupies_instructor_time !== false && localDateKey(new Date(item.start_at)) === localDateKey(start));
     if (isCfiView && dayLessons.reduce((total, item) => total + (Date.parse(item.end_at) - Date.parse(item.start_at)) / 60_000, 0) > teachingRules.max_daily_teaching_min) {
       warnings.push("This day's lessons exceed your total teaching hours.");
     }
@@ -1086,6 +1129,7 @@ export default function CfiScheduleManager() {
       requests,
       aircraft,
       selectedAircraftIds,
+      aircraftPreferences,
       aircraftReservations,
       teachingRules,
       instructorTimeOff,
@@ -1112,6 +1156,9 @@ export default function CfiScheduleManager() {
         aircraft_tail_number: draft.aircraft_tail_number ?? null, aircraft_status: aircraft.find((item) => item.id === draft.aircraft_id)?.operational_status ?? null,
         aircraft_status_note: null, aircraft_conflict: false, unavailable_kind: null, start_at: draft.start_at,
         end_at: draft.end_at, note: draft.note, auto_generated: true, status: "scheduled", is_own: false,
+        schedule_owner_user_id: userId, assigned_instructor_user_id: userId,
+        assigned_instructor_name: assignmentInstructors.find((item) => item.user_id === userId)?.name ?? "Me",
+        scheduled_by_user_id: userId, occupies_instructor_time: true, can_edit: true,
       } }));
       stageOperations([...operations, ...additions], additions.length);
       setDrawer(null);
@@ -1176,7 +1223,7 @@ export default function CfiScheduleManager() {
   }
 
   function renderChangePreview(items: ScheduleChange[], schedule = entries) {
-    return <div className="max-w-full overflow-x-auto border border-slate-200"><table className="w-full min-w-[380px] text-left text-xs"><thead className="bg-slate-50"><tr><th className="p-2">Student</th><th className="p-2">Before</th><th className="p-2">After</th></tr></thead><tbody>{items.map(({ before, after }) => <tr key={after.id} className="border-t border-slate-100 align-top"><td className="p-2 font-semibold">{after.student_name}</td><td className="p-2">{before ? <>{formatDate(new Date(before.start_at))}<br />{formatTime(before.start_at)}–{formatTime(before.end_at)}<br />{before.lesson_kind}{before.aircraft_tail_number ? ` · ${before.aircraft_tail_number}` : ""}</> : "New lesson"}</td><td className="p-2">{after.status === "cancelled" ? <span className="text-rose-700">Cancelled</span> : <>{formatDate(new Date(after.start_at))}<br />{formatTime(after.start_at)}–{formatTime(after.end_at)}<br />{after.lesson_kind}{after.aircraft_tail_number ? ` · ${after.aircraft_tail_number}` : ""}{before && before.note !== after.note ? <p className="mt-1 break-words">Note: {after.note || "Removed"}</p> : null}{entryWarnings(after, schedule).map((warning) => <p key={warning} className="mt-1 text-amber-800">⚠ {warning}</p>)}</>}</td></tr>)}</tbody></table></div>;
+    return <div className="max-w-full overflow-x-auto border border-slate-200"><table className="w-full min-w-[380px] text-left text-xs"><thead className="bg-slate-50"><tr><th className="p-2">Student</th><th className="p-2">Before</th><th className="p-2">After</th></tr></thead><tbody>{items.map(({ before, after }) => <tr key={after.id} className="border-t border-slate-100 align-top"><td className="p-2 font-semibold">{after.student_name}</td><td className="p-2">{before ? <>{formatDate(new Date(before.start_at))}<br />{formatTime(before.start_at)}–{formatTime(before.end_at)}<br />{before.lesson_kind}{before.aircraft_tail_number ? ` · ${before.aircraft_tail_number}` : ""}<br />{before.assigned_instructor_name ?? "Me"}</> : "New lesson"}</td><td className="p-2">{after.status === "cancelled" ? <span className="text-rose-700">Cancelled</span> : <>{formatDate(new Date(after.start_at))}<br />{formatTime(after.start_at)}–{formatTime(after.end_at)}<br />{after.lesson_kind}{after.aircraft_tail_number ? ` · ${after.aircraft_tail_number}` : ""}<br />{after.assigned_instructor_name ?? "Me"}{before && before.note !== after.note ? <p className="mt-1 break-words">Note: {after.note || "Removed"}</p> : null}{entryWarnings(after, schedule).map((warning) => <p key={warning} className="mt-1 text-amber-800">⚠ {warning}</p>)}</>}</td></tr>)}</tbody></table></div>;
   }
 
   if (featureEnabled === null || loading) return <div className="saas-panel">Loading schedule…</div>;
@@ -1259,6 +1306,7 @@ export default function CfiScheduleManager() {
               { label: "Manage access", disabled: hasDraft, onSelect: openAccessDrawer },
             ] : [
               { label: "Usual weekly availability", disabled: !weekReady, onSelect: () => setDrawer("weekly" as DrawerMode) },
+              { label: "Aircraft preferences", disabled: !weekReady || !aircraft.length, onSelect: openAircraftPreferences },
               ...(activeStudent?.storage_kind === "person" ? [{ label: "Weekly goal", disabled: !weekReady, onSelect: () => openStudentSettings(activeStudent) }] : []),
             ]),
             { label: "Refresh", onSelect: () => { void loadWeekData().catch((failure) => setError(getErrorMessage(failure, "Unable to refresh."))); } },
@@ -1329,10 +1377,15 @@ export default function CfiScheduleManager() {
                 const warnings = entryWarnings(entry);
                 const aircraftLabel = entry.aircraft_tail_number || (entry.aircraft_id ? "Aircraft" : "Aircraft not specified");
                 const lessonLabel = entry.lesson_kind === "ground" ? "Ground" : entry.lesson_kind === "solo" ? `Solo · ${aircraftLabel}` : aircraftLabel;
-                const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${lessonLabel}` : entry.unavailable_kind === "aircraft" ? `${aircraftLabel} unavailable${entry.block_owner_name && !entry.is_own ? ` · ${entry.block_owner_name}` : ""}` : entry.unavailable_kind === "instructor" ? `My unavailable time${entry.note ? ` · ${entry.note}` : ""}` : "Busy"}</span>{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ {warnings.length} issue{warnings.length === 1 ? "" : "s"}</span> : null}</>;
+                const assignmentLabel = entry.entry_type !== "lesson" ? "" : !isCfiView
+                  ? entry.assigned_instructor_name ? `Instructor: ${entry.assigned_instructor_name}` : ""
+                  : entry.schedule_owner_user_id === userId && entry.assigned_instructor_user_id !== userId
+                    ? `Assigned to ${entry.assigned_instructor_name ?? "another instructor"}`
+                    : entry.schedule_owner_user_id !== userId ? `Assigned by ${entry.scheduled_by_name ?? "another instructor"}` : "";
+                const content = <><strong>{formatTime(entry.start_at)}–{formatTime(entry.end_at)}</strong><span className={styles.entryMeta}>{entry.entry_type === "lesson" ? `${entry.student_name} · ${lessonLabel}` : entry.unavailable_kind === "aircraft" ? `${aircraftLabel} unavailable${entry.block_owner_name && !entry.is_own ? ` · ${entry.block_owner_name}` : ""}` : entry.unavailable_kind === "instructor" ? `My unavailable time${entry.note ? ` · ${entry.note}` : ""}` : "Busy"}</span>{assignmentLabel ? <span className={styles.entryMeta}>{assignmentLabel}</span> : null}{changes.some((change) => change.after.id === entry.id) ? <span className={styles.entryMeta}>Unpublished draft</span> : null}{warnings.length ? <span className={styles.conflict}>⚠ {warnings.length} issue{warnings.length === 1 ? "" : "s"}</span> : null}</>;
                 const dropMode = lessonDropTarget?.id === entry.id ? lessonDropTarget.mode : null;
                 const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : entry.lesson_kind === "solo" ? styles.solo : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${dropMode === "swap" ? styles.swapTarget : dropMode === "before" ? styles.dropBefore : dropMode === "after" ? styles.dropAfter : ""}`;
-                const canSwapEntry = isCfiView && entry.entry_type === "lesson" && entry.status === "scheduled";
+                const canSwapEntry = isCfiView && entry.entry_type === "lesson" && entry.status === "scheduled" && entry.can_edit !== false;
                 const canManageEntry = entry.entry_type === "lesson" || entry.is_own;
                 return (isCfiView && canManageEntry) || entry.is_own ? <button key={entry.id} type="button" className={className} disabled={!weekReady || saving} draggable={canSwapEntry && !saving}
                   data-drop-label={dropMode ? dropMode === "swap" ? "Swap" : dropMode === "before" ? "Place before" : "Place after" : undefined}
@@ -1370,7 +1423,8 @@ export default function CfiScheduleManager() {
                   onClick={() => {
                   if (suppressEntryClick.current) { suppressEntryClick.current = false; return; }
                   if (!isCfiView) { setDetailEntry(entry); setDrawer("details"); }
-                  else if (entry.entry_type === "lesson") openEditLesson(entry);
+                  else if (entry.entry_type === "lesson" && entry.can_edit !== false) openEditLesson(entry);
+                  else if (entry.entry_type === "lesson") { setDetailEntry(entry); setDrawer("details"); }
                   else if (entry.unavailable_kind === "instructor") openTeachingDrawer();
                   else { const block = blocks.find((item) => item.id === entry.id); if (block) openBlockDrawer(date, block); }
                 }}>{content}</button> : <div key={entry.id} className={className}>{content}</div>;
@@ -1420,7 +1474,7 @@ export default function CfiScheduleManager() {
         </div>
       </DetailDrawer>
       <DetailDrawer compact open={drawer === "review"} onClose={() => setDrawer(null)} title="Your availability" description="Check the next 14 days.">
-        <button type="button" className={styles.textButton} onClick={() => setDrawer("weekly")}>Set usual week</button>
+        <div className="flex flex-wrap gap-3"><button type="button" className={styles.textButton} onClick={() => setDrawer("weekly")}>Set usual week</button><button type="button" className={styles.textButton} disabled={!aircraft.length} onClick={openAircraftPreferences}>Aircraft preferences</button></div>
         <div className={styles.weeklyList}>{Array.from({length:14},(_,i)=>addCalendarDays(new Date(),i)).map(day=>{
           const date=localDateKey(day);
           const times=availabilityForDate({date:day,studentUserId:activeStudent?.student_user_id ?? userId,slots,overrideDates});
@@ -1453,7 +1507,7 @@ export default function CfiScheduleManager() {
         </details>
       </DetailDrawer>
       <DetailDrawer compact open={drawer === "details"} onClose={() => setDrawer(null)} title="Lesson details">
-        {detailEntry ? <div className="space-y-3"><p className="font-semibold">{formatDate(new Date(detailEntry.start_at))} · {formatTime(detailEntry.start_at)}–{formatTime(detailEntry.end_at)}</p><p className="capitalize">{detailEntry.lesson_kind}</p>{detailEntry.aircraft_tail_number ? <p>{detailEntry.aircraft_tail_number}{detailEntry.aircraft_status && detailEntry.aircraft_status !== "available" ? ` · ${detailEntry.aircraft_status.replace("_", " ")}` : " · Available"}</p> : null}{detailEntry.note ? <p className="whitespace-pre-wrap">{detailEntry.note}</p> : null}{entryWarnings(detailEntry).map((warning) => <p key={warning} className="text-sm text-amber-800">⚠ {warning}</p>)}</div> : null}
+        {detailEntry ? <div className="space-y-3"><p className="font-semibold">{formatDate(new Date(detailEntry.start_at))} · {formatTime(detailEntry.start_at)}–{formatTime(detailEntry.end_at)}</p><p className="capitalize">{detailEntry.lesson_kind}</p>{detailEntry.assigned_instructor_name ? <p>Instructor: {detailEntry.assigned_instructor_name}</p> : null}{detailEntry.scheduled_by_name && detailEntry.scheduled_by_user_id !== detailEntry.assigned_instructor_user_id ? <p className="text-sm text-slate-600">Assigned by {detailEntry.scheduled_by_name}</p> : null}{detailEntry.aircraft_tail_number ? <p>{detailEntry.aircraft_tail_number}{detailEntry.aircraft_status && detailEntry.aircraft_status !== "available" ? ` · ${detailEntry.aircraft_status.replace("_", " ")}` : " · Available"}</p> : null}{detailEntry.note ? <p className="whitespace-pre-wrap">{detailEntry.note}</p> : null}{entryWarnings(detailEntry).map((warning) => <p key={warning} className="text-sm text-amber-800">⚠ {warning}</p>)}</div> : null}
       </DetailDrawer>
 
       <DetailDrawer compact open={drawer === "access"} onClose={() => setDrawer(null)} title="Manage schedule access" description="Students who can use this schedule.">
@@ -1490,10 +1544,18 @@ export default function CfiScheduleManager() {
         <div className="mt-5 flex flex-wrap justify-end gap-2">{availabilityScope === "date" && overrideDates.some((item) => item.student_user_id === availabilityStudentId && item.availability_date === availabilityDate) ? <button className="ghost-button" type="button" disabled={saving} onClick={() => void clearDateOverride()}>Use general rule</button> : null}<button className="ghost-button" type="button" onClick={() => { setDrawer(drawerReturn); setDrawerReturn(null); }}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAvailability()}>{saving ? "Saving…" : "Apply"}</button></div>
       </DetailDrawer>
 
+      <DetailDrawer compact open={drawer === "aircraft-preferences"} onClose={() => { if (!saving) { setDrawer(drawerReturn); setDrawerReturn(null); } }} title="Aircraft preferences" description="Select any aircraft you prefer for flight lessons.">
+        {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
+        <div className={styles.aircraftChoices}>{aircraft.filter((item) => item.operational_status !== "away").map((item) => <label key={item.id}><input type="checkbox" checked={aircraftPreferenceDraft.includes(item.id)} onChange={(event) => setAircraftPreferenceDraft((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span><strong>{item.tail_number}</strong>{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? ` · ${item.operational_status.replace("_", " ")}` : ""}</span></label>)}</div>
+        {!aircraft.some((item) => item.operational_status !== "away") ? <p className="text-sm text-slate-600">No aircraft are available on this schedule.</p> : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2"><button className="ghost-button mr-auto" type="button" disabled={saving || !aircraftPreferenceDraft.length} onClick={() => setAircraftPreferenceDraft([])}>Clear preferences</button><button className="ghost-button" type="button" disabled={saving} onClick={() => { setDrawer(drawerReturn); setDrawerReturn(null); }}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void saveAircraftPreferences()}>{saving ? "Saving…" : "Save preferences"}</button></div>
+      </DetailDrawer>
+
       <DetailDrawer compact open={drawer === "lesson"} onClose={() => { setDrawer(null); setResumeLessons([]); }} title={lesson.id ? "Edit lesson" : "Add lesson"} description="Changes stay unpublished until Review & publish.">
         {error ? <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p> : null}
         <div className="grid gap-3">
           <label className="saas-field"><span>Student</span><select value={lesson.studentUserId} disabled={Boolean(lesson.id)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, studentUserId: event.target.value })); }}><option value="">Select student</option>{activeStudents.map((student) => <option key={student.student_user_id} value={student.student_user_id}>{student.student_name}</option>)}</select></label>
+          {assignmentInstructors.length > 1 ? <label className="saas-field"><span>Instructor</span><select value={lesson.assignedInstructorId || userId} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, assignedInstructorId: event.target.value })); }}>{assignmentInstructors.map((instructor) => <option key={instructor.user_id} value={instructor.user_id}>{instructor.user_id === userId ? `${instructor.name} (me)` : instructor.name}</option>)}</select></label> : null}
           <div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Date</span><input className={styles.nativePicker} data-native-picker type="date" value={lesson.date} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, date: event.target.value })); }} /></label><label className="saas-field"><span>Start</span><input className={styles.nativePicker} data-native-picker type="time" step={900} value={lesson.start} onClick={(event) => showNativePicker(event.currentTarget)} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, start: event.target.value })); }} /></label></div>
           <div className="grid grid-cols-2 gap-3"><label className="saas-field"><span>Type</span><select value={lesson.kind} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, kind: event.target.value as LessonKind, aircraftId: event.target.value === "ground" ? "" : current.aircraftId })); }}><option value="flight">Flight</option><option value="solo">Solo</option><option value="ground">Ground</option></select></label><label className="saas-field"><span>Duration</span><select value={lesson.durationMin} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, durationMin: Number(event.target.value) })); }}>{[60, 90, 120, 150, 180, 240].map((value) => <option key={value} value={value}>{value} minutes</option>)}</select></label></div>
           {lesson.kind !== "ground" ? <label className="saas-field"><span>Aircraft</span><select value={lesson.aircraftId} onChange={(event) => { setLessonWarnings([]); setLesson((current) => ({ ...current, aircraftId: event.target.value })); }}><option value="" disabled={lesson.kind === "solo"}>{lesson.kind === "solo" ? "Choose aircraft" : "Not assigned"}</option>{aircraftOptionGroups.map((group) => <optgroup key={group.key} label={group.label}>{group.items.map((item) => <option key={item.id} value={item.id}>{item.tail_number}{item.model_name ? ` · ${item.model_name}` : ""}{item.operational_status !== "available" ? ` · ${item.operational_status.replace("_", " ")}` : ""}</option>)}</optgroup>)}</select></label> : null}
@@ -1560,8 +1622,9 @@ export default function CfiScheduleManager() {
               const existingFlight = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === student.student_user_id && entry.lesson_kind === "flight" && localDateKey(new Date(entry.start_at)) >= localDateKey(weekStart) && localDateKey(new Date(entry.start_at)) < localDateKey(addCalendarDays(weekStart, 7))).length;
               const existingGround = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === student.student_user_id && entry.lesson_kind === "ground" && localDateKey(new Date(entry.start_at)) >= localDateKey(weekStart) && localDateKey(new Date(entry.start_at)) < localDateKey(addCalendarDays(weekStart, 7))).length;
               const availableDays = Array.from({ length: 7 }, (_, index) => addCalendarDays(weekStart, index)).filter((date) => teachingRules.weekdays.includes((date.getDay() + 6) % 7 + 1) && availabilityForDate({ date, studentUserId: student.student_user_id, slots, overrideDates }).length > 0).length;
+              const preferredAircraft = aircraftPreferences.filter((item) => item.student_user_id === student.student_user_id).map((item) => aircraft.find((candidate) => candidate.id === item.aircraft_id)?.tail_number).filter(Boolean);
               return <div className={styles.autoStudentRow} key={student.student_user_id} data-selected={request.selected}>
-                <label className={styles.autoStudentToggle}><input type="checkbox" checked={request.selected} onChange={(event) => updateAutoRequest(student.student_user_id, { selected: event.target.checked, flightSessions: event.target.checked && request.flightSessions + request.groundSessions === 0 ? 1 : request.flightSessions })} /><span><strong>{student.student_name}</strong><span className={styles.autoStudentMeta}>{availableDays} available day{availableDays === 1 ? "" : "s"} · Existing {existingFlight} Flight, {existingGround} Ground · {duration} min</span>{availableDays === 0 ? <span className={styles.autoStudentWarning}>No availability in the selected days</span> : null}</span></label>
+                <label className={styles.autoStudentToggle}><input type="checkbox" checked={request.selected} onChange={(event) => updateAutoRequest(student.student_user_id, { selected: event.target.checked, flightSessions: event.target.checked && request.flightSessions + request.groundSessions === 0 ? 1 : request.flightSessions })} /><span><strong>{student.student_name}</strong><span className={styles.autoStudentMeta}>{availableDays} available day{availableDays === 1 ? "" : "s"} · Existing {existingFlight} Flight, {existingGround} Ground · {duration} min</span><span className={styles.autoStudentMeta}>{preferredAircraft.length ? `Prefers ${preferredAircraft.join(", ")}` : "No aircraft preference"}</span>{availableDays === 0 ? <span className={styles.autoStudentWarning}>No availability in the selected days</span> : null}</span></label>
                 <div className={styles.autoCounts}><label><span>Flight total</span><input type="number" inputMode="numeric" min={0} max={14} value={request.flightSessions} disabled={!request.selected} aria-label={`Flight lessons for ${student.student_name}`} onChange={(event) => updateAutoRequest(student.student_user_id, { flightSessions: Math.max(0,Math.min(14,Number(event.target.value)||0)) })} /></label><label><span>Ground total</span><input type="number" inputMode="numeric" min={0} max={14} value={request.groundSessions} disabled={!request.selected} aria-label={`Ground lessons for ${student.student_name}`} onChange={(event) => updateAutoRequest(student.student_user_id, { groundSessions: Math.max(0,Math.min(14,Number(event.target.value)||0)) })} /></label></div>
               </div>;
             })}

@@ -39,7 +39,7 @@ try{
   unwrap(await admin.from('saved_person_account_links').upsert({saved_person_id:personId,owner_user_id:cfiId,linked_user_id:studentId}));
   unwrap(await admin.from('cfi_schedule_student_grants').upsert({cfi_user_id:cfiId,saved_person_id:personId,student_user_id:studentId,access_enabled:true}));
   unwrap(await admin.from('dashboard_preferences').upsert({user_id:cfiId,enabled_feature_ids:['cfi_schedule']}));
-  unwrap(await admin.from('organization_aircraft_maintenance').upsert({aircraft_id:aircraftId,operational_status:'grounded',operational_status_note:'Synthetic UI status',updated_by:cfiId}));
+  unwrap(await admin.from('organization_aircraft_maintenance').upsert({aircraft_id:aircraftId,operational_status:'away',operational_status_note:'Synthetic away status',updated_by:cfiId}));
   const context=await browser.newContext({viewport:{width:390,height:900},timezoneId:'America/New_York'});
   await context.route('**/*',route=>isLocal(route.request().url())?route.continue():route.abort());
   const key=`sb-${new URL(env.API_URL).hostname.split('.')[0]}-auth-token`;
@@ -63,6 +63,17 @@ try{
   await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
   await page.getByRole('menuitem',{name:'Add lesson',exact:true}).click();
   const lesson=page.getByRole('dialog',{name:'Add lesson',exact:true});
+  await lesson.waitFor();
+  assert.equal(await lesson.locator(`option[value="${aircraftId}"]`).count(),0,'away aircraft are excluded from Add lesson');
+  await page.keyboard.press('Escape');
+  await lesson.waitFor({state:'hidden'});
+  unwrap(await admin.from('organization_aircraft_maintenance').upsert({aircraft_id:aircraftId,operational_status:'grounded',operational_status_note:'Synthetic UI status',updated_by:cfiId}));
+  await page.reload();
+  await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
+  await page.getByLabel('Jump to date').fill(date);
+  await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();
+  await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
+  await page.getByRole('menuitem',{name:'Add lesson',exact:true}).click();
   await lesson.waitFor();
   await lesson.getByLabel('Date',{exact:true}).fill(date);
   const aircraftSelect=lesson.locator('select').nth(3);
