@@ -72,6 +72,14 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="M8 3.5v4M16 3.5v4M4 10h16M8 14h3M13 14h3M8 17h3" />
         </svg>
       );
+    case "Training Guide":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <path d="M4.5 5.5A2.5 2.5 0 0 1 7 3h5v16H7a2.5 2.5 0 0 0-2.5 2V5.5Z" />
+          <path d="M19.5 5.5A2.5 2.5 0 0 0 17 3h-5v16h5a2.5 2.5 0 0 1 2.5 2V5.5Z" />
+          <path d="M7.5 7.5h2M14.5 7.5h2M7.5 11h2M14.5 11h2" />
+        </svg>
+      );
     case "Reports":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>

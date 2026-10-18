@@ -1,4 +1,8 @@
 import { getSupabaseClient } from "@/lib/supabase";
+import {
+  fetchScheduleTrainingSubjects,
+  type ScheduleTrainingSubject,
+} from "@/lib/training-guide";
 
 export type LessonKind = "flight" | "ground" | "solo";
 export type AvailabilityScope = "weekly" | "date";
@@ -73,6 +77,7 @@ export type ScheduleEntry = {
   scheduled_by_name?: string;
   occupies_instructor_time?: boolean;
   can_edit?: boolean;
+  training_subjects?: ScheduleTrainingSubject[];
 };
 
 export type ScheduleAircraftPreference = {
@@ -116,35 +121,75 @@ export type InstructorTimeOff = {
   note: string;
 };
 
-export const defaultTeachingRules = { start_minute: 0, latest_start_minute: 1439, end_minute: 1440, max_daily_span_min: 1440, max_daily_teaching_min: 1440, weekdays: [1, 2, 3, 4, 5, 6, 7] };
+export const defaultTeachingRules = {
+  start_minute: 0,
+  latest_start_minute: 1439,
+  end_minute: 1440,
+  max_daily_span_min: 1440,
+  max_daily_teaching_min: 1440,
+  weekdays: [1, 2, 3, 4, 5, 6, 7],
+};
 
-export async function fetchInstructorScheduleSettings(cfiUserId: string, rangeStart: Date, rangeEnd: Date) {
+export async function fetchInstructorScheduleSettings(
+  cfiUserId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+) {
   const supabase = getSupabaseClient();
   const [rulesResult, timeOffResult] = await Promise.all([
-    supabase.from("cfi_schedule_teaching_rules").select("cfi_user_id, start_minute, latest_start_minute, end_minute, max_daily_span_min, max_daily_teaching_min, weekdays").eq("cfi_user_id", cfiUserId).maybeSingle(),
-    supabase.from("cfi_schedule_time_off").select("id, cfi_user_id, start_at, end_at, note").eq("cfi_user_id", cfiUserId).lt("start_at", rangeEnd.toISOString()).gt("end_at", rangeStart.toISOString()).order("start_at"),
+    supabase
+      .from("cfi_schedule_teaching_rules")
+      .select(
+        "cfi_user_id, start_minute, latest_start_minute, end_minute, max_daily_span_min, max_daily_teaching_min, weekdays",
+      )
+      .eq("cfi_user_id", cfiUserId)
+      .maybeSingle(),
+    supabase
+      .from("cfi_schedule_time_off")
+      .select("id, cfi_user_id, start_at, end_at, note")
+      .eq("cfi_user_id", cfiUserId)
+      .lt("start_at", rangeEnd.toISOString())
+      .gt("end_at", rangeStart.toISOString())
+      .order("start_at"),
   ]);
   if (rulesResult.error) throw rulesResult.error;
   if (timeOffResult.error) throw timeOffResult.error;
-  return { rules: { ...defaultTeachingRules, ...rulesResult.data, cfi_user_id: cfiUserId } as TeachingRules, timeOff: (timeOffResult.data ?? []) as InstructorTimeOff[] };
+  return {
+    rules: {
+      ...defaultTeachingRules,
+      ...rulesResult.data,
+      cfi_user_id: cfiUserId,
+    } as TeachingRules,
+    timeOff: (timeOffResult.data ?? []) as InstructorTimeOff[],
+  };
 }
 
 export async function saveTeachingRules(input: TeachingRules) {
-  const { error } = await getSupabaseClient().from("cfi_schedule_teaching_rules").upsert(input, { onConflict: "cfi_user_id" });
+  const { error } = await getSupabaseClient()
+    .from("cfi_schedule_teaching_rules")
+    .upsert(input, { onConflict: "cfi_user_id" });
   if (error) throw error;
 }
 
-export async function createInstructorTimeOff(input: Omit<InstructorTimeOff, "id">) {
-  const { error } = await getSupabaseClient().from("cfi_schedule_time_off").insert(input);
+export async function createInstructorTimeOff(
+  input: Omit<InstructorTimeOff, "id">,
+) {
+  const { error } = await getSupabaseClient()
+    .from("cfi_schedule_time_off")
+    .insert(input);
   if (error) throw error;
 }
 
 export async function deleteInstructorTimeOff(id: string) {
-  const { error } = await getSupabaseClient().from("cfi_schedule_time_off").delete().eq("id", id);
+  const { error } = await getSupabaseClient()
+    .from("cfi_schedule_time_off")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
-export type AircraftOperationalStatus = "available" | "away" | "in_maintenance" | "grounded";
+export type AircraftOperationalStatus =
+  "available" | "away" | "in_maintenance" | "grounded";
 export type ScheduleAircraft = {
   id: string;
   tail_number: string;
@@ -200,7 +245,8 @@ export type LinkedScheduleCandidate = {
   student_name: string;
 };
 
-const slotSelect = "id, cfi_user_id, student_user_id, scope, weekday, availability_date, start_minute, end_minute, timezone";
+const slotSelect =
+  "id, cfi_user_id, student_user_id, scope, weekday, availability_date, start_minute, end_minute, timezone";
 
 export function browserTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -236,7 +282,8 @@ export function minutesToTime(value: number) {
 }
 
 export function timeToMinutes(value: string) {
-  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) && value !== "24:00") return Number.NaN;
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) && value !== "24:00")
+    return Number.NaN;
   const [hours, minutes] = value.split(":").map(Number);
   return hours * 60 + minutes;
 }
@@ -245,13 +292,21 @@ export function availabilityEndToMinutes(value: string) {
   return value === "00:00" ? 1440 : timeToMinutes(value);
 }
 
-export function normalizeAvailabilityTimeRows(rows: Array<{ start: string; end: string }>) {
+export function normalizeAvailabilityTimeRows(
+  rows: Array<{ start: string; end: string }>,
+) {
   return rows.flatMap((row) => {
     const start = row.start.trim();
     const end = row.end.trim();
     if (!start && !end) return [];
-    if (!start || !end) throw new Error("Finish the incomplete time or remove it.");
-    return [{ startMinute: timeToMinutes(start), endMinute: availabilityEndToMinutes(end) }];
+    if (!start || !end)
+      throw new Error("Finish the incomplete time or remove it.");
+    return [
+      {
+        startMinute: timeToMinutes(start),
+        endMinute: availabilityEndToMinutes(end),
+      },
+    ];
   });
 }
 
@@ -269,7 +324,9 @@ function datePartsInZone(input: Date, timezone: string) {
     minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(input);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
   return {
     year: Number(values.year),
     month: Number(values.month),
@@ -279,7 +336,11 @@ function datePartsInZone(input: Date, timezone: string) {
   };
 }
 
-export function zonedLocalToUtc(dateKey: string, minuteOfDay: number, timezone: string) {
+export function zonedLocalToUtc(
+  dateKey: string,
+  minuteOfDay: number,
+  timezone: string,
+) {
   const [year, month, day] = dateKey.split("-").map(Number);
   const hour = Math.floor(minuteOfDay / 60);
   const minute = minuteOfDay % 60;
@@ -288,7 +349,13 @@ export function zonedLocalToUtc(dateKey: string, minuteOfDay: number, timezone: 
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const actual = datePartsInZone(candidate, timezone);
-    const actualUtcShape = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute);
+    const actualUtcShape = Date.UTC(
+      actual.year,
+      actual.month - 1,
+      actual.day,
+      actual.hour,
+      actual.minute,
+    );
     const delta = desiredUtcShape - actualUtcShape;
     if (delta === 0) break;
     candidate = new Date(candidate.getTime() + delta);
@@ -303,7 +370,11 @@ export async function fetchScheduleAccess() {
   return (data ?? []) as ScheduleAccess[];
 }
 
-export async function fetchScheduleEntries(cfiUserId: string, rangeStart: Date, rangeEnd: Date) {
+export async function fetchScheduleEntries(
+  cfiUserId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("list_cfi_schedule_entries", {
     p_cfi_user_id: cfiUserId,
@@ -328,15 +399,22 @@ export type ScheduleEditorSnapshot = {
   assignmentInstructors: ScheduleAssignmentInstructor[];
 };
 
-export async function fetchScheduleEditorSnapshot(rangeStart: Date, rangeEnd: Date, cfiUserId?: string) {
+export async function fetchScheduleEditorSnapshot(
+  rangeStart: Date,
+  rangeEnd: Date,
+  cfiUserId?: string,
+) {
   const parameters = {
-    p_range_start: rangeStart.toISOString(), p_range_end: rangeEnd.toISOString(),
+    p_range_start: rangeStart.toISOString(),
+    p_range_end: rangeEnd.toISOString(),
     ...(cfiUserId ? { p_cfi_id: cfiUserId } : {}),
   };
-  const [snapshotResult, collaborationResult] = await Promise.all([
-    getSupabaseClient().rpc("get_cfi_schedule_snapshot_v2", parameters),
-    getSupabaseClient().rpc("get_cfi_schedule_collaboration", parameters),
-  ]);
+  const [snapshotResult, collaborationResult, trainingSubjects] =
+    await Promise.all([
+      getSupabaseClient().rpc("get_cfi_schedule_snapshot_v2", parameters),
+      getSupabaseClient().rpc("get_cfi_schedule_collaboration", parameters),
+      fetchScheduleTrainingSubjects(rangeStart, rangeEnd, cfiUserId),
+    ]);
   if (snapshotResult.error) throw snapshotResult.error;
   if (collaborationResult.error) throw collaborationResult.error;
   const snapshot = snapshotResult.data as ScheduleEditorSnapshot;
@@ -347,10 +425,30 @@ export async function fetchScheduleEditorSnapshot(rangeStart: Date, rangeEnd: Da
     assignmentMetadata: Array<Partial<ScheduleEntry> & { id: string }>;
     assignedEntries: ScheduleEntry[];
   };
-  const metadata = new Map((collaboration.assignmentMetadata ?? []).map((item) => [item.id, item]));
-  const entries = [...(snapshot.entries ?? []), ...(collaboration.assignedEntries ?? [])]
-    .filter((entry, index, all) => all.findIndex((candidate) => candidate.id === entry.id) === index)
-    .map((entry) => ({ ...entry, ...(metadata.get(entry.id) ?? {}) }));
+  const metadata = new Map(
+    (collaboration.assignmentMetadata ?? []).map((item) => [item.id, item]),
+  );
+  const subjectsByEvent = new Map<string, ScheduleTrainingSubject[]>();
+  for (const subject of trainingSubjects) {
+    const current = subjectsByEvent.get(subject.event_id) ?? [];
+    current.push(subject);
+    subjectsByEvent.set(subject.event_id, current);
+  }
+  const entries = [
+    ...(snapshot.entries ?? []),
+    ...(collaboration.assignedEntries ?? []),
+  ]
+    .filter(
+      (entry, index, all) =>
+        all.findIndex((candidate) => candidate.id === entry.id) === index,
+    )
+    .map((entry) => ({
+      ...entry,
+      ...(metadata.get(entry.id) ?? {}),
+      training_subjects: (subjectsByEvent.get(entry.id) ?? []).sort(
+        (left, right) => left.position - right.position,
+      ),
+    }));
   return {
     ...snapshot,
     entries,
@@ -360,59 +458,115 @@ export async function fetchScheduleEditorSnapshot(rangeStart: Date, rangeEnd: Da
   };
 }
 
-export async function publishScheduleDraft(revision: string, batchId: string, changes: ScheduleEntry[]) {
-  const { data, error } = await getSupabaseClient().rpc("publish_cfi_schedule_draft_v2", {
-    p_expected_revision: revision,
-    p_batch_id: batchId,
-    p_changes: changes.map((entry) => ({
-      id: entry.id, student_user_id: entry.student_user_id, lesson_kind: entry.lesson_kind,
-      aircraft_id: entry.lesson_kind !== "ground" ? entry.aircraft_id : null,
-      assigned_instructor_user_id: entry.assigned_instructor_user_id,
-      start_at: entry.start_at, end_at: entry.end_at, note: entry.note,
-      status: entry.status, auto_generated: entry.auto_generated,
-    })),
-  });
+export async function publishScheduleDraft(
+  revision: string,
+  batchId: string,
+  changes: ScheduleEntry[],
+) {
+  const { data, error } = await getSupabaseClient().rpc(
+    "publish_cfi_schedule_draft_v3",
+    {
+      p_expected_revision: revision,
+      p_batch_id: batchId,
+      p_changes: changes.map((entry) => ({
+        id: entry.id,
+        student_user_id: entry.student_user_id,
+        lesson_kind: entry.lesson_kind,
+        aircraft_id: entry.lesson_kind !== "ground" ? entry.aircraft_id : null,
+        assigned_instructor_user_id: entry.assigned_instructor_user_id,
+        start_at: entry.start_at,
+        end_at: entry.end_at,
+        note: entry.note,
+        status: entry.status,
+        auto_generated: entry.auto_generated,
+        training_subjects: entry.training_subjects ?? [],
+      })),
+    },
+  );
   if (error) throw error;
   return String(data);
 }
 
-export async function saveScheduleAircraftPreferences(cfiUserId: string, aircraftIds: string[]) {
-  const { error } = await getSupabaseClient().rpc("save_cfi_schedule_aircraft_preferences", {
-    p_cfi_id: cfiUserId,
-    p_aircraft_ids: aircraftIds,
-  });
+export async function saveScheduleAircraftPreferences(
+  cfiUserId: string,
+  aircraftIds: string[],
+) {
+  const { error } = await getSupabaseClient().rpc(
+    "save_cfi_schedule_aircraft_preferences",
+    {
+      p_cfi_id: cfiUserId,
+      p_aircraft_ids: aircraftIds,
+    },
+  );
   if (error) throw error;
 }
 
 export async function saveScheduleAvailability(input: {
   personId?: string;
-  cfiUserId: string; timezone: string; scope: AvailabilityScope; weekday: number;
-  date: string; slots: Array<{ startMinute: number; endMinute: number }>; autofill: boolean;
+  cfiUserId: string;
+  timezone: string;
+  scope: AvailabilityScope;
+  weekday: number;
+  date: string;
+  slots: Array<{ startMinute: number; endMinute: number }>;
+  autofill: boolean;
 }) {
   validateSlots(input.slots);
-  const { data, error } = await getSupabaseClient().rpc(input.personId ? "save_cfi_person_availability" : "save_cfi_schedule_availability", {
-    ...(input.personId ? { p_person_id: input.personId } : {}),
-    p_cfi_id: input.cfiUserId, p_timezone: input.timezone, p_scope: input.scope,
-    p_weekday: input.weekday, p_date: input.date,
-    p_slots: input.slots.map((slot) => ({ start_minute: slot.startMinute, end_minute: slot.endMinute })),
-    p_autofill: input.autofill,
-  });
+  const { data, error } = await getSupabaseClient().rpc(
+    input.personId
+      ? "save_cfi_person_availability"
+      : "save_cfi_schedule_availability",
+    {
+      ...(input.personId ? { p_person_id: input.personId } : {}),
+      p_cfi_id: input.cfiUserId,
+      p_timezone: input.timezone,
+      p_scope: input.scope,
+      p_weekday: input.weekday,
+      p_date: input.date,
+      p_slots: input.slots.map((slot) => ({
+        start_minute: slot.startMinute,
+        end_minute: slot.endMinute,
+      })),
+      p_autofill: input.autofill,
+    },
+  );
   if (error) throw error;
   return Number(data);
 }
 
-export type AvailabilityReview = { confirmed_through: string | null; needs_review: boolean };
-export async function fetchAvailabilityReview(cfiUserId: string): Promise<AvailabilityReview> {
-  const { data, error } = await getSupabaseClient().rpc("get_schedule_availability_review", { p_cfi_id: cfiUserId, p_timezone: browserTimeZone() });
+export type AvailabilityReview = {
+  confirmed_through: string | null;
+  needs_review: boolean;
+};
+export async function fetchAvailabilityReview(
+  cfiUserId: string,
+): Promise<AvailabilityReview> {
+  const { data, error } = await getSupabaseClient().rpc(
+    "get_schedule_availability_review",
+    { p_cfi_id: cfiUserId, p_timezone: browserTimeZone() },
+  );
   if (error) throw error;
   return data as AvailabilityReview;
 }
 export async function confirmAvailabilityReview(cfiUserId: string) {
-  const { error } = await getSupabaseClient().rpc("confirm_schedule_availability", { p_cfi_id: cfiUserId, p_timezone: browserTimeZone(), p_days: 14 });
+  const { error } = await getSupabaseClient().rpc(
+    "confirm_schedule_availability",
+    { p_cfi_id: cfiUserId, p_timezone: browserTimeZone(), p_days: 14 },
+  );
   if (error) throw error;
 }
-export async function fillAvailabilityWeeks(cfiUserId: string, personId?: string) {
-  const { data, error } = await getSupabaseClient().rpc("fill_schedule_availability_weeks", { p_cfi_id: cfiUserId, p_timezone: browserTimeZone(), p_person_id: personId ?? null });
+export async function fillAvailabilityWeeks(
+  cfiUserId: string,
+  personId?: string,
+) {
+  const { data, error } = await getSupabaseClient().rpc(
+    "fill_schedule_availability_weeks",
+    {
+      p_cfi_id: cfiUserId,
+      p_timezone: browserTimeZone(),
+      p_person_id: personId ?? null,
+    },
+  );
   if (error) throw error;
   return Number(data);
 }
@@ -420,10 +574,15 @@ export async function fillAvailabilityWeeks(cfiUserId: string, personId?: string
 export async function fetchAvailability(cfiUserId: string) {
   const supabase = getSupabaseClient();
   const [slotsResult, datesResult] = await Promise.all([
-    supabase.from("cfi_schedule_availability_slots").select(slotSelect).eq("cfi_user_id", cfiUserId),
+    supabase
+      .from("cfi_schedule_availability_slots")
+      .select(slotSelect)
+      .eq("cfi_user_id", cfiUserId),
     supabase
       .from("cfi_schedule_availability_override_dates")
-      .select("cfi_user_id, student_user_id, availability_date, timezone, source")
+      .select(
+        "cfi_user_id, student_user_id, availability_date, timezone, source",
+      )
       .eq("cfi_user_id", cfiUserId),
   ]);
   if (slotsResult.error) throw slotsResult.error;
@@ -438,14 +597,20 @@ export async function fetchWeekOverrides(cfiUserId: string, weekStart: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("cfi_schedule_week_overrides")
-    .select("cfi_user_id, student_user_id, week_start, target_sessions, duration_min")
+    .select(
+      "cfi_user_id, student_user_id, week_start, target_sessions, duration_min",
+    )
     .eq("cfi_user_id", cfiUserId)
     .eq("week_start", weekStart);
   if (error) throw error;
   return (data ?? []) as WeekOverride[];
 }
 
-export async function fetchUnavailableBlocks(cfiUserId: string, rangeStart: Date, rangeEnd: Date) {
+export async function fetchUnavailableBlocks(
+  cfiUserId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("cfi_schedule_unavailable_blocks")
@@ -466,7 +631,8 @@ export async function grantScheduleAccess(input: {
   defaultDurationMin?: number;
   color?: string;
 }) {
-  if (input.storageKind === "person") return setPersonScheduleAccess(input.savedPersonId, true);
+  if (input.storageKind === "person")
+    return setPersonScheduleAccess(input.savedPersonId, true);
   const supabase = getSupabaseClient();
   const { error } = await supabase.from("cfi_schedule_student_grants").upsert(
     {
@@ -478,30 +644,59 @@ export async function grantScheduleAccess(input: {
       color: input.color ?? "#2563eb",
       access_enabled: true,
     },
-    { onConflict: "cfi_user_id,student_user_id" }
+    { onConflict: "cfi_user_id,student_user_id" },
   );
   if (error) throw error;
 }
 
-export async function setPersonScheduleAccess(personId: string, enabled: boolean) {
-  const { error } = await getSupabaseClient().rpc("set_cfi_person_access", { p_person: personId, p_enabled: enabled });
+export async function setPersonScheduleAccess(
+  personId: string,
+  enabled: boolean,
+) {
+  const { error } = await getSupabaseClient().rpc("set_cfi_person_access", {
+    p_person: personId,
+    p_enabled: enabled,
+  });
   if (error) throw error;
 }
 
-export async function savePersonScheduleSettings(cfiUserId: string, personId: string, settings: {
-  weeklySessions: number; durationMin: number; color: string; useWeekOverride: boolean;
-  weekStart: string; weekSessions: number; weekDurationMin: number;
-}) {
-  const { error } = await getSupabaseClient().rpc("update_cfi_person_settings", { p_cfi_id: cfiUserId, p_person_id: personId, p_settings: settings });
+export async function savePersonScheduleSettings(
+  cfiUserId: string,
+  personId: string,
+  settings: {
+    weeklySessions: number;
+    durationMin: number;
+    color: string;
+    useWeekOverride: boolean;
+    weekStart: string;
+    weekSessions: number;
+    weekDurationMin: number;
+  },
+) {
+  const { error } = await getSupabaseClient().rpc(
+    "update_cfi_person_settings",
+    { p_cfi_id: cfiUserId, p_person_id: personId, p_settings: settings },
+  );
   if (error) throw error;
 }
 
-export async function clearPersonAvailabilityDate(cfiUserId: string, personId: string, date: string) {
-  const { error } = await getSupabaseClient().rpc("clear_cfi_person_date", { p_cfi_id: cfiUserId, p_person_id: personId, p_date: date });
+export async function clearPersonAvailabilityDate(
+  cfiUserId: string,
+  personId: string,
+  date: string,
+) {
+  const { error } = await getSupabaseClient().rpc("clear_cfi_person_date", {
+    p_cfi_id: cfiUserId,
+    p_person_id: personId,
+    p_date: date,
+  });
   if (error) throw error;
 }
 
-export async function revokeScheduleAccess(cfiUserId: string, studentUserId: string) {
+export async function revokeScheduleAccess(
+  cfiUserId: string,
+  studentUserId: string,
+) {
   const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("cfi_schedule_student_grants")
@@ -533,13 +728,19 @@ export async function updateStudentScheduleDefaults(input: {
 
 export async function upsertWeekOverride(input: WeekOverride) {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.from("cfi_schedule_week_overrides").upsert(input, {
-    onConflict: "cfi_user_id,student_user_id,week_start",
-  });
+  const { error } = await supabase
+    .from("cfi_schedule_week_overrides")
+    .upsert(input, {
+      onConflict: "cfi_user_id,student_user_id,week_start",
+    });
   if (error) throw error;
 }
 
-export async function removeWeekOverride(cfiUserId: string, studentUserId: string, weekStart: string) {
+export async function removeWeekOverride(
+  cfiUserId: string,
+  studentUserId: string,
+  weekStart: string,
+) {
   const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("cfi_schedule_week_overrides")
@@ -570,18 +771,20 @@ export async function replaceWeeklyAvailability(input: {
     .eq("weekday", input.weekday);
   if (deleteError) throw deleteError;
   if (!input.slots.length) return;
-  const { error } = await supabase.from("cfi_schedule_availability_slots").insert(
-    input.slots.map((slot) => ({
-      cfi_user_id: input.cfiUserId,
-      student_user_id: input.studentUserId,
-      scope: "weekly",
-      weekday: input.weekday,
-      availability_date: null,
-      start_minute: slot.startMinute,
-      end_minute: slot.endMinute,
-      timezone: input.timezone,
-    }))
-  );
+  const { error } = await supabase
+    .from("cfi_schedule_availability_slots")
+    .insert(
+      input.slots.map((slot) => ({
+        cfi_user_id: input.cfiUserId,
+        student_user_id: input.studentUserId,
+        scope: "weekly",
+        weekday: input.weekday,
+        availability_date: null,
+        start_minute: slot.startMinute,
+        end_minute: slot.endMinute,
+        timezone: input.timezone,
+      })),
+    );
   if (error) throw error;
 }
 
@@ -603,7 +806,7 @@ export async function replaceDateAvailability(input: {
         availability_date: input.date,
         timezone: input.timezone,
       },
-      { onConflict: "cfi_user_id,student_user_id,availability_date" }
+      { onConflict: "cfi_user_id,student_user_id,availability_date" },
     );
   if (markerError) throw markerError;
   const { error: deleteError } = await supabase
@@ -615,22 +818,28 @@ export async function replaceDateAvailability(input: {
     .eq("availability_date", input.date);
   if (deleteError) throw deleteError;
   if (!input.slots.length) return;
-  const { error } = await supabase.from("cfi_schedule_availability_slots").insert(
-    input.slots.map((slot) => ({
-      cfi_user_id: input.cfiUserId,
-      student_user_id: input.studentUserId,
-      scope: "date",
-      weekday: null,
-      availability_date: input.date,
-      start_minute: slot.startMinute,
-      end_minute: slot.endMinute,
-      timezone: input.timezone,
-    }))
-  );
+  const { error } = await supabase
+    .from("cfi_schedule_availability_slots")
+    .insert(
+      input.slots.map((slot) => ({
+        cfi_user_id: input.cfiUserId,
+        student_user_id: input.studentUserId,
+        scope: "date",
+        weekday: null,
+        availability_date: input.date,
+        start_minute: slot.startMinute,
+        end_minute: slot.endMinute,
+        timezone: input.timezone,
+      })),
+    );
   if (error) throw error;
 }
 
-export async function removeDateAvailabilityOverride(cfiUserId: string, studentUserId: string, date: string) {
+export async function removeDateAvailabilityOverride(
+  cfiUserId: string,
+  studentUserId: string,
+  date: string,
+) {
   const supabase = getSupabaseClient();
   const [{ error: slotsError }, { error: markerError }] = await Promise.all([
     supabase
@@ -651,39 +860,66 @@ export async function removeDateAvailabilityOverride(cfiUserId: string, studentU
   if (markerError) throw markerError;
 }
 
-export async function createUnavailableBlock(input: Omit<UnavailableBlock, "id">) {
+export async function createUnavailableBlock(
+  input: Omit<UnavailableBlock, "id">,
+) {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.from("cfi_schedule_unavailable_blocks").insert(input);
+  const { error } = await supabase
+    .from("cfi_schedule_unavailable_blocks")
+    .insert(input);
   if (error) throw error;
 }
 
-export async function updateUnavailableBlock(id: string, input: Omit<UnavailableBlock, "id">) {
-  const { error } = await getSupabaseClient().from("cfi_schedule_unavailable_blocks")
-    .update(input).eq("id", id).eq("cfi_user_id", input.cfi_user_id).select("id").single();
+export async function updateUnavailableBlock(
+  id: string,
+  input: Omit<UnavailableBlock, "id">,
+) {
+  const { error } = await getSupabaseClient()
+    .from("cfi_schedule_unavailable_blocks")
+    .update(input)
+    .eq("id", id)
+    .eq("cfi_user_id", input.cfi_user_id)
+    .select("id")
+    .single();
   if (error) throw error;
 }
 
 export async function deleteUnavailableBlock(id: string) {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.from("cfi_schedule_unavailable_blocks").delete().eq("id", id);
+  const { error } = await supabase
+    .from("cfi_schedule_unavailable_blocks")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function createScheduleEvents(drafts: ScheduleDraft[], createdBy: string) {
+export async function createScheduleEvents(
+  drafts: ScheduleDraft[],
+  createdBy: string,
+) {
   if (!drafts.length) return;
   const supabase = getSupabaseClient();
-  const { error } = await supabase.from("cfi_schedule_events").insert(
-    drafts.map((draft) => ({ ...draft, created_by: createdBy, status: "scheduled" }))
-  );
+  const { error } = await supabase
+    .from("cfi_schedule_events")
+    .insert(
+      drafts.map((draft) => ({
+        ...draft,
+        created_by: createdBy,
+        status: "scheduled",
+      })),
+    );
   if (error) throw error;
 }
 
-export async function updateScheduleEvent(id: string, input: {
-  lessonKind: LessonKind;
-  startAt: string;
-  endAt: string;
-  note: string;
-}) {
+export async function updateScheduleEvent(
+  id: string,
+  input: {
+    lessonKind: LessonKind;
+    startAt: string;
+    endAt: string;
+    note: string;
+  },
+) {
   const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("cfi_schedule_events")
@@ -697,13 +933,16 @@ export async function updateScheduleEvent(id: string, input: {
   if (error) throw error;
 }
 
-export async function moveFirstScheduleEventAndFollowing(id: string, input: {
-  lessonKind: LessonKind;
-  startAt: string;
-  endAt: string;
-  note: string;
-  timezone: string;
-}) {
+export async function moveFirstScheduleEventAndFollowing(
+  id: string,
+  input: {
+    lessonKind: LessonKind;
+    startAt: string;
+    endAt: string;
+    note: string;
+    timezone: string;
+  },
+) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("move_cfi_schedule_day", {
     p_event_id: id,
@@ -728,7 +967,13 @@ export async function cancelScheduleEvent(id: string) {
 
 function validateSlots(slots: SlotInput[]) {
   for (const slot of slots) {
-    if (!Number.isInteger(slot.startMinute) || !Number.isInteger(slot.endMinute) || slot.startMinute < 0 || slot.endMinute > 1440 || slot.endMinute - slot.startMinute < 120) {
+    if (
+      !Number.isInteger(slot.startMinute) ||
+      !Number.isInteger(slot.endMinute) ||
+      slot.startMinute < 0 ||
+      slot.endMinute > 1440 ||
+      slot.endMinute - slot.startMinute < 120
+    ) {
       throw new Error("Each availability period must be at least two hours.");
     }
   }
@@ -746,15 +991,17 @@ export function availabilityForDate(input: {
 }) {
   const date = localDateKey(input.date);
   const override = input.overrideDates.find(
-    (item) => item.student_user_id === input.studentUserId && item.availability_date === date
+    (item) =>
+      item.student_user_id === input.studentUserId &&
+      item.availability_date === date,
   );
   const weekday = input.date.getDay() === 0 ? 7 : input.date.getDay();
-  const matching = input.slots.filter((slot) =>
-    slot.student_user_id === input.studentUserId && (
-      override
+  const matching = input.slots.filter(
+    (slot) =>
+      slot.student_user_id === input.studentUserId &&
+      (override
         ? slot.scope === "date" && slot.availability_date === date
-        : slot.scope === "weekly" && slot.weekday === weekday
-    )
+        : slot.scope === "weekly" && slot.weekday === weekday),
   );
   return matching.map((slot) => ({
     start: zonedLocalToUtc(date, slot.start_minute, slot.timezone),
@@ -781,19 +1028,43 @@ export function getManualConflictWarnings(input: {
     overrideDates: input.overrideDates,
   });
   const warnings: string[] = [];
-  if (!periods.some((period) => input.start >= period.start && input.end <= period.end)) {
+  if (
+    !periods.some(
+      (period) => input.start >= period.start && input.end <= period.end,
+    )
+  ) {
     warnings.push("This lesson is outside the student’s stated availability.");
   }
   if (
     input.lessonKind !== "ground" &&
-    input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === input.aircraftId) && overlaps(input.start, input.end, new Date(block.start_at), new Date(block.end_at)))
+    input.blocks.some(
+      (block) =>
+        (!block.aircraft_id || block.aircraft_id === input.aircraftId) &&
+        overlaps(
+          input.start,
+          input.end,
+          new Date(block.start_at),
+          new Date(block.end_at),
+        ),
+    )
   ) {
-    warnings.push("The selected aircraft is marked unavailable during this time.");
+    warnings.push(
+      "The selected aircraft is marked unavailable during this time.",
+    );
   }
-  if (input.lessonKind !== "ground" && input.aircraftStatus && input.aircraftStatus !== "available") {
-    warnings.push(`The selected aircraft is currently ${input.aircraftStatus.replace("_", " ")}. Booking is still allowed.`);
+  if (
+    input.lessonKind !== "ground" &&
+    input.aircraftStatus &&
+    input.aircraftStatus !== "available"
+  ) {
+    warnings.push(
+      `The selected aircraft is currently ${input.aircraftStatus.replace("_", " ")}. Booking is still allowed.`,
+    );
   }
-  if (input.lessonKind !== "ground" && input.aircraftConflict) warnings.push("The selected aircraft is booked by another instructor during this time.");
+  if (input.lessonKind !== "ground" && input.aircraftConflict)
+    warnings.push(
+      "The selected aircraft is booked by another instructor during this time.",
+    );
   return warnings;
 }
 
@@ -817,75 +1088,172 @@ export function generateAutomaticSchedule(input: {
 }) {
   const rules = input.teachingRules ?? defaultTeachingRules;
   const dayCount = 7;
-  const allowedWeekdays = input.includeWeekends ? rules.weekdays : rules.weekdays.filter((day) => day <= 5);
-  const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) => addCalendarDays(input.weekStart, dayIndex)).filter((date) => allowedWeekdays.includes((date.getDay() + 6) % 7 + 1));
+  const allowedWeekdays = input.includeWeekends
+    ? rules.weekdays
+    : rules.weekdays.filter((day) => day <= 5);
+  const consideredDates = Array.from({ length: dayCount }, (_, dayIndex) =>
+    addCalendarDays(input.weekStart, dayIndex),
+  ).filter((date) => allowedWeekdays.includes(((date.getDay() + 6) % 7) + 1));
   const occupied = input.existingEntries
-    .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.lesson_kind !== "solo" && entry.occupies_instructor_time !== false)
-    .map((entry) => ({ start: new Date(entry.start_at), end: new Date(entry.end_at), studentUserId: entry.student_user_id }));
+    .filter(
+      (entry) =>
+        entry.entry_type === "lesson" &&
+        entry.status === "scheduled" &&
+        entry.lesson_kind !== "solo" &&
+        entry.occupies_instructor_time !== false,
+    )
+    .map((entry) => ({
+      start: new Date(entry.start_at),
+      end: new Date(entry.end_at),
+      studentUserId: entry.student_user_id,
+    }));
   const drafts: ScheduleDraft[] = [];
   const unscheduled: AutomaticScheduleUnscheduled[] = [];
   const weekKey = localDateKey(input.weekStart);
-  const selectedAircraft = input.aircraft.filter((aircraft) => aircraft.operational_status === "available" && input.selectedAircraftIds.includes(aircraft.id));
+  const selectedAircraft = input.aircraft.filter(
+    (aircraft) =>
+      aircraft.operational_status === "available" &&
+      input.selectedAircraftIds.includes(aircraft.id),
+  );
   const usedDaysByStudent = new Map<string, Set<string>>();
   const settings = input.access.flatMap((access) => {
-    const request = input.requests?.find((item) => item.studentUserId === access.student_user_id);
+    const request = input.requests?.find(
+      (item) => item.studentUserId === access.student_user_id,
+    );
     if (input.requests && !request) return [];
     const override = input.weekOverrides.find(
-      (item) => item.student_user_id === access.student_user_id && item.week_start === weekKey
+      (item) =>
+        item.student_user_id === access.student_user_id &&
+        item.week_start === weekKey,
     );
     const existingCount = input.existingEntries.filter(
-      (entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id
-        && consideredDates.some((date) => localDateKey(new Date(entry.start_at)) === localDateKey(date))
+      (entry) =>
+        entry.entry_type === "lesson" &&
+        entry.status === "scheduled" &&
+        entry.student_user_id === access.student_user_id &&
+        consideredDates.some(
+          (date) =>
+            localDateKey(new Date(entry.start_at)) === localDateKey(date),
+        ),
     ).length;
-    const existingByKind = (lessonKind: LessonKind) => input.existingEntries.filter(
-      (entry) => entry.entry_type === "lesson" && entry.status === "scheduled"
-        && entry.student_user_id === access.student_user_id && entry.lesson_kind === lessonKind
-        && consideredDates.some((date) => localDateKey(new Date(entry.start_at)) === localDateKey(date))
-    ).length;
-    const fallback = Math.max(0, (override?.target_sessions ?? access.default_weekly_sessions) - existingCount);
-    const counts: Array<{ lessonKind: LessonKind; requested: number; existing: number }> = request
-      ? [
-          { lessonKind: "flight", requested: Math.max(0, Math.min(14, Math.floor(request.flightSessions || 0)) - existingByKind("flight")), existing: existingByKind("flight") },
-          { lessonKind: "ground", requested: Math.max(0, Math.min(14, Math.floor(request.groundSessions || 0)) - existingByKind("ground")), existing: existingByKind("ground") },
-        ]
-      : [{ lessonKind: "flight", requested: fallback, existing: existingByKind("flight") }];
-    const usedDays = usedDaysByStudent.get(access.student_user_id) ?? new Set(
-      input.existingEntries
-        .filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled" && entry.student_user_id === access.student_user_id)
-        .map((entry) => localDateKey(new Date(entry.start_at)))
+    const existingByKind = (lessonKind: LessonKind) =>
+      input.existingEntries.filter(
+        (entry) =>
+          entry.entry_type === "lesson" &&
+          entry.status === "scheduled" &&
+          entry.student_user_id === access.student_user_id &&
+          entry.lesson_kind === lessonKind &&
+          consideredDates.some(
+            (date) =>
+              localDateKey(new Date(entry.start_at)) === localDateKey(date),
+          ),
+      ).length;
+    const fallback = Math.max(
+      0,
+      (override?.target_sessions ?? access.default_weekly_sessions) -
+        existingCount,
     );
+    const counts: Array<{
+      lessonKind: LessonKind;
+      requested: number;
+      existing: number;
+    }> = request
+      ? [
+          {
+            lessonKind: "flight",
+            requested: Math.max(
+              0,
+              Math.min(14, Math.floor(request.flightSessions || 0)) -
+                existingByKind("flight"),
+            ),
+            existing: existingByKind("flight"),
+          },
+          {
+            lessonKind: "ground",
+            requested: Math.max(
+              0,
+              Math.min(14, Math.floor(request.groundSessions || 0)) -
+                existingByKind("ground"),
+            ),
+            existing: existingByKind("ground"),
+          },
+        ]
+      : [
+          {
+            lessonKind: "flight",
+            requested: fallback,
+            existing: existingByKind("flight"),
+          },
+        ];
+    const usedDays =
+      usedDaysByStudent.get(access.student_user_id) ??
+      new Set(
+        input.existingEntries
+          .filter(
+            (entry) =>
+              entry.entry_type === "lesson" &&
+              entry.status === "scheduled" &&
+              entry.student_user_id === access.student_user_id,
+          )
+          .map((entry) => localDateKey(new Date(entry.start_at))),
+      );
     usedDaysByStudent.set(access.student_user_id, usedDays);
-    return counts.filter((item) => item.requested > 0).map(({ lessonKind, requested, existing }) => ({
-      access, lessonKind,
-      durationMin: override?.duration_min ?? access.default_duration_min,
-      requested, remaining: requested,
-      existing,
-      availabilityDays: consideredDates.filter((date) => availabilityForDate({
-        date,
-        studentUserId: access.student_user_id,
-        slots: input.slots,
-        overrideDates: input.overrideDates,
-      }).length > 0).length,
-      usedDays,
-      preferredAircraftIds: input.aircraftPreferences
-        ?.filter((item) => item.student_user_id === access.student_user_id)
-        .map((item) => item.aircraft_id) ?? [],
-    }));
+    return counts
+      .filter((item) => item.requested > 0)
+      .map(({ lessonKind, requested, existing }) => ({
+        access,
+        lessonKind,
+        durationMin: override?.duration_min ?? access.default_duration_min,
+        requested,
+        remaining: requested,
+        existing,
+        availabilityDays: consideredDates.filter(
+          (date) =>
+            availabilityForDate({
+              date,
+              studentUserId: access.student_user_id,
+              slots: input.slots,
+              overrideDates: input.overrideDates,
+            }).length > 0,
+        ).length,
+        usedDays,
+        preferredAircraftIds:
+          input.aircraftPreferences
+            ?.filter((item) => item.student_user_id === access.student_user_id)
+            .map((item) => item.aircraft_id) ?? [],
+      }));
   });
 
   const dailyItems = (date: Date) => [
-    ...occupied.filter((item) => localDateKey(item.start) === localDateKey(date)),
+    ...occupied.filter(
+      (item) => localDateKey(item.start) === localDateKey(date),
+    ),
     ...drafts
-      .filter((draft) => localDateKey(new Date(draft.start_at)) === localDateKey(date))
-      .map((draft) => ({ start: new Date(draft.start_at), end: new Date(draft.end_at), studentUserId: draft.student_user_id })),
+      .filter(
+        (draft) =>
+          localDateKey(new Date(draft.start_at)) === localDateKey(date),
+      )
+      .map((draft) => ({
+        start: new Date(draft.start_at),
+        end: new Date(draft.end_at),
+        studentUserId: draft.student_user_id,
+      })),
   ];
 
   const findBestPlacement = (setting: (typeof settings)[number]) => {
-    let best: { start: Date; end: Date; aircraft?: ScheduleAircraft; dayIndex: number; dayLessonCount: number; dayTeachingMinutes: number; gapMs: number } | null = null;
+    let best: {
+      start: Date;
+      end: Date;
+      aircraft?: ScheduleAircraft;
+      dayIndex: number;
+      dayLessonCount: number;
+      dayTeachingMinutes: number;
+      gapMs: number;
+    } | null = null;
     for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
       const date = addCalendarDays(input.weekStart, dayIndex);
       const dateKey = localDateKey(date);
-      if (!allowedWeekdays.includes((date.getDay() + 6) % 7 + 1)) continue;
+      if (!allowedWeekdays.includes(((date.getDay() + 6) % 7) + 1)) continue;
       if (setting.usedDays.has(dateKey)) continue;
       const periods = availabilityForDate({
         date,
@@ -894,43 +1262,140 @@ export function generateAutomaticSchedule(input: {
         overrideDates: input.overrideDates,
       });
       for (const period of periods) {
-        for (let startMs = period.start.getTime(); startMs + setting.durationMin * 60_000 <= period.end.getTime(); startMs += 15 * 60_000) {
+        for (
+          let startMs = period.start.getTime();
+          startMs + setting.durationMin * 60_000 <= period.end.getTime();
+          startMs += 15 * 60_000
+        ) {
           const start = new Date(startMs);
           const end = new Date(startMs + setting.durationMin * 60_000);
           const localStartMinute = start.getHours() * 60 + start.getMinutes();
           const localEndMinute = end.getHours() * 60 + end.getMinutes();
-          if (localDateKey(end) !== dateKey || localStartMinute < rules.start_minute || localEndMinute > rules.end_minute) continue;
-          if (input.instructorTimeOff?.some((item) => overlaps(start, end, new Date(item.start_at), new Date(item.end_at)))) continue;
+          if (
+            localDateKey(end) !== dateKey ||
+            localStartMinute < rules.start_minute ||
+            localEndMinute > rules.end_minute
+          )
+            continue;
+          if (
+            input.instructorTimeOff?.some((item) =>
+              overlaps(
+                start,
+                end,
+                new Date(item.start_at),
+                new Date(item.end_at),
+              ),
+            )
+          )
+            continue;
           const items = dailyItems(date);
-          if (items.some((item) => overlaps(start, end, item.start, item.end))) continue;
-          const teachingMinutes = setting.durationMin + items.reduce((total, item) => total + (item.end.getTime() - item.start.getTime()) / 60_000, 0);
+          if (items.some((item) => overlaps(start, end, item.start, item.end)))
+            continue;
+          const teachingMinutes =
+            setting.durationMin +
+            items.reduce(
+              (total, item) =>
+                total + (item.end.getTime() - item.start.getTime()) / 60_000,
+              0,
+            );
           if (teachingMinutes > rules.max_daily_teaching_min) continue;
           let aircraft: ScheduleAircraft | undefined;
           if (setting.lessonKind === "flight") {
             const studentAircraft = setting.preferredAircraftIds.length
-              ? selectedAircraft.filter((candidate) => setting.preferredAircraftIds.includes(candidate.id))
+              ? selectedAircraft.filter((candidate) =>
+                  setting.preferredAircraftIds.includes(candidate.id),
+                )
               : selectedAircraft;
             aircraft = studentAircraft.find((candidate) => {
-              const blocked = input.blocks.some((block) => (!block.aircraft_id || block.aircraft_id === candidate.id) && overlaps(start,end,new Date(block.start_at),new Date(block.end_at)));
-              const externallyReserved = input.aircraftReservations.some((reservation) => reservation.aircraft_id === candidate.id && overlaps(start,end,new Date(reservation.start_at),new Date(reservation.end_at)));
-              const locallyReserved = input.existingEntries.some((item) => item.lesson_kind !== "ground" && item.aircraft_id === candidate.id && item.status !== "cancelled" && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)))
-                || drafts.some((item) => item.lesson_kind === "flight" && item.aircraft_id === candidate.id && overlaps(start,end,new Date(item.start_at),new Date(item.end_at)));
+              const blocked = input.blocks.some(
+                (block) =>
+                  (!block.aircraft_id || block.aircraft_id === candidate.id) &&
+                  overlaps(
+                    start,
+                    end,
+                    new Date(block.start_at),
+                    new Date(block.end_at),
+                  ),
+              );
+              const externallyReserved = input.aircraftReservations.some(
+                (reservation) =>
+                  reservation.aircraft_id === candidate.id &&
+                  overlaps(
+                    start,
+                    end,
+                    new Date(reservation.start_at),
+                    new Date(reservation.end_at),
+                  ),
+              );
+              const locallyReserved =
+                input.existingEntries.some(
+                  (item) =>
+                    item.lesson_kind !== "ground" &&
+                    item.aircraft_id === candidate.id &&
+                    item.status !== "cancelled" &&
+                    overlaps(
+                      start,
+                      end,
+                      new Date(item.start_at),
+                      new Date(item.end_at),
+                    ),
+                ) ||
+                drafts.some(
+                  (item) =>
+                    item.lesson_kind === "flight" &&
+                    item.aircraft_id === candidate.id &&
+                    overlaps(
+                      start,
+                      end,
+                      new Date(item.start_at),
+                      new Date(item.end_at),
+                    ),
+                );
               return !blocked && !externallyReserved && !locallyReserved;
             });
             if (!aircraft) continue;
           }
-          const gapMs = items.length ? Math.min(...items.map((item) => item.end <= start ? start.getTime() - item.end.getTime() : item.start.getTime() - end.getTime())) : 0;
+          const gapMs = items.length
+            ? Math.min(
+                ...items.map((item) =>
+                  item.end <= start
+                    ? start.getTime() - item.end.getTime()
+                    : item.start.getTime() - end.getTime(),
+                ),
+              )
+            : 0;
           const candidate = {
-            start, end, aircraft, dayIndex,
+            start,
+            end,
+            aircraft,
+            dayIndex,
             dayLessonCount: items.length,
-            dayTeachingMinutes: items.reduce((total, item) => total + (item.end.getTime() - item.start.getTime()) / 60_000, 0),
+            dayTeachingMinutes: items.reduce(
+              (total, item) =>
+                total + (item.end.getTime() - item.start.getTime()) / 60_000,
+              0,
+            ),
             gapMs,
           };
-          if (!best || candidate.dayLessonCount < best.dayLessonCount
-            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes < best.dayTeachingMinutes
-            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes === best.dayTeachingMinutes && candidate.gapMs < best.gapMs
-            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes === best.dayTeachingMinutes && candidate.gapMs === best.gapMs && candidate.dayIndex < best.dayIndex
-            || candidate.dayLessonCount === best.dayLessonCount && candidate.dayTeachingMinutes === best.dayTeachingMinutes && candidate.gapMs === best.gapMs && candidate.dayIndex === best.dayIndex && candidate.start < best.start) best = candidate;
+          if (
+            !best ||
+            candidate.dayLessonCount < best.dayLessonCount ||
+            (candidate.dayLessonCount === best.dayLessonCount &&
+              candidate.dayTeachingMinutes < best.dayTeachingMinutes) ||
+            (candidate.dayLessonCount === best.dayLessonCount &&
+              candidate.dayTeachingMinutes === best.dayTeachingMinutes &&
+              candidate.gapMs < best.gapMs) ||
+            (candidate.dayLessonCount === best.dayLessonCount &&
+              candidate.dayTeachingMinutes === best.dayTeachingMinutes &&
+              candidate.gapMs === best.gapMs &&
+              candidate.dayIndex < best.dayIndex) ||
+            (candidate.dayLessonCount === best.dayLessonCount &&
+              candidate.dayTeachingMinutes === best.dayTeachingMinutes &&
+              candidate.gapMs === best.gapMs &&
+              candidate.dayIndex === best.dayIndex &&
+              candidate.start < best.start)
+          )
+            best = candidate;
         }
       }
     }
@@ -940,20 +1405,30 @@ export function generateAutomaticSchedule(input: {
   let madeProgress = true;
   while (madeProgress && settings.some((item) => item.remaining > 0)) {
     madeProgress = false;
-    const choices = settings.filter((setting) => setting.remaining > 0).map((setting) => ({ setting, placement: findBestPlacement(setting) })).filter((choice) => choice.placement !== null);
+    const choices = settings
+      .filter((setting) => setting.remaining > 0)
+      .map((setting) => ({ setting, placement: findBestPlacement(setting) }))
+      .filter((choice) => choice.placement !== null);
     choices.sort((a, b) => {
-      if (a.setting.lessonKind !== b.setting.lessonKind) return a.setting.lessonKind === "flight" ? -1 : 1;
-      const aWeeklyTotal = a.setting.existing + (a.setting.requested - a.setting.remaining);
-      const bWeeklyTotal = b.setting.existing + (b.setting.requested - b.setting.remaining);
-      return aWeeklyTotal - bWeeklyTotal
-        || a.placement!.dayLessonCount - b.placement!.dayLessonCount
-        || a.placement!.dayTeachingMinutes - b.placement!.dayTeachingMinutes
-        || a.placement!.gapMs - b.placement!.gapMs
-        || a.placement!.dayIndex - b.placement!.dayIndex
-        || a.placement!.start.getTime() - b.placement!.start.getTime()
-        || a.setting.availabilityDays - b.setting.availabilityDays
-        || b.setting.remaining - a.setting.remaining
-        || a.setting.access.student_name.localeCompare(b.setting.access.student_name);
+      if (a.setting.lessonKind !== b.setting.lessonKind)
+        return a.setting.lessonKind === "flight" ? -1 : 1;
+      const aWeeklyTotal =
+        a.setting.existing + (a.setting.requested - a.setting.remaining);
+      const bWeeklyTotal =
+        b.setting.existing + (b.setting.requested - b.setting.remaining);
+      return (
+        aWeeklyTotal - bWeeklyTotal ||
+        a.placement!.dayLessonCount - b.placement!.dayLessonCount ||
+        a.placement!.dayTeachingMinutes - b.placement!.dayTeachingMinutes ||
+        a.placement!.gapMs - b.placement!.gapMs ||
+        a.placement!.dayIndex - b.placement!.dayIndex ||
+        a.placement!.start.getTime() - b.placement!.start.getTime() ||
+        a.setting.availabilityDays - b.setting.availabilityDays ||
+        b.setting.remaining - a.setting.remaining ||
+        a.setting.access.student_name.localeCompare(
+          b.setting.access.student_name,
+        )
+      );
     });
     const choice = choices[0];
     if (!choice?.placement) continue;
@@ -985,14 +1460,18 @@ export function generateAutomaticSchedule(input: {
         scheduled: setting.requested - setting.remaining,
         remaining: setting.remaining,
         lessonKind: setting.lessonKind,
-        reason: setting.availabilityDays === 0
-          ? "No availability is set for the selected days."
-          : setting.lessonKind === "flight" && selectedAircraft.length === 0
-            ? "Choose at least one aircraft for Flight lessons."
-            : setting.lessonKind === "flight" && setting.preferredAircraftIds.length > 0
-              && !selectedAircraft.some((aircraft) => setting.preferredAircraftIds.includes(aircraft.id))
-              ? "None of the selected aircraft match this student’s preferences."
-            : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, and aircraft availability.",
+        reason:
+          setting.availabilityDays === 0
+            ? "No availability is set for the selected days."
+            : setting.lessonKind === "flight" && selectedAircraft.length === 0
+              ? "Choose at least one aircraft for Flight lessons."
+              : setting.lessonKind === "flight" &&
+                  setting.preferredAircraftIds.length > 0 &&
+                  !selectedAircraft.some((aircraft) =>
+                    setting.preferredAircraftIds.includes(aircraft.id),
+                  )
+                ? "None of the selected aircraft match this student’s preferences."
+                : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, and aircraft availability.",
       });
     }
   }

@@ -1,93 +1,236 @@
 import type { LessonKind, ScheduleEntry } from "./cfi-schedule";
 
-export type LessonEdit = { start_at: string; end_at: string; lesson_kind: LessonKind; note: string; aircraft_id: string | null; aircraft_tail_number?: string | null; aircraft_status?: ScheduleEntry["aircraft_status"]; assigned_instructor_user_id?: string; assigned_instructor_name?: string; occupies_instructor_time?: boolean };
+export type LessonEdit = {
+  start_at: string;
+  end_at: string;
+  lesson_kind: LessonKind;
+  note: string;
+  aircraft_id: string | null;
+  aircraft_tail_number?: string | null;
+  aircraft_status?: ScheduleEntry["aircraft_status"];
+  assigned_instructor_user_id?: string;
+  assigned_instructor_name?: string;
+  occupies_instructor_time?: boolean;
+  training_subjects?: ScheduleEntry["training_subjects"];
+};
 export type ScheduleOperation =
   | { type: "edit"; id: string; values: LessonEdit }
   | { type: "add"; entry: ScheduleEntry }
   | { type: "cancel"; id: string };
-export type ScheduleChange = { before: ScheduleEntry | null; after: ScheduleEntry };
+export type ScheduleChange = {
+  before: ScheduleEntry | null;
+  after: ScheduleEntry;
+};
 
 // Each operation changes only its own lesson, including when replayed against a
 // newer server snapshot. Other lessons must be adjusted explicitly.
-export function applyScheduleOperations(original: ScheduleEntry[], operations: ScheduleOperation[]) {
+export function applyScheduleOperations(
+  original: ScheduleEntry[],
+  operations: ScheduleOperation[],
+) {
   let result = original.map((entry) => ({ ...entry }));
   for (const operation of operations) {
     if (operation.type === "add") {
-      if (result.some((entry) => entry.id === operation.entry.id)) throw new Error("A draft lesson already exists. Reload the latest schedule.");
+      if (result.some((entry) => entry.id === operation.entry.id))
+        throw new Error(
+          "A draft lesson already exists. Reload the latest schedule.",
+        );
       result.push({ ...operation.entry });
       continue;
     }
-    const target = result.find((entry) => entry.id === operation.id && entry.entry_type === "lesson");
-    if (!target) throw new Error("A lesson in this draft has been removed or cancelled. Discard the draft and review the latest schedule.");
+    const target = result.find(
+      (entry) => entry.id === operation.id && entry.entry_type === "lesson",
+    );
+    if (!target)
+      throw new Error(
+        "A lesson in this draft has been removed or cancelled. Discard the draft and review the latest schedule.",
+      );
     if (operation.type === "cancel") {
       result = result.filter((entry) => entry.id !== operation.id);
       continue;
     }
-    result = result.map((entry) => entry.id === target.id ? { ...entry, ...operation.values } : entry);
+    result = result.map((entry) =>
+      entry.id === target.id ? { ...entry, ...operation.values } : entry,
+    );
   }
-  return result.sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
+  return result.sort(
+    (left, right) => Date.parse(left.start_at) - Date.parse(right.start_at),
+  );
 }
 
-export function scheduleChanges(original: ScheduleEntry[], current: ScheduleEntry[]): ScheduleChange[] {
-  const beforeById = new Map(original.filter((entry) => entry.entry_type === "lesson").map((entry) => [entry.id, entry]));
-  const afterById = new Map(current.filter((entry) => entry.entry_type === "lesson").map((entry) => [entry.id, entry]));
+export function scheduleChanges(
+  original: ScheduleEntry[],
+  current: ScheduleEntry[],
+): ScheduleChange[] {
+  const beforeById = new Map(
+    original
+      .filter((entry) => entry.entry_type === "lesson")
+      .map((entry) => [entry.id, entry]),
+  );
+  const afterById = new Map(
+    current
+      .filter((entry) => entry.entry_type === "lesson")
+      .map((entry) => [entry.id, entry]),
+  );
   const result: ScheduleChange[] = [];
   for (const [id, before] of beforeById) {
     const after = afterById.get(id);
-    if (!after) result.push({ before, after: { ...before, status: "cancelled" } });
-    else if (Date.parse(before.start_at) !== Date.parse(after.start_at) || Date.parse(before.end_at) !== Date.parse(after.end_at) || before.lesson_kind !== after.lesson_kind || before.aircraft_id !== after.aircraft_id || before.assigned_instructor_user_id !== after.assigned_instructor_user_id || before.note !== after.note) result.push({ before, after });
+    if (!after)
+      result.push({ before, after: { ...before, status: "cancelled" } });
+    else if (
+      Date.parse(before.start_at) !== Date.parse(after.start_at) ||
+      Date.parse(before.end_at) !== Date.parse(after.end_at) ||
+      before.lesson_kind !== after.lesson_kind ||
+      before.aircraft_id !== after.aircraft_id ||
+      before.assigned_instructor_user_id !==
+        after.assigned_instructor_user_id ||
+      before.note !== after.note ||
+      JSON.stringify(before.training_subjects ?? []) !==
+        JSON.stringify(after.training_subjects ?? [])
+    )
+      result.push({ before, after });
   }
-  for (const [id, after] of afterById) if (!beforeById.has(id)) result.push({ before: null, after });
+  for (const [id, after] of afterById)
+    if (!beforeById.has(id)) result.push({ before: null, after });
   return result;
 }
 
 export function scheduleHasOverlap(entries: ScheduleEntry[]) {
-  const lessons = entries.filter((entry) => entry.entry_type === "lesson" && entry.status === "scheduled").sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
-  return lessons.some((entry, index) => lessons.slice(0, index).some((other) => lessonsConflict(entry, other)));
+  const lessons = entries
+    .filter(
+      (entry) => entry.entry_type === "lesson" && entry.status === "scheduled",
+    )
+    .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+  return lessons.some((entry, index) =>
+    lessons.slice(0, index).some((other) => lessonsConflict(entry, other)),
+  );
 }
 
 function lessonsConflict(left: ScheduleEntry, right: ScheduleEntry) {
-  const overlaps = Date.parse(left.start_at) < Date.parse(right.end_at) && Date.parse(left.end_at) > Date.parse(right.start_at);
+  const overlaps =
+    Date.parse(left.start_at) < Date.parse(right.end_at) &&
+    Date.parse(left.end_at) > Date.parse(right.start_at);
   if (!overlaps) return false;
   if (left.student_user_id === right.student_user_id) return true;
-  const leftInstructor = left.assigned_instructor_user_id ?? left.schedule_owner_user_id ?? "current-schedule";
-  const rightInstructor = right.assigned_instructor_user_id ?? right.schedule_owner_user_id ?? "current-schedule";
-  return leftInstructor === rightInstructor && left.lesson_kind !== "solo" && right.lesson_kind !== "solo";
+  const leftInstructor =
+    left.assigned_instructor_user_id ??
+    left.schedule_owner_user_id ??
+    "current-schedule";
+  const rightInstructor =
+    right.assigned_instructor_user_id ??
+    right.schedule_owner_user_id ??
+    "current-schedule";
+  return (
+    leftInstructor === rightInstructor &&
+    left.lesson_kind !== "solo" &&
+    right.lesson_kind !== "solo"
+  );
 }
 
-export function scheduleConflictsForLesson(entries: ScheduleEntry[], lessonId: string) {
-  const edited = entries.find((entry) => entry.id === lessonId && entry.entry_type === "lesson" && entry.status === "scheduled");
+export function scheduleConflictsForLesson(
+  entries: ScheduleEntry[],
+  lessonId: string,
+) {
+  const edited = entries.find(
+    (entry) =>
+      entry.id === lessonId &&
+      entry.entry_type === "lesson" &&
+      entry.status === "scheduled",
+  );
   if (!edited) return [];
   const start = Date.parse(edited.start_at);
   const end = Date.parse(edited.end_at);
-  return entries.filter((entry) => entry.id !== lessonId && entry.entry_type === "lesson" && entry.status === "scheduled"
-    && Date.parse(entry.start_at) < end && Date.parse(entry.end_at) > start && lessonsConflict(edited, entry))
-    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
+  return entries
+    .filter(
+      (entry) =>
+        entry.id !== lessonId &&
+        entry.entry_type === "lesson" &&
+        entry.status === "scheduled" &&
+        Date.parse(entry.start_at) < end &&
+        Date.parse(entry.end_at) > start &&
+        lessonsConflict(edited, entry),
+    )
+    .sort(
+      (left, right) => Date.parse(left.start_at) - Date.parse(right.start_at),
+    );
 }
 
-export function swapScheduleLessons(entries: ScheduleEntry[], sourceId: string, targetId: string) {
-  if (!sourceId || !targetId || sourceId === targetId) throw new Error("Choose two different lessons to swap.");
-  const source = entries.find((entry) => entry.id === sourceId && entry.entry_type === "lesson" && entry.status === "scheduled");
-  const target = entries.find((entry) => entry.id === targetId && entry.entry_type === "lesson" && entry.status === "scheduled");
-  if (!source || !target) throw new Error("One of these lessons is no longer available. Refresh and try again.");
-  if (source.student_user_id === target.student_user_id) throw new Error("Choose lessons for two different students.");
+export function swapScheduleLessons(
+  entries: ScheduleEntry[],
+  sourceId: string,
+  targetId: string,
+) {
+  if (!sourceId || !targetId || sourceId === targetId)
+    throw new Error("Choose two different lessons to swap.");
+  const source = entries.find(
+    (entry) =>
+      entry.id === sourceId &&
+      entry.entry_type === "lesson" &&
+      entry.status === "scheduled",
+  );
+  const target = entries.find(
+    (entry) =>
+      entry.id === targetId &&
+      entry.entry_type === "lesson" &&
+      entry.status === "scheduled",
+  );
+  if (!source || !target)
+    throw new Error(
+      "One of these lessons is no longer available. Refresh and try again.",
+    );
+  if (source.student_user_id === target.student_user_id)
+    throw new Error("Choose lessons for two different students.");
 
   const moveTo = (entry: ScheduleEntry, startAt: string) => {
     const duration = Date.parse(entry.end_at) - Date.parse(entry.start_at);
-    return { ...entry, start_at: new Date(startAt).toISOString(), end_at: new Date(Date.parse(startAt) + duration).toISOString() };
+    return {
+      ...entry,
+      start_at: new Date(startAt).toISOString(),
+      end_at: new Date(Date.parse(startAt) + duration).toISOString(),
+    };
   };
-  return entries.map((entry) => entry.id === sourceId ? moveTo(entry, target.start_at) : entry.id === targetId ? moveTo(entry, source.start_at) : { ...entry })
-    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
+  return entries
+    .map((entry) =>
+      entry.id === sourceId
+        ? moveTo(entry, target.start_at)
+        : entry.id === targetId
+          ? moveTo(entry, source.start_at)
+          : { ...entry },
+    )
+    .sort(
+      (left, right) => Date.parse(left.start_at) - Date.parse(right.start_at),
+    );
 }
 
-export function moveScheduleLesson(entries: ScheduleEntry[], sourceId: string, startAt: string) {
-  const source = entries.find((entry) => entry.id === sourceId && entry.entry_type === "lesson" && entry.status === "scheduled");
+export function moveScheduleLesson(
+  entries: ScheduleEntry[],
+  sourceId: string,
+  startAt: string,
+) {
+  const source = entries.find(
+    (entry) =>
+      entry.id === sourceId &&
+      entry.entry_type === "lesson" &&
+      entry.status === "scheduled",
+  );
   const start = Date.parse(startAt);
-  if (!source || !Number.isFinite(start)) throw new Error("This lesson is no longer available. Refresh and try again.");
+  if (!source || !Number.isFinite(start))
+    throw new Error(
+      "This lesson is no longer available. Refresh and try again.",
+    );
   const duration = Date.parse(source.end_at) - Date.parse(source.start_at);
   if (duration <= 0) throw new Error("This lesson has an invalid duration.");
-  return entries.map((entry) => entry.id === sourceId
-    ? { ...entry, start_at: new Date(start).toISOString(), end_at: new Date(start + duration).toISOString() }
-    : { ...entry })
-    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at));
+  return entries
+    .map((entry) =>
+      entry.id === sourceId
+        ? {
+            ...entry,
+            start_at: new Date(start).toISOString(),
+            end_at: new Date(start + duration).toISOString(),
+          }
+        : { ...entry },
+    )
+    .sort(
+      (left, right) => Date.parse(left.start_at) - Date.parse(right.start_at),
+    );
 }

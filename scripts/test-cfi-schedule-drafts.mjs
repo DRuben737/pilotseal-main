@@ -22,6 +22,11 @@ assert.equal(middle.find(e => e.id === 'block').start_at, block.start_at);
 assert.equal(Date.parse(middle.find(e => e.id === 'c').start_at) - Date.parse(middle.find(e => e.id === 'b').end_at), 0);
 assert.deepEqual(scheduleConflictsForLesson(middle, 'b').map(e => e.id), [], 'touching endpoints do not overlap');
 assert.equal(scheduleChanges(original, middle).length, 1);
+const withTrainingSubject = original.map((entry) => entry.id === 'b' ? {
+  ...entry,
+  training_subjects: [{ subject_id: 'subject-1', organization_id: null, position: 0, personal_note: 'Review wind correction' }],
+} : entry);
+assert.equal(scheduleChanges(original, withTrainingSubject).length, 1, 'adding a Training Guide subject stages the lesson');
 const earlier = applyScheduleOperations(original, [edit(b, -15)]);
 assert.equal(earlier.find(e => e.id === 'c').start_at, c.start_at);
 assert.equal(scheduleHasOverlap(earlier), false);
@@ -70,7 +75,8 @@ assert.equal(scheduleHasOverlap([delegated,owned]),false,'a lesson assigned to a
 assert.equal(scheduleHasOverlap([{...delegated,student_user_id:'same-student'},{...owned,student_user_id:'same-student'}]),true,'a student still cannot have overlapping lessons with different instructors');
 // Pure scheduling checks: no database or network calls.
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
-  .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };');
+  .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };')
+  .replace(/import \{\s*fetchScheduleTrainingSubjects,\s*type ScheduleTrainingSubject,\s*\} from "@\/lib\/training-guide";/, 'const fetchScheduleTrainingSubjects = async () => [];');
 const scheduleCompiled = ts.transpileModule(scheduleSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { availabilityEndToMinutes, defaultTeachingRules, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd, normalizeAvailabilityTimeRows } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
 assert.equal(availabilityEndToMinutes('00:00'),1440,'native midnight end time saves as the end of the day');

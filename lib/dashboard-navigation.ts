@@ -1,6 +1,7 @@
 import type { OrganizationPermission } from "@/lib/organizations";
 
-export type DashboardNavAccess = "all" | "organization" | "organization-manager" | "platform";
+export type DashboardNavAccess =
+  "all" | "organization" | "organization-manager" | "platform";
 export type DashboardWorkspace = "personal" | "organization" | "platform";
 
 export type DashboardNavChild = {
@@ -23,75 +24,195 @@ export type DashboardNavItem = {
 };
 
 export const dashboardPrimaryNavigation: DashboardNavItem[] = [
-  { href: "/console/personal/schedule", label: "Schedule", access: "all", featureId: "cfi_schedule" },
+  {
+    href: "/console/personal/schedule",
+    label: "Schedule",
+    access: "all",
+    featureId: "cfi_schedule",
+  },
+  {
+    href: "/console/personal/training-guide",
+    label: "Training Guide",
+    access: "all",
+  },
   { href: "/console/personal/people", label: "People", access: "all" },
-  { href: "/console/personal/aircraft", label: "Aircraft", access: "all", children: [
-    { label: "My aircraft", value: "mine", default: true },
-    { label: "Organization aircraft", value: "organization", organizationRequired: true },
-  ] },
-  { href: "/console/personal/reports", label: "Reports", access: "all", children: [
-    { label: "Aircraft reports", param: "type", value: "aircraft", default: true },
-    { label: "Safety reports", param: "type", value: "asr" },
-  ] },
-  { href: "/console/personal/flight-briefs", label: "Flight Briefs", access: "all" },
-  { href: "/console/personal/endorsements", label: "Records", access: "all", children: [
-    { label: "Student records", value: "personal", default: true },
-    { label: "Shared with me", value: "received" },
-    { label: "Organization endorsements", value: "organization", organizationManagerOnly: true },
-  ] },
-  { href: "/console/personal/notifications", label: "Notifications", access: "all" },
+  {
+    href: "/console/personal/aircraft",
+    label: "Aircraft",
+    access: "all",
+    children: [
+      { label: "My aircraft", value: "mine", default: true },
+      {
+        label: "Organization aircraft",
+        value: "organization",
+        organizationRequired: true,
+      },
+    ],
+  },
+  {
+    href: "/console/personal/reports",
+    label: "Reports",
+    access: "all",
+    children: [
+      {
+        label: "Aircraft reports",
+        param: "type",
+        value: "aircraft",
+        default: true,
+      },
+      { label: "Safety reports", param: "type", value: "asr" },
+    ],
+  },
+  {
+    href: "/console/personal/flight-briefs",
+    label: "Flight Briefs",
+    access: "all",
+  },
+  {
+    href: "/console/personal/endorsements",
+    label: "Records",
+    access: "all",
+    children: [
+      { label: "Student records", value: "personal", default: true },
+      { label: "Shared with me", value: "received" },
+      {
+        label: "Organization endorsements",
+        value: "organization",
+        organizationManagerOnly: true,
+      },
+    ],
+  },
+  {
+    href: "/console/personal/notifications",
+    label: "Notifications",
+    access: "all",
+  },
   { href: "/console/personal/account", label: "Account", access: "all" },
 ];
 
 export const dashboardOrganizationNavigation: DashboardNavItem[] = [
-  { href: "/console/organization/people", label: "Team management", access: "organization-manager", organizationPermission: "members", children: [
-    { label: "Instructors", value: "instructors", default: true },
-    { label: "Students", value: "students" },
-    { label: "Unassigned", value: "unassigned" },
-    { label: "Invitations", value: "invitations" },
-  ] },
-  { href: "/console/organization/aircraft", label: "Aircraft", access: "organization", children: [
-    { label: "Aircraft", value: "aircraft", default: true, organizationManagerOnly: true },
-    { label: "Aircraft records", value: "records" },
-    { label: "Models", value: "models", organizationManagerOnly: true },
-    { label: "Maintenance items", value: "inspections", organizationManagerOnly: true },
-  ] },
-  { href: "/console/organization/reports", label: "Reports", access: "organization", children: [
-    { label: "Aircraft reports", param: "type", value: "aircraft", default: true },
-    { label: "Safety reports", param: "type", value: "asr" },
-  ] },
-  { href: "/console/organization/endorsements", label: "Endorsements", access: "organization-manager", organizationPermission: "endorsements", children: [
-    { label: "Issued endorsements", value: "records", default: true },
-    { label: "Change requests", value: "requests" },
-  ] },
-  { href: "/console/organization/notifications", label: "Notifications", access: "organization-manager", organizationPermission: "notifications" },
+  {
+    href: "/console/organization/training-guide",
+    label: "Training Guide",
+    access: "organization",
+  },
+  {
+    href: "/console/organization/people",
+    label: "Team management",
+    access: "organization-manager",
+    organizationPermission: "members",
+    children: [
+      { label: "Instructors", value: "instructors", default: true },
+      { label: "Students", value: "students" },
+      { label: "Unassigned", value: "unassigned" },
+      { label: "Invitations", value: "invitations" },
+    ],
+  },
+  {
+    href: "/console/organization/aircraft",
+    label: "Aircraft",
+    access: "organization",
+    children: [
+      {
+        label: "Aircraft",
+        value: "aircraft",
+        default: true,
+        organizationManagerOnly: true,
+      },
+      { label: "Aircraft records", value: "records" },
+      { label: "Models", value: "models", organizationManagerOnly: true },
+      {
+        label: "Maintenance items",
+        value: "inspections",
+        organizationManagerOnly: true,
+      },
+    ],
+  },
+  {
+    href: "/console/organization/reports",
+    label: "Reports",
+    access: "organization",
+    children: [
+      {
+        label: "Aircraft reports",
+        param: "type",
+        value: "aircraft",
+        default: true,
+      },
+      { label: "Safety reports", param: "type", value: "asr" },
+    ],
+  },
+  {
+    href: "/console/organization/endorsements",
+    label: "Endorsements",
+    access: "organization-manager",
+    organizationPermission: "endorsements",
+    children: [
+      { label: "Issued endorsements", value: "records", default: true },
+      { label: "Change requests", value: "requests" },
+    ],
+  },
+  {
+    href: "/console/organization/notifications",
+    label: "Notifications",
+    access: "organization-manager",
+    organizationPermission: "notifications",
+  },
 ];
 
 export const dashboardPlatformNavigation: DashboardNavItem[] = [
-  { href: "/console/platform/organizations", label: "Organizations", access: "platform", children: [
-    { label: "Requests", value: "requests" },
-    { label: "Organizations", value: "organizations", default: true },
-    { label: "Platform admins", value: "admins" },
-  ] },
-  { href: "/console/platform/aircraft", label: "Aircraft", access: "platform", children: [
-    { label: "Models", value: "models" },
-    { label: "Aircraft", value: "aircraft", default: true },
-    { label: "W&B requests", value: "requests" },
-    { label: "Assignments", value: "assignments" },
-  ] },
-  { href: "/console/platform/endorsements", label: "Endorsements", access: "platform", children: [
-    { label: "Requests", value: "requests", default: true },
-    { label: "Templates", value: "templates" },
-    { label: "Legacy review", value: "legacy" },
-  ] },
+  {
+    href: "/console/platform/training-guide",
+    label: "Training Guide",
+    access: "platform",
+  },
+  {
+    href: "/console/platform/organizations",
+    label: "Organizations",
+    access: "platform",
+    children: [
+      { label: "Requests", value: "requests" },
+      { label: "Organizations", value: "organizations", default: true },
+      { label: "Platform admins", value: "admins" },
+    ],
+  },
+  {
+    href: "/console/platform/aircraft",
+    label: "Aircraft",
+    access: "platform",
+    children: [
+      { label: "Models", value: "models" },
+      { label: "Aircraft", value: "aircraft", default: true },
+      { label: "W&B requests", value: "requests" },
+      { label: "Assignments", value: "assignments" },
+    ],
+  },
+  {
+    href: "/console/platform/endorsements",
+    label: "Endorsements",
+    access: "platform",
+    children: [
+      { label: "Requests", value: "requests", default: true },
+      { label: "Templates", value: "templates" },
+      { label: "Legacy review", value: "legacy" },
+    ],
+  },
   { href: "/console/platform/notices", label: "Notices", access: "platform" },
-  { href: "/console/platform/activity", label: "Activity", access: "platform", children: [
-    { label: "Access activity", value: "access", default: true },
-    { label: "Aircraft activity", value: "aircraft" },
-  ] },
+  {
+    href: "/console/platform/activity",
+    label: "Activity",
+    access: "platform",
+    children: [
+      { label: "Access activity", value: "access", default: true },
+      { label: "Aircraft activity", value: "aircraft" },
+    ],
+  },
 ];
 
-export function getDashboardNavChildHref(item: DashboardNavItem, child: DashboardNavChild) {
+export function getDashboardNavChildHref(
+  item: DashboardNavItem,
+  child: DashboardNavChild,
+) {
   const param = child.param ?? "view";
   return `${item.href}?${param}=${encodeURIComponent(child.value)}`;
 }
@@ -131,18 +252,24 @@ export function getDashboardWorkspaceLinks(input: {
       workspace: "personal" as const,
     },
     ...(input.canManageOrganization
-      ? [{
-          href: getOrganizationDashboardHref(input.organizationPermissions ?? []),
-          label: "Organization",
-          workspace: "organization" as const,
-        }]
+      ? [
+          {
+            href: getOrganizationDashboardHref(
+              input.organizationPermissions ?? [],
+            ),
+            label: "Organization",
+            workspace: "organization" as const,
+          },
+        ]
       : []),
     ...(input.isPlatformAdmin
-      ? [{
-          href: "/console/platform/organizations",
-          label: "Platform",
-          workspace: "platform" as const,
-        }]
+      ? [
+          {
+            href: "/console/platform/organizations",
+            label: "Platform",
+            workspace: "platform" as const,
+          },
+        ]
       : []),
   ];
 }
@@ -154,17 +281,26 @@ export function getDashboardLinksForWorkspace(input: {
 }) {
   if (input.workspace === "organization") {
     return dashboardOrganizationNavigation.filter(
-      (item) => !item.organizationPermission || input.organizationPermissions?.includes(item.organizationPermission)
+      (item) =>
+        !item.organizationPermission ||
+        input.organizationPermissions?.includes(item.organizationPermission),
     );
   }
   if (input.workspace === "platform") return dashboardPlatformNavigation;
   return dashboardPrimaryNavigation.filter(
-    (item) => !item.featureId || input.enabledFeatureIds.includes(item.featureId)
+    (item) =>
+      !item.featureId || input.enabledFeatureIds.includes(item.featureId),
   );
 }
 
-export function getOrganizationDashboardHref(permissions: readonly OrganizationPermission[]) {
-  return dashboardOrganizationNavigation.find(
-    (item) => item.organizationPermission && permissions.includes(item.organizationPermission)
-  )?.href ?? "/console/organization/aircraft";
+export function getOrganizationDashboardHref(
+  permissions: readonly OrganizationPermission[],
+) {
+  return (
+    dashboardOrganizationNavigation.find(
+      (item) =>
+        item.organizationPermission &&
+        permissions.includes(item.organizationPermission),
+    )?.href ?? "/console/organization/aircraft"
+  );
 }
