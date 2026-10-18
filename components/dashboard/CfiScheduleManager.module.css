@@ -118,7 +118,6 @@
   .agenda .entryMeta { font-size: 12px; }
   .agenda .conflict { margin-top: 0; }
 }
-.availability { display: block; text-align: left; width: 100%; padding: 4px 0; border: 0; background: transparent; color: var(--schedule-blue); font: inherit; font-size: 14px; line-height: 1.6; cursor: pointer; }
 .moreDates { display: block; margin: 12px auto 0; }
 .availabilityWeekNav { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; gap: 6px; margin-bottom: 6px; }
 .availabilityWeekNav strong { text-align: center; color: var(--schedule-ink); font-size: 13px; font-weight: 600; }
@@ -141,15 +140,6 @@
 .weeklyList { display: grid; }
 .weeklyList button { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; border: 0; border-bottom: 1px solid #e5e5ea; background: transparent; padding: 12px 0; text-align: left; font-size: 14px; }
 .weeklyList button span:last-child { color: #6e6e73; font-size: 13px; }
-.quickAvailability { display: grid; gap: 16px; }
-.quickLabel { color: #6e6e73; font-size: 12px; font-weight: 600; }
-.dayChips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
-.dayChips button { aspect-ratio: 1; min-width: 0; border: 1px solid #d2d2d7; border-radius: 50%; background: #f5f5f7; color: #3a3a3c; font: inherit; font-size: 13px; cursor: pointer; }
-.dayChips button[aria-pressed="true"] { border-color: #0066cc; background: #0066cc; color: #fff; font-weight: 600; }
-.quickTimes { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-.quickAvailability > button { width: 100%; min-height: 48px; justify-content: center; }
-.individualDays { margin-top: 22px; border-top: 1px solid #e5e5ea; }
-.individualDays summary { padding: 18px 0; color: #0066cc; font-size: 13px; cursor: pointer; list-style-position: inside; }
 .availabilityStudentBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 620px; margin-bottom: 8px; }
 .availabilityStudentName { margin: 0; color: var(--schedule-ink); font-size: 13px; font-weight: 600; }
 .weeklyTargetField { display: flex; align-items: center; gap: 6px; color: var(--schedule-muted); font-size: 12px; white-space: nowrap; }
@@ -166,6 +156,11 @@
 .weeklyEditorDay { display: grid; grid-template-columns: 148px minmax(0,1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--schedule-line); }
 .weeklyEditorDay > header { display: flex; align-items: center; justify-content: space-between; gap: 6px; align-self: start; min-height: 38px; }
 .weeklyEditorDay > header strong { font-size: 13px; font-weight: 600; }
+.dateAvailabilityEditor { max-width: 620px; border-top: 1px solid var(--schedule-line); }
+.dateAvailabilityEditor .weeklyEditorDay > header strong { display: grid; gap: 1px; }
+.dateAvailabilityEditor .weeklyEditorDay > header strong span { color: var(--schedule-ink); }
+.dateAvailabilityEditor .weeklyEditorDay > header strong small { color: var(--schedule-muted); font-size: 11px; font-weight: 400; }
+.dateAvailabilityActions { display: flex; align-items: center; gap: 2px; }
 .weeklyEditorDay > header .textButton { min-height: 32px; padding: 4px 6px; white-space: nowrap; }
 .weeklyEditorRows { display: grid; gap: 6px; }
 .weeklyEditorRow { display: grid; grid-template-columns: 132px 12px 132px auto; align-items: center; justify-content: start; gap: 7px; }
