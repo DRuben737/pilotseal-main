@@ -365,32 +365,32 @@ export default function TrainingGuideStudy({
               </nav>
             ) : null}
 
-            <article className="py-7 sm:py-9">
+            <article className="py-6 sm:py-8">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
                 Preflight preparation
               </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.75rem]">
+              <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.75rem]">
                 {activeStep.title}
               </h2>
 
               {activeStep.prepare ? (
-                <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-slate-800">
+                <p className="mt-3 whitespace-pre-wrap text-base leading-7 text-slate-800">
                   {activeStep.prepare}
                 </p>
               ) : null}
 
               {activeStep.method ? (
-                <section className="mt-6">
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <section className="mt-7">
+                  <h3 className="text-sm font-semibold text-slate-800">
                     Before the flight
                   </h3>
-                  <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">
+                  <p className="mt-1.5 whitespace-pre-wrap text-base leading-7 text-slate-700">
                     {activeStep.method}
                   </p>
                   {activeStep.resources.length ? (
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                       {activeStep.resources.map((resource) => (
-                        <a key={`${resource.title}-${resource.url}`} className="inline-flex min-h-10 items-center text-sm font-semibold text-blue-700 hover:underline" href={resource.url} target="_blank" rel="noreferrer">
+                        <a key={`${resource.title}-${resource.url}`} className="inline-flex min-h-10 items-center text-[0.8125rem] font-medium text-blue-700 underline decoration-blue-200 underline-offset-2 hover:decoration-blue-700" href={resource.url} target="_blank" rel="noreferrer">
                           {resource.title} ↗
                         </a>
                       ))}
@@ -400,27 +400,24 @@ export default function TrainingGuideStudy({
               ) : null}
 
               {activeStep.focus_questions.length ? (
-                <section className="mt-6 border-l-2 border-blue-200 pl-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    As you read, look for
+                <section className="mt-7">
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    As you read, notice
                   </h3>
-                  <ul className="mt-3 grid gap-2.5">
+                  <ul className="mt-1.5 list-disc space-y-1.5 pl-5 marker:text-slate-300">
                     {activeStep.focus_questions.map((point) => (
-                      <li key={point} className="grid grid-cols-[0.4rem_1fr] gap-3 text-[0.95rem] leading-6 text-slate-700">
-                        <span className="mt-[0.55rem] h-1.5 w-1.5 rounded-full bg-blue-600" aria-hidden="true" />
-                        <span>{point}</span>
-                      </li>
+                      <li key={point} className="text-sm leading-6 text-slate-600">{point}</li>
                     ))}
                   </ul>
                 </section>
               ) : null}
 
               {activeStep.expected_result ? (
-                <section className="mt-6">
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <section className="mt-7">
+                  <h3 className="text-sm font-semibold text-slate-800">
                     Why this matters in flight
                   </h3>
-                  <p className="mt-2 text-base leading-7 text-slate-700">{activeStep.expected_result}</p>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-600">{activeStep.expected_result}</p>
                 </section>
               ) : null}
 
@@ -433,9 +430,8 @@ export default function TrainingGuideStudy({
 
           </article>
 
-            <div className="border-t border-slate-200 pt-5">
-              <p className="text-center text-xs text-slate-500">Your place is saved automatically</p>
-              <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="border-t border-slate-200 pt-4">
+              <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   className="min-h-11 cursor-pointer text-sm font-semibold text-slate-600 disabled:cursor-default disabled:opacity-0"
