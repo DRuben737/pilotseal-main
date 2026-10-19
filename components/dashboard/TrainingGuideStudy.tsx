@@ -283,8 +283,8 @@ export default function TrainingGuideStudy({
   const isLastStep = activeStepIndex === steps.length - 1;
 
   return (
-    <main className="mx-auto w-full max-w-4xl pb-28 sm:pb-12">
-      <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-8 sm:py-6">
+    <main className="mx-auto w-full max-w-4xl pb-12">
+      <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-8 sm:py-5">
         <button
           type="button"
           className="min-h-11 cursor-pointer text-sm font-semibold text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
@@ -292,10 +292,10 @@ export default function TrainingGuideStudy({
         >
           ← Back
         </button>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
           {data.subject.certificate_code} · {data.subject.task_code}
         </p>
-        <h1 className="mt-1 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+        <h1 className="mt-1 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
           {data.subject.title}
         </h1>
         {data.instructor_modules.length > 1 ? (
@@ -332,8 +332,8 @@ export default function TrainingGuideStudy({
           </p>
         </section>
       ) : activeStep ? (
-        <div className="px-4 py-5 sm:px-8 sm:py-8">
-          <div className="mx-auto max-w-[42rem]">
+        <div className="px-4 py-4 sm:px-8 sm:py-6">
+          <div className="mx-auto max-w-[38rem]">
             <div className="flex justify-end border-b border-slate-200 pb-4">
               <button
                 type="button"
@@ -365,35 +365,40 @@ export default function TrainingGuideStudy({
               </nav>
             ) : null}
 
-            <article className="py-8 sm:py-12">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
-                Self-study guide
+            <article className="py-7 sm:py-9">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+                Preflight preparation
               </p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.75rem]">
                 {activeStep.title}
               </h2>
 
               {activeStep.prepare ? (
-                <p className="mt-7 whitespace-pre-wrap text-lg leading-8 text-slate-800">
+                <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-slate-800">
                   {activeStep.prepare}
                 </p>
               ) : null}
 
               {activeStep.method ? (
-                <div className="mt-8 border-t border-slate-200 pt-7">
-                  <p className="whitespace-pre-wrap text-base leading-8 text-slate-700">
+                <section className="mt-6">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Before the flight
+                  </h3>
+                  <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">
                     {activeStep.method}
                   </p>
-                </div>
+                </section>
               ) : null}
 
               {activeStep.focus_questions.length ? (
-                <section className="mt-8 rounded-sm bg-slate-50 px-5 py-5 sm:px-6">
-                  <h3 className="text-sm font-semibold text-slate-950">Keep these points in view</h3>
-                  <ul className="mt-3 grid gap-3">
+                <section className="mt-6 border-l-2 border-blue-200 pl-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    As you read, look for
+                  </h3>
+                  <ul className="mt-3 grid gap-2.5">
                     {activeStep.focus_questions.map((point) => (
-                      <li key={point} className="grid grid-cols-[0.45rem_1fr] gap-3 text-base leading-7 text-slate-700">
-                        <span className="mt-[0.7rem] h-1.5 w-1.5 rounded-full bg-blue-700" aria-hidden="true" />
+                      <li key={point} className="grid grid-cols-[0.4rem_1fr] gap-3 text-[0.95rem] leading-6 text-slate-700">
+                        <span className="mt-[0.55rem] h-1.5 w-1.5 rounded-full bg-blue-600" aria-hidden="true" />
                         <span>{point}</span>
                       </li>
                     ))}
@@ -402,9 +407,12 @@ export default function TrainingGuideStudy({
               ) : null}
 
               {activeStep.expected_result ? (
-                <p className="mt-8 border-l-2 border-blue-700 pl-4 text-base leading-8 text-slate-700">
-                  {activeStep.expected_result}
-                </p>
+                <section className="mt-6">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Why this matters in flight
+                  </h3>
+                  <p className="mt-2 text-base leading-7 text-slate-700">{activeStep.expected_result}</p>
+                </section>
               ) : null}
 
             {stepNotes.map((note) => (
@@ -430,19 +438,29 @@ export default function TrainingGuideStudy({
             ) : null}
           </article>
 
-            <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
-              <button
-                type="button"
-                className="min-h-11 cursor-pointer text-sm font-semibold text-slate-600 disabled:cursor-default disabled:opacity-0"
-                disabled={activeStepIndex <= 0 || saving}
-                onClick={() => {
-                  const previous = steps[activeStepIndex - 1];
-                  if (previous) void chooseStep(previous.id);
-                }}
-              >
-                ← Previous
-              </button>
-              <span className="text-xs text-slate-500">Your place is saved automatically</span>
+            <div className="border-t border-slate-200 pt-5">
+              <p className="text-center text-xs text-slate-500">Your place is saved automatically</p>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className="min-h-11 cursor-pointer text-sm font-semibold text-slate-600 disabled:cursor-default disabled:opacity-0"
+                  disabled={activeStepIndex <= 0 || saving}
+                  onClick={() => {
+                    const previous = steps[activeStepIndex - 1];
+                    if (previous) void chooseStep(previous.id);
+                  }}
+                >
+                  ← Previous
+                </button>
+                <button
+                  type="button"
+                  className="primary-button min-h-11 cursor-pointer px-5"
+                  disabled={saving}
+                  onClick={() => void continueReading()}
+                >
+                  {saving ? "Saving…" : isLastStep ? "Return to Training Guide" : "Continue reading"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -540,15 +558,6 @@ export default function TrainingGuideStudy({
         ) : null}
       </div>
 
-      {activeStep ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:px-6">
-          <div className="mx-auto flex max-w-[42rem] justify-end">
-            <button type="button" className="primary-button min-h-11 w-full cursor-pointer sm:w-auto" disabled={saving} onClick={() => void continueReading()}>
-              {saving ? "Saving…" : isLastStep ? "Return to Training Guide" : "Continue reading"}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }

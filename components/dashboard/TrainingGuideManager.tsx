@@ -2339,19 +2339,19 @@ export default function TrainingGuideManager({
                           <input value={step.title} maxLength={160} onChange={(event) => updateStep({ title: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>Opening passage</span>
+                          <span>What the student is about to review</span>
                           <textarea rows={4} value={step.prepare} onChange={(event) => updateStep({ prepare: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>Reading guidance · optional</span>
+                          <span>Before the flight · optional</span>
                           <textarea rows={4} value={step.method} onChange={(event) => updateStep({ method: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>Points to notice · optional, one per line</span>
+                          <span>As you read, look for · optional, one per line</span>
                           <textarea rows={4} value={step.focusQuestions} onChange={(event) => updateStep({ focusQuestions: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>Closing thought · optional</span>
+                          <span>Why this matters in flight · optional</span>
                           <textarea rows={3} value={step.expectedResult} onChange={(event) => updateStep({ expectedResult: event.target.value })} />
                         </label>
                         {selectedSubject?.components.length ? (
