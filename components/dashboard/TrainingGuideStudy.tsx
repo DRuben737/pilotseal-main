@@ -8,11 +8,15 @@ import {
   createCommunityTrainingNote,
   deleteCommunityTrainingNote,
   fetchCommunityTrainingNotes,
+  fetchInstructorTrainingManeuverOverrides,
   fetchMyTrainingGuideSubject,
+  fetchOrganizationTrainingManeuverGuides,
   fetchStudentTrainingSubjectNotes,
   reportCommunityTrainingNote,
   saveMyTrainingGuideProgress,
   type CommunityTrainingNote,
+  type InstructorTrainingManeuverOverride,
+  type OrganizationTrainingManeuverGuide,
   type StudentTrainingGuideModule,
   type StudentTrainingGuideSubject,
   type StudentTrainingSubjectNote,
@@ -66,6 +70,14 @@ export default function TrainingGuideStudy({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [organizationManeuvers, setOrganizationManeuvers] = useState<
+    OrganizationTrainingManeuverGuide[]
+  >([]);
+  const [instructorManeuvers, setInstructorManeuvers] = useState<
+    InstructorTrainingManeuverOverride[]
+  >([]);
+  const [activeManeuverKey, setActiveManeuverKey] = useState<string | null>(null);
+  const [maneuverPhase, setManeuverPhase] = useState<"setup" | "fly" | "exit">("setup");
 
   const activeModule = useMemo(
     () => data?.instructor_modules.find((item) => item.access_id === moduleId) ?? null,
@@ -73,6 +85,12 @@ export default function TrainingGuideStudy({
   );
   const steps = activeModule?.guide?.steps ?? [];
   const activeStep = steps.find((step) => step.id === stepId) ?? null;
+  const activeManeuver = organizationManeuvers.find(
+    (guide) => guide.component_key === activeManeuverKey && guide.enabled,
+  ) ?? null;
+  const activeInstructorManeuver = instructorManeuvers.find(
+    (guide) => guide.component_key === activeManeuverKey,
+  ) ?? null;
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -162,6 +180,34 @@ export default function TrainingGuideStudy({
       setNoteComponent("");
     }
   }, [activeModule, subjectId, userId]);
+
+  useEffect(() => {
+    setActiveManeuverKey(null);
+    setManeuverPhase("setup");
+    if (!activeModule?.organization_id) {
+      setOrganizationManeuvers([]);
+      setInstructorManeuvers([]);
+      return;
+    }
+    Promise.all([
+      fetchOrganizationTrainingManeuverGuides(
+        activeModule.organization_id,
+        subjectId,
+      ),
+      fetchInstructorTrainingManeuverOverrides(
+        activeModule.organization_id,
+        activeModule.instructor_user_id,
+        subjectId,
+      ),
+    ])
+      .then(([organizationRows, instructorRows]) => {
+        setOrganizationManeuvers(organizationRows.filter((row) => row.enabled));
+        setInstructorManeuvers(instructorRows);
+      })
+      .catch((failure) =>
+        setError(message(failure, "Maneuver guidance could not be loaded.")),
+      );
+  }, [activeModule, subjectId]);
 
   async function persist(nextStepId: string | null, nextCompleted: string[]) {
     if (!activeModule) return false;
@@ -281,6 +327,25 @@ export default function TrainingGuideStudy({
     ? steps.findIndex((step) => step.id === activeStep.id)
     : -1;
   const isLastStep = activeStepIndex === steps.length - 1;
+  const stepManeuvers = activeStep
+    ? organizationManeuvers.filter((guide) =>
+        activeStep.component_keys.includes(guide.component_key),
+      )
+    : [];
+  const phaseItems = activeManeuver
+    ? maneuverPhase === "setup"
+      ? activeManeuver.setup_items
+      : maneuverPhase === "fly"
+        ? activeManeuver.fly_items
+        : activeManeuver.exit_items
+    : [];
+  const instructorPhaseItems = activeInstructorManeuver
+    ? maneuverPhase === "setup"
+      ? activeInstructorManeuver.setup_notes
+      : maneuverPhase === "fly"
+        ? activeInstructorManeuver.fly_notes
+        : activeInstructorManeuver.exit_notes
+    : [];
 
   return (
     <main className="mx-auto w-full max-w-4xl pb-12">
@@ -288,9 +353,16 @@ export default function TrainingGuideStudy({
         <button
           type="button"
           className="min-h-11 cursor-pointer text-sm font-semibold text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
-          onClick={() => router.push(safeReturnPath(returnTo))}
+          onClick={() => {
+            if (activeManeuver) {
+              setActiveManeuverKey(null);
+              setManeuverPhase("setup");
+              return;
+            }
+            router.push(safeReturnPath(returnTo));
+          }}
         >
-          ← Back
+          ← {activeManeuver ? "Back to guide" : "Back"}
         </button>
         <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
           {data.subject.certificate_code} · {data.subject.task_code}
@@ -331,6 +403,90 @@ export default function TrainingGuideStudy({
             This subject is open to you. Your instructor has not added the reading guide yet.
           </p>
         </section>
+      ) : activeManeuver ? (
+        <div className="px-4 py-4 sm:px-8 sm:py-6">
+          <article className="mx-auto max-w-[38rem]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+              How we fly it
+            </p>
+            <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.75rem]">
+              {activeManeuver.title}
+            </h2>
+            {[activeManeuver.source_name, activeManeuver.source_pages && `pp. ${activeManeuver.source_pages}`, activeManeuver.revision_label]
+              .filter(Boolean).length ? (
+              <p className="mt-2 text-sm text-slate-500">
+                {[activeManeuver.source_name, activeManeuver.source_pages && `pp. ${activeManeuver.source_pages}`, activeManeuver.revision_label]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            ) : null}
+            {activeManeuver.applicable_aircraft.length ? (
+              <p className="mt-3 text-sm text-slate-600">
+                Applies to {activeManeuver.applicable_aircraft.join(", ")}
+              </p>
+            ) : null}
+
+            <div className="mt-6 grid grid-cols-3 border border-slate-200 bg-white" role="tablist" aria-label="Maneuver phases">
+              {(["setup", "fly", "exit"] as const).map((phase) => (
+                <button
+                  key={phase}
+                  type="button"
+                  role="tab"
+                  aria-selected={maneuverPhase === phase}
+                  className={`min-h-12 cursor-pointer border-r border-slate-200 px-2 text-sm font-semibold capitalize last:border-r-0 ${
+                    maneuverPhase === phase
+                      ? "bg-blue-50 text-blue-900"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                  onClick={() => setManeuverPhase(phase)}
+                >
+                  {phase}
+                </button>
+              ))}
+            </div>
+
+            <section className="py-6">
+              <ol className="space-y-4">
+                {phaseItems.map((item, index) => (
+                  <li key={`${item}-${index}`} className="grid grid-cols-[1.75rem_1fr] gap-2 text-base leading-7 text-slate-800">
+                    <span className="font-semibold text-blue-700">{index + 1}</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ol>
+
+              {instructorPhaseItems.length ? (
+                <aside className="mt-7 border-l-2 border-blue-600 bg-blue-50 px-4 py-3">
+                  <strong className="text-sm text-blue-950">
+                    From {activeModule.instructor_name}
+                  </strong>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-blue-950">
+                    {instructorPhaseItems.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </aside>
+              ) : null}
+
+              {maneuverPhase === "exit" && (activeManeuver.callouts.length || activeInstructorManeuver?.callouts.length) ? (
+                <div className="mt-7">
+                  <h3 className="text-sm font-semibold text-slate-900">Callouts to remember</h3>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                    {[...activeManeuver.callouts, ...(activeInstructorManeuver?.callouts ?? [])].map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+
+              {maneuverPhase === "exit" && activeInstructorManeuver?.resources.length ? (
+                <div className="mt-7 flex flex-wrap gap-3">
+                  {activeInstructorManeuver.resources.map((resource) => (
+                    <a key={`${resource.title}-${resource.url}`} href={resource.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 underline decoration-blue-200 underline-offset-2">
+                      {resource.title} ↗
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          </article>
+        </div>
       ) : activeStep ? (
         <div className="px-4 py-4 sm:px-8 sm:py-6">
           <div className="mx-auto max-w-[38rem]">
@@ -418,6 +574,31 @@ export default function TrainingGuideStudy({
                     Why this matters in flight
                   </h3>
                   <p className="mt-1.5 text-sm leading-6 text-slate-600">{activeStep.expected_result}</p>
+                </section>
+              ) : null}
+
+              {stepManeuvers.length ? (
+                <section className="mt-8 border-t border-slate-200 pt-5">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    See how we’ll fly it
+                  </h3>
+                  <div className="mt-2 grid gap-1">
+                    {stepManeuvers.map((guide) => (
+                      <button
+                        key={guide.component_key}
+                        type="button"
+                        className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 text-left text-sm font-semibold text-blue-700"
+                        onClick={() => {
+                          setActiveManeuverKey(guide.component_key);
+                          setManeuverPhase("setup");
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        <span>{guide.title}</span>
+                        <span aria-hidden="true">→</span>
+                      </button>
+                    ))}
+                  </div>
                 </section>
               ) : null}
 

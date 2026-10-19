@@ -108,6 +108,38 @@ export type InstructorTrainingGuide = {
   updated_at?: string;
 };
 
+export type OrganizationTrainingManeuverGuide = {
+  id?: string;
+  organization_id: string;
+  subject_id: string;
+  component_key: string;
+  title: string;
+  revision_label: string;
+  source_name: string;
+  source_pages: string;
+  applicable_aircraft: string[];
+  setup_items: string[];
+  fly_items: string[];
+  exit_items: string[];
+  callouts: string[];
+  enabled: boolean;
+  updated_at?: string;
+};
+
+export type InstructorTrainingManeuverOverride = {
+  id?: string;
+  organization_id: string;
+  instructor_user_id: string;
+  subject_id: string;
+  component_key: string;
+  setup_notes: string[];
+  fly_notes: string[];
+  exit_notes: string[];
+  callouts: string[];
+  resources: TrainingResource[];
+  updated_at?: string;
+};
+
 export type StudentTrainingSubjectNote = {
   id: string;
   organization_id: string | null;
@@ -208,6 +240,52 @@ function normalizeInstructorGuide(
     key_points: Array.isArray(row.key_points) ? row.key_points.map(String) : [],
     resources: normalizeResources(row.resources),
     steps: normalizeSteps(row.steps),
+    updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
+  };
+}
+
+function normalizeTextArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+}
+
+function normalizeOrganizationManeuverGuide(
+  row: Record<string, unknown>,
+): OrganizationTrainingManeuverGuide {
+  return {
+    id: typeof row.id === "string" ? row.id : undefined,
+    organization_id: String(row.organization_id ?? ""),
+    subject_id: String(row.subject_id ?? ""),
+    component_key: String(row.component_key ?? ""),
+    title: String(row.title ?? ""),
+    revision_label: String(row.revision_label ?? ""),
+    source_name: String(row.source_name ?? ""),
+    source_pages: String(row.source_pages ?? ""),
+    applicable_aircraft: normalizeTextArray(row.applicable_aircraft),
+    setup_items: normalizeTextArray(row.setup_items),
+    fly_items: normalizeTextArray(row.fly_items),
+    exit_items: normalizeTextArray(row.exit_items),
+    callouts: normalizeTextArray(row.callouts),
+    enabled: row.enabled !== false,
+    updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
+  };
+}
+
+function normalizeInstructorManeuverOverride(
+  row: Record<string, unknown>,
+): InstructorTrainingManeuverOverride {
+  return {
+    id: typeof row.id === "string" ? row.id : undefined,
+    organization_id: String(row.organization_id ?? ""),
+    instructor_user_id: String(row.instructor_user_id ?? ""),
+    subject_id: String(row.subject_id ?? ""),
+    component_key: String(row.component_key ?? ""),
+    setup_notes: normalizeTextArray(row.setup_notes),
+    fly_notes: normalizeTextArray(row.fly_notes),
+    exit_notes: normalizeTextArray(row.exit_notes),
+    callouts: normalizeTextArray(row.callouts),
+    resources: normalizeResources(row.resources),
     updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
   };
 }
@@ -506,6 +584,97 @@ export async function saveInstructorTrainingGuide(
         .eq("id", input.id)
     : getSupabaseClient().from("instructor_training_guides").insert(payload);
   const { error } = await query;
+  if (error) throw error;
+}
+
+export async function fetchOrganizationTrainingManeuverGuides(
+  organizationId: string,
+  subjectId: string,
+) {
+  if (!organizationId || !subjectId)
+    return [] as OrganizationTrainingManeuverGuide[];
+  const { data, error } = await getSupabaseClient()
+    .from("organization_training_maneuver_guides")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .eq("subject_id", subjectId)
+    .order("title");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map(
+    normalizeOrganizationManeuverGuide,
+  );
+}
+
+export async function saveOrganizationTrainingManeuverGuide(
+  input: OrganizationTrainingManeuverGuide,
+) {
+  const { error } = await getSupabaseClient()
+    .from("organization_training_maneuver_guides")
+    .upsert(
+      {
+        organization_id: input.organization_id,
+        subject_id: input.subject_id,
+        component_key: input.component_key,
+        title: input.title.trim(),
+        revision_label: input.revision_label.trim(),
+        source_name: input.source_name.trim(),
+        source_pages: input.source_pages.trim(),
+        applicable_aircraft: input.applicable_aircraft,
+        setup_items: input.setup_items,
+        fly_items: input.fly_items,
+        exit_items: input.exit_items,
+        callouts: input.callouts,
+        enabled: input.enabled,
+        updated_by:
+          (await getSupabaseClient().auth.getUser()).data.user?.id ?? null,
+      },
+      { onConflict: "organization_id,subject_id,component_key" },
+    );
+  if (error) throw error;
+}
+
+export async function fetchInstructorTrainingManeuverOverrides(
+  organizationId: string,
+  instructorUserId: string,
+  subjectId: string,
+) {
+  if (!organizationId || !instructorUserId || !subjectId)
+    return [] as InstructorTrainingManeuverOverride[];
+  const { data, error } = await getSupabaseClient()
+    .from("instructor_training_maneuver_overrides")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .eq("instructor_user_id", instructorUserId)
+    .eq("subject_id", subjectId)
+    .order("component_key");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map(
+    normalizeInstructorManeuverOverride,
+  );
+}
+
+export async function saveInstructorTrainingManeuverOverride(
+  input: InstructorTrainingManeuverOverride,
+) {
+  const { error } = await getSupabaseClient()
+    .from("instructor_training_maneuver_overrides")
+    .upsert(
+      {
+        organization_id: input.organization_id,
+        instructor_user_id: input.instructor_user_id,
+        subject_id: input.subject_id,
+        component_key: input.component_key,
+        setup_notes: input.setup_notes,
+        fly_notes: input.fly_notes,
+        exit_notes: input.exit_notes,
+        callouts: input.callouts,
+        resources: input.resources,
+      },
+      {
+        onConflict:
+          "organization_id,instructor_user_id,subject_id,component_key",
+      },
+    );
   if (error) throw error;
 }
 

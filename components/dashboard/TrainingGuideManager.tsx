@@ -25,18 +25,24 @@ import {
   fetchMyTrainingGuideSubjects,
   fetchMyAssignedInstructorTrainingGuides,
   fetchMyInstructorTrainingGuides,
+  fetchInstructorTrainingManeuverOverrides,
+  fetchOrganizationTrainingManeuverGuides,
   fetchOrganizationTrainingGuides,
   fetchStudentTrainingSubjectNotes,
   fetchTrainingSubjects,
   moderateCommunityTrainingNote,
   reportCommunityTrainingNote,
   saveInstructorTrainingGuide,
+  saveInstructorTrainingManeuverOverride,
   saveOrganizationTrainingGuide,
+  saveOrganizationTrainingManeuverGuide,
   saveStudentTrainingSubjectNote,
   saveTrainingSubject,
   updateCommunityTrainingNote,
   type CommunityTrainingNote,
   type InstructorTrainingGuide,
+  type InstructorTrainingManeuverOverride,
+  type OrganizationTrainingManeuverGuide,
   type OrganizationTrainingGuide,
   type StudentTrainingSubjectNote,
   type StudentTrainingSubjectAccess,
@@ -57,7 +63,9 @@ type Drawer =
   | "subject"
   | "platform-editor"
   | "organization-editor"
+  | "organization-maneuvers"
   | "instructor-editor"
+  | "instructor-maneuvers"
   | "student-note"
   | null;
 
@@ -103,6 +111,37 @@ type InstructorStepDraft = {
   componentKeys: string[];
   resources: string;
 };
+
+type OrganizationManeuverDraft = {
+  componentKey: string;
+  title: string;
+  revisionLabel: string;
+  sourceName: string;
+  sourcePages: string;
+  applicableAircraft: string;
+  setupItems: string;
+  flyItems: string;
+  exitItems: string;
+  callouts: string;
+  enabled: boolean;
+};
+
+type InstructorManeuverDraft = {
+  componentKey: string;
+  title: string;
+  setupNotes: string;
+  flyNotes: string;
+  exitNotes: string;
+  callouts: string;
+  resources: string;
+};
+
+function lines(value: string) {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 function blankInstructorStep(): InstructorStepDraft {
   return {
@@ -781,6 +820,12 @@ export default function TrainingGuideManager({
   const [assignedInstructorGuides, setAssignedInstructorGuides] = useState<
     InstructorTrainingGuide[]
   >([]);
+  const [organizationManeuverGuides, setOrganizationManeuverGuides] = useState<
+    OrganizationTrainingManeuverGuide[]
+  >([]);
+  const [instructorManeuverOverrides, setInstructorManeuverOverrides] = useState<
+    InstructorTrainingManeuverOverride[]
+  >([]);
   const [organizationStudents, setOrganizationStudents] = useState<
     OrganizationStudent[]
   >([]);
@@ -819,6 +864,12 @@ export default function TrainingGuideManager({
     resources: "",
     steps: [] as InstructorStepDraft[],
   });
+  const [organizationManeuverDrafts, setOrganizationManeuverDrafts] = useState<
+    OrganizationManeuverDraft[]
+  >([]);
+  const [instructorManeuverDrafts, setInstructorManeuverDrafts] = useState<
+    InstructorManeuverDraft[]
+  >([]);
   const [communityForm, setCommunityForm] = useState({
     id: "",
     componentKey: "",
@@ -972,12 +1023,35 @@ export default function TrainingGuideManager({
     setAssignedInstructorGuides(nextAssignedInstructorGuides);
   }
 
+  async function loadManeuverGuides(subjectId: string) {
+    if (!organizationId) {
+      setOrganizationManeuverGuides([]);
+      setInstructorManeuverOverrides([]);
+      return;
+    }
+    const [organizationRows, instructorRows] = await Promise.all([
+      fetchOrganizationTrainingManeuverGuides(organizationId, subjectId),
+      userId
+        ? fetchInstructorTrainingManeuverOverrides(
+            organizationId,
+            userId,
+            subjectId,
+          )
+        : Promise.resolve([]),
+    ]);
+    setOrganizationManeuverGuides(organizationRows);
+    setInstructorManeuverOverrides(instructorRows);
+  }
+
   async function openSubject(subject: TrainingSubject) {
     setSelectedSubjectId(subject.id);
     setDrawer("subject");
     setStatus("");
-    await loadSubjectNotes(subject.id).catch((error) =>
-      setStatus(errorMessage(error, "Unable to load subject notes.")),
+    await Promise.all([
+      loadSubjectNotes(subject.id),
+      loadManeuverGuides(subject.id),
+    ]).catch((error) =>
+      setStatus(errorMessage(error, "Unable to load subject details.")),
     );
   }
 
@@ -1029,6 +1103,52 @@ export default function TrainingGuideManager({
       })),
     });
     setDrawer("instructor-editor");
+  }
+
+  function openOrganizationManeuverEditor() {
+    if (!selectedSubject) return;
+    setOrganizationManeuverDrafts(
+      selectedSubject.components.map((component) => {
+        const existing = organizationManeuverGuides.find(
+          (guide) => guide.component_key === component.key,
+        );
+        return {
+          componentKey: component.key,
+          title: existing?.title ?? component.title,
+          revisionLabel: existing?.revision_label ?? "",
+          sourceName: existing?.source_name ?? "SOPM",
+          sourcePages: existing?.source_pages ?? "",
+          applicableAircraft: (existing?.applicable_aircraft ?? []).join("\n"),
+          setupItems: (existing?.setup_items ?? []).join("\n"),
+          flyItems: (existing?.fly_items ?? []).join("\n"),
+          exitItems: (existing?.exit_items ?? []).join("\n"),
+          callouts: (existing?.callouts ?? []).join("\n"),
+          enabled: existing?.enabled ?? true,
+        };
+      }),
+    );
+    setDrawer("organization-maneuvers");
+  }
+
+  function openInstructorManeuverEditor() {
+    if (!selectedSubject) return;
+    setInstructorManeuverDrafts(
+      selectedSubject.components.map((component) => {
+        const existing = instructorManeuverOverrides.find(
+          (guide) => guide.component_key === component.key,
+        );
+        return {
+          componentKey: component.key,
+          title: component.title,
+          setupNotes: (existing?.setup_notes ?? []).join("\n"),
+          flyNotes: (existing?.fly_notes ?? []).join("\n"),
+          exitNotes: (existing?.exit_notes ?? []).join("\n"),
+          callouts: (existing?.callouts ?? []).join("\n"),
+          resources: resourcesToText(existing?.resources ?? []),
+        };
+      }),
+    );
+    setDrawer("instructor-maneuvers");
   }
 
   async function handleSaveSubject() {
@@ -1099,6 +1219,57 @@ export default function TrainingGuideManager({
     }
   }
 
+  async function handleSaveOrganizationManeuvers() {
+    if (!selectedSubject || !organizationId) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      const populated = organizationManeuverDrafts.filter((draft) =>
+        [draft.setupItems, draft.flyItems, draft.exitItems].some((value) =>
+          value.trim(),
+        ),
+      );
+      if (
+        populated.some(
+          (draft) =>
+            !draft.title.trim() ||
+            !draft.setupItems.trim() ||
+            !draft.flyItems.trim() ||
+            !draft.exitItems.trim(),
+        )
+      )
+        throw new Error(
+          "Each published maneuver needs a title plus Setup, Fly, and Exit guidance.",
+        );
+      await Promise.all(
+        populated.map((draft) =>
+          saveOrganizationTrainingManeuverGuide({
+            organization_id: organizationId,
+            subject_id: selectedSubject.id,
+            component_key: draft.componentKey,
+            title: draft.title,
+            revision_label: draft.revisionLabel,
+            source_name: draft.sourceName,
+            source_pages: draft.sourcePages,
+            applicable_aircraft: lines(draft.applicableAircraft),
+            setup_items: lines(draft.setupItems),
+            fly_items: lines(draft.flyItems),
+            exit_items: lines(draft.exitItems),
+            callouts: lines(draft.callouts),
+            enabled: draft.enabled,
+          }),
+        ),
+      );
+      await loadManeuverGuides(selectedSubject.id);
+      setDrawer("subject");
+      setStatus("SOPM maneuver guidance saved.");
+    } catch (error) {
+      setStatus(errorMessage(error, "Unable to save maneuver guidance."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleSaveInstructorGuide() {
     if (!selectedSubject || !userId) return;
     setSaving(true);
@@ -1143,6 +1314,45 @@ export default function TrainingGuideManager({
       setStatus("Instructor guidance saved.");
     } catch (error) {
       setStatus(errorMessage(error, "Unable to save instructor guidance."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveInstructorManeuvers() {
+    if (!selectedSubject || !organizationId || !userId) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      const populated = instructorManeuverDrafts.filter((draft) =>
+        [
+          draft.setupNotes,
+          draft.flyNotes,
+          draft.exitNotes,
+          draft.callouts,
+          draft.resources,
+        ].some((value) => value.trim()),
+      );
+      await Promise.all(
+        populated.map((draft) =>
+          saveInstructorTrainingManeuverOverride({
+            organization_id: organizationId,
+            instructor_user_id: userId,
+            subject_id: selectedSubject.id,
+            component_key: draft.componentKey,
+            setup_notes: lines(draft.setupNotes),
+            fly_notes: lines(draft.flyNotes),
+            exit_notes: lines(draft.exitNotes),
+            callouts: lines(draft.callouts),
+            resources: parseResources(draft.resources),
+          }),
+        ),
+      );
+      await loadManeuverGuides(selectedSubject.id);
+      setDrawer("subject");
+      setStatus("Your maneuver notes were saved.");
+    } catch (error) {
+      setStatus(errorMessage(error, "Unable to save your maneuver notes."));
     } finally {
       setSaving(false);
     }
@@ -1533,6 +1743,45 @@ export default function TrainingGuideManager({
                 </section>
               ) : null}
 
+              {organizationId ? (
+                <section>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-slate-950">
+                      SOPM Maneuver Guides
+                    </h2>
+                    {canEditOrganization ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={openOrganizationManeuverEditor}
+                      >
+                        {organizationManeuverGuides.length ? "Edit" : "Add"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {!organizationManeuverGuides.length ? (
+                    <p className="text-sm text-slate-500">
+                      No maneuver guides added.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-slate-100 border border-slate-200 bg-white">
+                      {organizationManeuverGuides.map((guide) => (
+                        <div key={guide.component_key} className="px-3 py-2">
+                          <strong className="text-sm text-slate-900">
+                            {guide.title}
+                          </strong>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {[guide.source_name, guide.source_pages && `pp. ${guide.source_pages}`, guide.revision_label]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
               {workspace === "personal" && canAuthorGuide ? (
                 <section>
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -1557,6 +1806,32 @@ export default function TrainingGuideManager({
                       ))}
                     </ol>
                   ) : null}
+                </section>
+              ) : null}
+
+              {workspace === "personal" && canAuthorGuide && organizationId ? (
+                <section>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-slate-950">
+                      My Maneuver Notes
+                    </h2>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={openInstructorManeuverEditor}
+                    >
+                      {instructorManeuverOverrides.length ? "Edit" : "Add"}
+                    </button>
+                  </div>
+                  {instructorManeuverOverrides.length ? (
+                    <p className="text-sm text-slate-600">
+                      Notes added for {instructorManeuverOverrides.length} maneuver{instructorManeuverOverrides.length === 1 ? "" : "s"}.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      Add your own setup, flying cues, and links without changing the organization SOPM.
+                    </p>
+                  )}
                 </section>
               ) : null}
 
@@ -2180,6 +2455,90 @@ export default function TrainingGuideManager({
 
       <DetailDrawer
         compact
+        open={drawer === "organization-maneuvers"}
+        onClose={() => setDrawer("subject")}
+        title="SOPM Maneuver Guides"
+      >
+        <div className="grid gap-3">
+          {organizationManeuverDrafts.map((draft, index) => {
+            const update = (patch: Partial<OrganizationManeuverDraft>) =>
+              setOrganizationManeuverDrafts((current) =>
+                current.map((item, itemIndex) =>
+                  itemIndex === index ? { ...item, ...patch } : item,
+                ),
+              );
+            return (
+              <details
+                key={draft.componentKey}
+                className="border border-slate-200 bg-white"
+                open={index === 0}
+              >
+                <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold text-slate-900">
+                  {draft.title || draft.componentKey}
+                </summary>
+                <div className="grid gap-3 border-t border-slate-200 p-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={draft.enabled}
+                      onChange={(event) => update({ enabled: event.target.checked })}
+                    />
+                    Available to students
+                  </label>
+                  <label className="saas-field">
+                    <span>Student-facing title</span>
+                    <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="saas-field">
+                      <span>Source</span>
+                      <input value={draft.sourceName} onChange={(event) => update({ sourceName: event.target.value })} />
+                    </label>
+                    <label className="saas-field">
+                      <span>Pages</span>
+                      <input value={draft.sourcePages} onChange={(event) => update({ sourcePages: event.target.value })} />
+                    </label>
+                    <label className="saas-field">
+                      <span>Revision</span>
+                      <input value={draft.revisionLabel} onChange={(event) => update({ revisionLabel: event.target.value })} />
+                    </label>
+                  </div>
+                  <label className="saas-field">
+                    <span>Applicable aircraft · one per line</span>
+                    <textarea rows={2} value={draft.applicableAircraft} onChange={(event) => update({ applicableAircraft: event.target.value })} />
+                  </label>
+                  {[
+                    ["Setup · one action per line", "setupItems"],
+                    ["Fly · one action per line", "flyItems"],
+                    ["Exit · one action per line", "exitItems"],
+                    ["Callouts · optional, one per line", "callouts"],
+                  ].map(([label, field]) => (
+                    <label key={field} className="saas-field">
+                      <span>{label}</span>
+                      <textarea
+                        rows={field === "callouts" ? 3 : 5}
+                        value={draft[field as keyof OrganizationManeuverDraft] as string}
+                        onChange={(event) =>
+                          update({ [field]: event.target.value } as Partial<OrganizationManeuverDraft>)
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" className="ghost-button" onClick={() => setDrawer("subject")}>Cancel</button>
+          <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSaveOrganizationManeuvers()}>
+            {saving ? "Saving…" : "Save maneuver guides"}
+          </button>
+        </div>
+      </DetailDrawer>
+
+      <DetailDrawer
+        compact
         open={drawer === "instructor-editor"}
         onClose={() => setDrawer("subject")}
         title="My Guidance"
@@ -2339,6 +2698,58 @@ export default function TrainingGuideManager({
             onClick={() => void handleSaveInstructorGuide()}
           >
             {saving ? "Saving…" : "Save guidance"}
+          </button>
+        </div>
+      </DetailDrawer>
+
+      <DetailDrawer
+        compact
+        open={drawer === "instructor-maneuvers"}
+        onClose={() => setDrawer("subject")}
+        title="My Maneuver Notes"
+      >
+        <div className="grid gap-3">
+          {instructorManeuverDrafts.map((draft, index) => {
+            const update = (patch: Partial<InstructorManeuverDraft>) =>
+              setInstructorManeuverDrafts((current) =>
+                current.map((item, itemIndex) =>
+                  itemIndex === index ? { ...item, ...patch } : item,
+                ),
+              );
+            return (
+              <details key={draft.componentKey} className="border border-slate-200 bg-white" open={index === 0}>
+                <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold text-slate-900">
+                  {draft.title}
+                </summary>
+                <div className="grid gap-3 border-t border-slate-200 p-3">
+                  {[
+                    ["Setup notes · one per line", "setupNotes"],
+                    ["Flying cues · one per line", "flyNotes"],
+                    ["Exit notes · one per line", "exitNotes"],
+                    ["Callouts · one per line", "callouts"],
+                  ].map(([label, field]) => (
+                    <label key={field} className="saas-field">
+                      <span>{label}</span>
+                      <textarea
+                        rows={4}
+                        value={draft[field as keyof InstructorManeuverDraft] as string}
+                        onChange={(event) => update({ [field]: event.target.value } as Partial<InstructorManeuverDraft>)}
+                      />
+                    </label>
+                  ))}
+                  <label className="saas-field">
+                    <span>Videos and links · title | https://…</span>
+                    <textarea rows={3} value={draft.resources} onChange={(event) => update({ resources: event.target.value })} />
+                  </label>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" className="ghost-button" onClick={() => setDrawer("subject")}>Cancel</button>
+          <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSaveInstructorManeuvers()}>
+            {saving ? "Saving…" : "Save maneuver notes"}
           </button>
         </div>
       </DetailDrawer>
