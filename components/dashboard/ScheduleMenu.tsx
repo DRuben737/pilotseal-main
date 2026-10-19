@@ -23,7 +23,7 @@ export default function ScheduleMenu({ label, icon, actions, disabled = false }:
     return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
   return <div ref={root} className={styles.menu}>
-    <button ref={trigger} type="button" className={styles.iconButton} aria-label={label} title={label}
+    <button ref={trigger} type="button" className={styles.iconButton} aria-label={label}
       disabled={disabled} aria-haspopup="menu" aria-expanded={open} aria-controls={id}
       onClick={() => setOpen(!open)} onKeyDown={(event) => {
         if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); }
