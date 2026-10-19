@@ -1120,19 +1120,16 @@ export default function TrainingGuideManager({
     setStatus("");
     try {
       if (!instructorForm.steps.length)
-        throw new Error("Add at least one guided study item.");
+        throw new Error("Add at least one guide page.");
       if (
         instructorForm.steps.some(
           (step) =>
             !step.title.trim() ||
-            !step.prepare.trim() ||
-            !step.method.trim() ||
-            !step.focusQuestions.trim() ||
-            !step.expectedResult.trim(),
+            !step.prepare.trim(),
         )
       )
         throw new Error(
-          "Each item needs a title, preparation, study method, question, and expected result.",
+          "Each guide page needs a title and opening passage.",
         );
       await saveInstructorTrainingGuide({
         id: instructorForm.id,
@@ -2256,8 +2253,8 @@ export default function TrainingGuideManager({
           <section className="border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">Guided study items</h3>
-                <p className="mt-0.5 text-xs text-slate-600">Students see one item at a time in this order.</p>
+                <h3 className="text-sm font-semibold text-slate-950">Guide pages</h3>
+                <p className="mt-0.5 text-xs text-slate-600">Students read one short page at a time in this order.</p>
               </div>
               <button
                 type="button"
@@ -2269,13 +2266,13 @@ export default function TrainingGuideManager({
                   }))
                 }
               >
-                Add item
+                Add page
               </button>
             </div>
             <div className="mt-3 grid gap-3">
               {!instructorForm.steps.length ? (
                 <p className="border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
-                  Add the first preparation item to publish a useful student guide.
+                  Add the first page to publish this guide.
                 </p>
               ) : (
                 instructorForm.steps.map((step, index) => {
@@ -2289,13 +2286,13 @@ export default function TrainingGuideManager({
                   return (
                     <article key={step.id} className="border border-slate-200 bg-white p-3">
                       <div className="flex items-center justify-between gap-3">
-                        <strong className="text-sm text-slate-900">Item {index + 1}</strong>
+                        <strong className="text-sm text-slate-900">Page {index + 1}</strong>
                         <div className="flex gap-1">
                           <button
                             type="button"
                             className="ghost-button min-h-9 px-2"
                             disabled={index === 0}
-                            aria-label={`Move item ${index + 1} up`}
+                            aria-label={`Move page ${index + 1} up`}
                             onClick={() =>
                               setInstructorForm((current) => {
                                 const steps = [...current.steps];
@@ -2310,7 +2307,7 @@ export default function TrainingGuideManager({
                             type="button"
                             className="ghost-button min-h-9 px-2"
                             disabled={index === instructorForm.steps.length - 1}
-                            aria-label={`Move item ${index + 1} down`}
+                            aria-label={`Move page ${index + 1} down`}
                             onClick={() =>
                               setInstructorForm((current) => {
                                 const steps = [...current.steps];
@@ -2325,7 +2322,7 @@ export default function TrainingGuideManager({
                             type="button"
                             className="ghost-button min-h-9 px-2 text-rose-700"
                             onClick={() => {
-                              if (!window.confirm("Remove this guided study item?")) return;
+                              if (!window.confirm("Remove this guide page?")) return;
                               setInstructorForm((current) => ({
                                 ...current,
                                 steps: current.steps.filter((item) => item.id !== step.id),
@@ -2338,23 +2335,23 @@ export default function TrainingGuideManager({
                       </div>
                       <div className="mt-3 grid gap-3">
                         <label className="saas-field">
-                          <span>Item title</span>
+                          <span>Page title</span>
                           <input value={step.title} maxLength={160} onChange={(event) => updateStep({ title: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>What to prepare</span>
+                          <span>Opening passage</span>
                           <textarea rows={4} value={step.prepare} onChange={(event) => updateStep({ prepare: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>How to work through it</span>
+                          <span>Reading guidance · optional</span>
                           <textarea rows={4} value={step.method} onChange={(event) => updateStep({ method: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>Questions to work through · one per line</span>
+                          <span>Points to notice · optional, one per line</span>
                           <textarea rows={4} value={step.focusQuestions} onChange={(event) => updateStep({ focusQuestions: event.target.value })} />
                         </label>
                         <label className="saas-field">
-                          <span>What the student should be able to produce</span>
+                          <span>Closing thought · optional</span>
                           <textarea rows={3} value={step.expectedResult} onChange={(event) => updateStep({ expectedResult: event.target.value })} />
                         </label>
                         {selectedSubject?.components.length ? (
@@ -2381,7 +2378,7 @@ export default function TrainingGuideManager({
                           </fieldset>
                         ) : null}
                         <label className="saas-field">
-                          <span>Item resources · title | https://…</span>
+                          <span>Page resources · title | https://…</span>
                           <textarea rows={3} value={step.resources} onChange={(event) => updateStep({ resources: event.target.value })} />
                         </label>
                       </div>

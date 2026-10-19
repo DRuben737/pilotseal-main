@@ -37,8 +37,7 @@ function firstStep(
 ) {
   const current = module.progress?.current_step_id;
   if (current && steps.some((step) => step.id === current)) return current;
-  const completed = new Set(module.progress?.completed_step_ids ?? []);
-  return steps.find((step) => !completed.has(step.id))?.id ?? steps[0]?.id ?? null;
+  return steps[0]?.id ?? null;
 }
 
 export default function TrainingGuideStudy({
@@ -66,6 +65,7 @@ export default function TrainingGuideStudy({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [outlineOpen, setOutlineOpen] = useState(false);
 
   const activeModule = useMemo(
     () => data?.instructor_modules.find((item) => item.access_id === moduleId) ?? null,
@@ -220,16 +220,21 @@ export default function TrainingGuideStudy({
     if (nextId === stepId) return;
     if (!(await persist(nextId, completed))) return;
     setStepId(nextId);
+    setOutlineOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function completeAndContinue() {
+  async function continueReading() {
     if (!activeStep) return;
-    const nextCompleted = Array.from(new Set([...completed, activeStep.id]));
     const index = steps.findIndex((step) => step.id === activeStep.id);
-    const nextStep = steps[index + 1]?.id ?? activeStep.id;
-    if (!(await persist(nextStep, nextCompleted))) return;
-    setCompleted(nextCompleted);
-    setStepId(nextStep);
+    const nextStep = steps[index + 1];
+    if (!nextStep) {
+      router.push(safeReturnPath(returnTo));
+      return;
+    }
+    if (!(await persist(nextStep.id, completed))) return;
+    setStepId(nextStep.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function postCommunityNote() {
@@ -272,12 +277,14 @@ export default function TrainingGuideStudy({
   const stepNotes = privateNotes.filter(
     (note) => !note.step_id || note.step_id === activeStep?.id,
   );
-  const isLastStep = activeStep && steps.at(-1)?.id === activeStep.id;
-  const isAlreadyComplete = activeStep ? completed.includes(activeStep.id) : false;
+  const activeStepIndex = activeStep
+    ? steps.findIndex((step) => step.id === activeStep.id)
+    : -1;
+  const isLastStep = activeStepIndex === steps.length - 1;
 
   return (
-    <main className="mx-auto w-full max-w-5xl pb-28 sm:pb-10">
-      <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+    <main className="mx-auto w-full max-w-4xl pb-28 sm:pb-12">
+      <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-8 sm:py-6">
         <button
           type="button"
           className="min-h-11 cursor-pointer text-sm font-semibold text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
@@ -285,10 +292,10 @@ export default function TrainingGuideStudy({
         >
           ← Back
         </button>
-        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
           {data.subject.certificate_code} · {data.subject.task_code}
         </p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-950 sm:text-3xl">
+        <h1 className="mt-1 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
           {data.subject.title}
         </h1>
         {data.instructor_modules.length > 1 ? (
@@ -319,113 +326,159 @@ export default function TrainingGuideStudy({
 
       {!activeModule || !steps.length ? (
         <section className="mx-4 mt-6 border border-slate-200 bg-white p-5 sm:mx-6">
-          <h2 className="text-lg font-semibold text-slate-950">Preparation guide not published yet</h2>
+          <h2 className="text-lg font-semibold text-slate-950">Reading guide not published yet</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            This subject is open to you. Your instructor has not added guided preparation steps yet.
+            This subject is open to you. Your instructor has not added the reading guide yet.
           </p>
         </section>
       ) : activeStep ? (
-        <div className="grid gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
-          <aside className="self-start lg:sticky lg:top-4">
-            <label className="block text-sm font-semibold text-slate-700">
-              Current item
-              <select
-                className="mt-1 min-h-11 w-full rounded-sm border border-slate-300 bg-white px-3 text-base lg:hidden"
-                value={activeStep.id}
-                disabled={saving}
-                onChange={(event) => void chooseStep(event.target.value)}
+        <div className="px-4 py-5 sm:px-8 sm:py-8">
+          <div className="mx-auto max-w-[42rem]">
+            <div className="flex justify-end border-b border-slate-200 pb-4">
+              <button
+                type="button"
+                aria-expanded={outlineOpen}
+                className="min-h-11 cursor-pointer text-sm font-semibold text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                onClick={() => setOutlineOpen((current) => !current)}
               >
+                {outlineOpen ? "Hide guide outline" : "View guide outline"}
+              </button>
+            </div>
+
+            {outlineOpen ? (
+              <nav className="mt-4 border border-slate-200 bg-white" aria-label="Guide outline">
                 {steps.map((step) => (
-                  <option key={step.id} value={step.id}>
-                    {completed.includes(step.id) ? "Completed · " : ""}{step.title}
-                  </option>
+                  <button
+                    key={step.id}
+                    type="button"
+                    aria-current={step.id === activeStep.id ? "page" : undefined}
+                    className={`flex min-h-12 w-full cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-3 text-left text-sm last:border-b-0 ${
+                      step.id === activeStep.id
+                        ? "bg-blue-50 font-semibold text-blue-900"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                    onClick={() => void chooseStep(step.id)}
+                  >
+                    <span>{step.title}</span>
+                  </button>
                 ))}
-              </select>
-            </label>
-            <nav className="mt-2 hidden border border-slate-200 bg-white lg:block" aria-label="Study items">
-              {steps.map((step) => (
-                <button
-                  key={step.id}
-                  type="button"
-                  aria-current={step.id === activeStep.id ? "step" : undefined}
-                  className={`min-h-11 w-full cursor-pointer border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 ${
-                    step.id === activeStep.id
-                      ? "bg-blue-50 font-semibold text-blue-900"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                  onClick={() => void chooseStep(step.id)}
-                >
-                  {completed.includes(step.id) ? "✓ " : ""}{step.title}
-                </button>
-              ))}
-            </nav>
-          </aside>
+              </nav>
+            ) : null}
 
-          <article className="min-w-0 border border-slate-200 bg-white p-5 sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-              {isAlreadyComplete ? "Previously completed" : "Prepare this next"}
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-950">{activeStep.title}</h2>
-
-            <section className="mt-6">
-              <h3 className="text-sm font-semibold text-slate-950">What to prepare</h3>
-              <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">
-                {activeStep.prepare || "No preparation instruction has been added for this item."}
+            <article className="py-8 sm:py-12">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+                Self-study guide
               </p>
-            </section>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                {activeStep.title}
+              </h2>
 
-            {activeStep.method ? (
-              <section className="mt-6 border-l-2 border-blue-700 pl-4">
-                <h3 className="text-sm font-semibold text-slate-950">How to work through it</h3>
-                <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">{activeStep.method}</p>
-              </section>
-            ) : null}
+              {activeStep.prepare ? (
+                <p className="mt-7 whitespace-pre-wrap text-lg leading-8 text-slate-800">
+                  {activeStep.prepare}
+                </p>
+              ) : null}
 
-            {activeStep.focus_questions.length ? (
-              <section className="mt-6">
-                <h3 className="text-sm font-semibold text-slate-950">Questions to work through</h3>
-                <ol className="mt-3 grid gap-3">
-                  {activeStep.focus_questions.map((question, index) => (
-                    <li key={`${index}-${question}`} className="grid grid-cols-[1.75rem_1fr] gap-2 text-base leading-7 text-slate-700">
-                      <span className="font-semibold text-blue-800">{index + 1}</span>
-                      <span>{question}</span>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            ) : null}
+              {activeStep.method ? (
+                <div className="mt-8 border-t border-slate-200 pt-7">
+                  <p className="whitespace-pre-wrap text-base leading-8 text-slate-700">
+                    {activeStep.method}
+                  </p>
+                </div>
+              ) : null}
 
-            {activeStep.expected_result ? (
-              <section className="mt-6 bg-slate-50 p-4">
-                <h3 className="text-sm font-semibold text-slate-950">What you should be able to produce</h3>
-                <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">{activeStep.expected_result}</p>
-              </section>
-            ) : null}
+              {activeStep.focus_questions.length ? (
+                <section className="mt-8 rounded-sm bg-slate-50 px-5 py-5 sm:px-6">
+                  <h3 className="text-sm font-semibold text-slate-950">Keep these points in view</h3>
+                  <ul className="mt-3 grid gap-3">
+                    {activeStep.focus_questions.map((point) => (
+                      <li key={point} className="grid grid-cols-[0.45rem_1fr] gap-3 text-base leading-7 text-slate-700">
+                        <span className="mt-[0.7rem] h-1.5 w-1.5 rounded-full bg-blue-700" aria-hidden="true" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              {activeStep.expected_result ? (
+                <p className="mt-8 border-l-2 border-blue-700 pl-4 text-base leading-8 text-slate-700">
+                  {activeStep.expected_result}
+                </p>
+              ) : null}
 
             {stepNotes.map((note) => (
-              <aside key={note.id} className="mt-6 border-l-2 border-amber-500 bg-amber-50 px-4 py-3">
-                <strong className="text-sm text-amber-950">A note from your instructor</strong>
+              <aside key={note.id} className="mt-8 border-l-2 border-amber-500 bg-amber-50 px-4 py-3">
+                <strong className="text-sm text-amber-950">A note for you</strong>
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-amber-950">{note.body}</p>
               </aside>
             ))}
 
             {activeStep.resources.length ? (
-              <section className="mt-6">
-                <h3 className="text-sm font-semibold text-slate-950">Instructor resources</h3>
-                <div className="mt-2 divide-y divide-slate-100 border border-slate-200">
+              <details className="mt-8 border-y border-slate-200">
+                <summary className="min-h-12 cursor-pointer py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
+                  Resources for this page
+                </summary>
+                <div className="mb-3 divide-y divide-slate-100 border border-slate-200">
                   {activeStep.resources.map((resource) => (
                     <a key={`${resource.title}-${resource.url}`} className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" href={resource.url} target="_blank" rel="noreferrer">
                       <span>{resource.title}</span><span aria-hidden="true">↗</span>
                     </a>
                   ))}
                 </div>
-              </section>
+              </details>
             ) : null}
           </article>
+
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                className="min-h-11 cursor-pointer text-sm font-semibold text-slate-600 disabled:cursor-default disabled:opacity-0"
+                disabled={activeStepIndex <= 0 || saving}
+                onClick={() => {
+                  const previous = steps[activeStepIndex - 1];
+                  if (previous) void chooseStep(previous.id);
+                }}
+              >
+                ← Previous
+              </button>
+              <span className="text-xs text-slate-500">Your place is saved automatically</span>
+            </div>
+          </div>
         </div>
       ) : null}
 
-      <div className="px-4 sm:px-6">
+      <div className="mx-auto max-w-[42rem] px-4 sm:px-0">
+        {activeModule?.guide && (
+          activeModule.guide.explanation ||
+          activeModule.guide.key_points.length ||
+          activeModule.guide.resources.length
+        ) ? (
+          <details className="mb-4 border border-slate-200 bg-white">
+            <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
+              From {activeModule.instructor_name}
+            </summary>
+            <div className="border-t border-slate-200 p-4">
+              {activeModule.guide.explanation ? (
+                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{activeModule.guide.explanation}</p>
+              ) : null}
+              {activeModule.guide.key_points.length ? (
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
+                  {activeModule.guide.key_points.map((point) => <li key={point}>{point}</li>)}
+                </ul>
+              ) : null}
+              {activeModule.guide.resources.length ? (
+                <div className="mt-4 divide-y divide-slate-100 border border-slate-200">
+                  {activeModule.guide.resources.map((resource) => (
+                    <a key={`${resource.title}-${resource.url}`} className="flex min-h-11 items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" href={resource.url} target="_blank" rel="noreferrer">
+                      <span>{resource.title}</span><span aria-hidden="true">↗</span>
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
         <details className="border border-slate-200 bg-white">
           <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
             Official references and ACS
@@ -450,7 +503,7 @@ export default function TrainingGuideStudy({
         {activeModule?.organization_id ? (
           <details className="mt-4 border border-slate-200 bg-white">
             <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
-              Notes from other students
+              Student notes
             </summary>
             <div className="border-t border-slate-200 p-4">
               <label className="block text-sm font-semibold text-slate-700">
@@ -461,7 +514,7 @@ export default function TrainingGuideStudy({
                 </select>
               </label>
               <label className="mt-3 block text-sm font-semibold text-slate-700">
-                Your note
+                Share a note with other students
                 <textarea className="mt-1 w-full rounded-sm border border-slate-300 p-3 text-base" rows={4} maxLength={2000} value={noteBody} onChange={(event) => { const body = event.target.value; setNoteBody(body); localStorage.setItem(`training-guide-note:${activeModule.access_id}`, JSON.stringify({ body, component: noteComponent })); }} />
               </label>
               <button type="button" className="primary-button mt-3 min-h-11" disabled={saving || !noteBody.trim()} onClick={() => void postCommunityNote()}>
@@ -489,9 +542,9 @@ export default function TrainingGuideStudy({
 
       {activeStep ? (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:px-6">
-          <div className="mx-auto flex max-w-5xl justify-end">
-            <button type="button" className="primary-button min-h-11 w-full cursor-pointer sm:w-auto" disabled={saving || Boolean(isLastStep && isAlreadyComplete)} onClick={() => void completeAndContinue()}>
-              {saving ? "Saving…" : isLastStep ? (isAlreadyComplete ? "Preparation saved" : "Complete this item") : "Complete this item and continue"}
+          <div className="mx-auto flex max-w-[42rem] justify-end">
+            <button type="button" className="primary-button min-h-11 w-full cursor-pointer sm:w-auto" disabled={saving} onClick={() => void continueReading()}>
+              {saving ? "Saving…" : isLastStep ? "Return to Training Guide" : "Continue reading"}
             </button>
           </div>
         </div>
