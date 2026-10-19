@@ -387,6 +387,15 @@ export default function TrainingGuideStudy({
                   <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">
                     {activeStep.method}
                   </p>
+                  {activeStep.resources.length ? (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                      {activeStep.resources.map((resource) => (
+                        <a key={`${resource.title}-${resource.url}`} className="inline-flex min-h-10 items-center text-sm font-semibold text-blue-700 hover:underline" href={resource.url} target="_blank" rel="noreferrer">
+                          {resource.title} ↗
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -422,20 +431,6 @@ export default function TrainingGuideStudy({
               </aside>
             ))}
 
-            {activeStep.resources.length ? (
-              <details className="mt-8 border-y border-slate-200">
-                <summary className="min-h-12 cursor-pointer py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
-                  Resources for this page
-                </summary>
-                <div className="mb-3 divide-y divide-slate-100 border border-slate-200">
-                  {activeStep.resources.map((resource) => (
-                    <a key={`${resource.title}-${resource.url}`} className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" href={resource.url} target="_blank" rel="noreferrer">
-                      <span>{resource.title}</span><span aria-hidden="true">↗</span>
-                    </a>
-                  ))}
-                </div>
-              </details>
-            ) : null}
           </article>
 
             <div className="border-t border-slate-200 pt-5">
@@ -467,59 +462,8 @@ export default function TrainingGuideStudy({
       ) : null}
 
       <div className="mx-auto max-w-[42rem] px-4 sm:px-0">
-        {activeModule?.guide && (
-          activeModule.guide.explanation ||
-          activeModule.guide.key_points.length ||
-          activeModule.guide.resources.length
-        ) ? (
-          <details className="mb-4 border border-slate-200 bg-white">
-            <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
-              From {activeModule.instructor_name}
-            </summary>
-            <div className="border-t border-slate-200 p-4">
-              {activeModule.guide.explanation ? (
-                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{activeModule.guide.explanation}</p>
-              ) : null}
-              {activeModule.guide.key_points.length ? (
-                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
-                  {activeModule.guide.key_points.map((point) => <li key={point}>{point}</li>)}
-                </ul>
-              ) : null}
-              {activeModule.guide.resources.length ? (
-                <div className="mt-4 divide-y divide-slate-100 border border-slate-200">
-                  {activeModule.guide.resources.map((resource) => (
-                    <a key={`${resource.title}-${resource.url}`} className="flex min-h-11 items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" href={resource.url} target="_blank" rel="noreferrer">
-                      <span>{resource.title}</span><span aria-hidden="true">↗</span>
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </details>
-        ) : null}
-        <details className="border border-slate-200 bg-white">
-          <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
-            Official references and ACS
-          </summary>
-          <div className="border-t border-slate-200 p-4">
-            <div className="divide-y divide-slate-100 border border-slate-200">
-              {data.subject.references.map((reference) => (
-                <a key={reference.id ?? reference.title} className="block min-h-11 cursor-pointer px-3 py-2 hover:bg-blue-50" href={reference.source_url} target="_blank" rel="noreferrer">
-                  <strong className="text-sm text-blue-800">{reference.title}</strong>
-                  <span className="mt-1 block text-sm text-slate-600">
-                    {[reference.chapter, reference.page_label && `pp. ${reference.page_label}`].filter(Boolean).join(" · ")}
-                  </span>
-                </a>
-              ))}
-            </div>
-            <a className="mt-3 inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-blue-700" href={data.subject.source_url} target="_blank" rel="noreferrer">
-              Open the official ACS ↗
-            </a>
-          </div>
-        </details>
-
         {activeModule?.organization_id ? (
-          <details className="mt-4 border border-slate-200 bg-white">
+          <details className="border border-slate-200 bg-white">
             <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
               Student notes
             </summary>

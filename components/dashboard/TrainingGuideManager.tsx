@@ -562,21 +562,6 @@ function GuidedStudentStudy({
                   <strong className="text-sm text-slate-950">
                     {guide.instructor_name ?? "Instructor"}
                   </strong>
-                  {guide.explanation ? (
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                      {guide.explanation}
-                    </p>
-                  ) : null}
-                  {guide.key_points.length ? (
-                    <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                      {guide.key_points.map((point) => (
-                        <li key={point}>{point}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <div className="mt-3">
-                    <ResourceLinks resources={guide.resources} />
-                  </div>
                 </article>
               ))}
               {privateNotes.map((note) => (
@@ -1562,15 +1547,6 @@ export default function TrainingGuideManager({
                       {selectedInstructorGuide ? "Edit" : "Add"}
                     </button>
                   </div>
-                  {selectedInstructorGuide?.explanation ? (
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                      {selectedInstructorGuide.explanation}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-slate-500">
-                      No instructor guidance.
-                    </p>
-                  )}
                   {selectedInstructorGuide?.steps.length ? (
                     <ol className="mt-3 divide-y divide-slate-100 border border-slate-200 bg-white">
                       {selectedInstructorGuide.steps.map((step, index) => (
@@ -1581,18 +1557,6 @@ export default function TrainingGuideManager({
                       ))}
                     </ol>
                   ) : null}
-                  {selectedInstructorGuide?.key_points.length ? (
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                      {selectedInstructorGuide.key_points.map((point) => (
-                        <li key={point}>{point}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <div className="mt-2">
-                    <ResourceLinks
-                      resources={selectedInstructorGuide?.resources ?? []}
-                    />
-                  </div>
                 </section>
               ) : null}
 
@@ -1612,21 +1576,6 @@ export default function TrainingGuideManager({
                           <strong className="text-sm text-slate-900">
                             {guide.instructor_name ?? "Instructor"}
                           </strong>
-                          {guide.explanation ? (
-                            <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                              {guide.explanation}
-                            </p>
-                          ) : null}
-                          {guide.key_points.length ? (
-                            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                              {guide.key_points.map((point) => (
-                                <li key={point}>{point}</li>
-                              ))}
-                            </ul>
-                          ) : null}
-                          <div className="mt-2">
-                            <ResourceLinks resources={guide.resources} />
-                          </div>
                         </article>
                       ))}
                     </div>
@@ -2236,20 +2185,6 @@ export default function TrainingGuideManager({
         title="My Guidance"
       >
         <div className="grid gap-3">
-          <label className="saas-field">
-            <span>Module introduction · optional</span>
-            <textarea
-              rows={4}
-              maxLength={12000}
-              value={instructorForm.explanation}
-              onChange={(event) =>
-                setInstructorForm((current) => ({
-                  ...current,
-                  explanation: event.target.value,
-                }))
-              }
-            />
-          </label>
           <section className="border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -2378,7 +2313,7 @@ export default function TrainingGuideManager({
                           </fieldset>
                         ) : null}
                         <label className="saas-field">
-                          <span>Page resources · title | https://…</span>
+                          <span>Links shown beside Before the flight · title | https://…</span>
                           <textarea rows={3} value={step.resources} onChange={(event) => updateStep({ resources: event.target.value })} />
                         </label>
                       </div>
@@ -2388,19 +2323,6 @@ export default function TrainingGuideManager({
               )}
             </div>
           </section>
-          <label className="saas-field">
-            <span>Resources · title | https://…</span>
-            <textarea
-              rows={5}
-              value={instructorForm.resources}
-              onChange={(event) =>
-                setInstructorForm((current) => ({
-                  ...current,
-                  resources: event.target.value,
-                }))
-              }
-            />
-          </label>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button
