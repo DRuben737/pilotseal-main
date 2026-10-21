@@ -317,6 +317,11 @@ export default function CfiScheduleManager() {
   } | null>(null);
   const [dayDropTarget, setDayDropTarget] = useState("");
   const dragSourceId = useRef("");
+  const pendingLessonDrop = useRef<
+    | { kind: "entry"; id: string; mode: "before" | "swap" | "after" }
+    | { kind: "day"; date: string }
+    | null
+  >(null);
   const suppressEntryClick = useRef(false);
 
   const [permissionDraft, setPermissionDraft] = useState<string[]>([]);
@@ -801,6 +806,7 @@ export default function CfiScheduleManager() {
     setLessonDropTarget(null);
     setDayDropTarget("");
     dragSourceId.current = "";
+    pendingLessonDrop.current = null;
   }
 
   function lessonEditOperation(entry: ScheduleEntry): ScheduleOperation {
@@ -925,6 +931,27 @@ export default function CfiScheduleManager() {
       return true;
     }
     return false;
+  }
+
+  function completePendingLessonDrop(sourceId: string) {
+    const pending = pendingLessonDrop.current;
+    if (!pending) return false;
+    if (pending.kind === "day") {
+      moveLessonToDate(sourceId, pending.date);
+      return true;
+    }
+    if (pending.id === sourceId) return false;
+    const target = entries.find((entry) => entry.id === pending.id);
+    if (!target) return false;
+    if (pending.mode === "swap" && target.entry_type === "lesson")
+      void swapLessons(sourceId, target.id);
+    else
+      moveLessonRelative(
+        sourceId,
+        target,
+        pending.mode === "before" ? "before" : "after",
+      );
+    return true;
   }
 
   async function swapLessons(sourceId: string, targetId: string) {
@@ -2758,6 +2785,7 @@ export default function CfiScheduleManager() {
                   event.dataTransfer.dropEffect = "move";
                   setLessonDropTarget(null);
                   setDayDropTarget(date);
+                  pendingLessonDrop.current = { kind: "day", date };
                 }}
                 onDragLeave={(event) => {
                   if (
@@ -2913,7 +2941,7 @@ export default function CfiScheduleManager() {
                           const rect =
                             event.currentTarget.getBoundingClientRect();
                           setDayDropTarget("");
-                          setLessonDropTarget({
+                          const nextDropTarget = {
                             id: entry.id,
                             mode: lessonDropMode(
                               event.clientY,
@@ -2921,7 +2949,12 @@ export default function CfiScheduleManager() {
                               rect.height,
                               entry.entry_type === "lesson",
                             ),
-                          });
+                          } as const;
+                          pendingLessonDrop.current = {
+                            kind: "entry",
+                            ...nextDropTarget,
+                          };
+                          setLessonDropTarget(nextDropTarget);
                         }}
                         onDrop={(event) => {
                           event.stopPropagation();
@@ -2949,21 +2982,24 @@ export default function CfiScheduleManager() {
                         }}
                         onDragEnd={(event) => {
                           const sourceId = dragSourceId.current;
+                          let completed = false;
                           if (
                             sourceId &&
                             (event.clientX !== 0 || event.clientY !== 0)
                           ) {
-                            if (
-                              !completeLessonDropAtPoint(
-                                sourceId,
-                                event.clientX,
-                                event.clientY,
-                              )
-                            )
-                              resetLessonDrag();
-                          } else {
-                            resetLessonDrag();
+                            completed = completeLessonDropAtPoint(
+                              sourceId,
+                              event.clientX,
+                              event.clientY,
+                            );
                           }
+                          if (
+                            !completed &&
+                            sourceId &&
+                            event.dataTransfer.dropEffect === "move"
+                          )
+                            completed = completePendingLessonDrop(sourceId);
+                          if (!completed) resetLessonDrag();
                           window.setTimeout(() => {
                             suppressEntryClick.current = false;
                           }, 0);
