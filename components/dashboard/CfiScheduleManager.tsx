@@ -323,6 +323,7 @@ export default function CfiScheduleManager() {
     | null
   >(null);
   const suppressEntryClick = useRef(false);
+  const lessonDragCancelled = useRef(false);
 
   const [permissionDraft, setPermissionDraft] = useState<string[]>([]);
   const [accessPickerOpen, setAccessPickerOpen] = useState(false);
@@ -737,6 +738,15 @@ export default function CfiScheduleManager() {
   }, [featureEnabled, isCfiView, weekReady, availabilityReview, activeCfiId]);
 
   useEffect(() => {
+    const cancelLessonDrag = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && dragSourceId.current)
+        lessonDragCancelled.current = true;
+    };
+    document.addEventListener("keydown", cancelLessonDrag, true);
+    return () => document.removeEventListener("keydown", cancelLessonDrag, true);
+  }, []);
+
+  useEffect(() => {
     if (!hasDraft) return;
     const beforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -807,6 +817,7 @@ export default function CfiScheduleManager() {
     setDayDropTarget("");
     dragSourceId.current = "";
     pendingLessonDrop.current = null;
+    lessonDragCancelled.current = false;
   }
 
   function lessonEditOperation(entry: ScheduleEntry): ScheduleOperation {
@@ -2792,10 +2803,12 @@ export default function CfiScheduleManager() {
                     !event.currentTarget.contains(
                       event.relatedTarget as Node | null,
                     )
-                  )
+                  ) {
                     setDayDropTarget((current) =>
                       current === date ? "" : current,
                     );
+                    pendingLessonDrop.current = null;
+                  }
                 }}
                 onDrop={(event) => {
                   if (!isCfiView) return;
@@ -2924,6 +2937,7 @@ export default function CfiScheduleManager() {
                             return;
                           }
                           dragSourceId.current = entry.id;
+                          lessonDragCancelled.current = false;
                           suppressEntryClick.current = true;
                           event.dataTransfer.effectAllowed = "move";
                           event.dataTransfer.setData("text/plain", entry.id);
@@ -2996,7 +3010,7 @@ export default function CfiScheduleManager() {
                           if (
                             !completed &&
                             sourceId &&
-                            event.dataTransfer.dropEffect === "move"
+                            !lessonDragCancelled.current
                           )
                             completed = completePendingLessonDrop(sourceId);
                           if (!completed) resetLessonDrag();
