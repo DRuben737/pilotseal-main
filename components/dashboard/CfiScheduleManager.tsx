@@ -885,6 +885,48 @@ export default function CfiScheduleManager() {
     );
   }
 
+  function completeLessonDropAtPoint(
+    sourceId: string,
+    clientX: number,
+    clientY: number,
+  ) {
+    const element = document.elementFromPoint(clientX, clientY);
+    const entryElement = element?.closest<HTMLElement>(
+      "[data-schedule-entry-id]",
+    );
+    const targetId = entryElement?.dataset.scheduleEntryId;
+    if (targetId && targetId !== sourceId) {
+      const target = entries.find((entry) => entry.id === targetId);
+      if (target) {
+        const rect = entryElement.getBoundingClientRect();
+        const mode = lessonDropMode(
+          clientY,
+          rect.top,
+          rect.height,
+          target.entry_type === "lesson",
+        );
+        if (mode === "swap" && target.entry_type === "lesson")
+          void swapLessons(sourceId, target.id);
+        else
+          moveLessonRelative(
+            sourceId,
+            target,
+            mode === "before" ? "before" : "after",
+          );
+        return true;
+      }
+    }
+    const dayElement = element?.closest<HTMLElement>(
+      "[data-schedule-day-drop]",
+    );
+    const date = dayElement?.dataset.scheduleDayDrop;
+    if (date) {
+      moveLessonToDate(sourceId, date);
+      return true;
+    }
+    return false;
+  }
+
   async function swapLessons(sourceId: string, targetId: string) {
     if (!isCfiView || saving || !sourceId || !targetId || sourceId === targetId)
       return;
@@ -2709,6 +2751,7 @@ export default function CfiScheduleManager() {
               </div>
               <div
                 className={styles.dayEntries}
+                data-schedule-day-drop={date}
                 onDragOver={(event) => {
                   if (!isCfiView || !dragSourceId.current) return;
                   event.preventDefault();
@@ -2830,6 +2873,7 @@ export default function CfiScheduleManager() {
                         key={entry.id}
                         type="button"
                         className={className}
+                        data-schedule-entry-id={entry.id}
                         disabled={!weekReady || saving}
                         draggable={canSwapEntry && !saving}
                         data-drop-label={
@@ -2903,8 +2947,23 @@ export default function CfiScheduleManager() {
                               mode === "before" ? "before" : "after",
                             );
                         }}
-                        onDragEnd={() => {
-                          resetLessonDrag();
+                        onDragEnd={(event) => {
+                          const sourceId = dragSourceId.current;
+                          if (
+                            sourceId &&
+                            (event.clientX !== 0 || event.clientY !== 0)
+                          ) {
+                            if (
+                              !completeLessonDropAtPoint(
+                                sourceId,
+                                event.clientX,
+                                event.clientY,
+                              )
+                            )
+                              resetLessonDrag();
+                          } else {
+                            resetLessonDrag();
+                          }
                           window.setTimeout(() => {
                             suppressEntryClick.current = false;
                           }, 0);
