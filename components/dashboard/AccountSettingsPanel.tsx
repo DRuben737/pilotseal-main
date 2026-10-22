@@ -44,6 +44,7 @@ type MedicalForm = {
 type CertificateForm = {
   certificate_number: string;
   certificate_type: PersonCertificateType;
+  issue_date: string;
   last_event_date: string;
   ratings: string[];
   level: string;
@@ -66,6 +67,7 @@ const emptyMedicalForm: MedicalForm = {
 const emptyCertificateForm: CertificateForm = {
   certificate_number: "",
   certificate_type: "pilot",
+  issue_date: "",
   last_event_date: "",
   ratings: [],
   level: "",
@@ -192,6 +194,7 @@ function buildCertificateForm(certificate: PersonCertificate): CertificateForm {
   return {
     certificate_number: certificate.certificate_number ?? "",
     certificate_type: certificate.certificate_type,
+    issue_date: formatIsoDateForDisplay(certificate.issue_date),
     last_event_date: formatIsoDateForDisplay(certificate.last_event_date),
     ratings: certificate.ratings,
     level: certificate.certificate_type === "pilot" ? certificate.certificate_level ?? "" : "",
@@ -315,6 +318,14 @@ function AccountCertificateForm({
   return (
     <div className="people-certificate-form dashboard-setting-form mt-3">
       <label className="saas-field">
+        <span>Most recent certificate issuance date</span>
+        <input
+          value={form.issue_date}
+          onChange={(event) => onChange("issue_date", event.target.value)}
+          placeholder="MM/DD/YYYY"
+        />
+      </label>
+      <label className="saas-field">
         <span>Certificate type</span>
         <select
           value={form.certificate_type}
@@ -351,7 +362,13 @@ function AccountCertificateForm({
         />
       </label>
       <label className="saas-field">
-        <span>Last flight review / issuance / activity</span>
+        <span>
+          {form.certificate_type === "flight_instructor"
+            ? "Recent experience established"
+            : form.certificate_type === "ground_instructor"
+              ? "Recent experience established"
+              : "Last flight review / issuance"}
+        </span>
         <input
           value={form.last_event_date}
           onChange={(event) => onChange("last_event_date", event.target.value)}
@@ -829,7 +846,7 @@ export default function AccountSettingsPanel() {
         certificateType: certificateForm.certificate_type,
         certificateNumber: certificateForm.certificate_number,
         ratings: certificateForm.ratings,
-        issueDate: null,
+        issueDate: certificateForm.issue_date ? convertDisplayDateToIsoDate(certificateForm.issue_date) : null,
         lastEventDate: certificateForm.last_event_date ? convertDisplayDateToIsoDate(certificateForm.last_event_date) : null,
         eventType: certificateForm.certificate_type === "pilot" ? certificateForm.level : null,
         certificateLevel: certificateForm.certificate_type === "pilot" && certificateForm.level ? certificateForm.level as "Student" | "Private" | "Commercial" | "ATP" : null,
@@ -874,7 +891,7 @@ export default function AccountSettingsPanel() {
         certificateType: draft.certificate_type,
         certificateNumber: draft.certificate_number,
         ratings: draft.ratings,
-        issueDate: null,
+        issueDate: draft.issue_date ? convertDisplayDateToIsoDate(draft.issue_date) : null,
         lastEventDate: draft.last_event_date ? convertDisplayDateToIsoDate(draft.last_event_date) : null,
         eventType: draft.certificate_type === "pilot" ? draft.level : null,
         certificateLevel: draft.certificate_type === "pilot" && draft.level ? draft.level as "Student" | "Private" | "Commercial" | "ATP" : null,

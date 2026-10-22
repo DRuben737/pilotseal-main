@@ -150,11 +150,12 @@ export function convertDisplayDateToIsoDate(value: string) {
 }
 
 export function getCertificateCurrencyDueDate(certificate: PersonCertificate) {
-  if (!certificate.last_event_date) {
+  const referenceDate = certificate.last_event_date || certificate.issue_date;
+  if (!referenceDate) {
     return null;
   }
 
-  const date = new Date(`${certificate.last_event_date}T00:00:00`);
+  const date = new Date(`${referenceDate}T00:00:00`);
   if (Number.isNaN(date.getTime())) {
     return null;
   }

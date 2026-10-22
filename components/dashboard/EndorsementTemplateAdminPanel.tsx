@@ -714,7 +714,7 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
               </p>
               <div className="mt-2 text-xs leading-5 text-slate-500">
                 <p>Date: 07/16/2026</p>
-                <p>Alex Instructor · 9876543CFI · Exp. 12/31/2027</p>
+                <p>Alex Instructor · 9876543CFI · RE 12/31/2027</p>
               </div>
               {previewState.missingFields.length > 0 ? (
                 <p className="mt-1 text-xs text-amber-700">

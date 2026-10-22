@@ -10,7 +10,7 @@ export default function SoloFlightInitialPage() {
   const endorsementText = `I certify that [Student Name] has received the required training to qualify for solo flying. I have determined they meet the applicable requirements of 14 CFR § 61.87(n) and are proficient to make solo flights in [Make/Model].
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">

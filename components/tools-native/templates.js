@@ -17,6 +17,7 @@ const BASE_FIELD_KEYS = new Set([
   "date",
   "instructorName",
   "instructorCertNumber",
+  "instructorCertificateDateLabel",
   "instructorCertExpDate",
 ]);
 

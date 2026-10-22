@@ -10,7 +10,7 @@ export default function SoloCrossCountryPage() {
   const endorsementText = `I certify that [Student Name] has received the required solo cross-country training. I find they have met the applicable requirements of 14 CFR § 61.93 and are proficient to make solo cross-country flights in a [Make/Model] aircraft, [Aircraft Category].
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">

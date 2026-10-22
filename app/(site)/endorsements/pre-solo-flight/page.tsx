@@ -10,7 +10,7 @@ export default function PreSoloFlightPage() {
   const endorsementText = `I certify that [Student Name] has received and logged pre-solo flight training for the maneuvers and procedures that are appropriate to the [Make/Model] aircraft. I have determined they have demonstrated satisfactory proficiency and safety on the maneuvers and procedures required by 14 CFR § 61.87 in this or similar make and model of aircraft to be flown.
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">

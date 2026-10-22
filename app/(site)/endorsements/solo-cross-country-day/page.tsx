@@ -10,7 +10,7 @@ export default function SoloCrossCountryDayPage() {
   const endorsementText = `I have reviewed the cross-country planning of [Student Name]. I find the planning and preparation to be correct to make the solo flight from [Origination Airport] to [Destination Airport] via [Route of Flight] with landings at [Airport Names] in a [Make/Model] aircraft on [Date]. [List any applicable conditions or limitations.]
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">

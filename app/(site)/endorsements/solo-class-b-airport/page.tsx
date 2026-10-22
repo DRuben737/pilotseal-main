@@ -10,7 +10,7 @@ export default function SoloClassBAirportPage() {
   const endorsementText = `I certify that [Student Name] has received the required training of 14 CFR § 61.95(b)(1). I have determined that they are proficient to conduct solo flight operations at [Name of Airport]. [List any applicable conditions or limitations.]
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">

@@ -621,7 +621,7 @@ export default function EndorsementWordingEditor({
 
       <p className="text-xs text-slate-500">
         <span className="font-medium text-slate-600">Signature details added automatically:</span>{" "}
-        date, instructor name, certificate number and expiration date.
+        date, instructor name, certificate number and recent experience end date.
       </p>
 
       {pickerOpen ? (

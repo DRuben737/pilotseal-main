@@ -36,7 +36,7 @@ import { fetchMyStudentCandidates } from '@/lib/student-candidates';
 const FIELD_CONFIG = [
   { key: 'instructorName', label: 'Instructor name', type: 'text', required: true, autoComplete: 'name' },
   { key: 'instructorCertNumber', label: 'Instructor certificate number', type: 'text', required: true, autoComplete: 'off' },
-  { key: 'instructorCertExpDate', label: 'Instructor certificate expiration', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
+  { key: 'instructorCertExpDate', label: 'Instructor recent experience end date', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
   { key: 'studentName', label: 'Pilot name', type: 'text', required: true, autoComplete: 'name' },
   { key: 'studentCertNumber', label: 'Pilot certificate number', type: 'text', required: false, autoComplete: 'off', hideOptionalTag: true },
   { key: 'date', label: 'Endorsement date', type: 'text', required: true, autoComplete: 'off', placeholder: 'MM/DD/YYYY', inputMode: 'numeric', maxLength: 10 },
@@ -45,6 +45,7 @@ const FIELD_CONFIG = [
 const INITIAL_FORM_DATA = {
   instructorName: '',
   instructorCertNumber: '',
+  instructorCertificateDateLabel: 'RE',
   instructorCertExpDate: '',
   studentName: '',
   studentCertNumber: '',
@@ -81,21 +82,29 @@ const AVERY_5163_LABELS_PER_PAGE = AVERY_5163_COLUMNS * AVERY_5163_ROWS;
 const AVERY_5163_SIDE_MARGIN = 11.25;
 const AVERY_5163_TOP_MARGIN = 36;
 const AVERY_5163_COLUMN_GAP = 13.5;
-function getInstructorExpirationDate(certificate, person) {
-  if (person.cert_exp_date) {
-    return person.cert_exp_date;
+const CFI_NO_EXPIRATION_EFFECTIVE_DATE = '2024-12-01';
+
+function getInstructorCertificateDateLabel(certificate) {
+  const mostRecentIssuanceDate = certificate.issue_date || certificate.last_event_date;
+  return mostRecentIssuanceDate && mostRecentIssuanceDate < CFI_NO_EXPIRATION_EFFECTIVE_DATE
+    ? 'Exp.'
+    : 'RE';
+}
+
+function getInstructorCertificateDate(certificate, person) {
+  const certificateForDate = getInstructorCertificateDateLabel(certificate) === 'Exp.'
+    ? { ...certificate, last_event_date: null }
+    : certificate;
+  const dueDate = getCertificateCurrencyDueDate(certificateForDate);
+  if (dueDate) {
+    return [
+      String(dueDate.getMonth() + 1).padStart(2, '0'),
+      String(dueDate.getDate()).padStart(2, '0'),
+      String(dueDate.getFullYear()).padStart(4, '0'),
+    ].join('/');
   }
 
-  const dueDate = getCertificateCurrencyDueDate(certificate);
-  if (!dueDate) {
-    return '';
-  }
-
-  return [
-    String(dueDate.getMonth() + 1).padStart(2, '0'),
-    String(dueDate.getDate()).padStart(2, '0'),
-    String(dueDate.getFullYear()).padStart(4, '0'),
-  ].join('/');
+  return person.cert_exp_date || '';
 }
 
 function sanitizeText(text) {
@@ -881,7 +890,8 @@ function EndorsementGenerator() {
               id: certificate.id,
               person_id: person.id,
               cert_number: certificate.certificate_number || person.cert_number,
-              cert_exp_date: getInstructorExpirationDate(certificate, person),
+              certificate_date_label: getInstructorCertificateDateLabel(certificate),
+              cert_exp_date: getInstructorCertificateDate(certificate, person),
               is_default: certificate.is_default_for_endorsements || person.is_default,
             };
           })
@@ -925,6 +935,7 @@ function EndorsementGenerator() {
             instructorCertNumber: prev.instructorCertNumber.trim()
               ? prev.instructorCertNumber
               : preferredCfi.cert_number || '',
+            instructorCertificateDateLabel: preferredCfi.certificate_date_label || 'RE',
             instructorCertExpDate: prev.instructorCertExpDate.trim()
               ? prev.instructorCertExpDate
               : formatStoredDateForDisplay(preferredCfi.cert_exp_date) || '',
@@ -993,6 +1004,7 @@ function EndorsementGenerator() {
           ),
           instructorName: payloadFormData.instructorName || record.instructor_name,
           instructorCertNumber: payloadFormData.instructorCertNumber || record.instructor_cert_number || '',
+          instructorCertificateDateLabel: payloadFormData.instructorCertificateDateLabel || 'RE',
           instructorCertExpDate: payloadFormData.instructorCertExpDate || '',
           studentName: record.student_name,
           studentCertNumber: record.student_cert_number || '',
@@ -1232,6 +1244,7 @@ function EndorsementGenerator() {
         if (matchingCertificates.length === 1) {
           const [selected] = matchingCertificates;
           nextForm.instructorCertNumber = selected.cert_number || '';
+          nextForm.instructorCertificateDateLabel = selected.certificate_date_label || 'RE';
           nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
         } else if (matchingCertificates.length > 1) {
           const currentCertNumber = prev.instructorCertNumber.trim().toLowerCase();
@@ -1241,9 +1254,11 @@ function EndorsementGenerator() {
 
           if (selected) {
             nextForm.instructorCertNumber = selected.cert_number || '';
+            nextForm.instructorCertificateDateLabel = selected.certificate_date_label || 'RE';
             nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
           } else {
             nextForm.instructorCertNumber = '';
+            nextForm.instructorCertificateDateLabel = 'RE';
             nextForm.instructorCertExpDate = '';
           }
         }
@@ -1255,6 +1270,7 @@ function EndorsementGenerator() {
         );
 
         if (selected) {
+          nextForm.instructorCertificateDateLabel = selected.certificate_date_label || 'RE';
           nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
         }
       }
@@ -1313,6 +1329,7 @@ function EndorsementGenerator() {
         if (matchingCertificates.length === 1) {
           const [selected] = matchingCertificates;
           nextForm.instructorCertNumber = selected.cert_number || '';
+          nextForm.instructorCertificateDateLabel = selected.certificate_date_label || 'RE';
           nextForm.instructorCertExpDate = formatStoredDateForDisplay(selected.cert_exp_date) || '';
         } else if (matchingCertificates.length > 1) {
           const selected = matchingCertificates.find(
@@ -1322,6 +1339,7 @@ function EndorsementGenerator() {
           );
 
           nextForm.instructorCertNumber = selected?.cert_number || '';
+          nextForm.instructorCertificateDateLabel = selected?.certificate_date_label || 'RE';
           nextForm.instructorCertExpDate = selected ? formatStoredDateForDisplay(selected.cert_exp_date) || '' : '';
         }
       }
@@ -1329,6 +1347,7 @@ function EndorsementGenerator() {
       if (field === 'instructorCertNumber') {
         nextForm.instructorName = person.display_name || nextForm.instructorName;
         nextForm.instructorCertNumber = person.cert_number || '';
+        nextForm.instructorCertificateDateLabel = person.certificate_date_label || 'RE';
         nextForm.instructorCertExpDate = formatStoredDateForDisplay(person.cert_exp_date) || '';
       }
 
@@ -1471,6 +1490,7 @@ function EndorsementGenerator() {
       date: getBlankTemplateValue('date'),
       instructorName: formData.instructorName.trim() || getBlankTemplateValue('instructorName'),
       instructorCertNumber: formData.instructorCertNumber.trim() || getBlankTemplateValue('instructorCertNumber'),
+      instructorCertificateDateLabel: formData.instructorCertificateDateLabel,
       instructorCertExpDate:
         formatDateForPdf(formData.instructorCertExpDate) || getBlankTemplateValue('instructorCertExpDate'),
     };
@@ -1480,6 +1500,7 @@ function EndorsementGenerator() {
       date: formatDateForPdf(formData.date),
       instructorName: formData.instructorName.trim(),
       instructorCertNumber: formData.instructorCertNumber.trim(),
+      instructorCertificateDateLabel: formData.instructorCertificateDateLabel,
       instructorCertExpDate: formatDateForPdf(formData.instructorCertExpDate),
       ...Object.fromEntries(
         Object.entries(templateFieldData).map(([key, value]) => [
@@ -2184,7 +2205,11 @@ function EndorsementGenerator() {
                   {FIELD_CONFIG.slice(0, 3).map((field) => (
                     <label key={field.key} className={styles.field}>
                       <span>
-                        {field.label}
+                        {field.key === 'instructorCertExpDate'
+                          ? formData.instructorCertificateDateLabel === 'Exp.'
+                            ? 'Instructor certificate expiration'
+                            : 'Instructor recent experience end date'
+                          : field.label}
                         {generatorMode === 'blank' ? ' (optional)' : field.required ? ' *' : field.hideOptionalTag ? '' : ' (optional)'}
                       </span>
                       {renderFieldInput(field)}

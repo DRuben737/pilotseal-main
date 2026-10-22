@@ -10,7 +10,7 @@ export default function InstrumentKnowledgeTestPage() {
   const endorsementText = `I certify that [Pilot Name] has received the required training of 14 CFR § 61.65(b). I have determined that they are prepared for the Instrument-[Airplane, Helicopter, or Powered-Lift] knowledge test.
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">

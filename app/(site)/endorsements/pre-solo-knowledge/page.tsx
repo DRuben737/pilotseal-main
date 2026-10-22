@@ -10,7 +10,7 @@ export default function PreSoloKnowledgePage() {
   const endorsementText = `I certify that [Student Name] has satisfactorily completed the pre-solo knowledge test of 14 CFR § 61.87(b) for the [Make/Model] aircraft.
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">

@@ -166,14 +166,15 @@ const checks = [
       ).join(",") === "studentName,trainingType",
   },
   {
-    name: "Automatic endorsement information uses one six-field registry",
+    name: "Automatic endorsement information uses one seven-field registry",
     pass:
-      automaticFieldKeys.size === 6 &&
+      automaticFieldKeys.size === 7 &&
       [
         "studentName",
         "studentCertNumber",
         "instructorName",
         "instructorCertNumber",
+        "instructorCertificateDateLabel",
         "instructorCertExpDate",
         "date",
       ].every((key) => automaticFieldKeys.has(key)),

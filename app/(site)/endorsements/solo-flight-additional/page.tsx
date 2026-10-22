@@ -26,7 +26,7 @@ export default function SoloFlightAdditionalPage() {
   const endorsementText = `I certify that [Student Name] has received the required training to qualify for solo flying. I have determined that they meet the applicable requirements of 14 CFR § 61.87(p) and are proficient to make solo flights in [Make/Model].
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: 'Home', path: '/' },
@@ -170,7 +170,7 @@ Date: [Date]
               Generate This Endorsement Instantly
             </h2>
             <p className="copy-muted mb-6 leading-7">
-              PilotSeal ensures the correct 14 CFR § 61.87(p) wording, verifies expiration dates, and maintains endorsement history.
+              PilotSeal ensures the correct 14 CFR § 61.87(p) wording, records instructor recent experience, and maintains endorsement history.
             </p>
             <Link
               href="/tools/endorsement-generator?type=solo-additional"

@@ -10,7 +10,7 @@ export default function KnowledgeTestPage() {
   const endorsementText = `I certify that [Pilot Name] has received the required training in accordance with [Applicable Regulation]. I have determined they are prepared for the [Name of] knowledge test.
 
 Date: [Date]
-[Instructor Name] [Instructor Cert Number] Exp. [Instructor Cert Exp Date]`;
+[Instructor Name] [Instructor Cert Number] RE [Instructor Recent Experience End Date]`;
 
   return (
     <main className="page-shell page-endorsement px-3">
