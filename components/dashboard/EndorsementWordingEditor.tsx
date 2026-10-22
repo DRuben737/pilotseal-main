@@ -151,14 +151,6 @@ function serializeEditor(editor: HTMLElement) {
   return output.replace(/\n$/, "");
 }
 
-function getUsedKeys(editor: HTMLElement) {
-  return new Set(
-    Array.from(editor.querySelectorAll<HTMLElement>("[data-fill-in]"))
-      .map((element) => element.dataset.fillIn)
-      .filter((key): key is string => Boolean(key))
-  );
-}
-
 function getRangeAtPoint(x: number, y: number) {
   const doc = document as Document & {
     caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
@@ -194,15 +186,21 @@ export default function EndorsementWordingEditor({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const [fieldDraft, setFieldDraft] = useState<FieldDraft | null>(null);
+  const [fieldDraftParent, setFieldDraftParent] = useState<"editor" | "picker">("editor");
   const [fieldError, setFieldError] = useState("");
 
   const baseFields = ENDORSEMENT_AUTOMATIC_FIELDS as FillIn[];
   const fieldCatalog = useMemo(() => {
     const byKey = new Map<string, FillIn>();
-    for (const field of [...baseFields, ...suggestions, ...fields]) {
+    for (const field of [...baseFields, ...suggestions]) {
       const key = normalizeEndorsementAutomaticFieldKey(field.key);
       const automatic = baseFields.find((item) => item.key === key);
       if (!byKey.has(key)) byKey.set(key, automatic ?? { ...field, key });
+    }
+    for (const field of fields) {
+      const key = normalizeEndorsementAutomaticFieldKey(field.key);
+      const automatic = baseFields.find((item) => item.key === key);
+      byKey.set(key, automatic ?? { ...field, key });
     }
     for (const paragraph of parseEndorsementWording(body) as Paragraph[]) {
       for (const segment of paragraph.segments) {
@@ -228,6 +226,21 @@ export default function EndorsementWordingEditor({
   }, [fieldCatalog, pickerQuery]);
   const automaticPickerFields = pickerFields.filter((field) => field.system);
   const questionPickerFields = pickerFields.filter((field) => !field.system);
+  const customFieldKeys = useMemo(
+    () => new Set(fields.map((field) => normalizeEndorsementAutomaticFieldKey(field.key))),
+    [fields]
+  );
+  const usedFieldKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const paragraph of parseEndorsementWording(body) as Paragraph[]) {
+      for (const segment of paragraph.segments) {
+        if (segment.type === "fill-in") {
+          keys.add(normalizeEndorsementAutomaticFieldKey(segment.key));
+        }
+      }
+    }
+    return keys;
+  }, [body]);
 
   function renderStatement(statement: string) {
     const editor = editorRef.current;
@@ -277,23 +290,26 @@ export default function EndorsementWordingEditor({
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopImmediatePropagation();
-      if (fieldDraft) setFieldDraft(null);
-      else setPickerOpen(false);
+      if (fieldDraft) {
+        setFieldDraft(null);
+        setFieldError("");
+        setPickerOpen(fieldDraftParent === "picker");
+        setFieldDraftParent("editor");
+      } else setPickerOpen(false);
     };
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [fieldDraft, pickerOpen]);
+  }, [fieldDraft, fieldDraftParent, pickerOpen]);
 
   function emitChange(nextFields = fields) {
     const editor = editorRef.current;
     if (!editor) return;
     const statement = serializeEditor(editor);
-    const usedKeys = getUsedKeys(editor);
     const systemKeys = new Set(baseFields.map((field) => field.key));
     const uniqueFields = new Map<string, EndorsementTemplateField>();
     for (const field of nextFields) {
       const key = normalizeEndorsementAutomaticFieldKey(field.key);
-      if (usedKeys.has(key) && !systemKeys.has(key) && !uniqueFields.has(key)) {
+      if (!systemKeys.has(key) && !uniqueFields.has(key)) {
         uniqueFields.set(key, { ...field, key });
       }
     }
@@ -356,9 +372,10 @@ export default function EndorsementWordingEditor({
     placeCaret(range);
   }
 
-  function openFieldEditor(field: FillIn) {
+  function openFieldEditor(field: FillIn, parent: "editor" | "picker" = "editor") {
     if (field.system) return;
     setFieldError("");
+    setFieldDraftParent(parent);
     setFieldDraft({
       editingKey: field.key,
       label: field.label,
@@ -367,6 +384,19 @@ export default function EndorsementWordingEditor({
       optionsText: field.options?.join("\n") ?? "",
       placeholder: field.placeholder ?? "",
     });
+  }
+
+  function closeFieldEditor() {
+    setFieldDraft(null);
+    setFieldError("");
+    setPickerOpen(fieldDraftParent === "picker");
+    setFieldDraftParent("editor");
+  }
+
+  function deleteUnusedField(field: FillIn) {
+    const key = normalizeEndorsementAutomaticFieldKey(field.key);
+    if (field.system || usedFieldKeys.has(key)) return;
+    emitChange(fields.filter((item) => normalizeEndorsementAutomaticFieldKey(item.key) !== key));
   }
 
   function saveFieldDraft() {
@@ -382,7 +412,8 @@ export default function EndorsementWordingEditor({
       return;
     }
     if (fieldDraft.editingKey) {
-      emitChange(fields.map((field) => field.key === fieldDraft.editingKey ? {
+      const editingKey = normalizeEndorsementAutomaticFieldKey(fieldDraft.editingKey);
+      emitChange(fields.map((field) => normalizeEndorsementAutomaticFieldKey(field.key) === editingKey ? {
         ...field,
         label,
         type: fieldDraft.type,
@@ -392,7 +423,7 @@ export default function EndorsementWordingEditor({
           ? { placeholder: fieldDraft.placeholder.trim() }
           : { placeholder: undefined }),
       } : field));
-      setFieldDraft(null);
+      closeFieldEditor();
       return;
     }
     const field: EndorsementTemplateField = {
@@ -404,7 +435,7 @@ export default function EndorsementWordingEditor({
       ...(fieldDraft.placeholder.trim() ? { placeholder: fieldDraft.placeholder.trim() } : {}),
     };
     insertField(field, [...fields, field]);
-    setFieldDraft(null);
+    closeFieldEditor();
   }
 
   function adjacentFillIn(range: Range, before: boolean) {
@@ -623,18 +654,39 @@ export default function EndorsementWordingEditor({
               {questionPickerFields.length ? (
                 <div className="grid gap-2">
                   <p className="text-xs font-semibold uppercase text-slate-500">Questions for the user</p>
-                  {questionPickerFields.map((field) => (
-                    <button key={field.key} type="button" className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:border-blue-300 hover:bg-blue-50" onClick={() => insertField(field)}>
-                      <span className="text-sm font-medium text-slate-900">{field.label}</span>
-                      <span className="text-xs text-slate-500">{field.type === "multi-select" ? "Multiple choice" : field.type === "select" ? "Single choice" : field.type === "date" ? "Date" : "Text"}</span>
-                    </button>
-                  ))}
+                  {questionPickerFields.map((field) => {
+                    const key = normalizeEndorsementAutomaticFieldKey(field.key);
+                    const custom = customFieldKeys.has(key);
+                    const used = usedFieldKeys.has(key);
+                    return (
+                      <div key={field.key} className="flex items-center gap-2 rounded-lg border border-slate-200 p-1 hover:border-blue-300 hover:bg-blue-50">
+                        <button type="button" className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left" onClick={() => insertField(field)}>
+                          <span className="truncate text-sm font-medium text-slate-900">{field.label}</span>
+                          <span className="shrink-0 text-xs text-slate-500">{field.type === "multi-select" ? "Multiple choice" : field.type === "select" ? "Single choice" : field.type === "date" ? "Date" : "Text"}</span>
+                        </button>
+                        {custom ? (
+                          <div className="flex shrink-0 items-center gap-1 border-l border-slate-200 pl-2">
+                            <button type="button" className="rounded px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100" onClick={() => openFieldEditor(field, "picker")}>Edit</button>
+                            <button
+                              type="button"
+                              className="rounded px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+                              disabled={used}
+                              title={used ? "Remove this fill-in from the wording before deleting it" : `Delete ${field.label}`}
+                              onClick={() => deleteUnusedField(field)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>
             <button type="button" className="primary-button mt-4 w-full" onClick={() => {
-              setPickerOpen(false);
               setFieldError("");
+              setFieldDraftParent("picker");
               setFieldDraft(emptyFieldDraft);
             }}>
               Create a new fill-in
@@ -648,7 +700,7 @@ export default function EndorsementWordingEditor({
           <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[86vh] w-full max-w-lg overflow-auto rounded-sm bg-white p-4 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold text-slate-950">{fieldDraft.editingKey ? "Edit fill-in" : "New fill-in"}</h3>
-              <button type="button" className="secondary-button" onClick={() => setFieldDraft(null)}>Close</button>
+              <button type="button" className="secondary-button" onClick={closeFieldEditor}>Close</button>
             </div>
             <div className="mt-4 grid gap-3">
               <label className="grid gap-1 text-sm font-medium text-slate-700">
