@@ -9,13 +9,14 @@ import { useOrganization } from "@/components/organizations/OrganizationProvider
 import { fetchMyAircraft, type AircraftRecord } from "@/lib/aircraft";
 import {
   dashboardTaskRoleLabel,
+  scheduleTaskPresentation,
   sortDashboardTasks,
   type DashboardTask,
   type DashboardTaskPriority,
   type DashboardTaskRole,
 } from "@/lib/dashboard-tasks";
 import { fetchEnabledFeatureIds, fetchScheduleEligibility, type OptionalFeatureId } from "@/lib/dashboard-preferences";
-import { fetchScheduleAccess, fetchScheduleEntries, type ScheduleEntry } from "@/lib/cfi-schedule";
+import { fetchScheduleAccess, fetchScheduleEditorSnapshot, type ScheduleEntry } from "@/lib/cfi-schedule";
 import { fetchInboxNotifications, type NotificationPriority } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
 
@@ -153,17 +154,29 @@ export default function DashboardTaskCenter() {
         const accessByCfi = new Map(access.map((item) => [item.cfi_user_id, item]));
         const scheduleGroups = await Promise.all(Array.from(accessByCfi).map(async ([cfiUserId, item]) => ({
           item,
-          entries: await fetchScheduleEntries(cfiUserId, now, rangeEnd).catch(() => []),
+          entries: await fetchScheduleEditorSnapshot(now, rangeEnd, cfiUserId)
+            .then((snapshot) => snapshot.entries)
+            .catch(() => []),
         })));
         for (const group of scheduleGroups) {
-          for (const entry of group.entries.filter((item) => item.status === "scheduled" && Date.parse(item.end_at) >= now.getTime()).slice(0, 3)) {
+          const instructor = group.item.caller_role === "cfi";
+          for (const entry of group.entries.filter((item) =>
+            item.entry_type === "lesson" &&
+            item.status === "scheduled" &&
+            Date.parse(item.end_at) >= now.getTime() &&
+            (instructor || item.is_own)
+          ).slice(0, 3)) {
+            const presentation = scheduleTaskPresentation(entry, {
+              instructor,
+              cfiName: group.item.cfi_name,
+            });
             next.push({
               id: `schedule:${entry.id}`,
-              title: entry.lesson_kind === "ground" ? "Ground lesson" : "Flight lesson",
-              detail: `${entry.student_name ?? group.item.student_name} · ${new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(entry.start_at))}`,
+              title: presentation.title,
+              detail: presentation.detail,
               href: "/dashboard/schedule",
               priority: "normal",
-              role: roleForSchedule(entry, group.item.caller_role === "cfi"),
+              role: roleForSchedule(entry, instructor),
               dueAt: entry.start_at,
             });
           }
