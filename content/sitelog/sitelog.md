@@ -1,7 +1,7 @@
 ---
 title: "Site Log"
 summary: "Ongoing development notes and history of PilotSeal."
-updated: "2026-09-25"
+updated: "2026-10-25"
 ---
 
 
@@ -329,6 +329,47 @@ Additional updates included:
 - Confirmation dialogs before aircraft report submission
 - One-week retention for saved Flight Brief records
 - A new state-indexed reference listing public-use airports without published instrument approaches
+
+</details>
+
+<details>
+<summary>October 2026 — Training Guide, Sky Art, Records, and Scheduling</summary>
+
+Added a guided Training Guide for instructors and students.
+
+Training subjects can now be organized into a structured study flow and connected to scheduled lessons. The guide includes focused reading views, preflight study material, and SOPM maneuver guides so instructors can prepare lessons and students can review assigned subjects in the same workflow.
+
+Added Sky Art, a flight-planning tool for drawing routes and converting them into flyable paths.
+
+Sky Art supports typed and hand-drawn designs, route planning from a selected starting point, compact drawing tools, saved work, and direct handoff to ForeFlight.
+
+Expanded student and endorsement record management:
+
+- Student record folders with file uploads, notes, and attachments
+- Simpler endorsement template management with a compact inline wording editor
+- Editable endorsement fill-in fields
+- Updated CFI endorsement date labels
+- Grouped record views with role-based visibility and deletion controls
+- Authorized closure of aircraft discrepancy reports
+- Safety report review access managed from organization member details
+
+Scheduling updates included:
+
+- Managed solo lessons and concurrent solo scheduling
+- Instructor teaching limits, aircraft preferences, and instructor assignments
+- Simplified student availability editing
+- More reliable drag-and-drop changes across days
+- Improved nested Schedule panels that return to the correct parent screen
+- Thirty-day schedule history retention
+
+Additional updates included:
+
+- Fleet aircraft grouped by model family with inline drill-down
+- Utility-category envelope editing for aircraft models
+- Editable aircraft status and improved availability filtering across Flight Brief, weight and balance, and saved records
+- Source-aware notifications with grouped audiences and organization publishing controls
+- Improved notification inbox and publication management
+- Better reconciliation of pending organization invitations
 
 </details>
 
