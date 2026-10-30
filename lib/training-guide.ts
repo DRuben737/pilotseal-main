@@ -181,6 +181,37 @@ export type StudentTrainingSubjectAccess = {
 
 export type StudentTrainingGuideSubject = StudentTrainingSubjectAccess;
 
+export type TrainingModuleLineItem = {
+  id: string;
+  position: number;
+  text: string;
+  minimum_score: number;
+};
+
+export type TrainingCourseModule = {
+  id: string;
+  stage_number: number;
+  module_number: number;
+  module_type: string;
+  duration_label: string;
+  duration_hours: number;
+  lesson_objective: string;
+  study_material: string;
+  completion_standards: string;
+  source_page: number;
+  line_items: TrainingModuleLineItem[];
+};
+
+export type TrainingCourse = {
+  id: string;
+  stable_key: string;
+  provider_name: string;
+  title: string;
+  revision_label: string;
+  source_file_name: string;
+  modules: TrainingCourseModule[];
+};
+
 const emptyStandards: TrainingSubject["standards"] = {
   knowledge: [],
   risk_management: [],
@@ -248,6 +279,60 @@ function normalizeTextArray(value: unknown) {
   return Array.isArray(value)
     ? value.map((item) => String(item).trim()).filter(Boolean)
     : [];
+}
+
+function normalizeTrainingCourse(value: unknown): TrainingCourse | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const modules = Array.isArray(row.modules)
+    ? row.modules.flatMap((moduleValue) => {
+        if (!moduleValue || typeof moduleValue !== "object") return [];
+        const courseModule = moduleValue as Record<string, unknown>;
+        const lineItems = Array.isArray(courseModule.line_items)
+          ? courseModule.line_items.flatMap((itemValue) => {
+              if (!itemValue || typeof itemValue !== "object") return [];
+              const item = itemValue as Record<string, unknown>;
+              return [
+                {
+                  id: String(item.id ?? ""),
+                  position: Number(item.position ?? 0),
+                  text: String(item.text ?? ""),
+                  minimum_score: Number(item.minimum_score ?? 0),
+                },
+              ];
+            })
+          : [];
+        return [
+          {
+            id: String(courseModule.id ?? ""),
+            stage_number: Number(courseModule.stage_number ?? 0),
+            module_number: Number(courseModule.module_number ?? 0),
+            module_type: String(courseModule.module_type ?? ""),
+            duration_label: String(courseModule.duration_label ?? ""),
+            duration_hours: Number(courseModule.duration_hours ?? 0),
+            lesson_objective: String(courseModule.lesson_objective ?? ""),
+            study_material: String(courseModule.study_material ?? ""),
+            completion_standards: String(
+              courseModule.completion_standards ?? "",
+            ),
+            source_page: Number(courseModule.source_page ?? 0),
+            line_items: lineItems.sort((a, b) => a.position - b.position),
+          },
+        ];
+      })
+    : [];
+  return {
+    id: String(row.id ?? ""),
+    stable_key: String(row.stable_key ?? ""),
+    provider_name: String(row.provider_name ?? ""),
+    title: String(row.title ?? ""),
+    revision_label: String(row.revision_label ?? ""),
+    source_file_name: String(row.source_file_name ?? ""),
+    modules: modules.sort(
+      (a, b) =>
+        a.stage_number - b.stage_number || a.module_number - b.module_number,
+    ),
+  };
 }
 
 function normalizeOrganizationManeuverGuide(
@@ -527,6 +612,22 @@ export async function fetchOrganizationTrainingGuides(organizationId: string) {
     resources: normalizeResources(row.resources),
     updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
   }));
+}
+
+export async function fetchOrganizationTrainingCourses(
+  organizationId: string,
+) {
+  if (!organizationId) return [] as TrainingCourse[];
+  const { data, error } = await getSupabaseClient().rpc(
+    "list_organization_training_courses",
+    { p_organization_id: organizationId },
+  );
+  if (error) throw error;
+  if (!Array.isArray(data)) return [] as TrainingCourse[];
+  return data.flatMap((value) => {
+    const course = normalizeTrainingCourse(value);
+    return course ? [course] : [];
+  });
 }
 
 export async function saveOrganizationTrainingGuide(

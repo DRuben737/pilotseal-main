@@ -26,6 +26,7 @@ import {
   fetchMyAssignedInstructorTrainingGuides,
   fetchMyInstructorTrainingGuides,
   fetchInstructorTrainingManeuverOverrides,
+  fetchOrganizationTrainingCourses,
   fetchOrganizationTrainingManeuverGuides,
   fetchOrganizationTrainingGuides,
   fetchStudentTrainingSubjectNotes,
@@ -46,6 +47,8 @@ import {
   type OrganizationTrainingGuide,
   type StudentTrainingSubjectNote,
   type StudentTrainingSubjectAccess,
+  type TrainingCourse,
+  type TrainingCourseModule,
   type TrainingResource,
   type TrainingStandardGroup,
   type TrainingStandardItem,
@@ -60,6 +63,8 @@ import { fetchScheduleEligibility } from "@/lib/dashboard-preferences";
 
 type Workspace = "personal" | "organization" | "platform";
 type Drawer =
+  | "course"
+  | "course-module"
   | "subject"
   | "platform-editor"
   | "organization-editor"
@@ -808,6 +813,7 @@ export default function TrainingGuideManager({
     activeOrganization?.member_role === "organization_admin" ||
     activeOrganization?.member_role === "platform_admin";
   const [subjects, setSubjects] = useState<TrainingSubject[]>([]);
+  const [trainingCourses, setTrainingCourses] = useState<TrainingCourse[]>([]);
   const [studentSubjectAccess, setStudentSubjectAccess] = useState<
     StudentTrainingSubjectAccess[]
   >([]);
@@ -836,6 +842,10 @@ export default function TrainingGuideManager({
     StudentTrainingSubjectNote[]
   >([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedModuleNumber, setSelectedModuleNumber] = useState<
+    number | null
+  >(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [personalMode, setPersonalMode] = useState<"study" | "instructor">(
     "study",
@@ -884,6 +894,12 @@ export default function TrainingGuideManager({
 
   const selectedSubject =
     subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
+  const selectedCourse =
+    trainingCourses.find((course) => course.id === selectedCourseId) ?? null;
+  const selectedCourseModule =
+    selectedCourse?.modules.find(
+      (module) => module.module_number === selectedModuleNumber,
+    ) ?? null;
   const selectedOrganizationGuide =
     organizationGuides.find(
       (guide) => guide.subject_id === selectedSubjectId,
@@ -949,6 +965,7 @@ export default function TrainingGuideManager({
       nextInstructorGuides,
       nextStudents,
       nextStudentSubjectAccess,
+      nextTrainingCourses,
       eligibility,
     ] = await Promise.all([
       fetchTrainingSubjects({ includeUnpublished }),
@@ -962,6 +979,9 @@ export default function TrainingGuideManager({
       workspace === "personal"
         ? fetchMyTrainingGuideSubjects(organizationId)
         : Promise.resolve([]),
+      organizationId && workspace !== "platform"
+        ? fetchOrganizationTrainingCourses(organizationId)
+        : Promise.resolve([]),
       fetchScheduleEligibility(),
     ]);
     setSubjects(nextSubjects);
@@ -969,6 +989,7 @@ export default function TrainingGuideManager({
     setInstructorGuides(nextInstructorGuides);
     setOrganizationStudents(nextStudents);
     setStudentSubjectAccess(nextStudentSubjectAccess);
+    setTrainingCourses(nextTrainingCourses);
     setCanInstruct(eligibility.can_instruct);
   }
 
@@ -1053,6 +1074,19 @@ export default function TrainingGuideManager({
     ]).catch((error) =>
       setStatus(errorMessage(error, "Unable to load subject details.")),
     );
+  }
+
+  function openCourse(course: TrainingCourse) {
+    setSelectedCourseId(course.id);
+    setSelectedModuleNumber(null);
+    setDrawer("course");
+    setStatus("");
+  }
+
+  function openCourseModule(module: TrainingCourseModule) {
+    setSelectedModuleNumber(module.module_number);
+    setDrawer("course-module");
+    setStatus("");
   }
 
   function openPlatformEditor(subject?: TrainingSubject) {
@@ -1434,6 +1468,37 @@ export default function TrainingGuideManager({
 
   return (
     <>
+      {trainingCourses.length ? (
+        <ManagementDisclosure
+          id={`training-courses-${workspace}`}
+          title="USATS Training Guide"
+          summary={`${trainingCourses.reduce((total, course) => total + course.modules.length, 0)} modules`}
+        >
+          <div className="divide-y divide-slate-200 border-t border-slate-200 bg-white">
+            {trainingCourses.map((course) => (
+              <button
+                key={course.id}
+                type="button"
+                className="flex min-h-10 w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
+                onClick={() => openCourse(course)}
+              >
+                <span>
+                  <strong className="block text-sm text-slate-900">
+                    {course.title}
+                  </strong>
+                  <span className="text-xs text-slate-500">
+                    {course.provider_name} · {course.revision_label}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-slate-600">
+                  {course.modules.length} modules
+                </span>
+              </button>
+            ))}
+          </div>
+        </ManagementDisclosure>
+      ) : null}
+
       <ManagementDisclosure
         id={`training-guide-${workspace}`}
         title={workspaceLabel}
@@ -1578,6 +1643,137 @@ export default function TrainingGuideManager({
           />
         )}
       </ManagementDisclosure>
+
+      <DetailDrawer
+        compact
+        open={drawer === "course" && Boolean(selectedCourse)}
+        onClose={() => setDrawer(null)}
+        title={selectedCourse?.title ?? "Training course"}
+        description={
+          selectedCourse
+            ? `${selectedCourse.provider_name} · ${selectedCourse.revision_label}`
+            : undefined
+        }
+      >
+        {selectedCourse ? (
+          <div className="grid gap-5">
+            {[1, 2].map((stageNumber) => {
+              const stageModules = selectedCourse.modules.filter(
+                (module) => module.stage_number === stageNumber,
+              );
+              if (!stageModules.length) return null;
+              return (
+                <section
+                  key={stageNumber}
+                  aria-labelledby={`course-stage-${stageNumber}`}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <h2
+                      id={`course-stage-${stageNumber}`}
+                      className="text-sm font-semibold text-slate-950"
+                    >
+                      Stage {stageNumber}
+                    </h2>
+                    <span className="text-xs font-semibold text-slate-500">
+                      {stageModules.length} modules
+                    </span>
+                  </div>
+                  <div className="divide-y divide-slate-200 border border-slate-200 bg-white">
+                    {stageModules.map((module) => (
+                      <button
+                        key={module.id}
+                        type="button"
+                        className="grid min-h-9 w-full cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
+                        onClick={() => openCourseModule(module)}
+                      >
+                        <strong className="text-xs text-slate-500">
+                          M{String(module.module_number).padStart(2, "0")}
+                        </strong>
+                        <span className="text-sm font-medium text-slate-900">
+                          {module.module_type}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {module.duration_label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        ) : null}
+      </DetailDrawer>
+
+      <DetailDrawer
+        compact
+        open={drawer === "course-module" && Boolean(selectedCourseModule)}
+        onClose={() => setDrawer("course")}
+        title={
+          selectedCourseModule
+            ? `Module ${selectedCourseModule.module_number}`
+            : "Module"
+        }
+        description={
+          selectedCourseModule
+            ? `(${selectedCourseModule.module_type}) (${selectedCourseModule.duration_label}) · Stage ${selectedCourseModule.stage_number}`
+            : undefined
+        }
+      >
+        {selectedCourseModule ? (
+          <div className="grid gap-5">
+            <section>
+              <h2 className="mb-2 text-sm font-semibold text-slate-950">
+                Lesson Objective
+              </h2>
+              <p className="text-sm leading-6 text-slate-700">
+                {selectedCourseModule.lesson_objective}
+              </p>
+            </section>
+
+            <section>
+              <h2 className="mb-2 text-sm font-semibold text-slate-950">
+                Line Items (minimum score)
+              </h2>
+              <ol className="divide-y divide-slate-200 border border-slate-200 bg-white">
+                {selectedCourseModule.line_items.map((item) => (
+                  <li
+                    key={item.id || `${selectedCourseModule.id}-${item.position}`}
+                    className="grid min-h-9 grid-cols-[2rem_1fr] gap-2 px-3 py-2 text-sm leading-5 text-slate-800"
+                  >
+                    <span className="text-right text-slate-500">
+                      {item.position}.
+                    </span>
+                    <span>
+                      {item.text} ({item.minimum_score})
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            {selectedCourseModule.study_material ? (
+              <section>
+                <h2 className="mb-2 text-sm font-semibold text-slate-950">
+                  Study Material
+                </h2>
+                <p className="text-sm leading-6 text-slate-700">
+                  {selectedCourseModule.study_material}
+                </p>
+              </section>
+            ) : null}
+
+            <section>
+              <h2 className="mb-2 text-sm font-semibold text-slate-950">
+                Completion Standards
+              </h2>
+              <p className="text-sm leading-6 text-slate-700">
+                {selectedCourseModule.completion_standards}
+              </p>
+            </section>
+          </div>
+        ) : null}
+      </DetailDrawer>
 
       <DetailDrawer
         compact
