@@ -179,6 +179,25 @@ function trainingCourseTrack(course: TrainingCourse) {
     : "Ground";
 }
 
+function DisclosureChevron({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      className={`h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 motion-reduce:transition-none ${className}`}
+    >
+      <path
+        d="m7.5 5 5 5-5 5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function resourcesToText(resources: TrainingResource[]) {
   return resources
     .map((resource) => `${resource.title} | ${resource.url}`)
@@ -1466,18 +1485,26 @@ export default function TrainingGuideManager({
   return (
     <>
       {trainingCourses.length ? (
-        <details className="border border-slate-200 bg-white">
-          <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left marker:text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
-            <strong className="text-base text-slate-950">USATS Part 141</strong>
-            <span className="text-xs font-semibold text-slate-500">
+        <details className="group/usats mb-3 overflow-hidden rounded-xl bg-slate-100/80">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3.5 text-left transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 flex-1">
+              <strong className="block text-[17px] font-semibold tracking-[-0.01em] text-slate-950">
+                USATS Part 141
+              </strong>
+              <span className="mt-0.5 block text-xs text-slate-600">
+                PVT 141 · IR 141 · CPL 141
+              </span>
+            </span>
+            <span className="text-xs font-medium text-slate-500">
               {trainingCourses.reduce(
                 (total, course) => total + course.modules.length,
                 0,
               )}{" "}
               modules
             </span>
+            <DisclosureChevron className="group-open/usats:rotate-90" />
           </summary>
-          <div className="divide-y divide-slate-200 border-t border-slate-200">
+          <div className="space-y-2 px-2 pb-2">
             {Array.from(
               trainingCourses.reduce((groups, course) => {
                 const code = trainingCourseCode(course);
@@ -1485,25 +1512,29 @@ export default function TrainingGuideManager({
                 return groups;
               }, new Map<string, TrainingCourse[]>()),
             ).map(([code, courses]) => (
-              <details key={code} className="bg-white">
-                <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-6 py-2.5 marker:text-slate-500 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
-                  <span>
-                    <strong className="block text-sm text-slate-950">
+              <details
+                key={code}
+                className="group/course overflow-hidden rounded-lg bg-white/80"
+              >
+                <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-[15px] font-semibold text-slate-950">
                       {code} 141
                     </strong>
-                    <span className="text-xs text-slate-500">
+                    <span className="mt-0.5 block truncate text-[12px] text-slate-500">
                       {courses[0]?.title}
                     </span>
                   </span>
-                  <span className="text-xs font-semibold text-slate-500">
+                  <span className="text-xs font-medium text-slate-500">
                     {courses.reduce(
                       (total, course) => total + course.modules.length,
                       0,
                     )}{" "}
                     modules
                   </span>
+                  <DisclosureChevron className="group-open/course:rotate-90" />
                 </summary>
-                <div className="border-t border-slate-200 bg-slate-50 px-3 py-3 sm:px-6">
+                <div className="space-y-2 bg-slate-50/70 px-2 pb-2 pt-1 sm:px-3">
                   {Array.from(
                     courses.reduce((tracks, course) => {
                       const track = trainingCourseTrack(course);
@@ -1513,21 +1544,22 @@ export default function TrainingGuideManager({
                   ).map(([track, trackCourses]) => (
                     <details
                       key={track}
-                      className="border border-slate-200 bg-white"
+                      className="group/track overflow-hidden rounded-lg bg-blue-50/70"
                     >
-                      <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-3 px-3 py-2 marker:text-slate-500 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
-                        <strong className="text-sm text-slate-900">
+                      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 px-3.5 py-2.5 transition-colors duration-200 hover:bg-blue-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                        <strong className="min-w-0 flex-1 text-[13px] font-semibold text-blue-950">
                           {track}
                         </strong>
-                        <span className="text-xs font-semibold text-slate-500">
+                        <span className="text-[11px] font-medium text-slate-500">
                           {trackCourses.reduce(
                             (total, course) => total + course.modules.length,
                             0,
                           )}{" "}
                           modules
                         </span>
+                        <DisclosureChevron className="group-open/track:rotate-90" />
                       </summary>
-                      <div className="border-t border-slate-200">
+                      <div className="px-2 pb-3 pt-1">
                         {trackCourses.map((course) =>
                           Array.from(
                             new Set(
@@ -1542,35 +1574,38 @@ export default function TrainingGuideManager({
                                 (module) => module.stage_number === stageNumber,
                               );
                               return (
-                                <section key={`${course.id}-${stageNumber}`}>
-                                  <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-1.5">
-                                    <strong className="text-xs font-semibold uppercase tracking-wide text-slate-700">
+                                <section
+                                  key={`${course.id}-${stageNumber}`}
+                                  className="mt-3 first:mt-0"
+                                >
+                                  <div className="flex items-baseline justify-between gap-3 px-2 pb-1.5">
+                                    <strong className="text-[12px] font-semibold text-slate-700">
                                       Stage {stageNumber}
                                     </strong>
-                                    <span className="text-xs text-slate-500">
+                                    <span className="text-[11px] text-slate-500">
                                       {stageModules.length} modules
                                     </span>
                                   </div>
-                                  <div className="divide-y divide-slate-100">
+                                  <div className="grid gap-1">
                                     {stageModules.map((module) => (
                                       <button
                                         key={module.id}
                                         type="button"
-                                        className="grid min-h-10 w-full cursor-pointer grid-cols-[auto_1fr] items-center gap-x-4 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 sm:grid-cols-[7rem_1fr_auto]"
+                                        className="grid min-h-10 w-full cursor-pointer grid-cols-[3.25rem_1fr] items-center gap-x-3 rounded-md bg-white/75 px-3 py-2 text-left transition-[background-color,box-shadow] duration-200 hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 sm:grid-cols-[4rem_1fr_auto]"
                                         onClick={() =>
                                           openCourseModule(course, module)
                                         }
                                       >
-                                        <strong className="text-sm text-slate-950">
+                                        <strong className="text-[13px] font-semibold text-slate-700">
                                           M
                                           {String(
                                             module.module_number,
                                           ).padStart(2, "0")}
                                         </strong>
-                                        <span className="text-sm text-slate-700">
+                                        <span className="text-[13px] font-medium text-slate-900">
                                           {module.module_type}
                                         </span>
-                                        <span className="col-start-2 text-xs text-slate-500 sm:col-start-auto">
+                                        <span className="col-start-2 text-[11px] text-slate-500 sm:col-start-auto">
                                           {module.duration_label}
                                         </span>
                                       </button>
@@ -1590,14 +1625,22 @@ export default function TrainingGuideManager({
         </details>
       ) : null}
 
-      <details className="border border-slate-200 bg-white">
-        <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left marker:text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
-          <strong className="text-base text-slate-950">General ACS</strong>
-          <span className="text-xs font-semibold text-slate-500">
+      <details className="group/general overflow-hidden rounded-xl bg-slate-100/60">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3.5 text-left transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0 flex-1">
+            <strong className="block text-[17px] font-semibold tracking-[-0.01em] text-slate-950">
+              General ACS
+            </strong>
+            <span className="mt-0.5 block text-xs text-slate-600">
+              FAA Airman Certification Standards
+            </span>
+          </span>
+          <span className="text-xs font-medium text-slate-500">
             {filteredSubjects.length} subjects
           </span>
+          <DisclosureChevron className="group-open/general:rotate-90" />
         </summary>
-        <div className="border-t border-slate-200">
+        <div className="bg-white/70 px-2 pb-2">
           <CompactToolbar
             actions={
               workspace === "platform" ? (
@@ -1675,7 +1718,7 @@ export default function TrainingGuideManager({
           {isStudentStudy ? (
             <div aria-label="Training subjects" className="grid gap-5 p-3">
               {!groupedSubjects.length ? (
-                <div className="border border-dashed border-slate-300 px-4 py-6 text-center">
+                <div className="rounded-lg bg-slate-50 px-4 py-6 text-center">
                   <p className="text-sm font-semibold text-slate-800">
                     No subjects are available yet
                   </p>
@@ -1701,11 +1744,11 @@ export default function TrainingGuideManager({
                         {code}
                       </span>
                     </div>
-                    <div className="divide-y divide-slate-200 border border-slate-200 bg-white">
+                    <div className="grid gap-1 rounded-lg bg-slate-50 p-1">
                       {categorySubjects.map((subject) => (
                         <Link
                           key={subject.id}
-                          className="flex min-h-14 w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
+                          className="flex min-h-12 w-full cursor-pointer items-center justify-between gap-3 rounded-md bg-white/80 px-3 py-2 text-left transition-[background-color,box-shadow] duration-200 hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
                           href={`/console/personal/training-guide/${subject.id}`}
                         >
                           <span>
@@ -1758,9 +1801,9 @@ export default function TrainingGuideManager({
         }
       >
         {selectedCourseModule ? (
-          <div className="grid gap-5">
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-slate-950">
+          <div className="grid gap-4">
+            <section className="rounded-xl bg-slate-50 p-4">
+              <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
                 Lesson Objective
               </h2>
               <p className="text-sm leading-6 text-slate-700">
@@ -1769,22 +1812,23 @@ export default function TrainingGuideManager({
             </section>
 
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-slate-950">
+              <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
                 Line Items (minimum score)
               </h2>
-              <ol className="divide-y divide-slate-200 border border-slate-200 bg-white">
+              <ol className="grid gap-1.5">
                 {selectedCourseModule.line_items.map((item) => (
                   <li
                     key={
                       item.id || `${selectedCourseModule.id}-${item.position}`
                     }
-                    className="grid min-h-9 grid-cols-[2rem_1fr] gap-2 px-3 py-2 text-sm leading-5 text-slate-800"
+                    className="grid min-h-10 grid-cols-[1.75rem_1fr_auto] items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm leading-5 text-slate-800"
                   >
                     <span className="text-right text-slate-500">
                       {item.position}.
                     </span>
-                    <span>
-                      {item.text} ({item.minimum_score})
+                    <span>{item.text}</span>
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-900">
+                      {item.minimum_score}
                     </span>
                   </li>
                 ))}
@@ -1792,8 +1836,8 @@ export default function TrainingGuideManager({
             </section>
 
             {selectedCourseModule.study_material ? (
-              <section>
-                <h2 className="mb-2 text-sm font-semibold text-slate-950">
+              <section className="rounded-xl bg-blue-50/60 p-4">
+                <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
                   Study Material
                 </h2>
                 <p className="text-sm leading-6 text-slate-700">
@@ -1802,8 +1846,8 @@ export default function TrainingGuideManager({
               </section>
             ) : null}
 
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-slate-950">
+            <section className="rounded-xl bg-slate-50 p-4">
+              <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
                 Completion Standards
               </h2>
               <p className="text-sm leading-6 text-slate-700">
