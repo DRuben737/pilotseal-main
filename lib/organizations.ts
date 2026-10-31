@@ -2,6 +2,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 export type OrganizationRole = "owner" | "organization_admin" | "member" | "platform_admin";
 export type OrganizationTeachingRole = "instructor" | "student";
+export type OrganizationStudentStatus = "active" | "inactive";
 export const ORGANIZATION_PERMISSIONS = ["members", "fleet", "endorsements", "notifications", "audit"] as const;
 export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
 
@@ -34,6 +35,7 @@ export type OrganizationMember = {
   display_name: string | null;
   member_role: Exclude<OrganizationRole, "platform_admin">;
   teaching_role: OrganizationTeachingRole | null;
+  student_status: OrganizationStudentStatus;
   permissions: OrganizationPermission[];
   created_at: string;
 };
@@ -447,6 +449,20 @@ export async function setOrganizationMemberTeachingRole(
   if (error) throw error;
 }
 
+export async function setOrganizationStudentStatus(
+  organizationId: string,
+  userId: string,
+  status: OrganizationStudentStatus
+) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc("set_organization_student_status", {
+    p_organization_id: organizationId,
+    p_user_id: userId,
+    p_status: status,
+  });
+  if (error) throw error;
+}
+
 export async function fetchOrganizationStudents(organizationId: string): Promise<OrganizationStudent[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("list_organization_students", {
@@ -562,6 +578,7 @@ function normalizeOrganizationMember(value: unknown): OrganizationMember {
       record.teaching_role === "instructor" || record.teaching_role === "student"
         ? record.teaching_role
         : null,
+    student_status: record.student_status === "inactive" ? "inactive" : "active",
     permissions: normalizeOrganizationPermissions(record.permissions),
     created_at: String(record.created_at ?? ""),
   };

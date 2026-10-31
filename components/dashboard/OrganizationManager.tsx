@@ -40,11 +40,13 @@ import {
   saveManagedStudentProfile,
   setOrganizationMemberRole,
   setOrganizationMemberTeachingRole,
+  setOrganizationStudentStatus,
   transferOrganizationOwnership,
   updateOrganizationPerson,
   type OrganizationMember,
   type OrganizationMemberInvitation,
   type OrganizationPerson,
+  type OrganizationStudentStatus,
   type OrganizationTeachingRole,
 } from "@/lib/organizations";
 import OrganizationEndorsementRequests from "@/components/dashboard/OrganizationEndorsementRequests";
@@ -78,6 +80,7 @@ type MemberConfirmation =
 type MemberAccessDraft = {
   memberRole: OrganizationMember["member_role"];
   teachingRole: OrganizationTeachingRole | "";
+  studentStatus: OrganizationStudentStatus;
 };
 type MemberAccessConfirmation = {
   member: OrganizationMember;
@@ -303,6 +306,7 @@ export default function OrganizationManager({
   const [memberAccessDraft, setMemberAccessDraft] = useState<MemberAccessDraft | null>(null);
   const [memberAccessConfirmation, setMemberAccessConfirmation] = useState<MemberAccessConfirmation | null>(null);
   const [memberAccessError, setMemberAccessError] = useState("");
+  const [showInactiveStudents, setShowInactiveStudents] = useState(false);
   const [activePeopleTab, setActivePeopleTab] = usePersistentDashboardView({
     defaultValue: "instructors",
     enabled: view === "people",
@@ -399,7 +403,14 @@ export default function OrganizationManager({
     )
   ), [members, peopleByUserId]);
   const instructorMembers = sortedMembers.filter((member) => member.teaching_role === "instructor");
-  const studentMembers = sortedMembers.filter((member) => member.teaching_role === "student");
+  const activeStudentMembers = sortedMembers.filter(
+    (member) => member.teaching_role === "student" && member.student_status === "active",
+  );
+  const inactiveStudentMembers = sortedMembers.filter(
+    (member) => member.teaching_role === "student" && member.student_status === "inactive",
+  );
+  const studentMembers = [...activeStudentMembers, ...inactiveStudentMembers];
+  const visibleStudentMembers = showInactiveStudents ? studentMembers : activeStudentMembers;
   const unassignedMembers = sortedMembers.filter((member) => !member.teaching_role);
   useEffect(() => {
     if (view === "people" && activePeopleTab === "unassigned" && unassignedMembers.length === 0) {
@@ -417,6 +428,7 @@ export default function OrganizationManager({
   const memberAccessChanged = Boolean(selectedMember && memberAccessDraft && (
     memberAccessDraft.memberRole !== selectedMember.member_role
     || (memberAccessDraft.teachingRole || null) !== selectedMember.teaching_role
+    || (memberAccessDraft.teachingRole === "student" && memberAccessDraft.studentStatus !== selectedMember.student_status)
   ));
   const activeFleetWorkspace: FleetWorkspace = storedFleetWorkspace;
   const editingAircraft = aircraft.find((item) => item.id === editingAircraftId) ?? null;
@@ -738,6 +750,7 @@ export default function OrganizationManager({
     setMemberAccessDraft({
       memberRole: member.member_role,
       teachingRole: member.teaching_role ?? "",
+      studentStatus: member.student_status,
     });
     setMemberAccessError("");
   }
@@ -754,6 +767,9 @@ export default function OrganizationManager({
       if ((draft.teachingRole || null) !== member.teaching_role) {
         await setOrganizationMemberTeachingRole(activeOrganization.id, member.user_id, draft.teachingRole || null);
       }
+      if (draft.teachingRole === "student" && draft.studentStatus !== member.student_status) {
+        await setOrganizationStudentStatus(activeOrganization.id, member.user_id, draft.studentStatus);
+      }
       const [nextMembers, nextPeople] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
@@ -761,7 +777,7 @@ export default function OrganizationManager({
       setMembers(nextMembers);
       setOrganizationPeople(nextPeople);
       const updated = nextMembers.find((item) => item.user_id === member.user_id);
-      if (updated) setMemberAccessDraft({ memberRole: updated.member_role, teachingRole: updated.teaching_role ?? "" });
+      if (updated) setMemberAccessDraft({ memberRole: updated.member_role, teachingRole: updated.teaching_role ?? "", studentStatus: updated.student_status });
       setStatus("Role and access updated.");
     } catch (error) {
       setMemberAccessError(getErrorMessage(error, "Unable to update role and access."));
@@ -772,7 +788,7 @@ export default function OrganizationManager({
       if (nextMembers) {
         setMembers(nextMembers);
         const updated = nextMembers.find((item) => item.user_id === member.user_id);
-        if (updated) setMemberAccessDraft({ memberRole: updated.member_role, teachingRole: updated.teaching_role ?? "" });
+        if (updated) setMemberAccessDraft({ memberRole: updated.member_role, teachingRole: updated.teaching_role ?? "", studentStatus: updated.student_status });
       }
       if (nextPeople) setOrganizationPeople(nextPeople);
     } finally {
@@ -782,7 +798,10 @@ export default function OrganizationManager({
 
   function applyMemberAccess() {
     if (!selectedMember || !memberAccessDraft) return;
-    if (memberAccessDraft.memberRole !== selectedMember.member_role) {
+    if (
+      memberAccessDraft.memberRole !== selectedMember.member_role
+      || (memberAccessDraft.teachingRole === "student" && memberAccessDraft.studentStatus !== selectedMember.student_status)
+    ) {
       setMemberAccessConfirmation({ member: selectedMember, draft: memberAccessDraft });
       return;
     }
@@ -1967,21 +1986,34 @@ export default function OrganizationManager({
           />
           </> : null}
 
-          {activePeopleTab === "students" ? <>
-          <AdminNameList
-            label="Organization students"
-            emptyLabel="No students."
-            items={studentMembers.map((member) => ({
-              id: member.user_id,
-              name: memberDisplayName(member, peopleByUserId.get(member.user_id)),
-              meta: formatManagementRole(member),
-            }))}
-            onSelect={(item) => {
-              const member = members.find((value) => value.user_id === item.id);
-              if (member) openMemberDetail(member);
-            }}
-          />
-          </> : null}
+          {activePeopleTab === "students" ? <div>
+            <CompactToolbar resultLabel={`${visibleStudentMembers.length} of ${studentMembers.length} students`}>
+              <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={showInactiveStudents}
+                  onChange={(event) => setShowInactiveStudents(event.target.checked)}
+                />
+                Show inactive
+              </label>
+            </CompactToolbar>
+            <AdminNameList
+              label="Organization students"
+              emptyLabel={showInactiveStudents ? "No students." : "No active students."}
+              items={visibleStudentMembers.map((member) => ({
+                id: member.user_id,
+                name: memberDisplayName(member, peopleByUserId.get(member.user_id)),
+                meta: member.student_status === "inactive"
+                  ? `Inactive · ${formatManagementRole(member)}`
+                  : formatManagementRole(member),
+              }))}
+              onSelect={(item) => {
+                const member = members.find((value) => value.user_id === item.id);
+                if (member) openMemberDetail(member);
+              }}
+            />
+          </div> : null}
 
           {activePeopleTab === "unassigned" ? <>
           <AdminNameList
@@ -2068,6 +2100,7 @@ export default function OrganizationManager({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="saas-field"><span>Teaching role</span><select value={memberAccessDraft.teachingRole} disabled={saving || !canManageMembers} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, teachingRole: event.target.value as OrganizationTeachingRole | "" } : current)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></label>
                   <label className="saas-field"><span>Management access</span><select value={memberAccessDraft.memberRole} disabled={saving || !canChangeSelectedManagementAccess} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, memberRole: event.target.value as MemberAccessDraft["memberRole"] } : current)}>{selectedMemberIsOwner ? <option value="owner">Owner</option> : null}<option value="member">Standard</option><option value="organization_admin">Organization admin</option></select></label>
+                  {memberAccessDraft.teachingRole === "student" ? <label className="flex min-h-9 items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" role="switch" checked={memberAccessDraft.studentStatus === "active"} disabled={saving || !canManageMembers} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, studentStatus: event.target.checked ? "active" : "inactive" } : current)} /><span>Active student</span></label> : null}
                 </div>
                 <dl className="grid gap-1 border-y border-slate-200 py-2 text-xs"><div className="flex gap-2"><dt className="font-semibold text-slate-600">Current access</dt><dd className="text-slate-700">{formatMemberPermissions(selectedMember)}</dd></div></dl>
                 {memberAccessError ? <p className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{memberAccessError}</p> : null}
@@ -2139,7 +2172,7 @@ export default function OrganizationManager({
           <ConfirmDialog
             open={Boolean(memberAccessConfirmation)}
             title="Apply role and access changes?"
-            description={memberAccessConfirmation ? `${memberDisplayName(memberAccessConfirmation.member, peopleByUserId.get(memberAccessConfirmation.member.user_id))} will use ${formatCombinedMemberRole({ ...memberAccessConfirmation.member, member_role: memberAccessConfirmation.draft.memberRole, teaching_role: memberAccessConfirmation.draft.teachingRole || null })}. Management permissions follow the selected access role.` : ""}
+            description={memberAccessConfirmation ? `${memberDisplayName(memberAccessConfirmation.member, peopleByUserId.get(memberAccessConfirmation.member.user_id))} will use ${formatCombinedMemberRole({ ...memberAccessConfirmation.member, member_role: memberAccessConfirmation.draft.memberRole, teaching_role: memberAccessConfirmation.draft.teachingRole || null })}.${memberAccessConfirmation.draft.teachingRole === "student" ? ` Student status will be ${memberAccessConfirmation.draft.studentStatus}; inactive students are excluded from current student workflows and future organization notifications.` : ""} Management permissions follow the selected access role.` : ""}
             confirmLabel="Apply changes"
             busy={saving}
             onCancel={() => setMemberAccessConfirmation(null)}
