@@ -218,6 +218,10 @@ export function trainingCourseCode(course: TrainingCourseIdentity) {
   const identity = `${course.stable_key} ${course.title}`.toLowerCase();
   if (identity.includes("instrument-rating")) return "IR";
   if (identity.includes("instrument rating")) return "IR";
+  if (identity.includes("private-pilot")) return "PVT";
+  if (identity.includes("private pilot")) return "PVT";
+  if (identity.includes("commercial-pilot")) return "CPL";
+  if (identity.includes("commercial pilot")) return "CPL";
   return course.title;
 }
 
@@ -525,7 +529,9 @@ export async function fetchMyTrainingGuideSubjects(organizationId?: string) {
     const modules = Array.isArray(record.instructor_modules)
       ? record.instructor_modules
           .map((module) => normalizeStudentModule(module, subject.id))
-          .filter((module): module is StudentTrainingGuideModule => Boolean(module))
+          .filter((module): module is StudentTrainingGuideModule =>
+            Boolean(module),
+          )
       : [];
     return [{ subject, instructor_modules: modules }];
   });
@@ -546,9 +552,14 @@ export async function fetchMyTrainingGuideSubject(subjectId: string) {
   const modules = Array.isArray(record.instructor_modules)
     ? record.instructor_modules
         .map((module) => normalizeStudentModule(module, subject.id))
-        .filter((module): module is StudentTrainingGuideModule => Boolean(module))
+        .filter((module): module is StudentTrainingGuideModule =>
+          Boolean(module),
+        )
     : [];
-  return { subject, instructor_modules: modules } satisfies StudentTrainingGuideSubject;
+  return {
+    subject,
+    instructor_modules: modules,
+  } satisfies StudentTrainingGuideSubject;
 }
 
 export async function saveMyTrainingGuideProgress(input: {
@@ -646,9 +657,7 @@ export async function fetchOrganizationTrainingGuides(organizationId: string) {
   }));
 }
 
-export async function fetchOrganizationTrainingCourses(
-  organizationId: string,
-) {
+export async function fetchOrganizationTrainingCourses(organizationId: string) {
   if (!organizationId) return [] as TrainingCourse[];
   const { data, error } = await getSupabaseClient().rpc(
     "list_organization_training_courses",
@@ -717,7 +726,9 @@ export async function fetchMyInstructorTrainingGuides(
     : query.is("organization_id", null);
   const { data, error } = await query;
   if (error) throw error;
-  return ((data ?? []) as Record<string, unknown>[]).map(normalizeInstructorGuide);
+  return ((data ?? []) as Record<string, unknown>[]).map(
+    normalizeInstructorGuide,
+  );
 }
 
 export async function saveInstructorTrainingGuide(

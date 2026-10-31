@@ -13,7 +13,6 @@ import {
   AdminNameList,
   CompactToolbar,
   DetailDrawer,
-  ManagementDisclosure,
 } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -65,7 +64,6 @@ import { fetchScheduleEligibility } from "@/lib/dashboard-preferences";
 
 type Workspace = "personal" | "organization" | "platform";
 type Drawer =
-  | "course"
   | "course-module"
   | "subject"
   | "platform-editor"
@@ -168,6 +166,17 @@ function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error)
     return String(error.message);
   return fallback;
+}
+
+function trainingCourseTrack(course: TrainingCourse) {
+  const identity = `${course.stable_key} ${course.title}`.toLowerCase();
+  if (identity.includes("ground")) return "Ground";
+  if (identity.includes("flight")) return "Flight";
+  return course.modules.some((module) =>
+    module.module_type.toLowerCase().includes("flight"),
+  )
+    ? "Flight"
+    : "Ground";
 }
 
 function resourcesToText(resources: TrainingResource[]) {
@@ -831,9 +840,8 @@ export default function TrainingGuideManager({
   const [organizationManeuverGuides, setOrganizationManeuverGuides] = useState<
     OrganizationTrainingManeuverGuide[]
   >([]);
-  const [instructorManeuverOverrides, setInstructorManeuverOverrides] = useState<
-    InstructorTrainingManeuverOverride[]
-  >([]);
+  const [instructorManeuverOverrides, setInstructorManeuverOverrides] =
+    useState<InstructorTrainingManeuverOverride[]>([]);
   const [organizationStudents, setOrganizationStudents] = useState<
     OrganizationStudent[]
   >([]);
@@ -847,9 +855,6 @@ export default function TrainingGuideManager({
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [selectedModuleNumber, setSelectedModuleNumber] = useState<
     number | null
-  >(null);
-  const [courseModuleReturnDrawer, setCourseModuleReturnDrawer] = useState<
-    "course" | null
   >(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [personalMode, setPersonalMode] = useState<"study" | "instructor">(
@@ -1081,21 +1086,12 @@ export default function TrainingGuideManager({
     );
   }
 
-  function openCourse(course: TrainingCourse) {
-    setSelectedCourseId(course.id);
-    setSelectedModuleNumber(null);
-    setDrawer("course");
-    setStatus("");
-  }
-
   function openCourseModule(
     course: TrainingCourse,
     module: TrainingCourseModule,
-    returnTo: "course" | null = null,
   ) {
     setSelectedCourseId(course.id);
     setSelectedModuleNumber(module.module_number);
-    setCourseModuleReturnDrawer(returnTo);
     setDrawer("course-module");
     setStatus("");
   }
@@ -1324,14 +1320,10 @@ export default function TrainingGuideManager({
         throw new Error("Add at least one guide page.");
       if (
         instructorForm.steps.some(
-          (step) =>
-            !step.title.trim() ||
-            !step.prepare.trim(),
+          (step) => !step.title.trim() || !step.prepare.trim(),
         )
       )
-        throw new Error(
-          "Each guide page needs a title and opening passage.",
-        );
+        throw new Error("Each guide page needs a title and opening passage.");
       await saveInstructorTrainingGuide({
         id: instructorForm.id,
         organization_id: instructorGuideOrganizationId,
@@ -1468,200 +1460,249 @@ export default function TrainingGuideManager({
       </div>
     );
 
-  const workspaceLabel =
-    workspace === "platform"
-      ? "Platform subjects"
-      : workspace === "organization"
-        ? "Organization guidance"
-        : "Training Guide";
   const canEditOrganization =
     workspace === "organization" && canManageOrganization;
 
   return (
     <>
       {trainingCourses.length ? (
-        <ManagementDisclosure
-          id={`training-courses-${workspace}`}
-          title="USATS Training Guide"
-          summary={`${trainingCourses.reduce((total, course) => total + course.modules.length, 0)} modules`}
-        >
-          <div className="divide-y divide-slate-300 border-t border-slate-200 bg-white">
-            {trainingCourses.map((course) => {
-              const stageNumbers = Array.from(
-                new Set(course.modules.map((module) => module.stage_number)),
-              ).sort((a, b) => a - b);
-              return (
-                <section key={course.id}>
-                  <button
-                    type="button"
-                    className="flex min-h-10 w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
-                    onClick={() => openCourse(course)}
-                  >
-                    <span>
-                      <strong className="block text-sm text-slate-900">
-                        {trainingCourseCode(course)} · {course.title}
-                      </strong>
-                      <span className="text-xs text-slate-500">
-                        {course.provider_name} · {course.revision_label}
-                      </span>
+        <details className="border border-slate-200 bg-white">
+          <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left marker:text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
+            <strong className="text-base text-slate-950">USATS Part 141</strong>
+            <span className="text-xs font-semibold text-slate-500">
+              {trainingCourses.reduce(
+                (total, course) => total + course.modules.length,
+                0,
+              )}{" "}
+              modules
+            </span>
+          </summary>
+          <div className="divide-y divide-slate-200 border-t border-slate-200">
+            {Array.from(
+              trainingCourses.reduce((groups, course) => {
+                const code = trainingCourseCode(course);
+                groups.set(code, [...(groups.get(code) ?? []), course]);
+                return groups;
+              }, new Map<string, TrainingCourse[]>()),
+            ).map(([code, courses]) => (
+              <details key={code} className="bg-white">
+                <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-6 py-2.5 marker:text-slate-500 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
+                  <span>
+                    <strong className="block text-sm text-slate-950">
+                      {code} 141
+                    </strong>
+                    <span className="text-xs text-slate-500">
+                      {courses[0]?.title}
                     </span>
-                    <span className="shrink-0 text-xs font-semibold text-slate-600">
-                      {course.modules.length} modules
-                    </span>
-                  </button>
-                  {stageNumbers.map((stageNumber) => {
-                    const stageModules = course.modules.filter(
-                      (module) => module.stage_number === stageNumber,
-                    );
-                    return (
-                      <div key={stageNumber} className="border-t border-slate-200">
-                        <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5">
-                          <strong className="text-xs font-semibold uppercase tracking-wide text-slate-700">
-                            Stage {stageNumber}
-                          </strong>
-                          <span className="text-xs text-slate-500">
-                            {stageModules.length} modules
-                          </span>
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                          {stageModules.map((module) => (
-                            <button
-                              key={module.id}
-                              type="button"
-                              className="grid min-h-10 w-full cursor-pointer grid-cols-[auto_1fr] items-center gap-x-4 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 sm:grid-cols-[7rem_1fr_auto]"
-                              onClick={() => openCourseModule(course, module)}
-                            >
-                              <strong className="text-sm text-slate-950">
-                                M{String(module.module_number).padStart(2, "0")}
-                              </strong>
-                              <span className="text-sm text-slate-700">
-                                {module.module_type}
-                              </span>
-                              <span className="col-start-2 text-xs text-slate-500 sm:col-start-auto">
-                                {module.duration_label}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {courses.reduce(
+                      (total, course) => total + course.modules.length,
+                      0,
+                    )}{" "}
+                    modules
+                  </span>
+                </summary>
+                <div className="border-t border-slate-200 bg-slate-50 px-3 py-3 sm:px-6">
+                  {Array.from(
+                    courses.reduce((tracks, course) => {
+                      const track = trainingCourseTrack(course);
+                      tracks.set(track, [...(tracks.get(track) ?? []), course]);
+                      return tracks;
+                    }, new Map<string, TrainingCourse[]>()),
+                  ).map(([track, trackCourses]) => (
+                    <details
+                      key={track}
+                      className="border border-slate-200 bg-white"
+                    >
+                      <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-3 px-3 py-2 marker:text-slate-500 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
+                        <strong className="text-sm text-slate-900">
+                          {track}
+                        </strong>
+                        <span className="text-xs font-semibold text-slate-500">
+                          {trackCourses.reduce(
+                            (total, course) => total + course.modules.length,
+                            0,
+                          )}{" "}
+                          modules
+                        </span>
+                      </summary>
+                      <div className="border-t border-slate-200">
+                        {trackCourses.map((course) =>
+                          Array.from(
+                            new Set(
+                              course.modules.map(
+                                (module) => module.stage_number,
+                              ),
+                            ),
+                          )
+                            .sort((a, b) => a - b)
+                            .map((stageNumber) => {
+                              const stageModules = course.modules.filter(
+                                (module) => module.stage_number === stageNumber,
+                              );
+                              return (
+                                <section key={`${course.id}-${stageNumber}`}>
+                                  <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-1.5">
+                                    <strong className="text-xs font-semibold uppercase tracking-wide text-slate-700">
+                                      Stage {stageNumber}
+                                    </strong>
+                                    <span className="text-xs text-slate-500">
+                                      {stageModules.length} modules
+                                    </span>
+                                  </div>
+                                  <div className="divide-y divide-slate-100">
+                                    {stageModules.map((module) => (
+                                      <button
+                                        key={module.id}
+                                        type="button"
+                                        className="grid min-h-10 w-full cursor-pointer grid-cols-[auto_1fr] items-center gap-x-4 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 sm:grid-cols-[7rem_1fr_auto]"
+                                        onClick={() =>
+                                          openCourseModule(course, module)
+                                        }
+                                      >
+                                        <strong className="text-sm text-slate-950">
+                                          M
+                                          {String(
+                                            module.module_number,
+                                          ).padStart(2, "0")}
+                                        </strong>
+                                        <span className="text-sm text-slate-700">
+                                          {module.module_type}
+                                        </span>
+                                        <span className="col-start-2 text-xs text-slate-500 sm:col-start-auto">
+                                          {module.duration_label}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </section>
+                              );
+                            }),
+                        )}
                       </div>
-                    );
-                  })}
-                </section>
-              );
-            })}
+                    </details>
+                  ))}
+                </div>
+              </details>
+            ))}
           </div>
-        </ManagementDisclosure>
+        </details>
       ) : null}
 
-      <ManagementDisclosure
-        id={`training-guide-${workspace}`}
-        title={workspaceLabel}
-        summary={`${filteredSubjects.length}`}
-      >
-        <CompactToolbar
-          actions={
-            workspace === "platform" ? (
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => openPlatformEditor()}
-              >
-                Add subject
-              </button>
-            ) : workspace === "personal" && canInstruct && isStudent ? (
-              <div
-                className="flex rounded-sm border border-slate-300 bg-white p-0.5"
-                role="group"
-                aria-label="Training Guide mode"
-              >
+      <details className="border border-slate-200 bg-white">
+        <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left marker:text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700">
+          <strong className="text-base text-slate-950">General ACS</strong>
+          <span className="text-xs font-semibold text-slate-500">
+            {filteredSubjects.length} subjects
+          </span>
+        </summary>
+        <div className="border-t border-slate-200">
+          <CompactToolbar
+            actions={
+              workspace === "platform" ? (
                 <button
                   type="button"
-                  aria-pressed={personalMode === "study"}
-                  className={`min-h-8 cursor-pointer rounded-sm px-2.5 text-xs font-semibold transition-colors duration-200 ${
-                    personalMode === "study"
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                  onClick={() => setPersonalMode("study")}
+                  className="primary-button"
+                  onClick={() => openPlatformEditor()}
                 >
-                  Study
+                  Add subject
                 </button>
-                <button
-                  type="button"
-                  aria-pressed={personalMode === "instructor"}
-                  className={`min-h-8 cursor-pointer rounded-sm px-2.5 text-xs font-semibold transition-colors duration-200 ${
-                    personalMode === "instructor"
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                  onClick={() => setPersonalMode("instructor")}
+              ) : workspace === "personal" && canInstruct && isStudent ? (
+                <div
+                  className="flex rounded-sm border border-slate-300 bg-white p-0.5"
+                  role="group"
+                  aria-label="Training Guide mode"
                 >
-                  Instructor tools
-                </button>
-              </div>
-            ) : undefined
-          }
-        >
-          <select
-            aria-label="Certificate"
-            className="h-9 rounded-sm border border-slate-300 bg-white px-2 text-[13px]"
-            value={certificate}
-            onChange={(event) => setCertificate(event.target.value)}
+                  <button
+                    type="button"
+                    aria-pressed={personalMode === "study"}
+                    className={`min-h-8 cursor-pointer rounded-sm px-2.5 text-xs font-semibold transition-colors duration-200 ${
+                      personalMode === "study"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    onClick={() => setPersonalMode("study")}
+                  >
+                    Study
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={personalMode === "instructor"}
+                    className={`min-h-8 cursor-pointer rounded-sm px-2.5 text-xs font-semibold transition-colors duration-200 ${
+                      personalMode === "instructor"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    onClick={() => setPersonalMode("instructor")}
+                  >
+                    Instructor tools
+                  </button>
+                </div>
+              ) : undefined
+            }
           >
-            <option value="all">All certificates</option>
-            {certificates.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <input
-            type="search"
-            aria-label="Search training subjects"
-            className="console-compact-search h-9 rounded-sm border border-slate-300 px-3 text-[13px]"
-            placeholder="Search subjects or ACS codes"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </CompactToolbar>
-        {status ? (
-          <p
-            role="status"
-            className="border-b border-slate-200 px-3 py-2 text-sm text-slate-600"
-          >
-            {status}
-          </p>
-        ) : null}
-        {isStudentStudy ? (
-          <div aria-label="Training subjects" className="grid gap-5 p-3">
-            {!groupedSubjects.length ? (
-              <div className="border border-dashed border-slate-300 px-4 py-6 text-center">
-                <p className="text-sm font-semibold text-slate-800">
-                  No subjects are available yet
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  A subject appears here after it is added to a published lesson.
-                </p>
-              </div>
-            ) : (
-              groupedSubjects.map(([code, categorySubjects]) => (
-                <section
-                  key={code}
-                  aria-labelledby={`training-category-${code}`}
-                >
-                  <div className="mb-2 flex items-baseline justify-between gap-3">
-                    <h2
-                      id={`training-category-${code}`}
-                      className="text-sm font-semibold text-slate-950"
-                    >
-                      {trainingCategoryLabels[code] ?? code}
-                    </h2>
-                    <span className="text-xs font-semibold text-slate-500">
-                      {code}
-                    </span>
-                  </div>
-                  <div className="divide-y divide-slate-200 border border-slate-200 bg-white">
-                    {categorySubjects.map((subject) => (
+            <select
+              aria-label="Certificate"
+              className="h-9 rounded-sm border border-slate-300 bg-white px-2 text-[13px]"
+              value={certificate}
+              onChange={(event) => setCertificate(event.target.value)}
+            >
+              <option value="all">All certificates</option>
+              {certificates.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+            <input
+              type="search"
+              aria-label="Search training subjects"
+              className="console-compact-search h-9 rounded-sm border border-slate-300 px-3 text-[13px]"
+              placeholder="Search subjects or ACS codes"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </CompactToolbar>
+          {status ? (
+            <p
+              role="status"
+              className="border-b border-slate-200 px-3 py-2 text-sm text-slate-600"
+            >
+              {status}
+            </p>
+          ) : null}
+          {isStudentStudy ? (
+            <div aria-label="Training subjects" className="grid gap-5 p-3">
+              {!groupedSubjects.length ? (
+                <div className="border border-dashed border-slate-300 px-4 py-6 text-center">
+                  <p className="text-sm font-semibold text-slate-800">
+                    No subjects are available yet
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    A subject appears here after it is added to a published
+                    lesson.
+                  </p>
+                </div>
+              ) : (
+                groupedSubjects.map(([code, categorySubjects]) => (
+                  <section
+                    key={code}
+                    aria-labelledby={`training-category-${code}`}
+                  >
+                    <div className="mb-2 flex items-baseline justify-between gap-3">
+                      <h2
+                        id={`training-category-${code}`}
+                        className="text-sm font-semibold text-slate-950"
+                      >
+                        {trainingCategoryLabels[code] ?? code}
+                      </h2>
+                      <span className="text-xs font-semibold text-slate-500">
+                        {code}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-slate-200 border border-slate-200 bg-white">
+                      {categorySubjects.map((subject) => (
                         <Link
                           key={subject.id}
                           className="flex min-h-14 w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
@@ -1672,109 +1713,39 @@ export default function TrainingGuideManager({
                               {subject.title}
                             </strong>
                           </span>
-                          <span aria-hidden="true" className="text-blue-700">→</span>
+                          <span aria-hidden="true" className="text-blue-700">
+                            →
+                          </span>
                         </Link>
-                    ))}
-                  </div>
-                </section>
-              ))
-            )}
-          </div>
-        ) : (
-          <AdminNameList
-            label="Training subjects"
-            emptyLabel="No training subjects match."
-            items={filteredSubjects.map((subject) => ({
-              id: subject.id,
-              name: `${subject.certificate_code} · ${subject.title}`,
-            }))}
-            onSelect={(item) => {
-              const subject = filteredSubjects.find(
-                (candidate) => candidate.id === item.id,
-              );
-              if (subject) void openSubject(subject);
-            }}
-          />
-        )}
-      </ManagementDisclosure>
-
-      <DetailDrawer
-        compact
-        open={drawer === "course" && Boolean(selectedCourse)}
-        onClose={() => setDrawer(null)}
-        title={
-          selectedCourse
-            ? `${trainingCourseCode(selectedCourse)} · ${selectedCourse.title}`
-            : "Training course"
-        }
-        description={
-          selectedCourse
-            ? `${selectedCourse.provider_name} · ${selectedCourse.revision_label}`
-            : undefined
-        }
-      >
-        {selectedCourse ? (
-          <div className="grid gap-5">
-            {Array.from(
-              new Set(
-                selectedCourse.modules.map((module) => module.stage_number),
-              ),
-            )
-              .sort((a, b) => a - b)
-              .map((stageNumber) => {
-              const stageModules = selectedCourse.modules.filter(
-                (module) => module.stage_number === stageNumber,
-              );
-              if (!stageModules.length) return null;
-              return (
-                <section
-                  key={stageNumber}
-                  aria-labelledby={`course-stage-${stageNumber}`}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <h2
-                      id={`course-stage-${stageNumber}`}
-                      className="text-sm font-semibold text-slate-950"
-                    >
-                      Stage {stageNumber}
-                    </h2>
-                    <span className="text-xs font-semibold text-slate-500">
-                      {stageModules.length} modules
-                    </span>
-                  </div>
-                  <div className="divide-y divide-slate-200 border border-slate-200 bg-white">
-                    {stageModules.map((module) => (
-                      <button
-                        key={module.id}
-                        type="button"
-                        className="grid min-h-9 w-full cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
-                        onClick={() =>
-                          openCourseModule(selectedCourse, module, "course")
-                        }
-                      >
-                        <strong className="text-xs text-slate-500">
-                          M{String(module.module_number).padStart(2, "0")}
-                        </strong>
-                        <span className="text-sm font-medium text-slate-900">
-                          {module.module_type}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {module.duration_label}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        ) : null}
-      </DetailDrawer>
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
+            </div>
+          ) : (
+            <AdminNameList
+              label="Training subjects"
+              emptyLabel="No training subjects match."
+              items={filteredSubjects.map((subject) => ({
+                id: subject.id,
+                name: `${subject.certificate_code} · ${subject.title}`,
+              }))}
+              onSelect={(item) => {
+                const subject = filteredSubjects.find(
+                  (candidate) => candidate.id === item.id,
+                );
+                if (subject) void openSubject(subject);
+              }}
+            />
+          )}
+        </div>
+      </details>
 
       <DetailDrawer
         compact
         open={drawer === "course-module" && Boolean(selectedCourseModule)}
-        onClose={() => setDrawer(courseModuleReturnDrawer)}
+        onClose={() => setDrawer(null)}
         title={
           selectedCourseModule && selectedCourse
             ? trainingCourseModuleLabel(selectedCourse, selectedCourseModule)
@@ -1804,7 +1775,9 @@ export default function TrainingGuideManager({
               <ol className="divide-y divide-slate-200 border border-slate-200 bg-white">
                 {selectedCourseModule.line_items.map((item) => (
                   <li
-                    key={item.id || `${selectedCourseModule.id}-${item.position}`}
+                    key={
+                      item.id || `${selectedCourseModule.id}-${item.position}`
+                    }
                     className="grid min-h-9 grid-cols-[2rem_1fr] gap-2 px-3 py-2 text-sm leading-5 text-slate-800"
                   >
                     <span className="text-right text-slate-500">
@@ -2033,7 +2006,11 @@ export default function TrainingGuideManager({
                             {guide.title}
                           </strong>
                           <p className="mt-0.5 text-xs text-slate-500">
-                            {[guide.source_name, guide.source_pages && `pp. ${guide.source_pages}`, guide.revision_label]
+                            {[
+                              guide.source_name,
+                              guide.source_pages && `pp. ${guide.source_pages}`,
+                              guide.revision_label,
+                            ]
                               .filter(Boolean)
                               .join(" · ")}
                           </p>
@@ -2061,8 +2038,13 @@ export default function TrainingGuideManager({
                   {selectedInstructorGuide?.steps.length ? (
                     <ol className="mt-3 divide-y divide-slate-100 border border-slate-200 bg-white">
                       {selectedInstructorGuide.steps.map((step, index) => (
-                        <li key={step.id} className="flex min-h-9 items-center gap-3 px-3 py-2 text-sm text-slate-800">
-                          <span className="font-semibold text-slate-500">{index + 1}</span>
+                        <li
+                          key={step.id}
+                          className="flex min-h-9 items-center gap-3 px-3 py-2 text-sm text-slate-800"
+                        >
+                          <span className="font-semibold text-slate-500">
+                            {index + 1}
+                          </span>
                           <span>{step.title}</span>
                         </li>
                       ))}
@@ -2087,11 +2069,14 @@ export default function TrainingGuideManager({
                   </div>
                   {instructorManeuverOverrides.length ? (
                     <p className="text-sm text-slate-600">
-                      Notes added for {instructorManeuverOverrides.length} maneuver{instructorManeuverOverrides.length === 1 ? "" : "s"}.
+                      Notes added for {instructorManeuverOverrides.length}{" "}
+                      maneuver
+                      {instructorManeuverOverrides.length === 1 ? "" : "s"}.
                     </p>
                   ) : (
                     <p className="text-sm text-slate-500">
-                      Add your own setup, flying cues, and links without changing the organization SOPM.
+                      Add your own setup, flying cues, and links without
+                      changing the organization SOPM.
                     </p>
                   )}
                 </section>
@@ -2743,31 +2728,59 @@ export default function TrainingGuideManager({
                     <input
                       type="checkbox"
                       checked={draft.enabled}
-                      onChange={(event) => update({ enabled: event.target.checked })}
+                      onChange={(event) =>
+                        update({ enabled: event.target.checked })
+                      }
                     />
                     Available to students
                   </label>
                   <label className="saas-field">
                     <span>Student-facing title</span>
-                    <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
+                    <input
+                      value={draft.title}
+                      onChange={(event) =>
+                        update({ title: event.target.value })
+                      }
+                    />
                   </label>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <label className="saas-field">
                       <span>Source</span>
-                      <input value={draft.sourceName} onChange={(event) => update({ sourceName: event.target.value })} />
+                      <input
+                        value={draft.sourceName}
+                        onChange={(event) =>
+                          update({ sourceName: event.target.value })
+                        }
+                      />
                     </label>
                     <label className="saas-field">
                       <span>Pages</span>
-                      <input value={draft.sourcePages} onChange={(event) => update({ sourcePages: event.target.value })} />
+                      <input
+                        value={draft.sourcePages}
+                        onChange={(event) =>
+                          update({ sourcePages: event.target.value })
+                        }
+                      />
                     </label>
                     <label className="saas-field">
                       <span>Revision</span>
-                      <input value={draft.revisionLabel} onChange={(event) => update({ revisionLabel: event.target.value })} />
+                      <input
+                        value={draft.revisionLabel}
+                        onChange={(event) =>
+                          update({ revisionLabel: event.target.value })
+                        }
+                      />
                     </label>
                   </div>
                   <label className="saas-field">
                     <span>Applicable aircraft · one per line</span>
-                    <textarea rows={2} value={draft.applicableAircraft} onChange={(event) => update({ applicableAircraft: event.target.value })} />
+                    <textarea
+                      rows={2}
+                      value={draft.applicableAircraft}
+                      onChange={(event) =>
+                        update({ applicableAircraft: event.target.value })
+                      }
+                    />
                   </label>
                   {[
                     ["Setup · one action per line", "setupItems"],
@@ -2779,9 +2792,15 @@ export default function TrainingGuideManager({
                       <span>{label}</span>
                       <textarea
                         rows={field === "callouts" ? 3 : 5}
-                        value={draft[field as keyof OrganizationManeuverDraft] as string}
+                        value={
+                          draft[
+                            field as keyof OrganizationManeuverDraft
+                          ] as string
+                        }
                         onChange={(event) =>
-                          update({ [field]: event.target.value } as Partial<OrganizationManeuverDraft>)
+                          update({
+                            [field]: event.target.value,
+                          } as Partial<OrganizationManeuverDraft>)
                         }
                       />
                     </label>
@@ -2792,8 +2811,19 @@ export default function TrainingGuideManager({
           })}
         </div>
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="ghost-button" onClick={() => setDrawer("subject")}>Cancel</button>
-          <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSaveOrganizationManeuvers()}>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setDrawer("subject")}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={saving}
+            onClick={() => void handleSaveOrganizationManeuvers()}
+          >
             {saving ? "Saving…" : "Save maneuver guides"}
           </button>
         </div>
@@ -2809,8 +2839,12 @@ export default function TrainingGuideManager({
           <section className="border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">Guide pages</h3>
-                <p className="mt-0.5 text-xs text-slate-600">Students read one short page at a time in this order.</p>
+                <h3 className="text-sm font-semibold text-slate-950">
+                  Guide pages
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  Students read one short page at a time in this order.
+                </p>
               </div>
               <button
                 type="button"
@@ -2840,9 +2874,14 @@ export default function TrainingGuideManager({
                       ),
                     }));
                   return (
-                    <article key={step.id} className="border border-slate-200 bg-white p-3">
+                    <article
+                      key={step.id}
+                      className="border border-slate-200 bg-white p-3"
+                    >
                       <div className="flex items-center justify-between gap-3">
-                        <strong className="text-sm text-slate-900">Page {index + 1}</strong>
+                        <strong className="text-sm text-slate-900">
+                          Page {index + 1}
+                        </strong>
                         <div className="flex gap-1">
                           <button
                             type="button"
@@ -2852,7 +2891,10 @@ export default function TrainingGuideManager({
                             onClick={() =>
                               setInstructorForm((current) => {
                                 const steps = [...current.steps];
-                                [steps[index - 1], steps[index]] = [steps[index], steps[index - 1]];
+                                [steps[index - 1], steps[index]] = [
+                                  steps[index],
+                                  steps[index - 1],
+                                ];
                                 return { ...current, steps };
                               })
                             }
@@ -2867,7 +2909,10 @@ export default function TrainingGuideManager({
                             onClick={() =>
                               setInstructorForm((current) => {
                                 const steps = [...current.steps];
-                                [steps[index], steps[index + 1]] = [steps[index + 1], steps[index]];
+                                [steps[index], steps[index + 1]] = [
+                                  steps[index + 1],
+                                  steps[index],
+                                ];
                                 return { ...current, steps };
                               })
                             }
@@ -2878,10 +2923,13 @@ export default function TrainingGuideManager({
                             type="button"
                             className="ghost-button min-h-9 px-2 text-rose-700"
                             onClick={() => {
-                              if (!window.confirm("Remove this guide page?")) return;
+                              if (!window.confirm("Remove this guide page?"))
+                                return;
                               setInstructorForm((current) => ({
                                 ...current,
-                                steps: current.steps.filter((item) => item.id !== step.id),
+                                steps: current.steps.filter(
+                                  (item) => item.id !== step.id,
+                                ),
                               }));
                             }}
                           >
@@ -2892,38 +2940,82 @@ export default function TrainingGuideManager({
                       <div className="mt-3 grid gap-3">
                         <label className="saas-field">
                           <span>Page title</span>
-                          <input value={step.title} maxLength={160} onChange={(event) => updateStep({ title: event.target.value })} />
+                          <input
+                            value={step.title}
+                            maxLength={160}
+                            onChange={(event) =>
+                              updateStep({ title: event.target.value })
+                            }
+                          />
                         </label>
                         <label className="saas-field">
                           <span>What the student is about to review</span>
-                          <textarea rows={4} value={step.prepare} onChange={(event) => updateStep({ prepare: event.target.value })} />
+                          <textarea
+                            rows={4}
+                            value={step.prepare}
+                            onChange={(event) =>
+                              updateStep({ prepare: event.target.value })
+                            }
+                          />
                         </label>
                         <label className="saas-field">
                           <span>Before the flight · optional</span>
-                          <textarea rows={4} value={step.method} onChange={(event) => updateStep({ method: event.target.value })} />
+                          <textarea
+                            rows={4}
+                            value={step.method}
+                            onChange={(event) =>
+                              updateStep({ method: event.target.value })
+                            }
+                          />
                         </label>
                         <label className="saas-field">
-                          <span>As you read, look for · optional, one per line</span>
-                          <textarea rows={4} value={step.focusQuestions} onChange={(event) => updateStep({ focusQuestions: event.target.value })} />
+                          <span>
+                            As you read, look for · optional, one per line
+                          </span>
+                          <textarea
+                            rows={4}
+                            value={step.focusQuestions}
+                            onChange={(event) =>
+                              updateStep({ focusQuestions: event.target.value })
+                            }
+                          />
                         </label>
                         <label className="saas-field">
                           <span>Why this matters in flight · optional</span>
-                          <textarea rows={3} value={step.expectedResult} onChange={(event) => updateStep({ expectedResult: event.target.value })} />
+                          <textarea
+                            rows={3}
+                            value={step.expectedResult}
+                            onChange={(event) =>
+                              updateStep({ expectedResult: event.target.value })
+                            }
+                          />
                         </label>
                         {selectedSubject?.components.length ? (
                           <fieldset>
-                            <legend className="text-xs font-semibold text-slate-700">Related maneuvers</legend>
+                            <legend className="text-xs font-semibold text-slate-700">
+                              Related maneuvers
+                            </legend>
                             <div className="mt-2 flex flex-wrap gap-2">
                               {selectedSubject.components.map((component) => (
-                                <label key={component.key} className="flex min-h-9 cursor-pointer items-center gap-2 border border-slate-200 bg-white px-2 text-xs">
+                                <label
+                                  key={component.key}
+                                  className="flex min-h-9 cursor-pointer items-center gap-2 border border-slate-200 bg-white px-2 text-xs"
+                                >
                                   <input
                                     type="checkbox"
-                                    checked={step.componentKeys.includes(component.key)}
+                                    checked={step.componentKeys.includes(
+                                      component.key,
+                                    )}
                                     onChange={(event) =>
                                       updateStep({
                                         componentKeys: event.target.checked
-                                          ? [...step.componentKeys, component.key]
-                                          : step.componentKeys.filter((key) => key !== component.key),
+                                          ? [
+                                              ...step.componentKeys,
+                                              component.key,
+                                            ]
+                                          : step.componentKeys.filter(
+                                              (key) => key !== component.key,
+                                            ),
                                       })
                                     }
                                   />
@@ -2934,8 +3026,17 @@ export default function TrainingGuideManager({
                           </fieldset>
                         ) : null}
                         <label className="saas-field">
-                          <span>Links shown beside Before the flight · title | https://…</span>
-                          <textarea rows={3} value={step.resources} onChange={(event) => updateStep({ resources: event.target.value })} />
+                          <span>
+                            Links shown beside Before the flight · title |
+                            https://…
+                          </span>
+                          <textarea
+                            rows={3}
+                            value={step.resources}
+                            onChange={(event) =>
+                              updateStep({ resources: event.target.value })
+                            }
+                          />
                         </label>
                       </div>
                     </article>
@@ -2979,7 +3080,11 @@ export default function TrainingGuideManager({
                 ),
               );
             return (
-              <details key={draft.componentKey} className="border border-slate-200 bg-white" open={index === 0}>
+              <details
+                key={draft.componentKey}
+                className="border border-slate-200 bg-white"
+                open={index === 0}
+              >
                 <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold text-slate-900">
                   {draft.title}
                 </summary>
@@ -2994,14 +3099,28 @@ export default function TrainingGuideManager({
                       <span>{label}</span>
                       <textarea
                         rows={4}
-                        value={draft[field as keyof InstructorManeuverDraft] as string}
-                        onChange={(event) => update({ [field]: event.target.value } as Partial<InstructorManeuverDraft>)}
+                        value={
+                          draft[
+                            field as keyof InstructorManeuverDraft
+                          ] as string
+                        }
+                        onChange={(event) =>
+                          update({
+                            [field]: event.target.value,
+                          } as Partial<InstructorManeuverDraft>)
+                        }
                       />
                     </label>
                   ))}
                   <label className="saas-field">
                     <span>Videos and links · title | https://…</span>
-                    <textarea rows={3} value={draft.resources} onChange={(event) => update({ resources: event.target.value })} />
+                    <textarea
+                      rows={3}
+                      value={draft.resources}
+                      onChange={(event) =>
+                        update({ resources: event.target.value })
+                      }
+                    />
                   </label>
                 </div>
               </details>
@@ -3009,8 +3128,19 @@ export default function TrainingGuideManager({
           })}
         </div>
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="ghost-button" onClick={() => setDrawer("subject")}>Cancel</button>
-          <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSaveInstructorManeuvers()}>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setDrawer("subject")}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={saving}
+            onClick={() => void handleSaveInstructorManeuvers()}
+          >
             {saving ? "Saving…" : "Save maneuver notes"}
           </button>
         </div>
