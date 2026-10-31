@@ -780,7 +780,9 @@ export default function OrganizationManager({
       if (updated) setMemberAccessDraft({ memberRole: updated.member_role, teachingRole: updated.teaching_role ?? "", studentStatus: updated.student_status });
       setStatus("Role and access updated.");
     } catch (error) {
-      setMemberAccessError(getErrorMessage(error, "Unable to update role and access."));
+      const message = getErrorMessage(error, "Unable to update role and access.");
+      setMemberAccessError(message);
+      setStatus(message);
       const [nextMembers, nextPeople] = await Promise.all([
         fetchOrganizationMembers(activeOrganization.id),
         fetchOrganizationPeople(activeOrganization.id),
@@ -1998,21 +2000,39 @@ export default function OrganizationManager({
                 Show inactive
               </label>
             </CompactToolbar>
-            <AdminNameList
-              label="Organization students"
-              emptyLabel={showInactiveStudents ? "No students." : "No active students."}
-              items={visibleStudentMembers.map((member) => ({
-                id: member.user_id,
-                name: memberDisplayName(member, peopleByUserId.get(member.user_id)),
-                meta: member.student_status === "inactive"
-                  ? `Inactive · ${formatManagementRole(member)}`
-                  : formatManagementRole(member),
-              }))}
-              onSelect={(item) => {
-                const member = members.find((value) => value.user_id === item.id);
-                if (member) openMemberDetail(member);
-              }}
-            />
+            <div className="border-x border-t border-slate-200 bg-white" role="list" aria-label="Organization students">
+              {!visibleStudentMembers.length ? (
+                <p className="border-b border-slate-200 px-3 py-5 text-center text-xs text-slate-500">
+                  {showInactiveStudents ? "No students." : "No active students."}
+                </p>
+              ) : visibleStudentMembers.map((member) => {
+                const name = memberDisplayName(member, peopleByUserId.get(member.user_id));
+                return <div key={member.user_id} role="listitem" className="flex min-h-9 items-center gap-3 border-b border-slate-200 px-3 py-1.5">
+                  <button type="button" className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={() => openMemberDetail(member)}>
+                    <span className="block break-words text-[13px] font-medium leading-5 text-slate-900">{name}</span>
+                    <span className="block text-xs font-normal text-slate-500">{formatManagementRole(member)}</span>
+                  </button>
+                  <label className={`flex shrink-0 items-center gap-2 text-xs font-medium ${canManageMembers ? "cursor-pointer text-slate-700" : "text-slate-400"}`}>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-label={`${name} active`}
+                      checked={member.student_status === "active"}
+                      disabled={saving || !canManageMembers}
+                      onChange={(event) => setMemberAccessConfirmation({
+                        member,
+                        draft: {
+                          memberRole: member.member_role,
+                          teachingRole: "student",
+                          studentStatus: event.target.checked ? "active" : "inactive",
+                        },
+                      })}
+                    />
+                    Active
+                  </label>
+                </div>;
+              })}
+            </div>
           </div> : null}
 
           {activePeopleTab === "unassigned" ? <>
@@ -2100,7 +2120,6 @@ export default function OrganizationManager({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="saas-field"><span>Teaching role</span><select value={memberAccessDraft.teachingRole} disabled={saving || !canManageMembers} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, teachingRole: event.target.value as OrganizationTeachingRole | "" } : current)}><option value="">None</option><option value="instructor">Instructor</option><option value="student">Student</option></select></label>
                   <label className="saas-field"><span>Management access</span><select value={memberAccessDraft.memberRole} disabled={saving || !canChangeSelectedManagementAccess} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, memberRole: event.target.value as MemberAccessDraft["memberRole"] } : current)}>{selectedMemberIsOwner ? <option value="owner">Owner</option> : null}<option value="member">Standard</option><option value="organization_admin">Organization admin</option></select></label>
-                  {memberAccessDraft.teachingRole === "student" ? <label className="flex min-h-9 items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" role="switch" checked={memberAccessDraft.studentStatus === "active"} disabled={saving || !canManageMembers} onChange={(event) => setMemberAccessDraft((current) => current ? { ...current, studentStatus: event.target.checked ? "active" : "inactive" } : current)} /><span>Active student</span></label> : null}
                 </div>
                 <dl className="grid gap-1 border-y border-slate-200 py-2 text-xs"><div className="flex gap-2"><dt className="font-semibold text-slate-600">Current access</dt><dd className="text-slate-700">{formatMemberPermissions(selectedMember)}</dd></div></dl>
                 {memberAccessError ? <p className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{memberAccessError}</p> : null}
