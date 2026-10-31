@@ -39,6 +39,7 @@ import {
   saveOrganizationTrainingManeuverGuide,
   saveStudentTrainingSubjectNote,
   saveTrainingSubject,
+  trainingCourseCode,
   trainingCourseModuleLabel,
   updateCommunityTrainingNote,
   type CommunityTrainingNote,
@@ -1498,7 +1499,7 @@ export default function TrainingGuideManager({
                   >
                     <span>
                       <strong className="block text-sm text-slate-900">
-                        {course.title}
+                        {trainingCourseCode(course)} · {course.title}
                       </strong>
                       <span className="text-xs text-slate-500">
                         {course.provider_name} · {course.revision_label}
@@ -1531,7 +1532,7 @@ export default function TrainingGuideManager({
                               onClick={() => openCourseModule(course, module)}
                             >
                               <strong className="text-sm text-slate-950">
-                                {trainingCourseModuleLabel(course, module)}
+                                M{String(module.module_number).padStart(2, "0")}
                               </strong>
                               <span className="text-sm text-slate-700">
                                 {module.module_type}
@@ -1701,7 +1702,11 @@ export default function TrainingGuideManager({
         compact
         open={drawer === "course" && Boolean(selectedCourse)}
         onClose={() => setDrawer(null)}
-        title={selectedCourse?.title ?? "Training course"}
+        title={
+          selectedCourse
+            ? `${trainingCourseCode(selectedCourse)} · ${selectedCourse.title}`
+            : "Training course"
+        }
         description={
           selectedCourse
             ? `${selectedCourse.provider_name} · ${selectedCourse.revision_label}`
