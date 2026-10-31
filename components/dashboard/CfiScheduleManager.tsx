@@ -94,8 +94,12 @@ import {
   groupByAircraftFamily,
 } from "@/lib/aircraft-family";
 import {
+  fetchMyScheduleTrainingCourses,
   fetchTrainingSubjects,
+  type ScheduleTrainingCourse,
+  type ScheduleTrainingCourseModule,
   type ScheduleTrainingSubject,
+  type TrainingCourseModule,
   type TrainingSubject,
 } from "@/lib/training-guide";
 
@@ -108,6 +112,7 @@ type DrawerMode =
   | "availability"
   | "aircraft-preferences"
   | "lesson"
+  | "course-module-picker"
   | "subject-picker"
   | "block"
   | "auto"
@@ -142,6 +147,7 @@ const emptyLesson = {
   note: "",
   aircraftId: "",
   assignedInstructorId: "",
+  trainingCourseModules: [] as ScheduleTrainingCourseModule[],
   trainingSubjects: [] as ScheduleTrainingSubject[],
 };
 
@@ -358,6 +364,10 @@ export default function CfiScheduleManager() {
   const [trainingSubjects, setTrainingSubjects] = useState<TrainingSubject[]>(
     [],
   );
+  const [trainingCourses, setTrainingCourses] = useState<
+    ScheduleTrainingCourse[]
+  >([]);
+  const [courseModuleSearch, setCourseModuleSearch] = useState("");
   const [subjectSearch, setSubjectSearch] = useState("");
   const [blockForm, setBlockForm] = useState({
     date: localDateKey(new Date()),
@@ -460,6 +470,36 @@ export default function CfiScheduleManager() {
         ].some((value) => value.toLowerCase().includes(normalized)),
     );
   }, [subjectSearch, trainingSubjects]);
+  const availableCourseModules = useMemo(
+    () =>
+      trainingCourses.flatMap((course) =>
+        course.modules.map((courseModule) => ({ course, courseModule })),
+      ),
+    [trainingCourses],
+  );
+  const courseModulesById = useMemo(
+    () =>
+      new Map(
+        availableCourseModules.map((item) => [item.courseModule.id, item]),
+      ),
+    [availableCourseModules],
+  );
+  const filteredCourseModules = useMemo(() => {
+    const normalized = courseModuleSearch.trim().toLowerCase();
+    return availableCourseModules.filter(({ course, courseModule }) => {
+        const values = [
+          course.title,
+          course.organization_name,
+          `M${String(courseModule.module_number).padStart(2, "0")}`,
+          courseModule.module_type,
+          courseModule.lesson_objective,
+        ];
+        return (
+          !normalized ||
+          values.some((value) => value.toLowerCase().includes(normalized))
+        );
+      });
+  }, [availableCourseModules, courseModuleSearch]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("pilotseal:schedule-return");
@@ -695,12 +735,15 @@ export default function CfiScheduleManager() {
     setError("");
     try {
       const subjectsPromise = fetchTrainingSubjects();
+      const coursesPromise = fetchMyScheduleTrainingCourses();
       await loadIdentityData();
-      const [, nextTrainingSubjects] = await Promise.all([
+      const [, nextTrainingSubjects, nextTrainingCourses] = await Promise.all([
         loadWeekData(),
         subjectsPromise,
+        coursesPromise,
       ]);
       setTrainingSubjects(nextTrainingSubjects);
+      setTrainingCourses(nextTrainingCourses);
     } catch (loadError) {
       setError(getErrorMessage(loadError, "Unable to load the schedule."));
     } finally {
@@ -1489,6 +1532,9 @@ export default function CfiScheduleManager() {
         ? (entry.aircraft_id ?? "")
         : "",
       assignedInstructorId: entry.assigned_instructor_user_id ?? userId,
+      trainingCourseModules: (entry.training_course_modules ?? []).map(
+        (courseModule) => ({ ...courseModule }),
+      ),
       trainingSubjects: (entry.training_subjects ?? []).map((subject) => ({
         ...subject,
       })),
@@ -1547,6 +1593,72 @@ export default function CfiScheduleManager() {
     });
   }
 
+  function toggleLessonCourseModule(
+    course: ScheduleTrainingCourse,
+    courseModule: TrainingCourseModule,
+  ) {
+    setLesson((current) => {
+      const exists = current.trainingCourseModules.some(
+        (item) => item.course_module_id === courseModule.id,
+      );
+      if (exists) {
+        return {
+          ...current,
+          trainingCourseModules: current.trainingCourseModules.filter(
+            (item) => item.course_module_id !== courseModule.id,
+          ),
+        };
+      }
+      return {
+        ...current,
+        trainingCourseModules: [
+          ...current.trainingCourseModules,
+          {
+            course_module_id: courseModule.id,
+            organization_id: course.organization_id,
+            position: current.trainingCourseModules.length,
+            personal_note: "",
+            module_snapshot: {
+              course: {
+                id: course.id,
+                stable_key: course.stable_key,
+                provider_name: course.provider_name,
+                title: course.title,
+                revision_label: course.revision_label,
+                source_file_name: course.source_file_name,
+              },
+              module: courseModule,
+            },
+          },
+        ],
+      };
+    });
+  }
+
+  function moveLessonCourseModule(moduleId: string, direction: -1 | 1) {
+    setLesson((current) => {
+      const index = current.trainingCourseModules.findIndex(
+        (item) => item.course_module_id === moduleId,
+      );
+      const target = index + direction;
+      if (
+        index < 0 ||
+        target < 0 ||
+        target >= current.trainingCourseModules.length
+      )
+        return current;
+      const next = [...current.trainingCourseModules];
+      [next[index], next[target]] = [next[target], next[index]];
+      return {
+        ...current,
+        trainingCourseModules: next.map((item, position) => ({
+          ...item,
+          position,
+        })),
+      };
+    });
+  }
+
   function lessonTimes() {
     const start = new Date(localDateTimeToIso(lesson.date, lesson.start));
     const end = new Date(
@@ -1581,6 +1693,12 @@ export default function CfiScheduleManager() {
       assigned_instructor_name: assignedInstructor?.name ?? "Me",
       occupies_instructor_time:
         (lesson.assignedInstructorId || userId) === userId,
+      training_course_modules: lesson.trainingCourseModules.map(
+        (courseModule, position) => ({
+          ...courseModule,
+          position,
+        }),
+      ),
       training_subjects: lesson.trainingSubjects.map((subject, position) => ({
         ...subject,
         position,
@@ -2844,6 +2962,22 @@ export default function CfiScheduleManager() {
                           "1 training subject")
                         : `${entry.training_subjects.length} training subjects`
                       : "";
+                    const courseModuleLabel =
+                      entry.training_course_modules?.length
+                        ? entry.training_course_modules.length === 1
+                          ? (() => {
+                              const snapshot =
+                                entry.training_course_modules?.[0]
+                                  .module_snapshot?.module;
+                              return snapshot
+                                ? `M${String(snapshot.module_number).padStart(2, "0")} · ${snapshot.module_type}`
+                                : "1 course module";
+                            })()
+                          : `${entry.training_course_modules.length} course modules`
+                        : "";
+                    const trainingLabels = [courseModuleLabel, subjectLabel].filter(
+                      Boolean,
+                    );
                     const assignmentLabel =
                       entry.entry_type !== "lesson"
                         ? ""
@@ -2872,11 +3006,11 @@ export default function CfiScheduleManager() {
                                 ? `My unavailable time${entry.note ? ` · ${entry.note}` : ""}`
                                 : "Busy"}
                         </span>
-                        {subjectLabel ? (
-                          <span className={styles.entryMeta}>
-                            {subjectLabel}
+                        {trainingLabels.map((label) => (
+                          <span className={styles.entryMeta} key={label}>
+                            {label}
                           </span>
-                        ) : null}
+                        ))}
                         {assignmentLabel ? (
                           <span className={styles.entryMeta}>
                             {assignmentLabel}
@@ -3420,6 +3554,63 @@ export default function CfiScheduleManager() {
                   ? ` · ${detailEntry.aircraft_status.replace("_", " ")}`
                   : " · Available"}
               </p>
+            ) : null}
+            {detailEntry.training_course_modules?.length ? (
+              <section className="border-t border-slate-200 pt-3">
+                <h3 className="mb-2 text-sm font-semibold text-slate-950">
+                  Course modules
+                </h3>
+                <div className="grid gap-2">
+                  {detailEntry.training_course_modules.map((item) => {
+                    const snapshot = item.module_snapshot;
+                    const courseModule = snapshot?.module;
+                    return (
+                      <div
+                        key={item.course_module_id}
+                        className="border border-slate-200 bg-white p-3 text-sm"
+                      >
+                        <strong className="block text-slate-950">
+                          {courseModule
+                            ? `M${String(courseModule.module_number).padStart(2, "0")} · ${courseModule.module_type}`
+                            : "Course module"}
+                        </strong>
+                        {snapshot?.course.title ? (
+                          <span className="mt-1 block text-xs text-slate-500">
+                            {snapshot.course.title}
+                            {courseModule?.duration_label
+                              ? ` · ${courseModule.duration_label}`
+                              : ""}
+                          </span>
+                        ) : null}
+                        {courseModule?.lesson_objective ? (
+                          <p className="mt-2 whitespace-pre-wrap text-slate-700">
+                            {courseModule.lesson_objective}
+                          </p>
+                        ) : null}
+                        {courseModule?.line_items.length ? (
+                          <details className="mt-2 border-t border-slate-100 pt-2">
+                            <summary className="cursor-pointer font-semibold text-blue-800">
+                              Scored items · {courseModule.line_items.length}
+                            </summary>
+                            <ol className="mt-2 grid gap-1 pl-5 text-slate-700">
+                              {courseModule.line_items.map((lineItem) => (
+                                <li key={lineItem.id}>
+                                  {lineItem.text} ({lineItem.minimum_score})
+                                </li>
+                              ))}
+                            </ol>
+                          </details>
+                        ) : null}
+                        {item.personal_note ? (
+                          <p className="mt-2 whitespace-pre-wrap border-t border-slate-100 pt-2 text-slate-700">
+                            {item.personal_note}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
             ) : null}
             {detailEntry.training_subjects?.length ? (
               <section className="border-t border-slate-200 pt-3">
@@ -4203,6 +4394,115 @@ export default function CfiScheduleManager() {
           <section className="border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-slate-800">
+                USATS course modules
+              </span>
+              <button
+                type="button"
+                className={styles.textButton}
+                disabled={!trainingCourses.length}
+                onClick={() => {
+                  setCourseModuleSearch("");
+                  setDrawer("course-module-picker");
+                }}
+              >
+                ＋ Add
+              </button>
+            </div>
+            {!lesson.trainingCourseModules.length ? (
+              <p className="mt-2 text-xs text-slate-500">
+                {trainingCourses.length ? "Optional" : "No assigned courses"}
+              </p>
+            ) : (
+              <div className="mt-2 grid gap-2">
+                {lesson.trainingCourseModules.map((item, index) => {
+                  const option = courseModulesById.get(item.course_module_id);
+                  const courseModule =
+                    option?.courseModule ?? item.module_snapshot?.module;
+                  return (
+                    <div
+                      key={item.course_module_id}
+                      className="border border-slate-200 bg-white p-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <strong className="min-w-0 flex-1 text-left text-sm font-semibold text-slate-900">
+                          {courseModule
+                            ? `M${String(courseModule.module_number).padStart(2, "0")} · ${courseModule.module_type}`
+                            : "Course module"}
+                        </strong>
+                        <button
+                          type="button"
+                          className="text-xs text-slate-600"
+                          disabled={index === 0}
+                          aria-label="Move course module up"
+                          onClick={() =>
+                            moveLessonCourseModule(item.course_module_id, -1)
+                          }
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-slate-600"
+                          disabled={
+                            index === lesson.trainingCourseModules.length - 1
+                          }
+                          aria-label="Move course module down"
+                          onClick={() =>
+                            moveLessonCourseModule(item.course_module_id, 1)
+                          }
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-rose-700"
+                          onClick={() =>
+                            setLesson((current) => ({
+                              ...current,
+                              trainingCourseModules:
+                                current.trainingCourseModules.filter(
+                                  (candidate) =>
+                                    candidate.course_module_id !==
+                                    item.course_module_id,
+                                ),
+                            }))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <textarea
+                        className="mt-2 w-full rounded-sm border border-slate-300 p-2 text-sm"
+                        rows={2}
+                        maxLength={4000}
+                        aria-label={`Note for Module ${courseModule?.module_number ?? ""}`}
+                        placeholder="Note for this student"
+                        value={item.personal_note}
+                        onChange={(event) =>
+                          setLesson((current) => ({
+                            ...current,
+                            trainingCourseModules:
+                              current.trainingCourseModules.map((candidate) =>
+                                candidate.course_module_id ===
+                                item.course_module_id
+                                  ? {
+                                      ...candidate,
+                                      personal_note: event.target.value,
+                                    }
+                                  : candidate,
+                              ),
+                          }))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+          <section className="border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-800">
                 Training subjects
               </span>
               <button
@@ -4417,6 +4717,68 @@ export default function CfiScheduleManager() {
               : lesson.id
                 ? "Update draft"
                 : "Add to draft"}
+          </button>
+        </div>
+      </DetailDrawer>
+
+      <DetailDrawer
+        compact
+        open={drawer === "course-module-picker"}
+        onClose={() => setDrawer("lesson")}
+        title="USATS course modules"
+      >
+        <input
+          type="search"
+          autoFocus
+          className="mb-3 h-10 w-full rounded-sm border border-slate-300 px-3 text-sm"
+          placeholder="Search module, type, or objective"
+          value={courseModuleSearch}
+          onChange={(event) => setCourseModuleSearch(event.target.value)}
+        />
+        <div className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto border border-slate-200">
+          {!filteredCourseModules.length ? (
+            <p className="p-3 text-sm text-slate-500">No modules match.</p>
+          ) : (
+            filteredCourseModules.map(({ course, courseModule }) => {
+              const selected = lesson.trainingCourseModules.some(
+                (item) => item.course_module_id === courseModule.id,
+              );
+              return (
+                <div
+                  key={`${course.organization_id}:${courseModule.id}`}
+                  className="flex items-center gap-3 px-3 py-2"
+                >
+                  <label className="flex min-w-0 flex-1 items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() =>
+                        toggleLessonCourseModule(course, courseModule)
+                      }
+                    />
+                    <span className="min-w-0">
+                      <strong className="block truncate text-slate-900">
+                        M{String(courseModule.module_number).padStart(2, "0")} ·{" "}
+                        {courseModule.module_type}
+                      </strong>
+                      <small className="block truncate text-slate-500">
+                        Stage {courseModule.stage_number} ·{" "}
+                        {courseModule.duration_label} · {course.organization_name}
+                      </small>
+                    </span>
+                  </label>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setDrawer("lesson")}
+          >
+            Done · {lesson.trainingCourseModules.length} selected
           </button>
         </div>
       </DetailDrawer>

@@ -11,6 +11,7 @@ export type LessonEdit = {
   assigned_instructor_user_id?: string;
   assigned_instructor_name?: string;
   occupies_instructor_time?: boolean;
+  training_course_modules?: ScheduleEntry["training_course_modules"];
   training_subjects?: ScheduleEntry["training_subjects"];
 };
 export type ScheduleOperation =
@@ -85,6 +86,8 @@ export function scheduleChanges(
       before.assigned_instructor_user_id !==
         after.assigned_instructor_user_id ||
       before.note !== after.note ||
+      JSON.stringify(before.training_course_modules ?? []) !==
+        JSON.stringify(after.training_course_modules ?? []) ||
       JSON.stringify(before.training_subjects ?? []) !==
         JSON.stringify(after.training_subjects ?? [])
     )

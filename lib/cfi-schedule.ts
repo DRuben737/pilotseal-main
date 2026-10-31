@@ -1,6 +1,8 @@
 import { getSupabaseClient } from "@/lib/supabase";
 import {
+  fetchScheduleTrainingCourseModules,
   fetchScheduleTrainingSubjects,
+  type ScheduleTrainingCourseModule,
   type ScheduleTrainingSubject,
 } from "@/lib/training-guide";
 
@@ -77,6 +79,7 @@ export type ScheduleEntry = {
   scheduled_by_name?: string;
   occupies_instructor_time?: boolean;
   can_edit?: boolean;
+  training_course_modules?: ScheduleTrainingCourseModule[];
   training_subjects?: ScheduleTrainingSubject[];
 };
 
@@ -409,11 +412,17 @@ export async function fetchScheduleEditorSnapshot(
     p_range_end: rangeEnd.toISOString(),
     ...(cfiUserId ? { p_cfi_id: cfiUserId } : {}),
   };
-  const [snapshotResult, collaborationResult, trainingSubjects] =
+  const [
+    snapshotResult,
+    collaborationResult,
+    trainingSubjects,
+    trainingCourseModules,
+  ] =
     await Promise.all([
       getSupabaseClient().rpc("get_cfi_schedule_snapshot_v2", parameters),
       getSupabaseClient().rpc("get_cfi_schedule_collaboration", parameters),
       fetchScheduleTrainingSubjects(rangeStart, rangeEnd, cfiUserId),
+      fetchScheduleTrainingCourseModules(rangeStart, rangeEnd, cfiUserId),
     ]);
   if (snapshotResult.error) throw snapshotResult.error;
   if (collaborationResult.error) throw collaborationResult.error;
@@ -434,6 +443,15 @@ export async function fetchScheduleEditorSnapshot(
     current.push(subject);
     subjectsByEvent.set(subject.event_id, current);
   }
+  const courseModulesByEvent = new Map<
+    string,
+    ScheduleTrainingCourseModule[]
+  >();
+  for (const courseModule of trainingCourseModules) {
+    const current = courseModulesByEvent.get(courseModule.event_id) ?? [];
+    current.push(courseModule);
+    courseModulesByEvent.set(courseModule.event_id, current);
+  }
   const entries = [
     ...(snapshot.entries ?? []),
     ...(collaboration.assignedEntries ?? []),
@@ -445,6 +463,9 @@ export async function fetchScheduleEditorSnapshot(
     .map((entry) => ({
       ...entry,
       ...(metadata.get(entry.id) ?? {}),
+      training_course_modules: (
+        courseModulesByEvent.get(entry.id) ?? []
+      ).sort((left, right) => left.position - right.position),
       training_subjects: (subjectsByEvent.get(entry.id) ?? []).sort(
         (left, right) => left.position - right.position,
       ),
@@ -464,7 +485,7 @@ export async function publishScheduleDraft(
   changes: ScheduleEntry[],
 ) {
   const { data, error } = await getSupabaseClient().rpc(
-    "publish_cfi_schedule_draft_v3",
+    "publish_cfi_schedule_draft_v4",
     {
       p_expected_revision: revision,
       p_batch_id: batchId,
@@ -479,6 +500,7 @@ export async function publishScheduleDraft(
         note: entry.note,
         status: entry.status,
         auto_generated: entry.auto_generated,
+        training_course_modules: entry.training_course_modules ?? [],
         training_subjects: entry.training_subjects ?? [],
       })),
     },

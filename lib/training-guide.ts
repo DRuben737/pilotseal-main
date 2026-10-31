@@ -212,6 +212,22 @@ export type TrainingCourse = {
   modules: TrainingCourseModule[];
 };
 
+export type ScheduleTrainingCourse = TrainingCourse & {
+  organization_id: string;
+  organization_name: string;
+};
+
+export type ScheduleTrainingCourseModule = {
+  course_module_id: string;
+  organization_id: string;
+  position: number;
+  personal_note: string;
+  module_snapshot?: {
+    course: Omit<TrainingCourse, "modules">;
+    module: TrainingCourseModule;
+  } | null;
+};
+
 const emptyStandards: TrainingSubject["standards"] = {
   knowledge: [],
   risk_management: [],
@@ -630,6 +646,28 @@ export async function fetchOrganizationTrainingCourses(
   });
 }
 
+export async function fetchMyScheduleTrainingCourses() {
+  const { data, error } = await getSupabaseClient().rpc(
+    "list_my_schedule_training_courses",
+  );
+  if (error) throw error;
+  if (!Array.isArray(data)) return [] as ScheduleTrainingCourse[];
+  return data.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const row = value as Record<string, unknown>;
+    const course = normalizeTrainingCourse(row);
+    return course
+      ? [
+          {
+            ...course,
+            organization_id: String(row.organization_id ?? ""),
+            organization_name: String(row.organization_name ?? ""),
+          },
+        ]
+      : [];
+  });
+}
+
 export async function saveOrganizationTrainingGuide(
   input: OrganizationTrainingGuide,
 ) {
@@ -947,5 +985,24 @@ export async function fetchScheduleTrainingSubjects(
   if (error) throw error;
   return (Array.isArray(data) ? data : []) as Array<
     ScheduleTrainingSubject & { event_id: string }
+  >;
+}
+
+export async function fetchScheduleTrainingCourseModules(
+  rangeStart: Date,
+  rangeEnd: Date,
+  cfiUserId?: string,
+) {
+  const { data, error } = await getSupabaseClient().rpc(
+    "list_my_schedule_training_course_modules",
+    {
+      p_range_start: rangeStart.toISOString(),
+      p_range_end: rangeEnd.toISOString(),
+      p_cfi_id: cfiUserId ?? null,
+    },
+  );
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as Array<
+    ScheduleTrainingCourseModule & { event_id: string }
   >;
 }
