@@ -212,6 +212,22 @@ export type TrainingCourse = {
   modules: TrainingCourseModule[];
 };
 
+type TrainingCourseIdentity = Pick<TrainingCourse, "stable_key" | "title">;
+
+export function trainingCourseCode(course: TrainingCourseIdentity) {
+  const identity = `${course.stable_key} ${course.title}`.toLowerCase();
+  if (identity.includes("instrument-rating")) return "IR";
+  if (identity.includes("instrument rating")) return "IR";
+  return course.title;
+}
+
+export function trainingCourseModuleLabel(
+  course: TrainingCourseIdentity,
+  module: Pick<TrainingCourseModule, "module_number">,
+) {
+  return `${trainingCourseCode(course)} · M${String(module.module_number).padStart(2, "0")}`;
+}
+
 export type ScheduleTrainingCourse = TrainingCourse & {
   organization_id: string;
   organization_name: string;

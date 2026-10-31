@@ -39,6 +39,7 @@ import {
   saveOrganizationTrainingManeuverGuide,
   saveStudentTrainingSubjectNote,
   saveTrainingSubject,
+  trainingCourseModuleLabel,
   updateCommunityTrainingNote,
   type CommunityTrainingNote,
   type InstructorTrainingGuide,
@@ -846,6 +847,9 @@ export default function TrainingGuideManager({
   const [selectedModuleNumber, setSelectedModuleNumber] = useState<
     number | null
   >(null);
+  const [courseModuleReturnDrawer, setCourseModuleReturnDrawer] = useState<
+    "course" | null
+  >(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [personalMode, setPersonalMode] = useState<"study" | "instructor">(
     "study",
@@ -1083,8 +1087,14 @@ export default function TrainingGuideManager({
     setStatus("");
   }
 
-  function openCourseModule(module: TrainingCourseModule) {
+  function openCourseModule(
+    course: TrainingCourse,
+    module: TrainingCourseModule,
+    returnTo: "course" | null = null,
+  ) {
+    setSelectedCourseId(course.id);
     setSelectedModuleNumber(module.module_number);
+    setCourseModuleReturnDrawer(returnTo);
     setDrawer("course-module");
     setStatus("");
   }
@@ -1474,27 +1484,70 @@ export default function TrainingGuideManager({
           title="USATS Training Guide"
           summary={`${trainingCourses.reduce((total, course) => total + course.modules.length, 0)} modules`}
         >
-          <div className="divide-y divide-slate-200 border-t border-slate-200 bg-white">
-            {trainingCourses.map((course) => (
-              <button
-                key={course.id}
-                type="button"
-                className="flex min-h-10 w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
-                onClick={() => openCourse(course)}
-              >
-                <span>
-                  <strong className="block text-sm text-slate-900">
-                    {course.title}
-                  </strong>
-                  <span className="text-xs text-slate-500">
-                    {course.provider_name} · {course.revision_label}
-                  </span>
-                </span>
-                <span className="shrink-0 text-xs font-semibold text-slate-600">
-                  {course.modules.length} modules
-                </span>
-              </button>
-            ))}
+          <div className="divide-y divide-slate-300 border-t border-slate-200 bg-white">
+            {trainingCourses.map((course) => {
+              const stageNumbers = Array.from(
+                new Set(course.modules.map((module) => module.stage_number)),
+              ).sort((a, b) => a - b);
+              return (
+                <section key={course.id}>
+                  <button
+                    type="button"
+                    className="flex min-h-10 w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
+                    onClick={() => openCourse(course)}
+                  >
+                    <span>
+                      <strong className="block text-sm text-slate-900">
+                        {course.title}
+                      </strong>
+                      <span className="text-xs text-slate-500">
+                        {course.provider_name} · {course.revision_label}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-slate-600">
+                      {course.modules.length} modules
+                    </span>
+                  </button>
+                  {stageNumbers.map((stageNumber) => {
+                    const stageModules = course.modules.filter(
+                      (module) => module.stage_number === stageNumber,
+                    );
+                    return (
+                      <div key={stageNumber} className="border-t border-slate-200">
+                        <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5">
+                          <strong className="text-xs font-semibold uppercase tracking-wide text-slate-700">
+                            Stage {stageNumber}
+                          </strong>
+                          <span className="text-xs text-slate-500">
+                            {stageModules.length} modules
+                          </span>
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                          {stageModules.map((module) => (
+                            <button
+                              key={module.id}
+                              type="button"
+                              className="grid min-h-10 w-full cursor-pointer grid-cols-[auto_1fr] items-center gap-x-4 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 sm:grid-cols-[7rem_1fr_auto]"
+                              onClick={() => openCourseModule(course, module)}
+                            >
+                              <strong className="text-sm text-slate-950">
+                                {trainingCourseModuleLabel(course, module)}
+                              </strong>
+                              <span className="text-sm text-slate-700">
+                                {module.module_type}
+                              </span>
+                              <span className="col-start-2 text-xs text-slate-500 sm:col-start-auto">
+                                {module.duration_label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </section>
+              );
+            })}
           </div>
         </ManagementDisclosure>
       ) : null}
@@ -1657,7 +1710,13 @@ export default function TrainingGuideManager({
       >
         {selectedCourse ? (
           <div className="grid gap-5">
-            {[1, 2].map((stageNumber) => {
+            {Array.from(
+              new Set(
+                selectedCourse.modules.map((module) => module.stage_number),
+              ),
+            )
+              .sort((a, b) => a - b)
+              .map((stageNumber) => {
               const stageModules = selectedCourse.modules.filter(
                 (module) => module.stage_number === stageNumber,
               );
@@ -1684,7 +1743,9 @@ export default function TrainingGuideManager({
                         key={module.id}
                         type="button"
                         className="grid min-h-9 w-full cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2 text-left transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
-                        onClick={() => openCourseModule(module)}
+                        onClick={() =>
+                          openCourseModule(selectedCourse, module, "course")
+                        }
                       >
                         <strong className="text-xs text-slate-500">
                           M{String(module.module_number).padStart(2, "0")}
@@ -1708,15 +1769,15 @@ export default function TrainingGuideManager({
       <DetailDrawer
         compact
         open={drawer === "course-module" && Boolean(selectedCourseModule)}
-        onClose={() => setDrawer("course")}
+        onClose={() => setDrawer(courseModuleReturnDrawer)}
         title={
-          selectedCourseModule
-            ? `Module ${selectedCourseModule.module_number}`
+          selectedCourseModule && selectedCourse
+            ? trainingCourseModuleLabel(selectedCourse, selectedCourseModule)
             : "Module"
         }
         description={
           selectedCourseModule
-            ? `(${selectedCourseModule.module_type}) (${selectedCourseModule.duration_label}) · Stage ${selectedCourseModule.stage_number}`
+            ? `${selectedCourseModule.module_type} · ${selectedCourseModule.duration_label} · Stage ${selectedCourseModule.stage_number}`
             : undefined
         }
       >

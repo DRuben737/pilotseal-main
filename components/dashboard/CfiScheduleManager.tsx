@@ -96,6 +96,7 @@ import {
 import {
   fetchMyScheduleTrainingCourses,
   fetchTrainingSubjects,
+  trainingCourseModuleLabel,
   type ScheduleTrainingCourse,
   type ScheduleTrainingCourseModule,
   type ScheduleTrainingSubject,
@@ -2968,9 +2969,12 @@ export default function CfiScheduleManager() {
                           ? (() => {
                               const snapshot =
                                 entry.training_course_modules?.[0]
-                                  .module_snapshot?.module;
+                                  .module_snapshot;
                               return snapshot
-                                ? `M${String(snapshot.module_number).padStart(2, "0")} · ${snapshot.module_type}`
+                                ? trainingCourseModuleLabel(
+                                    snapshot.course,
+                                    snapshot.module,
+                                  )
                                 : "1 course module";
                             })()
                           : `${entry.training_course_modules.length} course modules`
@@ -3570,8 +3574,11 @@ export default function CfiScheduleManager() {
                         className="border border-slate-200 bg-white p-3 text-sm"
                       >
                         <strong className="block text-slate-950">
-                          {courseModule
-                            ? `M${String(courseModule.module_number).padStart(2, "0")} · ${courseModule.module_type}`
+                          {courseModule && snapshot?.course
+                            ? trainingCourseModuleLabel(
+                                snapshot.course,
+                                courseModule,
+                              )
                             : "Course module"}
                         </strong>
                         {snapshot?.course.title ? (
@@ -4418,6 +4425,7 @@ export default function CfiScheduleManager() {
                   const option = courseModulesById.get(item.course_module_id);
                   const courseModule =
                     option?.courseModule ?? item.module_snapshot?.module;
+                  const course = option?.course ?? item.module_snapshot?.course;
                   return (
                     <div
                       key={item.course_module_id}
@@ -4425,8 +4433,8 @@ export default function CfiScheduleManager() {
                     >
                       <div className="flex items-center gap-2">
                         <strong className="min-w-0 flex-1 text-left text-sm font-semibold text-slate-900">
-                          {courseModule
-                            ? `M${String(courseModule.module_number).padStart(2, "0")} · ${courseModule.module_type}`
+                          {courseModule && course
+                            ? trainingCourseModuleLabel(course, courseModule)
                             : "Course module"}
                         </strong>
                         <button
@@ -4758,11 +4766,10 @@ export default function CfiScheduleManager() {
                     />
                     <span className="min-w-0">
                       <strong className="block truncate text-slate-900">
-                        M{String(courseModule.module_number).padStart(2, "0")} ·{" "}
-                        {courseModule.module_type}
+                        {trainingCourseModuleLabel(course, courseModule)}
                       </strong>
                       <small className="block truncate text-slate-500">
-                        Stage {courseModule.stage_number} ·{" "}
+                        Stage {courseModule.stage_number} · {courseModule.module_type} ·{" "}
                         {courseModule.duration_label} · {course.organization_name}
                       </small>
                     </span>
