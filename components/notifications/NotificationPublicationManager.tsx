@@ -44,7 +44,13 @@ export default function NotificationPublicationManager({ organizationId, sourceN
     return () => { cancelled = true; };
   }, [organizationId]);
   async function refresh() { setHistory(await fetchNotificationPublications(organizationId)); }
-  function edit(publication?: NotificationPublication) {
+  async function edit(publication?: NotificationPublication) {
+    try {
+      setAudience(await fetchPublicationAudience(organizationId));
+    } catch (e) {
+      setError(errorMessage(e));
+      return;
+    }
     setForm(publication ? { ...publication, status: publication.status === "withdrawn" ? "draft" : publication.status === "scheduled" && publication.scheduled_at && Date.parse(publication.scheduled_at) <= Date.now() ? "sent" : publication.status, scheduled_at: localInputDate(publication.scheduled_at), expires_at: localInputDate(publication.expires_at) } : { ...emptyForm });
     setError(""); setPreview(false); setOpen(true);
   }
@@ -76,17 +82,17 @@ export default function NotificationPublicationManager({ organizationId, sourceN
   const publicationStatus = (p: NotificationPublication) => p.status === "scheduled" && p.scheduled_at && Date.parse(p.scheduled_at) <= Date.now() ? "sent" : p.status;
   const visible = history.filter(p => (filter === "all" || publicationStatus(p) === filter)).filter(p => `${p.title} ${p.message} ${p.status}`.toLowerCase().includes(query.toLowerCase()));
   return <section className="grid min-w-0 gap-3">
-    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold">{sourceName} notifications</h2><CompactButton type="button" tone="primary" onClick={() => edit()}>New notification</CompactButton></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold">{sourceName} notifications</h2><CompactButton type="button" tone="primary" onClick={() => void edit()}>New notification</CompactButton></div>
     {status ? <p role="status" className="text-sm text-slate-600">{status}</p> : null}
     {error && !open && !withdraw ? <p role="alert" className="text-sm text-rose-700">{error}</p> : null}
     <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">Publication history</h3><select aria-label="Publication status" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="sent">Sent</option><option value="draft">Drafts</option><option value="scheduled">Scheduled</option><option value="withdrawn">Withdrawn</option></select></div>
     <input aria-label="Search published notifications" type="search" placeholder="Search notifications" value={query} onChange={e => setQuery(e.target.value)} />
     {loading ? <p className="text-sm text-slate-500">Loading notifications…</p> : !visible.length ? <p className="saas-empty-state">No notifications.</p> : <AdminDataTable label="Published notifications"><thead><tr><th>Title</th><th>Status</th><th>Audience</th><th>Published</th><th>Expires</th><th aria-label="Actions" /></tr></thead><tbody>{visible.map(p => <tr key={p.id}>
       <td className="font-medium"><button type="button" className="text-left hover:text-blue-700" onClick={() => setDetail(p)}>{p.title}</button></td><td>{publicationStatus(p)}</td><td>{p.audience_user_ids ? `${p.audience_user_ids.length} selected` : "All members"}</td><td>{p.scheduled_at ? new Date(p.scheduled_at).toLocaleString() : new Date(p.created_at).toLocaleString()}</td><td>{p.expires_at ? new Date(p.expires_at).toLocaleString() : "—"}</td>
-      <td><div className="data-row-actions"><CompactButton type="button" onClick={() => edit(p)}>{p.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" disabled={reportLoading} onClick={() => void showReport(p)}>Receipts</CompactButton>{p.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setError(""); setWithdraw(p); }}>Withdraw</CompactButton> : null}</div></td>
+      <td><div className="data-row-actions"><CompactButton type="button" onClick={() => void edit(p)}>{p.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" disabled={reportLoading} onClick={() => void showReport(p)}>Receipts</CompactButton>{p.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setError(""); setWithdraw(p); }}>Withdraw</CompactButton> : null}</div></td>
     </tr>)}</tbody></AdminDataTable>}
     <DetailDrawer open={Boolean(detail)} title={detail?.title ?? "Notification"} onClose={() => setDetail(null)}>
-      {detail ? <div className="grid gap-4"><p className="text-sm text-slate-500">{publicationStatus(detail)} · {detail.audience_user_ids ? `${detail.audience_user_ids.length} recipients` : "All members"}</p><p className="whitespace-pre-wrap break-words text-sm">{detail.message}</p><div className="flex flex-wrap gap-2"><CompactButton type="button" onClick={() => { setDetail(null); edit(detail); }}>{detail.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" onClick={() => { setDetail(null); void showReport(detail); }}>Receipts</CompactButton>{detail.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setDetail(null); setError(""); setWithdraw(detail); }}>Withdraw</CompactButton> : null}</div></div> : null}
+      {detail ? <div className="grid gap-4"><p className="text-sm text-slate-500">{publicationStatus(detail)} · {detail.audience_user_ids ? `${detail.audience_user_ids.length} recipients` : "All members"}</p><p className="whitespace-pre-wrap break-words text-sm">{detail.message}</p><div className="flex flex-wrap gap-2"><CompactButton type="button" onClick={() => { setDetail(null); void edit(detail); }}>{detail.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" onClick={() => { setDetail(null); void showReport(detail); }}>Receipts</CompactButton>{detail.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setDetail(null); setError(""); setWithdraw(detail); }}>Withdraw</CompactButton> : null}</div></div> : null}
     </DetailDrawer>
     <DetailDrawer open={open} title={form.id ? "Edit notification" : "New notification"} onClose={() => { if (!saving) setOpen(false); }}>
       <form onSubmit={event => void save(event)} className="grid gap-3">

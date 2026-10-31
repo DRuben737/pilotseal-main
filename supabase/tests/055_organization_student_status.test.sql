@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(12);
 
 insert into auth.users(id,email) values
  ('57000000-0000-4000-8000-000000000001','status-owner@example.test'),
@@ -18,9 +18,16 @@ insert into public.organization_members(organization_id,user_id,role,teaching_ro
  ('57000000-0000-4000-8000-000000000010','57000000-0000-4000-8000-000000000002','member','student','active','57000000-0000-4000-8000-000000000001'),
  ('57000000-0000-4000-8000-000000000010','57000000-0000-4000-8000-000000000003','member','student','active','57000000-0000-4000-8000-000000000001');
 
+update public.organization_people
+set organization_display_name = 'Roster Active Name'
+where organization_id = '57000000-0000-4000-8000-000000000010'
+  and user_id = '57000000-0000-4000-8000-000000000002';
+
 select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000001',true);
 set local role authenticated;
 select is((select count(*) from public.get_notification_publication_audience('57000000-0000-4000-8000-000000000010')),3::bigint,'all current members begin in the notification audience');
+select is((select display_name from public.get_notification_publication_audience('57000000-0000-4000-8000-000000000010') where user_id='57000000-0000-4000-8000-000000000002'),'Roster Active Name','notification audience uses the organization display name');
+select is((select display_name from public.get_notification_publication_audience_groups('57000000-0000-4000-8000-000000000010') where user_id='57000000-0000-4000-8000-000000000002'),'Roster Active Name','grouped notification audience uses the organization display name');
 select lives_ok($$select public.save_notification_publication('57000000-0000-4000-8000-000000000010','Future status test','Synthetic message','normal','scheduled',now()+interval '1 hour')$$,'owner schedules a future notification');
 select lives_ok($$select public.set_organization_student_status('57000000-0000-4000-8000-000000000010','57000000-0000-4000-8000-000000000003','inactive')$$,'owner marks a student inactive');
 select is((select student_status from public.list_organization_members('57000000-0000-4000-8000-000000000010') where user_id='57000000-0000-4000-8000-000000000003'),'inactive','student status is persisted');
