@@ -3602,7 +3602,10 @@ export default function CfiScheduleManager() {
                             <ol className="mt-2 grid gap-1 pl-5 text-slate-700">
                               {courseModule.line_items.map((lineItem) => (
                                 <li key={lineItem.id}>
-                                  {lineItem.text} ({lineItem.minimum_score})
+                                  {lineItem.text}
+                                  {lineItem.minimum_score !== null
+                                    ? ` (${lineItem.minimum_score})`
+                                    : ""}
                                 </li>
                               ))}
                             </ol>

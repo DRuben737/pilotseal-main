@@ -1811,36 +1811,48 @@ export default function TrainingGuideManager({
               </p>
             </section>
 
-            <section>
-              <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
-                Line Items (minimum score)
-              </h2>
-              <ol className="grid gap-1.5">
-                {selectedCourseModule.line_items.map((item) => (
-                  <li
-                    key={
-                      item.id || `${selectedCourseModule.id}-${item.position}`
-                    }
-                    className="grid min-h-10 grid-cols-[1.75rem_1fr_auto] items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm leading-5 text-slate-800"
-                  >
-                    <span className="text-right text-slate-500">
-                      {item.position}.
-                    </span>
-                    <span>{item.text}</span>
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-900">
-                      {item.minimum_score}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </section>
+            {selectedCourseModule.line_items.length ? (
+              <section>
+                <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
+                  Line Items
+                  {selectedCourseModule.line_items.some(
+                    (item) => item.minimum_score !== null,
+                  )
+                    ? " (minimum score)"
+                    : ""}
+                </h2>
+                <ol className="grid gap-1.5">
+                  {selectedCourseModule.line_items.map((item) => (
+                    <li
+                      key={
+                        item.id || `${selectedCourseModule.id}-${item.position}`
+                      }
+                      className="grid min-h-10 grid-cols-[1.75rem_1fr_auto] items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm leading-5 text-slate-800"
+                    >
+                      <span className="text-right text-slate-500">
+                        {item.position}.
+                      </span>
+                      <span>{item.text}</span>
+                      {item.minimum_score !== null ? (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-900">
+                          {item.minimum_score}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
 
             {selectedCourseModule.study_material ? (
               <section className="rounded-xl bg-blue-50/60 p-4">
                 <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
-                  Study Material
+                  {selectedCourse &&
+                  trainingCourseTrack(selectedCourse) === "Ground"
+                    ? "Content"
+                    : "Study Material"}
                 </h2>
-                <p className="text-sm leading-6 text-slate-700">
+                <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
                   {selectedCourseModule.study_material}
                 </p>
               </section>

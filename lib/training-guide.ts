@@ -185,7 +185,7 @@ export type TrainingModuleLineItem = {
   id: string;
   position: number;
   text: string;
-  minimum_score: number;
+  minimum_score: number | null;
 };
 
 export type TrainingCourseModule = {
@@ -194,7 +194,7 @@ export type TrainingCourseModule = {
   module_number: number;
   module_type: string;
   duration_label: string;
-  duration_hours: number;
+  duration_hours: number | null;
   lesson_objective: string;
   study_material: string;
   completion_standards: string;
@@ -333,7 +333,10 @@ function normalizeTrainingCourse(value: unknown): TrainingCourse | null {
                   id: String(item.id ?? ""),
                   position: Number(item.position ?? 0),
                   text: String(item.text ?? ""),
-                  minimum_score: Number(item.minimum_score ?? 0),
+                  minimum_score:
+                    item.minimum_score == null
+                      ? null
+                      : Number(item.minimum_score),
                 },
               ];
             })
@@ -345,7 +348,10 @@ function normalizeTrainingCourse(value: unknown): TrainingCourse | null {
             module_number: Number(courseModule.module_number ?? 0),
             module_type: String(courseModule.module_type ?? ""),
             duration_label: String(courseModule.duration_label ?? ""),
-            duration_hours: Number(courseModule.duration_hours ?? 0),
+            duration_hours:
+              courseModule.duration_hours == null
+                ? null
+                : Number(courseModule.duration_hours),
             lesson_objective: String(courseModule.lesson_objective ?? ""),
             study_material: String(courseModule.study_material ?? ""),
             completion_standards: String(
