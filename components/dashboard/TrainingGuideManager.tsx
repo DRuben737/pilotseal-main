@@ -1486,12 +1486,12 @@ export default function TrainingGuideManager({
     <>
       {trainingCourses.length ? (
         <details className="group/usats mb-3 overflow-hidden rounded-xl bg-slate-100/80">
-          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3.5 text-left transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-4 py-2.5 text-left transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
             <span className="min-w-0 flex-1">
-              <strong className="block text-[17px] font-semibold tracking-[-0.01em] text-slate-950">
+              <strong className="block text-[13px] font-semibold text-slate-950">
                 USATS Part 141
               </strong>
-              <span className="mt-0.5 block text-xs text-slate-600">
+              <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">
                 PVT 141 · IR 141 · CPL 141
               </span>
             </span>
@@ -1516,12 +1516,12 @@ export default function TrainingGuideManager({
                 key={code}
                 className="group/course overflow-hidden rounded-lg bg-white/80"
               >
-                <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2.5 px-3.5 py-2 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
                   <span className="min-w-0 flex-1">
-                    <strong className="block text-[15px] font-semibold text-slate-950">
+                    <strong className="block text-xs font-semibold text-slate-950">
                       {code} 141
                     </strong>
-                    <span className="mt-0.5 block truncate text-[12px] text-slate-500">
+                    <span className="mt-0.5 block truncate text-[11px] leading-4 text-slate-500">
                       {courses[0]?.title}
                     </span>
                   </span>
@@ -1546,8 +1546,8 @@ export default function TrainingGuideManager({
                       key={track}
                       className="group/track overflow-hidden rounded-lg bg-blue-50/70"
                     >
-                      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 px-3.5 py-2.5 transition-colors duration-200 hover:bg-blue-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
-                        <strong className="min-w-0 flex-1 text-[13px] font-semibold text-blue-950">
+                      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-2 transition-colors duration-200 hover:bg-blue-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                        <strong className="min-w-0 flex-1 text-xs font-semibold text-blue-950">
                           {track}
                         </strong>
                         <span className="text-[11px] font-medium text-slate-500">
@@ -1579,7 +1579,7 @@ export default function TrainingGuideManager({
                                   className="mt-3 first:mt-0"
                                 >
                                   <div className="flex items-baseline justify-between gap-3 px-2 pb-1.5">
-                                    <strong className="text-[12px] font-semibold text-slate-700">
+                                    <strong className="text-[11px] font-semibold text-slate-700">
                                       Stage {stageNumber}
                                     </strong>
                                     <span className="text-[11px] text-slate-500">
@@ -1591,18 +1591,18 @@ export default function TrainingGuideManager({
                                       <button
                                         key={module.id}
                                         type="button"
-                                        className="grid min-h-10 w-full cursor-pointer grid-cols-[3.25rem_1fr] items-center gap-x-3 rounded-md bg-white/75 px-3 py-2 text-left transition-[background-color,box-shadow] duration-200 hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 sm:grid-cols-[4rem_1fr_auto]"
+                                        className="grid min-h-9 w-full cursor-pointer grid-cols-[3rem_1fr] items-center gap-x-2.5 rounded-md bg-white/75 px-2.5 py-1.5 text-left transition-[background-color,box-shadow] duration-200 hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 sm:grid-cols-[3.5rem_1fr_auto]"
                                         onClick={() =>
                                           openCourseModule(course, module)
                                         }
                                       >
-                                        <strong className="text-[13px] font-semibold text-slate-700">
+                                        <strong className="text-xs font-semibold text-slate-700">
                                           M
                                           {String(
                                             module.module_number,
                                           ).padStart(2, "0")}
                                         </strong>
-                                        <span className="text-[13px] font-medium text-slate-900">
+                                        <span className="text-xs font-medium text-slate-900">
                                           {module.module_type}
                                         </span>
                                         <span className="col-start-2 text-[11px] text-slate-500 sm:col-start-auto">
@@ -1626,12 +1626,12 @@ export default function TrainingGuideManager({
       ) : null}
 
       <details className="group/general overflow-hidden rounded-xl bg-slate-100/60">
-        <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3.5 text-left transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-4 py-2.5 text-left transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0 flex-1">
-            <strong className="block text-[17px] font-semibold tracking-[-0.01em] text-slate-950">
+            <strong className="block text-[13px] font-semibold text-slate-950">
               General ACS
             </strong>
-            <span className="mt-0.5 block text-xs text-slate-600">
+            <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">
               FAA Airman Certification Standards
             </span>
           </span>
