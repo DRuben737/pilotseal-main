@@ -24,3 +24,9 @@ self.addEventListener("notificationclick", event => {
     return self.clients.openWindow(target);
   }));
 });
+
+self.addEventListener("pushsubscriptionchange", event => {
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(clients => {
+    clients.forEach(client => client.postMessage({ type: "pilotseal:push-subscription-changed" }));
+  }));
+});

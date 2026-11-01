@@ -1,7 +1,8 @@
 import { getSupabaseClient } from "@/lib/supabase";
+import { type NotificationPermissionState, type SystemNotificationStatus } from "@/lib/notification-device-policy";
+export { notificationPermissionLabel, type NotificationPermissionState, type SystemNotificationStatus } from "@/lib/notification-device-policy";
 
 const deviceStorageKey = "pilotseal:notification-device";
-export type NotificationPermissionState = NotificationPermission | "unsupported";
 
 function base64UrlToUint8Array(value: string) {
   const padding = "=".repeat((4 - value.length % 4) % 4);
@@ -29,6 +30,14 @@ export function systemNotificationCapability() {
     return { permission: "unsupported" as const, supported: false };
   }
   return { permission: Notification.permission as NotificationPermissionState, supported: true };
+}
+
+export async function getSystemNotificationStatus(): Promise<SystemNotificationStatus> {
+  const capability = systemNotificationCapability();
+  if (!capability.supported) return { ...capability, enabled: false };
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  const subscription = await registration?.pushManager.getSubscription();
+  return { ...capability, enabled: Boolean(subscription) };
 }
 
 async function registerDevice(subscription?: PushSubscription | null, enabled = true) {

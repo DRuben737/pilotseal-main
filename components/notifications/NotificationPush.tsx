@@ -61,8 +61,23 @@ export default function NotificationPush({ userId }: { userId: string }) {
     const firstRefresh = window.setTimeout(() => void refresh(), 800);
     const unsubscribe = subscribeToNotificationChanges(userId, () => void refresh());
     const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
+    const onOnline = () => {
+      void syncNotificationDevice().finally(() => void refresh());
+    };
+    const onServiceWorkerMessage = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === "pilotseal:push-subscription-changed") {
+        void syncNotificationDevice().finally(() => void refresh());
+      }
+    };
     document.addEventListener("visibilitychange", onVisibility);
-    return () => { cancelled = true; clearTimeout(firstRefresh); unsubscribe(); document.removeEventListener("visibilitychange", onVisibility); };
+    window.addEventListener("online", onOnline);
+    navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
+    return () => {
+      cancelled = true; clearTimeout(firstRefresh); unsubscribe();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
+      navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
+    };
   }, [userId, inboxVisible, pathname]);
 
   useEffect(() => {

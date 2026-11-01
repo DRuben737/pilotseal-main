@@ -79,6 +79,13 @@ try {
   const desktopCritical = desktopPage.getByRole("alertdialog", { name: `${prefix} critical` });
   try {
     await Promise.all([mobileCritical.waitFor({ timeout: 20000 }), desktopCritical.waitFor({ timeout: 20000 })]);
+  const beforeReconnect = unwrap(await admin.from("notification_devices").select("last_seen_at").eq("user_id", userId).eq("device_key", deviceKeys[0]).single());
+  await mobile.setOffline(true);
+  await mobilePage.waitForTimeout(250);
+  await mobile.setOffline(false);
+  await mobilePage.waitForTimeout(1000);
+  const afterReconnect = unwrap(await admin.from("notification_devices").select("last_seen_at").eq("user_id", userId).eq("device_key", deviceKeys[0]).single());
+  assert(Date.parse(afterReconnect.last_seen_at) > Date.parse(beforeReconnect.last_seen_at), "Online recovery re-synchronizes the device");
   } catch (error) {
     console.log("mobile page:", mobilePage.url(), (await mobilePage.locator("body").innerText()).slice(0, 1200));
     console.log("desktop page:", desktopPage.url(), (await desktopPage.locator("body").innerText()).slice(0, 1200));
@@ -120,6 +127,12 @@ try {
   await desktopPage.reload();
   await desktopPage.waitForTimeout(2500);
   assert.equal(await desktopPage.getByText(`${prefix} low`, { exact: true }).count(), 0, "Low priority remains inbox-only");
+  await desktop.grantPermissions(["notifications"], { origin: appUrl });
+  await desktopPage.goto(`${appUrl}/console/personal/notifications`);
+  await desktopPage.getByRole("button", { name: "Preferences" }).click();
+  const preferences = desktopPage.getByRole("dialog", { name: "Notification preferences" });
+  await preferences.getByText("Ready to enable on this device.", { exact: true }).waitFor();
+  await preferences.getByRole("button", { name: "Enable", exact: true }).waitFor();
 
   const rows = unwrap(await admin.from("notification_channel_deliveries").select("notification_id,device_id,channel,displayed_at,dismissed_at").in("notification_id", created));
   assert(rows.filter(row => row.channel === "in_app" && row.displayed_at).length >= 4, "Per-device delivery state is persisted");
