@@ -34,7 +34,8 @@ export function buildNotificationPushGroups(inbox: NotificationRecord[], states:
     const previous = latestEvents.get(key);
     if (!previous || Date.parse(n.created_at) > Date.parse(previous.created_at)) latestEvents.set(key, n);
   }
-  const eligible = inbox.filter(n => notificationIsActive(n, now) && !n.read_at && !shown.has(n.id) && modes[n.kind] === "instant"
+  const eligible = inbox.filter(n => notificationIsActive(n, now) && !n.read_at && !shown.has(n.id) && n.priority !== "low"
+    && (n.priority === "critical" || modes[n.kind] === "instant")
     && (!n.event_key || latestEvents.get(`${notificationSourceKey(n)}:${n.event_key}`)?.id === n.id));
   const priorities = { critical: 4, high: 3, normal: 2, low: 1 };
   eligible.sort((a, b) => priorities[b.priority] - priorities[a.priority] || Date.parse(b.created_at) - Date.parse(a.created_at));
@@ -46,9 +47,10 @@ export function buildNotificationPushGroups(inbox: NotificationRecord[], states:
     const event = n.event_key ? `${source}:${n.event_key}` : null;
     if (event && events.has(event)) continue;
     if (event) events.add(event);
-    const group = groups.get(source) ?? { key: source, notifications: [] };
+    const groupKey = `${source}:${n.priority}`;
+    const group = groups.get(groupKey) ?? { key: groupKey, notifications: [] };
     group.notifications.push(n);
-    groups.set(source, group);
+    groups.set(groupKey, group);
   }
   return [...groups.values()];
 }

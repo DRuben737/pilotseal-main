@@ -8,5 +8,5 @@ export default function NotificationExperience() {
   const { session } = useAuthSession();
   const pathname = usePathname();
   if (!session?.user || ["/login", "/register", "/reset-password"].includes(pathname)) return null;
-  return <NotificationPush key={session.user.id} userId={session.user.id} />;
+  return <NotificationPush key={`${session.user.id}:${pathname}`} userId={session.user.id} />;
 }

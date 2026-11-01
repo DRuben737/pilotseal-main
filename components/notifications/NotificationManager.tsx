@@ -32,6 +32,7 @@ import {
 } from "@/lib/notifications";
 import { fetchCurrentProfile } from "@/lib/profile";
 import { formatUsDateTime } from "@/lib/date-format";
+import { disableSystemNotifications, enableSystemNotifications, systemNotificationCapability, type NotificationPermissionState } from "@/lib/notification-devices";
 
 const priorityOptions: NotificationPriority[] = ["low", "normal", "high", "critical"];
 const statusOptions: NotificationStatus[] = ["draft", "scheduled", "sent"];
@@ -66,6 +67,8 @@ export default function NotificationManager({
   const [inboxQuery, setInboxQuery] = useState("");
   const [preferences, setPreferences] = useState<NotificationPreferences>(() => defaultNotificationPreferences(userId));
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermissionState>("unsupported");
+  const [savingPush, setSavingPush] = useState(false);
   const unreadCount = useMemo(
     () => inbox.filter((notification) => !notification.read_at && !notification.delivery_state?.completed_at).length,
     [inbox]
@@ -175,6 +178,27 @@ export default function NotificationManager({
       setStatus(getErrorMessage(error, "Unable to save notification settings."));
     } finally {
       setSavingPreferences(false);
+    }
+  }
+
+  async function handleSystemNotifications() {
+    setSavingPush(true);
+    setStatus("");
+    try {
+      if (pushPermission === "granted") {
+        await disableSystemNotifications();
+        setPushPermission(systemNotificationCapability().permission === "granted" ? "default" : systemNotificationCapability().permission);
+        setStatus("System notifications disabled on this device.");
+      } else {
+        await enableSystemNotifications();
+        setPushPermission("granted");
+        setStatus("System notifications enabled on this device.");
+      }
+    } catch (error) {
+      setPushPermission(systemNotificationCapability().permission);
+      setStatus(getErrorMessage(error, "Unable to update system notifications."));
+    } finally {
+      setSavingPush(false);
     }
   }
 
@@ -318,7 +342,7 @@ export default function NotificationManager({
           <div className={styles.heading}><h2>Inbox</h2><span>{unreadCount} unread</span></div>
           <div className={styles.actions}>
             <button className={styles.iconButton} type="button" aria-label="Mark all read" title="Mark all read" disabled={saving || unreadCount === 0} onClick={() => void handleMarkAllRead()}><InboxIcon name="read" /></button>
-            <button className={styles.iconButton} type="button" aria-label="Preferences" title="Notification preferences" onClick={() => setShowPreferences(true)}><InboxIcon name="settings" /></button>
+            <button className={styles.iconButton} type="button" aria-label="Preferences" title="Notification preferences" onClick={() => { setPushPermission(systemNotificationCapability().permission); setShowPreferences(true); }}><InboxIcon name="settings" /></button>
           </div>
         </header>
         <div className={styles.toolbar}>
@@ -364,6 +388,17 @@ export default function NotificationManager({
       </section>
 
       <DetailDrawer open={showPreferences} title="Notification preferences" onClose={() => setShowPreferences(false)}>
+        <div className="mb-4 grid grid-cols-[1fr_auto] items-center gap-4 border-y border-slate-200 px-1 py-3">
+          <span>
+            <span className="block text-sm font-semibold text-slate-900">System notifications</span>
+            <span className="mt-1 block text-xs leading-5 text-slate-500">
+              {pushPermission === "unsupported" ? "Not supported on this device." : pushPermission === "denied" ? "Blocked in browser settings." : "Alerts when PilotSeal is not open."}
+            </span>
+          </span>
+          <button type="button" className={pushPermission === "granted" ? "secondary-button" : "primary-button"} disabled={savingPush || pushPermission === "unsupported" || pushPermission === "denied"} onClick={() => void handleSystemNotifications()}>
+            {savingPush ? "Updating…" : pushPermission === "granted" ? "Disable" : "Enable"}
+          </button>
+        </div>
         <div className="divide-y divide-slate-200 border-y border-slate-200">
           {([
             ["personal_reminders_enabled", "Personal reminders", "Profile completion, certificates, medical dates, and personal aircraft due dates."],
