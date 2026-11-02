@@ -13,6 +13,16 @@ insert into public.organizations(id,name,created_by) values('53000000-0000-4000-
 insert into public.organization_members(organization_id,user_id,role,added_by) values
  ('53000000-0000-4000-8000-000000000010','53000000-0000-4000-8000-000000000001','owner','53000000-0000-4000-8000-000000000001'),
  ('53000000-0000-4000-8000-000000000010','53000000-0000-4000-8000-000000000002','member','53000000-0000-4000-8000-000000000001');
+insert into public.saved_people(id,user_id,role,display_name)
+values('53000000-0000-4000-8000-000000000020','53000000-0000-4000-8000-000000000002','self','Receipt Formal Name');
+update public.profiles
+set display_name = null,
+    self_person_id = '53000000-0000-4000-8000-000000000020'
+where id = '53000000-0000-4000-8000-000000000002';
+update public.organization_people
+set organization_display_name = 'Receipt Organization Name'
+where organization_id = '53000000-0000-4000-8000-000000000010'
+  and user_id = '53000000-0000-4000-8000-000000000002';
 select set_config('request.jwt.claim.sub','53000000-0000-4000-8000-000000000001',true);
 set local role authenticated;
 select is((select count(*) from public.get_notification_publication_audience('53000000-0000-4000-8000-000000000010')),2::bigint,'audience contains only organization members');
@@ -21,6 +31,11 @@ select throws_ok($$select public.save_notification_publication('53000000-0000-40
 select lives_ok($$select public.save_notification_publication('53000000-0000-4000-8000-000000000010','Scheduled test','Synthetic message','high','scheduled',now()+interval '1 hour',now()+interval '2 hours',p_requires_acknowledgement=>true)$$,'owner schedules message');
 select is((select count(*) from public.notification_publications where title='Scheduled test'),1::bigint,'publisher can see publication');
 select is((select count(*) from public.get_notification_publication_report((select id from public.notification_publications where title='Scheduled test'))),2::bigint,'report shows intended recipients');
+select is(
+  (select display_name from public.get_notification_publication_report((select id from public.notification_publications where title='Scheduled test')) where user_id='53000000-0000-4000-8000-000000000002'),
+  'Receipt Organization Name',
+  'report resolves the organization recipient name instead of showing a permission role'
+);
 select set_config('test.publication_id',(select id::text from public.notification_publications where title='Scheduled test'),true);
 select lives_ok($$select public.save_notification_publication('53000000-0000-4000-8000-000000000010','Corrected test','Corrected message','high','sent',p_id=>current_setting('test.publication_id')::uuid)$$,'owner can publish correction');
 select is((select revision from public.notification_publications where id=current_setting('test.publication_id')::uuid),2,'correction increments revision');

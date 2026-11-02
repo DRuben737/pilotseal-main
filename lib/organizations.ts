@@ -474,7 +474,7 @@ export async function fetchOrganizationStudents(organizationId: string): Promise
     person_id: typeof record.person_id === "string" ? record.person_id : null,
     saved_person_id: typeof record.saved_person_id === "string" ? record.saved_person_id : null,
     formal_name: typeof record.formal_name === "string" ? record.formal_name : null,
-    account_nickname: String(record.account_nickname ?? "Member"),
+    account_nickname: String(record.account_nickname ?? "Unknown user"),
     effective_certificate_number:
       typeof record.effective_certificate_number === "string" ? record.effective_certificate_number : null,
     certificate_source: String(record.certificate_source ?? "missing") as OrganizationStudent["certificate_source"],
