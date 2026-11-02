@@ -96,6 +96,7 @@ import {
 import {
   fetchMyScheduleTrainingCourses,
   fetchTrainingSubjects,
+  trainingCourseCode,
   trainingCourseModuleLabel,
   type ScheduleTrainingCourse,
   type ScheduleTrainingCourseModule,
@@ -191,6 +192,36 @@ function getErrorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error)
     return String(error.message);
   return fallback;
+}
+
+function trainingCourseTrack(course: ScheduleTrainingCourse) {
+  const identity = `${course.stable_key} ${course.title}`.toLowerCase();
+  if (identity.includes("ground")) return "Ground";
+  if (identity.includes("flight")) return "Flight";
+  return course.modules.some((module) =>
+    module.module_type.toLowerCase().includes("flight"),
+  )
+    ? "Flight"
+    : "Ground";
+}
+
+function DisclosureChevron({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      className={`h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 motion-reduce:transition-none ${className}`}
+    >
+      <path
+        d="m7.5 5 5 5-5 5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function lessonDropMode(
@@ -487,20 +518,52 @@ export default function CfiScheduleManager() {
   );
   const filteredCourseModules = useMemo(() => {
     const normalized = courseModuleSearch.trim().toLowerCase();
+    const lessonTrack = lesson.kind === "ground" ? "Ground" : "Flight";
     return availableCourseModules.filter(({ course, courseModule }) => {
-        const values = [
-          course.title,
-          course.organization_name,
-          `M${String(courseModule.module_number).padStart(2, "0")}`,
-          courseModule.module_type,
-          courseModule.lesson_objective,
-        ];
-        return (
-          !normalized ||
-          values.some((value) => value.toLowerCase().includes(normalized))
-        );
-      });
-  }, [availableCourseModules, courseModuleSearch]);
+      if (trainingCourseTrack(course) !== lessonTrack) return false;
+      const values = [
+        course.title,
+        course.organization_name,
+        `M${String(courseModule.module_number).padStart(2, "0")}`,
+        courseModule.module_type,
+        courseModule.lesson_objective,
+      ];
+      return (
+        !normalized ||
+        values.some((value) => value.toLowerCase().includes(normalized))
+      );
+    });
+  }, [availableCourseModules, courseModuleSearch, lesson.kind]);
+  const groupedCourseModules = useMemo(() => {
+    const courses = new Map<
+      string,
+      Map<
+        number,
+        Array<{
+          course: ScheduleTrainingCourse;
+          courseModule: TrainingCourseModule;
+        }>
+      >
+    >();
+    for (const item of filteredCourseModules) {
+      const code = trainingCourseCode(item.course);
+      const stages = courses.get(code) ?? new Map();
+      const modules = stages.get(item.courseModule.stage_number) ?? [];
+      modules.push(item);
+      stages.set(item.courseModule.stage_number, modules);
+      courses.set(code, stages);
+    }
+    const codeOrder = new Map([
+      ["PVT", 0],
+      ["IR", 1],
+      ["CPL", 2],
+    ]);
+    return Array.from(courses.entries()).sort(
+      ([left], [right]) =>
+        (codeOrder.get(left) ?? 99) - (codeOrder.get(right) ?? 99) ||
+        left.localeCompare(right),
+    );
+  }, [filteredCourseModules]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("pilotseal:schedule-return");
@@ -4335,13 +4398,21 @@ export default function CfiScheduleManager() {
               <select
                 value={lesson.kind}
                 onChange={(event) => {
+                  const nextKind = event.target.value as LessonKind;
                   setLessonWarnings([]);
-                  setLesson((current) => ({
-                    ...current,
-                    kind: event.target.value as LessonKind,
-                    aircraftId:
-                      event.target.value === "ground" ? "" : current.aircraftId,
-                  }));
+                  setLesson((current) => {
+                    const changesTrack =
+                      (current.kind === "ground") !== (nextKind === "ground");
+                    return {
+                      ...current,
+                      kind: nextKind,
+                      aircraftId:
+                        nextKind === "ground" ? "" : current.aircraftId,
+                      trainingCourseModules: changesTrack
+                        ? []
+                        : current.trainingCourseModules,
+                    };
+                  });
                 }}
               >
                 <option value="flight">Flight</option>
@@ -4746,38 +4817,97 @@ export default function CfiScheduleManager() {
           value={courseModuleSearch}
           onChange={(event) => setCourseModuleSearch(event.target.value)}
         />
-        <div className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto border border-slate-200">
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
           {!filteredCourseModules.length ? (
             <p className="p-3 text-sm text-slate-500">No modules match.</p>
           ) : (
-            filteredCourseModules.map(({ course, courseModule }) => {
-              const selected = lesson.trainingCourseModules.some(
-                (item) => item.course_module_id === courseModule.id,
+            groupedCourseModules.map(([code, stages]) => {
+              const courseModuleCount = Array.from(stages.values()).reduce(
+                (total, modules) => total + modules.length,
+                0,
               );
               return (
-                <div
-                  key={`${course.organization_id}:${courseModule.id}`}
-                  className="flex items-center gap-3 px-3 py-2"
+                <details
+                  key={code}
+                  open={courseModuleSearch.trim() ? true : undefined}
+                  className="group/picker-course overflow-hidden rounded-xl bg-slate-100/80"
                 >
-                  <label className="flex min-w-0 flex-1 items-center gap-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() =>
-                        toggleLessonCourseModule(course, courseModule)
-                      }
-                    />
-                    <span className="min-w-0">
-                      <strong className="block truncate text-slate-900">
-                        {trainingCourseModuleLabel(course, courseModule)}
-                      </strong>
-                      <small className="block truncate text-slate-500">
-                        Stage {courseModule.stage_number} · {courseModule.module_type} ·{" "}
-                        {courseModule.duration_label} · {course.organization_name}
-                      </small>
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2.5 px-3.5 py-2 text-left transition-colors duration-200 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                    <strong className="min-w-0 flex-1 text-[13px] font-semibold text-slate-950">
+                      {code} 141
+                    </strong>
+                    <span className="text-[11px] font-medium text-slate-500">
+                      {courseModuleCount} modules
                     </span>
-                  </label>
-                </div>
+                    <DisclosureChevron className="group-open/picker-course:rotate-90" />
+                  </summary>
+                  <div className="space-y-1.5 bg-blue-50/45 px-2 pb-2 pt-1">
+                    {Array.from(stages.entries())
+                      .sort(([left], [right]) => left - right)
+                      .map(([stageNumber, modules]) => (
+                        <details
+                          key={stageNumber}
+                          open={courseModuleSearch.trim() ? true : undefined}
+                          className="group/picker-stage overflow-hidden rounded-md bg-white/65"
+                        >
+                          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                            <strong className="min-w-0 flex-1 text-[11px] font-semibold text-slate-700">
+                              Stage {stageNumber}
+                            </strong>
+                            <span className="text-[11px] text-slate-500">
+                              {modules.length}
+                            </span>
+                            <DisclosureChevron className="group-open/picker-stage:rotate-90" />
+                          </summary>
+                          <div className="grid gap-1 px-1.5 pb-1.5">
+                            {modules.map(({ course, courseModule }) => {
+                              const selected =
+                                lesson.trainingCourseModules.some(
+                                  (item) =>
+                                    item.course_module_id === courseModule.id,
+                                );
+                              return (
+                                <label
+                                  key={`${course.organization_id}:${courseModule.id}`}
+                                  className={`flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-200 ${
+                                    selected
+                                      ? "bg-blue-100/80"
+                                      : "bg-white/80 hover:bg-white"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() =>
+                                      toggleLessonCourseModule(
+                                        course,
+                                        courseModule,
+                                      )
+                                    }
+                                  />
+                                  <span className="min-w-0 flex-1">
+                                    <strong className="block text-xs font-semibold text-slate-900">
+                                      M
+                                      {String(
+                                        courseModule.module_number,
+                                      ).padStart(2, "0")}
+                                      <span className="ml-2 font-medium text-slate-700">
+                                        {courseModule.module_type}
+                                      </span>
+                                    </strong>
+                                    <small className="block truncate text-[11px] leading-4 text-slate-500">
+                                      {courseModule.duration_label} ·{" "}
+                                      {course.organization_name}
+                                    </small>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      ))}
+                  </div>
+                </details>
               );
             })
           )}
