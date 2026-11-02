@@ -143,7 +143,6 @@ export function UsDateTimeInput({
       inputMode="numeric"
       autoComplete="off"
       maxLength={16}
-      pattern="\\d{2}/\\d{2}/\\d{4} \\d{2}:\\d{2}"
       className={className}
       placeholder={placeholder}
       value={editing ? draft : isoDateTimeLocalToUsInput(value)}
