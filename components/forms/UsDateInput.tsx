@@ -57,7 +57,8 @@ export function UsDateInput({
       className={className}
       placeholder={placeholder ?? formatLabel}
       value={editing ? draft : formatValue(value)}
-      onFocus={() => {
+      onFocus={(event) => {
+        event.currentTarget.setCustomValidity("");
         setDraft(formatValue(value));
         setEditing(true);
       }}
@@ -79,9 +80,15 @@ export function UsDateInput({
         } else onChange("");
       }}
       onBlur={(event) => {
-        const parsed = draft ? parseValue(draft) : "";
+        const currentDraft = normalizeDraft(
+          event.currentTarget.value,
+          precision,
+        );
+        const parsed = currentDraft ? parseValue(currentDraft) : "";
         event.currentTarget.setCustomValidity(
-          draft && !parsed ? `Enter a valid date as ${formatLabel}.` : ""
+          currentDraft && !parsed
+            ? `Enter a valid date as ${formatLabel}.`
+            : "",
         );
         onChange(parsed ?? "");
         setEditing(false);
@@ -140,7 +147,8 @@ export function UsDateTimeInput({
       className={className}
       placeholder={placeholder}
       value={editing ? draft : isoDateTimeLocalToUsInput(value)}
-      onFocus={() => {
+      onFocus={(event) => {
+        event.currentTarget.setCustomValidity("");
         setDraft(isoDateTimeLocalToUsInput(value));
         setEditing(true);
       }}
@@ -153,7 +161,8 @@ export function UsDateTimeInput({
         else if (!message && nextDraft.length === 16) onChange(parseUsDateTimeLocal(nextDraft) ?? "");
       }}
       onBlur={(event) => {
-        event.currentTarget.setCustomValidity(validityMessage(draft));
+        const currentDraft = normalizeDateTimeDraft(event.currentTarget.value);
+        event.currentTarget.setCustomValidity(validityMessage(currentDraft));
         setEditing(false);
         onBlur?.(event);
       }}
