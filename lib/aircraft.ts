@@ -1711,6 +1711,9 @@ function normalizeAircraftRecord(
               : null,
           avg_fuel_burn_rate: toNumber((rawModel as Record<string, unknown>).avg_fuel_burn_rate),
           max_weight: toNumber((rawModel as Record<string, unknown>).max_weight),
+          performance_speeds: parseAircraftPerformanceSpeeds(
+            (rawModel as Record<string, unknown>).performance_speeds
+          ),
           stations: (rawModel as Record<string, unknown>).stations ?? [],
           envelope: (rawModel as Record<string, unknown>).envelope ?? [],
         } as AircraftModelRecord)
