@@ -6999,6 +6999,85 @@ summary:focus-visible {
   color: var(--muted);
 }
 
+.wb-speed-panel {
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid rgba(18, 58, 117, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0.75rem;
+}
+
+.wb-speed-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.wb-speed-heading h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.wb-speed-heading span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.wb-speed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  gap: 0.4rem;
+}
+
+.wb-speed-card {
+  border-radius: 10px;
+  background: #f1f5f9;
+  padding: 0.5rem 0.4rem;
+  text-align: center;
+}
+
+.wb-speed-card span,
+.wb-speed-card strong {
+  display: block;
+}
+
+.wb-speed-card span {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.wb-speed-card strong {
+  margin-top: 0.15rem;
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.wb-print-button {
+  min-height: 36px;
+  border: 1px solid rgba(18, 58, 117, 0.2);
+  border-radius: 999px;
+  background: white;
+  color: #123a75;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.wb-print-button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
+}
+
+.wb-print-report {
+  display: none;
+}
+
 .decoder-shell {
   display: grid;
   gap: 1rem;
@@ -9946,3 +10025,272 @@ summary:focus-visible {
   .notification-alert-actions > * { width: 100%; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .notification-push, .notification-critical { animation: none; } }
+
+@page {
+  size: letter portrait;
+  margin: 0.42in;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .wb-print-report,
+  .wb-print-report * {
+    visibility: visible !important;
+  }
+
+  .wb-print-report {
+    position: absolute;
+    inset: 0 auto auto 0;
+    display: grid;
+    width: 100%;
+    gap: 0.16in;
+    color: #111827;
+    font-family: Arial, sans-serif;
+    font-size: 8.5pt;
+    line-height: 1.25;
+  }
+
+  .wb-print-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.2in;
+    border-bottom: 2px solid #0f172a;
+    padding-bottom: 0.1in;
+  }
+
+  .wb-print-header h1,
+  .wb-print-header p,
+  .wb-print-section h2 {
+    margin: 0;
+  }
+
+  .wb-print-header h1 {
+    font-size: 18pt;
+  }
+
+  .wb-print-header p {
+    margin-top: 0.03in;
+    font-size: 11pt;
+    font-weight: 700;
+  }
+
+  .wb-print-header dl {
+    display: grid;
+    min-width: 2.3in;
+    gap: 0.04in;
+    margin: 0;
+  }
+
+  .wb-print-header dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.15in;
+  }
+
+  .wb-print-header dt {
+    color: #475569;
+  }
+
+  .wb-print-header dd {
+    margin: 0;
+    font-weight: 700;
+  }
+
+  .wb-print-section {
+    break-inside: avoid;
+  }
+
+  .wb-print-section h2 {
+    margin-bottom: 0.05in;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .wb-print-speed-grid,
+  .wb-print-summary {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border-top: 1px solid #94a3b8;
+    border-left: 1px solid #94a3b8;
+  }
+
+  .wb-print-speed-grid div,
+  .wb-print-summary div {
+    border-right: 1px solid #94a3b8;
+    border-bottom: 1px solid #94a3b8;
+    padding: 0.05in 0.07in;
+  }
+
+  .wb-print-speed-grid span,
+  .wb-print-summary span,
+  .wb-print-speed-grid strong,
+  .wb-print-summary strong {
+    display: block;
+  }
+
+  .wb-print-speed-grid span,
+  .wb-print-summary span {
+    color: #475569;
+    font-size: 7pt;
+  }
+
+  .wb-print-speed-grid strong,
+  .wb-print-summary strong {
+    margin-top: 0.02in;
+    font-size: 9pt;
+  }
+
+  .wb-print-summary {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .wb-print-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.18in;
+    align-items: start;
+  }
+
+  .wb-print-charts {
+    display: grid;
+    gap: 0.1in;
+  }
+
+  .wb-print-charts-double {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wb-print-envelope {
+    display: grid;
+    gap: 0.02in;
+    margin: 0;
+    border: 1px solid #94a3b8;
+    padding: 0.06in;
+  }
+
+  .wb-print-envelope figcaption {
+    font-size: 8.5pt;
+    font-weight: 700;
+  }
+
+  .wb-print-envelope svg {
+    display: block;
+    width: 100%;
+    height: 2.35in;
+  }
+
+  .wb-print-charts-double .wb-print-envelope svg {
+    height: 1.85in;
+  }
+
+  .wb-print-grid-line {
+    stroke: #cbd5e1;
+    stroke-width: 0.8;
+    stroke-dasharray: 3 3;
+  }
+
+  .wb-print-envelope-primary,
+  .wb-print-envelope-secondary {
+    fill: none;
+    stroke: #0f172a;
+    stroke-width: 2.2;
+  }
+
+  .wb-print-envelope-secondary {
+    stroke: #d97706;
+    stroke-dasharray: 6 4;
+  }
+
+  .wb-print-current-point {
+    fill: #0f172a;
+  }
+
+  .wb-print-zero-fuel-point {
+    fill: #dc2626;
+  }
+
+  .wb-print-axis-label {
+    fill: #475569;
+    font-size: 9px;
+  }
+
+  .wb-print-chart-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1in;
+    color: #475569;
+    font-size: 7.5pt;
+  }
+
+  .wb-print-chart-key span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.03in;
+  }
+
+  .wb-print-chart-key i {
+    width: 0.06in;
+    height: 0.06in;
+    border-radius: 999px;
+  }
+
+  .wb-print-current-dot {
+    background: #0f172a;
+  }
+
+  .wb-print-zero-fuel-dot {
+    background: #dc2626;
+  }
+
+  .wb-print-chart-key .wb-print-normal-line,
+  .wb-print-chart-key .wb-print-utility-line {
+    width: 0.13in;
+    height: 0;
+    border-radius: 0;
+    border-top: 1.5px solid #0f172a;
+  }
+
+  .wb-print-chart-key .wb-print-utility-line {
+    border-top-color: #d97706;
+    border-top-style: dashed;
+  }
+
+  .wb-print-report table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+  }
+
+  .wb-print-detail-grid table {
+    font-size: 8pt;
+  }
+
+  .wb-print-detail-grid th,
+  .wb-print-detail-grid td {
+    padding: 0.035in 0.06in;
+  }
+
+  .wb-print-report th,
+  .wb-print-report td {
+    border: 1px solid #94a3b8;
+    padding: 0.035in 0.06in;
+    text-align: right;
+  }
+
+  .wb-print-report th:first-child,
+  .wb-print-report td:first-child {
+    text-align: left;
+  }
+
+  .wb-print-report thead,
+  .wb-print-total {
+    background: #e2e8f0 !important;
+    font-weight: 700;
+    print-color-adjust: exact;
+  }
+}

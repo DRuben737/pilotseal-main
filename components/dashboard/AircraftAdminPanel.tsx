@@ -22,6 +22,10 @@ import {
 } from "@/components/admin/AdminConsole";
 import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
 import AircraftAssignmentsManager from "@/components/dashboard/AircraftAssignmentsManager";
+import AircraftPerformanceSpeedsEditor, {
+  emptyAircraftPerformanceSpeedDraft,
+  type AircraftPerformanceSpeedDraft,
+} from "@/components/dashboard/AircraftPerformanceSpeedsEditor";
 import { compareAircraftLabels, groupByAircraftFamily } from "@/lib/aircraft-family";
 import {
   approveAircraftUpdateRequest,
@@ -47,6 +51,8 @@ import {
   type AircraftUpdateRequestRecord,
   type AircraftOrganizationAssignment,
   type AircraftStationKind,
+  type AircraftPerformanceSpeedKey,
+  type AircraftPerformanceSpeedUnit,
 } from "@/lib/aircraft";
 import {
   fetchPlatformOrganizations,
@@ -86,6 +92,8 @@ type ModelFormState = {
   category: "airplane" | "helicopter";
   avg_fuel_burn_rate: string;
   max_weight: string;
+  performance_speed_unit: AircraftPerformanceSpeedUnit;
+  performance_speeds: AircraftPerformanceSpeedDraft;
   stations: ModelStationDraft[];
   envelope: EnvelopePointDraft[];
   utilityEnvelope: EnvelopePointDraft[];
@@ -111,6 +119,8 @@ const emptyModelForm: ModelFormState = {
   category: "airplane",
   avg_fuel_burn_rate: "",
   max_weight: "",
+  performance_speed_unit: "KIAS",
+  performance_speeds: emptyAircraftPerformanceSpeedDraft(),
   stations: [{
     clientKey: "new-station-1",
     id: "",
@@ -167,6 +177,16 @@ function normalizeModelForm(model: AircraftModelRecord): ModelFormState {
     avg_fuel_burn_rate:
       typeof model.avg_fuel_burn_rate === "number" ? String(model.avg_fuel_burn_rate) : "",
     max_weight: typeof model.max_weight === "number" ? String(model.max_weight) : "",
+    performance_speed_unit: model.performance_speeds?.unit ?? "KIAS",
+    performance_speeds: {
+      ...emptyAircraftPerformanceSpeedDraft(),
+      ...Object.fromEntries(
+        Object.entries(model.performance_speeds?.values ?? {}).map(([key, value]) => [
+          key,
+          String(value),
+        ])
+      ),
+    },
     stations:
       stations.length > 0
         ? stations.map((station, index) => ({
@@ -318,6 +338,15 @@ function validateModelForm(modelForm: ModelFormState) {
     "Enter a fuel burn greater than 0.",
     { positive: true }
   );
+  for (const [key, value] of Object.entries(modelForm.performance_speeds)) {
+    validateOptionalNumber(
+      errors,
+      `model.performance_speeds.${key}`,
+      value,
+      `Enter a ${key} speed greater than 0.`,
+      { positive: true }
+    );
+  }
   validateOptionalNumber(
     errors,
     "model.max_weight",
@@ -1057,6 +1086,14 @@ export default function AircraftAdminPanel() {
           ? toNumber(modelForm.avg_fuel_burn_rate)
           : null,
         max_weight: toOptionalNumber(modelForm.max_weight),
+        performance_speeds: {
+          unit: modelForm.performance_speed_unit,
+          values: Object.fromEntries(
+            Object.entries(modelForm.performance_speeds)
+              .filter(([, value]) => value.trim())
+              .map(([key, value]) => [key, toNumber(value)])
+          ),
+        },
         stations,
         envelope: savedEnvelope,
       };
@@ -1397,6 +1434,29 @@ export default function AircraftAdminPanel() {
             </tr>
           </tbody>
         </WorksheetGrid>
+
+        <AircraftPerformanceSpeedsEditor
+          unit={modelForm.performance_speed_unit}
+          values={modelForm.performance_speeds}
+          invalidKeys={Object.keys(modelForm.performance_speeds).filter((key) =>
+            Boolean(modelErrors[`model.performance_speeds.${key}`])
+          ) as AircraftPerformanceSpeedKey[]}
+          inputClassName={(key) =>
+            controlClass(modelErrors[`model.performance_speeds.${key}`])
+          }
+          onUnitChange={(unit) => updateModelField("performance_speed_unit", unit)}
+          onValueChange={(key: AircraftPerformanceSpeedKey, value) => {
+            setModelErrors((current) => {
+              const next = { ...current };
+              delete next[`model.performance_speeds.${key}`];
+              return next;
+            });
+            updateModelField("performance_speeds", {
+              ...modelForm.performance_speeds,
+              [key]: value,
+            });
+          }}
+        />
 
         {stationGroups.map(({ kind, title, itemLabel }) => {
           const rows = modelForm.stations

@@ -22,6 +22,8 @@ import {
   type AircraftOperationalStatus,
   type AircraftRecord,
   type AircraftStationKind,
+  type AircraftPerformanceSpeedKey,
+  type AircraftPerformanceSpeedUnit,
   type OrganizationAircraftMaintenanceInput,
 } from "@/lib/aircraft";
 import {
@@ -55,6 +57,10 @@ import OrganizationInspectionManager from "@/components/dashboard/OrganizationIn
 import OrganizationMemberReviewAccess from "@/components/dashboard/OrganizationMemberReviewAccess";
 import AircraftStatusEditor from "@/components/dashboard/AircraftStatusEditor";
 import FleetReportsPanel from "@/components/dashboard/FleetReportsPanel";
+import AircraftPerformanceSpeedsEditor, {
+  emptyAircraftPerformanceSpeedDraft,
+  type AircraftPerformanceSpeedDraft,
+} from "@/components/dashboard/AircraftPerformanceSpeedsEditor";
 import {
   AdminDataTable,
   AdminNameList,
@@ -120,6 +126,8 @@ type ModelForm = {
   singleEnvelopeView: "topView" | "sideView";
   avg_fuel_burn_rate: string;
   max_weight: string;
+  performance_speed_unit: AircraftPerformanceSpeedUnit;
+  performance_speeds: AircraftPerformanceSpeedDraft;
   stations: LoadingLocationDraft[];
   envelope: WeightBalanceLimitDraft[];
   utilityEnvelope: WeightBalanceLimitDraft[];
@@ -161,6 +169,8 @@ const emptyModelForm: ModelForm = {
   singleEnvelopeView: "topView",
   avg_fuel_burn_rate: "",
   max_weight: "",
+  performance_speed_unit: "KIAS",
+  performance_speeds: emptyAircraftPerformanceSpeedDraft(),
   stations: [emptyLoadingLocation()],
   envelope: [emptyWeightBalanceLimit()],
   utilityEnvelope: [emptyWeightBalanceLimit("new-utility-limit-1")],
@@ -1100,6 +1110,16 @@ export default function OrganizationManager({
           : "sideView",
       avg_fuel_burn_rate: model.avg_fuel_burn_rate == null ? "" : String(model.avg_fuel_burn_rate),
       max_weight: model.max_weight == null ? "" : String(model.max_weight),
+      performance_speed_unit: model.performance_speeds?.unit ?? "KIAS",
+      performance_speeds: {
+        ...emptyAircraftPerformanceSpeedDraft(),
+        ...Object.fromEntries(
+          Object.entries(model.performance_speeds?.values ?? {}).map(([key, value]) => [
+            key,
+            String(value),
+          ])
+        ),
+      },
       stations:
         stations.length > 0
           ? [
@@ -1453,6 +1473,17 @@ export default function OrganizationManager({
           modelForm.max_weight,
           "Maximum takeoff weight"
         ),
+        performance_speeds: {
+          unit: modelForm.performance_speed_unit,
+          values: Object.fromEntries(
+            Object.entries(modelForm.performance_speeds)
+              .filter(([, value]) => value.trim())
+              .map(([key, value]) => [
+                key,
+                requiredPositiveNumber(value, `${key} speed`),
+              ])
+          ),
+        },
         stations,
         envelope,
       };
@@ -1754,6 +1785,23 @@ export default function OrganizationManager({
                 </tbody>
               </table>
             </div>
+
+            <AircraftPerformanceSpeedsEditor
+              unit={modelForm.performance_speed_unit}
+              values={modelForm.performance_speeds}
+              inputClassName={`${gridControlClass} font-mono tabular-nums`}
+              onUnitChange={(unit) => {
+                setModelError("");
+                setModelForm((current) => ({ ...current, performance_speed_unit: unit }));
+              }}
+              onValueChange={(key: AircraftPerformanceSpeedKey, value) => {
+                setModelError("");
+                setModelForm((current) => ({
+                  ...current,
+                  performance_speeds: { ...current.performance_speeds, [key]: value },
+                }));
+              }}
+            />
 
             <LoadingLocationsGrid
               category={modelForm.category}

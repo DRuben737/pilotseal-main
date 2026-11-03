@@ -3,9 +3,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
+  AIRCRAFT_PERFORMANCE_SPEED_KEYS,
   fetchActiveOrganizationAircraft,
   fetchMyAircraft,
   fetchSharedAircraft,
+  parseAircraftPerformanceSpeeds,
   parseAircraftEnvelopeSet,
   parseAircraftStations,
 } from "@/lib/aircraft";
@@ -107,6 +109,9 @@ function resolveAircraftProfile(selectedAircraft) {
     emptyArm: toNumber(selectedAircraft.empty_arm),
     emptyLatArm: toNumber(selectedAircraft.empty_lat_arm),
     maxWeight: toNumber(selectedAircraft.model.max_weight ?? selectedAircraft.max_weight),
+    modelName: selectedAircraft.model.name ?? "",
+    tailNumber: selectedAircraft.tail_number ?? selectedAircraft.name ?? "",
+    performanceSpeeds: parseAircraftPerformanceSpeeds(selectedAircraft.model.performance_speeds),
     stations,
     envelopeSet,
   };
@@ -437,6 +442,85 @@ function formatAircraftOptionLabel(aircraft) {
   return String(aircraft.tail_number ?? aircraft.name ?? "Untitled aircraft");
 }
 
+function performanceSpeedEntries(performanceSpeeds) {
+  if (!performanceSpeeds?.values) {
+    return [];
+  }
+
+  return AIRCRAFT_PERFORMANCE_SPEED_KEYS.flatMap((key) => {
+    const value = performanceSpeeds.values[key];
+    return typeof value === "number" && Number.isFinite(value) && value > 0
+      ? [{ key, value }]
+      : [];
+  });
+}
+
+function PrintableEnvelopeChart({
+  title,
+  xLabel,
+  yLabel,
+  primaryPolygon,
+  secondaryPolygon = [],
+  currentPoint,
+  referencePoint,
+}) {
+  const normalizePoints = (points) =>
+    (Array.isArray(points) ? points : [])
+      .map((point) => ({ x: Number(point?.x ?? point?.cg), y: Number(point?.y ?? point?.weight) }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  const primary = normalizePoints(primaryPolygon);
+  const secondary = normalizePoints(secondaryPolygon);
+  const markers = [currentPoint, referencePoint].filter(
+    (point) => Number.isFinite(point?.x) && Number.isFinite(point?.y)
+  );
+  const domainPoints = [...primary, ...secondary, ...markers];
+  if (primary.length < 2 || domainPoints.length < 2) return null;
+
+  const xs = domainPoints.map((point) => point.x);
+  const ys = domainPoints.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const xPad = Math.max((maxX - minX) * 0.08, 0.5);
+  const yPad = Math.max((maxY - minY) * 0.08, 0.5);
+  const x0 = minX - xPad;
+  const x1 = maxX + xPad;
+  const y0 = minY - yPad;
+  const y1 = maxY + yPad;
+  const plot = { left: 42, top: 24, width: 300, height: 164 };
+  const px = (value) => plot.left + ((value - x0) / (x1 - x0 || 1)) * plot.width;
+  const py = (value) => plot.top + plot.height - ((value - y0) / (y1 - y0 || 1)) * plot.height;
+  const pathFor = (points) =>
+    points.map((point, index) => `${index === 0 ? "M" : "L"}${px(point.x)} ${py(point.y)}`).join(" ") + " Z";
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
+
+  return (
+    <figure className="wb-print-envelope">
+      <figcaption>{title}</figcaption>
+      <svg viewBox="0 0 360 220" role="img" aria-label={`${title}: ${xLabel} by ${yLabel}`}>
+        {ticks.map((ratio) => {
+          const x = plot.left + plot.width * ratio;
+          const y = plot.top + plot.height * ratio;
+          return <g key={ratio}><line x1={x} x2={x} y1={plot.top} y2={plot.top + plot.height} className="wb-print-grid-line" /><line x1={plot.left} x2={plot.left + plot.width} y1={y} y2={y} className="wb-print-grid-line" /></g>;
+        })}
+        <path d={pathFor(primary)} className="wb-print-envelope-primary" />
+        {secondary.length > 1 ? <path d={pathFor(secondary)} className="wb-print-envelope-secondary" /> : null}
+        {Number.isFinite(referencePoint?.x) && Number.isFinite(referencePoint?.y) ? <circle cx={px(referencePoint.x)} cy={py(referencePoint.y)} r="4" className="wb-print-zero-fuel-point" /> : null}
+        {Number.isFinite(currentPoint?.x) && Number.isFinite(currentPoint?.y) ? <circle cx={px(currentPoint.x)} cy={py(currentPoint.y)} r="4" className="wb-print-current-point" /> : null}
+        <text x={plot.left} y="207" className="wb-print-axis-label">{xLabel}: {x0.toFixed(1)} - {x1.toFixed(1)}</text>
+        <text x={plot.left + plot.width} y="207" textAnchor="end" className="wb-print-axis-label">{yLabel}: {y0.toFixed(1)} - {y1.toFixed(1)}</text>
+      </svg>
+      <div className="wb-print-chart-key">
+        <span><i className="wb-print-normal-line" />Normal</span>
+        {secondary.length > 1 ? <span><i className="wb-print-utility-line" />Utility</span> : null}
+        <span><i className="wb-print-current-dot" />Current</span>
+        <span><i className="wb-print-zero-fuel-dot" />Zero fuel</span>
+      </div>
+    </figure>
+  );
+}
+
 export default function WeightBalanceCalculator({
   stateKey = "wb",
   embedded = false,
@@ -598,6 +682,10 @@ export default function WeightBalanceCalculator({
     [activeSelectedAircraft]
   );
   const aircraftType = getAircraftType(aircraftProfile);
+  const referenceSpeeds = useMemo(
+    () => performanceSpeedEntries(aircraftProfile?.performanceSpeeds),
+    [aircraftProfile?.performanceSpeeds]
+  );
 
   useEffect(() => {
     if (!aircraftProfile) {
@@ -750,6 +838,86 @@ export default function WeightBalanceCalculator({
 
   return (
     <div className={`wb-shell ${embedded ? "wb-shell-embedded" : ""}`}>
+      {result ? (
+        <section className="wb-print-report" aria-label="Printable weight and balance report">
+          <header className="wb-print-header">
+            <div>
+              <h1>Weight &amp; Balance</h1>
+              <p>{aircraftProfile?.tailNumber || result.aircraft_name}</p>
+            </div>
+            <dl>
+              <div><dt>Model</dt><dd>{aircraftProfile?.modelName || "—"}</dd></div>
+              <div><dt>Status</dt><dd>{getStatusLabel(result.status)}</dd></div>
+            </dl>
+          </header>
+          {referenceSpeeds.length > 0 ? (
+            <section className="wb-print-section">
+              <h2>Reference speeds ({aircraftProfile.performanceSpeeds.unit})</h2>
+              <div className="wb-print-speed-grid">
+                {referenceSpeeds.map(({ key, value }) => (
+                  <div key={key}><span>{key}</span><strong>{value}</strong></div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <section className="wb-print-section">
+            <h2>Result</h2>
+            <div className="wb-print-summary">
+              <div><span>Total weight</span><strong>{result.total_weight.toFixed(1)} lb</strong></div>
+              <div><span>CG</span><strong>{result.cg_long.toFixed(2)} in</strong></div>
+              {aircraftType === "helicopter" ? <div><span>CG Lat</span><strong>{result.cg_lat?.toFixed(2) ?? "—"} in</strong></div> : null}
+              <div><span>Fuel weight</span><strong>{result.fuel_weight.toFixed(1)} lb</strong></div>
+              {aircraftType === "airplane" ? <div><span>Status</span><strong>{getStatusLabel(result.status)}</strong></div> : null}
+            </div>
+          </section>
+          <div className="wb-print-detail-grid">
+            <section className="wb-print-section wb-print-chart-section">
+              <h2>CG envelope</h2>
+              <div className={`wb-print-charts ${chartType === "2d2p" ? "wb-print-charts-double" : ""}`}>
+                {chartType === "1d1p" ? (
+                  <PrintableEnvelopeChart title="CG / weight" xLabel="CG (in)" yLabel="Weight (lb)" primaryPolygon={result.normal_envelope} secondaryPolygon={result.utility_envelope} currentPoint={{ x: result.cg_long, y: result.total_weight }} referencePoint={{ x: result.zero_fuel_cg, y: result.zero_fuel_weight }} />
+                ) : chartType === "2d2p" ? (
+                  <>
+                    <PrintableEnvelopeChart title="Top view" xLabel="CG Long" yLabel="CG Lat" primaryPolygon={result.top_view_envelope} currentPoint={{ x: result.cg_long, y: result.cg_lat }} referencePoint={{ x: result.zero_fuel_cg, y: result.zero_fuel_cg_lat }} />
+                    <PrintableEnvelopeChart title="Side view" xLabel="CG Long" yLabel="Weight" primaryPolygon={result.side_view_envelope} currentPoint={{ x: result.cg_long, y: result.total_weight }} referencePoint={{ x: result.zero_fuel_cg, y: result.zero_fuel_weight }} />
+                  </>
+                ) : (() => {
+                  const useTopView = Array.isArray(result.top_view_envelope) && result.top_view_envelope.length > 0;
+                  return <PrintableEnvelopeChart title={useTopView ? "Top view" : "Side view"} xLabel="CG Long" yLabel={useTopView ? "CG Lat" : "Weight"} primaryPolygon={useTopView ? result.top_view_envelope : result.side_view_envelope} currentPoint={useTopView ? { x: result.cg_long, y: result.cg_lat } : { x: result.cg_long, y: result.total_weight }} referencePoint={useTopView ? { x: result.zero_fuel_cg, y: result.zero_fuel_cg_lat } : { x: result.zero_fuel_cg, y: result.zero_fuel_weight }} />;
+                })()}
+              </div>
+            </section>
+            <section className="wb-print-section">
+              <h2>Loading details</h2>
+              <table>
+                <thead><tr><th>Item</th><th>Weight</th><th>Arm</th><th>Moment</th></tr></thead>
+                <tbody>
+                  <tr><td>Empty aircraft</td><td>{result.empty_weight.toFixed(1)}</td><td>{result.empty_arm.toFixed(2)}</td><td>{(result.empty_weight * result.empty_arm).toFixed(1)}</td></tr>
+                  {result.stationBreakdown.map((station) => (
+                    <tr key={station.id}><td>{station.name}</td><td>{station.weight.toFixed(1)}</td><td>{station.arm.toFixed(2)}</td><td>{station.longMoment.toFixed(1)}</td></tr>
+                  ))}
+                  <tr className="wb-print-total"><td>Total / CG</td><td>{result.total_weight.toFixed(1)}</td><td>{result.cg_long.toFixed(2)}</td><td>{result.total_moment.toFixed(1)}</td></tr>
+                </tbody>
+              </table>
+            </section>
+          </div>
+        </section>
+      ) : null}
+
+      {referenceSpeeds.length > 0 ? (
+        <section className="wb-speed-panel" aria-label="Aircraft reference speeds">
+          <div className="wb-speed-heading">
+            <h3>Reference speeds</h3>
+            <span>{aircraftProfile.performanceSpeeds.unit}</span>
+          </div>
+          <div className="wb-speed-grid">
+            {referenceSpeeds.map(({ key, value }) => (
+              <div key={key} className="wb-speed-card"><span>{key}</span><strong>{value}</strong></div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="wb-grid">
         <section className={`wb-panel ${embedded ? "wb-panel-embedded" : ""}`}>
           <div className="wb-section-head">
@@ -883,6 +1051,11 @@ export default function WeightBalanceCalculator({
                 </p>
               ) : null}
             </div>
+            {result ? (
+              <button className="wb-print-button" type="button" onClick={() => window.print()}>
+                Print one-page summary
+              </button>
+            ) : null}
           </div>
 
           <div className="wb-stat-grid">

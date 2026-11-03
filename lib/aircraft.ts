@@ -18,6 +18,26 @@ export type AircraftEnvelopeSet = {
 };
 
 export type AircraftChartType = "1d1p" | "2d1p" | "2d2p";
+export type AircraftPerformanceSpeedUnit = "KIAS" | "MPH";
+export const AIRCRAFT_PERFORMANCE_SPEED_KEYS = [
+  "Vx",
+  "Vy",
+  "Vr",
+  "Vg",
+  "Va",
+  "Vs0",
+  "Vs1",
+  "Vfe",
+  "Vno",
+  "Vne",
+  "Vmc",
+  "Vyse",
+] as const;
+export type AircraftPerformanceSpeedKey = (typeof AIRCRAFT_PERFORMANCE_SPEED_KEYS)[number];
+export type AircraftPerformanceSpeeds = {
+  unit: AircraftPerformanceSpeedUnit;
+  values: Partial<Record<AircraftPerformanceSpeedKey, number>>;
+};
 export type AircraftMeterType = "hobbs" | "tach";
 export type AircraftStationKind =
   | "seat"
@@ -93,6 +113,7 @@ export type AircraftModelRecord = {
   chart_type?: AircraftChartType | string | null;
   avg_fuel_burn_rate?: number | null;
   max_weight?: number | null;
+  performance_speeds?: AircraftPerformanceSpeeds | null;
   stations: unknown;
   envelope: unknown;
 };
@@ -283,7 +304,8 @@ export type AttachAircraftSuccess = {
 
 export type AttachAircraftResult = AttachAircraftSuccess | AttachAircraftConflict;
 
-const AIRCRAFT_MODEL_SELECT = "id, organization_id, name, category, chart_type, avg_fuel_burn_rate, max_weight, stations, envelope";
+const AIRCRAFT_MODEL_SELECT = "id, organization_id, name, category, chart_type, avg_fuel_burn_rate, max_weight, performance_speeds, stations, envelope";
+const AIRCRAFT_MODEL_SELECT_WITHOUT_SPEEDS = "id, organization_id, name, category, chart_type, avg_fuel_burn_rate, max_weight, stations, envelope";
 const AIRCRAFT_MODEL_SELECT_LEGACY = "id, name, category, chart_type, stations, envelope";
 const AIRCRAFT_SELECT_VARIANTS = [
   "id, model_id, name, tail_number, updated_at, owner_user_id, visibility, empty_weight, empty_arm, empty_lat_arm",
@@ -320,17 +342,19 @@ const ORGANIZATION_MAINTENANCE_SELECT =
 
 export async function fetchAircraftModels(organizationId?: string | null) {
   const supabase = getSupabaseClient();
-  let query = supabase
-    .from("aircraft_models")
-    .select(AIRCRAFT_MODEL_SELECT)
-    .order("name", { ascending: true });
-  query = organizationId
-    ? query.or(`organization_id.is.null,organization_id.eq.${organizationId}`)
-    : query.is("organization_id", null);
-  const { data, error } = await query;
+  for (const select of [AIRCRAFT_MODEL_SELECT, AIRCRAFT_MODEL_SELECT_WITHOUT_SPEEDS]) {
+    let query = supabase
+      .from("aircraft_models")
+      .select(select)
+      .order("name", { ascending: true });
+    query = organizationId
+      ? query.or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+      : query.is("organization_id", null);
+    const { data, error } = await query;
 
-  if (!error) {
-    return normalizeAircraftModels(data ?? []);
+    if (!error) {
+      return normalizeAircraftModels(data ?? []);
+    }
   }
 
   const { data: legacyData, error: legacyError } = await supabase
@@ -728,6 +752,7 @@ export async function createAircraftModel(input: {
   chart_type?: AircraftChartType | null;
   avg_fuel_burn_rate?: number | null;
   max_weight?: number | null;
+  performance_speeds?: AircraftPerformanceSpeeds | null;
   stations: AircraftStation[];
   envelope: unknown;
 }) {
@@ -739,6 +764,7 @@ export async function createAircraftModel(input: {
     chart_type: input.chart_type ?? null,
     avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
     max_weight: input.max_weight ?? null,
+    performance_speeds: input.performance_speeds ?? null,
     stations: input.stations,
     envelope: input.envelope,
   };
@@ -748,7 +774,8 @@ export async function createAircraftModel(input: {
     stations: input.stations,
     envelope: input.envelope,
   };
-  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = input.organization_id
+  const hasPerformanceSpeeds = Object.keys(input.performance_speeds?.values ?? {}).length > 0;
+  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = input.organization_id || hasPerformanceSpeeds
     ? [{ payload, select: AIRCRAFT_MODEL_SELECT }]
     : [
         { payload, select: AIRCRAFT_MODEL_SELECT },
@@ -781,6 +808,7 @@ export async function updateAircraftModel(
     chart_type?: AircraftChartType | null;
     avg_fuel_burn_rate?: number | null;
     max_weight?: number | null;
+    performance_speeds?: AircraftPerformanceSpeeds | null;
     stations: AircraftStation[];
     envelope: unknown;
   }
@@ -792,6 +820,7 @@ export async function updateAircraftModel(
     chart_type: input.chart_type ?? null,
     avg_fuel_burn_rate: input.avg_fuel_burn_rate ?? null,
     max_weight: input.max_weight ?? null,
+    performance_speeds: input.performance_speeds ?? null,
     stations: input.stations,
     envelope: input.envelope,
   };
@@ -801,10 +830,13 @@ export async function updateAircraftModel(
     stations: input.stations,
     envelope: input.envelope,
   };
-  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = [
-    { payload, select: AIRCRAFT_MODEL_SELECT },
-    { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
-  ];
+  const hasPerformanceSpeeds = Object.keys(input.performance_speeds?.values ?? {}).length > 0;
+  const attempts: Array<{ payload: Record<string, unknown>; select: string }> = hasPerformanceSpeeds
+    ? [{ payload, select: AIRCRAFT_MODEL_SELECT }]
+    : [
+        { payload, select: AIRCRAFT_MODEL_SELECT },
+        { payload: legacyPayload, select: AIRCRAFT_MODEL_SELECT_LEGACY },
+      ];
 
   let lastError = null;
   for (const attempt of attempts) {
@@ -1627,9 +1659,33 @@ function normalizeAircraftModelRecord(value: unknown) {
     chart_type: typeof record.chart_type === "string" ? record.chart_type : null,
     avg_fuel_burn_rate: toNumber(record.avg_fuel_burn_rate),
     max_weight: toNumber(record.max_weight),
+    performance_speeds: parseAircraftPerformanceSpeeds(record.performance_speeds),
     stations: record.stations ?? [],
     envelope: record.envelope ?? [],
   } as AircraftModelRecord;
+}
+
+export function parseAircraftPerformanceSpeeds(value: unknown): AircraftPerformanceSpeeds | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const unit: AircraftPerformanceSpeedUnit = record.unit === "MPH" ? "MPH" : "KIAS";
+  const rawValues =
+    record.values && typeof record.values === "object" && !Array.isArray(record.values)
+      ? (record.values as Record<string, unknown>)
+      : record;
+  const values: Partial<Record<AircraftPerformanceSpeedKey, number>> = {};
+
+  for (const key of AIRCRAFT_PERFORMANCE_SPEED_KEYS) {
+    const speed = toNumber(rawValues[key]);
+    if (speed !== null && speed > 0) {
+      values[key] = speed;
+    }
+  }
+
+  return Object.keys(values).length > 0 ? { unit, values } : null;
 }
 
 function normalizeAircraftRecord(
