@@ -10032,18 +10032,25 @@ summary:focus-visible {
 }
 
 @media print {
-  body * {
-    visibility: hidden !important;
+  html,
+  body,
+  body:has(.wb-print-report),
+  body:has(.wb-print-report) *:has(.wb-print-report) {
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
   }
 
-  .wb-print-report,
-  .wb-print-report * {
-    visibility: visible !important;
+  body:has(.wb-print-report)
+    *:not(:has(.wb-print-report)):not(.wb-print-report):not(.wb-print-report *) {
+    display: none !important;
   }
 
   .wb-print-report {
-    position: absolute;
-    inset: 0 auto auto 0;
+    position: static;
     display: grid;
     width: 100%;
     gap: 0.16in;
