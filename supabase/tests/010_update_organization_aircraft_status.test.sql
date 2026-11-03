@@ -2,7 +2,19 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(14);
+select plan(16);
+
+select is(
+  (
+    select count(*)::integer
+    from pg_catalog.pg_trigger
+    where tgrelid = 'public.organization_aircraft_maintenance'::regclass
+      and tgname = 'notify_organization_aircraft_maintenance_change'
+      and not tgisinternal
+  ),
+  0,
+  'aircraft maintenance changes do not have a notification trigger'
+);
 
 select has_function(
   'public',
@@ -228,6 +240,17 @@ select is(
   ),
   1,
   'authenticated role has one explicit execute grant'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.notifications
+    where title = 'Aircraft maintenance updated'
+      and event_key like 'aircraft-maintenance:30000000-0000-4000-8000-00000000000%'
+  ),
+  0,
+  'aircraft maintenance changes do not create inbox or push notifications'
 );
 
 select * from finish();
