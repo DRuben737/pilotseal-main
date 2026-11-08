@@ -4,7 +4,7 @@ export type TrainingRecordScore = {
   line_item_id: string;
   position: number;
   text: string;
-  minimum_score: number;
+  minimum_score: number | null;
   score: number | null;
   note: string;
 };
@@ -105,7 +105,8 @@ function normalizeScore(value: unknown): TrainingRecordScore | null {
     line_item_id: String(row.line_item_id ?? ""),
     position: numberValue(row.position),
     text: String(row.text ?? ""),
-    minimum_score: numberValue(row.minimum_score),
+    minimum_score:
+      row.minimum_score == null ? null : numberValue(row.minimum_score),
     score,
     note: String(row.note ?? ""),
   };
@@ -186,9 +187,7 @@ export async function fetchMyTrainingRecords() {
   });
 }
 
-export async function fetchOrganizationTrainingRecords(
-  organizationId: string,
-) {
+export async function fetchOrganizationTrainingRecords(organizationId: string) {
   const { data, error } = await getSupabaseClient().rpc(
     "list_organization_training_records",
     { p_organization_id: organizationId },

@@ -91,6 +91,7 @@ function PrintFlightHeader() {
       <div className={styles.printGroupRow}>
         {PRINT_GROUPS.map(([label, span], index) => (
           <span
+            className={index === 2 ? styles.printInstructorGroup : undefined}
             style={{ gridColumn: `span ${span}` }}
             key={`${label}-${index}`}
           >
@@ -144,8 +145,8 @@ function scoresForModule(module: TrainingCourseModule): TrainingRecordScore[] {
     line_item_id: item.id,
     position: item.position,
     text: item.text,
-    minimum_score: item.minimum_score ?? 1,
-    score: null,
+    minimum_score: item.minimum_score,
+    score: item.minimum_score == null ? 1 : null,
     note: "",
   }));
 }
@@ -251,7 +252,10 @@ function EvaluationGrid({ record }: { record: TrainingRecord }) {
   const srm = record.scores.find((score) => /SRM|CRM/i.test(score.text));
   const scoresByPosition = new Map(
     record.scores
-      .filter((score) => score !== srm && score.score != null)
+      .filter(
+        (score) =>
+          score !== srm && score.minimum_score != null && score.score != null,
+      )
       .map((score) => [score.position, score.score]),
   );
   return (
@@ -476,6 +480,13 @@ function TrainingRecordPrint({ records }: { records: TrainingRecord[] }) {
     const key = `${record.student_person_id}:${record.course_id}:${record.stage_number}`;
     grouped.set(key, [...(grouped.get(key) ?? []), record]);
   }
+  for (const group of grouped.values()) {
+    group.sort(
+      (left, right) =>
+        left.lesson_date.localeCompare(right.lesson_date) ||
+        left.module_number - right.module_number,
+    );
+  }
   const pages = Array.from(grouped.values()).flatMap((group) =>
     chunk(group, 3).map((pageRecords) => ({ pageRecords, group })),
   );
@@ -647,8 +658,12 @@ export default function TrainingRecordsManager({
     }
     return Array.from(groups.entries());
   }, [visibleRecords]);
+  const scoreableScores = form.scores.filter(
+    (score) => score.minimum_score != null,
+  );
   const scoresComplete =
-    form.scores.length > 0 && form.scores.every((score) => score.score != null);
+    scoreableScores.length > 0 &&
+    scoreableScores.every((score) => score.score != null);
 
   useEffect(() => {
     if (
@@ -849,7 +864,14 @@ export default function TrainingRecordsManager({
     setBusy(true);
     setMessage("");
     try {
-      await saveMyTrainingRecord(form);
+      await saveMyTrainingRecord({
+        ...form,
+        scores: form.scores.map((score) =>
+          score.minimum_score == null && score.score == null
+            ? { ...score, score: 1 }
+            : score,
+        ),
+      });
       await reload();
       setEditorOpen(false);
     } catch (error) {
@@ -1243,55 +1265,68 @@ export default function TrainingRecordsManager({
                     </div>
                     <span className="text-sm text-slate-600">
                       {
-                        form.scores.filter((score) => score.score != null)
+                        scoreableScores.filter((score) => score.score != null)
                           .length
                       }{" "}
-                      / {form.scores.length} scored
+                      / {scoreableScores.length} scored
                     </span>
                   </div>
                   <div className={styles.scoreTable}>
-                    {form.scores.map((score, scoreIndex) => (
-                      <div className={styles.scoreRow} key={score.line_item_id}>
-                        <div>
-                          <strong>
-                            {score.position}. {score.text}
-                          </strong>
-                          <small>Minimum {score.minimum_score}</small>
-                        </div>
+                    {form.scores.map((score, scoreIndex) => {
+                      const titleRow = score.minimum_score == null;
+                      return (
                         <div
-                          className={styles.scoreChoices}
-                          role="radiogroup"
-                          aria-label={`Score for ${score.text}`}
+                          className={`${styles.scoreRow} ${titleRow ? styles.scoreTitleRow : styles.scoreItemRow}`}
+                          key={score.line_item_id}
                         >
-                          {[1, 2, 3, 4, 5].map((value) => (
-                            <button
-                              className={
-                                score.score === value
-                                  ? styles.selectedScore
-                                  : ""
-                              }
-                              type="button"
-                              role="radio"
-                              aria-checked={score.score === value}
-                              aria-label={`${value} for ${score.text}`}
-                              key={value}
-                              onClick={() =>
-                                setForm((current) => ({
-                                  ...current,
-                                  scores: current.scores.map((item, index) =>
-                                    index === scoreIndex
-                                      ? { ...item, score: value }
-                                      : item,
-                                  ),
-                                }))
-                              }
+                          <div>
+                            <strong>
+                              {titleRow
+                                ? score.text
+                                : `${score.position}. ${score.text}`}
+                            </strong>
+                            {titleRow ? null : (
+                              <small>Minimum {score.minimum_score}</small>
+                            )}
+                          </div>
+                          {titleRow ? null : (
+                            <div
+                              className={styles.scoreChoices}
+                              role="radiogroup"
+                              aria-label={`Score for ${score.text}`}
                             >
-                              {value}
-                            </button>
-                          ))}
+                              {[1, 2, 3, 4, 5].map((value) => (
+                                <button
+                                  className={
+                                    score.score === value
+                                      ? styles.selectedScore
+                                      : ""
+                                  }
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={score.score === value}
+                                  aria-label={`${value} for ${score.text}`}
+                                  key={value}
+                                  onClick={() =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      scores: current.scores.map(
+                                        (item, index) =>
+                                          index === scoreIndex
+                                            ? { ...item, score: value }
+                                            : item,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  {value}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}

@@ -66,6 +66,21 @@
 .scoreRow:last-child {
   border-bottom: 0;
 }
+.scoreItemRow {
+  background: #fff;
+}
+.scoreTitleRow {
+  grid-template-columns: 1fr;
+  padding-block: 0.6rem;
+  border-color: #bfdbfe;
+  background: #dbeafe;
+}
+.scoreTitleRow strong {
+  color: #1e3a8a;
+  font-size: 0.8rem;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
 .scoreRow strong {
   display: block;
   color: #0f172a;
@@ -242,6 +257,14 @@
     font-size: 6.2pt;
     font-weight: 700;
     line-height: 1;
+  }
+  .printGroupRow .printInstructorGroup {
+    position: relative;
+    z-index: 1;
+    height: 0.42in;
+    margin-bottom: -0.25in;
+    border-bottom: 1px solid #111;
+    background: #fff;
   }
   .printLabelRow {
     height: 0.25in;
