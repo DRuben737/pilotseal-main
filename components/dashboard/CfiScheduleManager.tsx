@@ -927,6 +927,14 @@ export default function CfiScheduleManager() {
     lessonDragCancelled.current = false;
   }
 
+  function canSwapWithEntry(entry: ScheduleEntry) {
+    return (
+      entry.entry_type === "lesson" &&
+      entry.status === "scheduled" &&
+      entry.can_edit !== false
+    );
+  }
+
   function lessonEditOperation(entry: ScheduleEntry): ScheduleOperation {
     return {
       type: "edit",
@@ -959,19 +967,17 @@ export default function CfiScheduleManager() {
       return;
     }
     const next = moveScheduleLesson(entries, sourceId, startAt);
-    if (scheduleConflictsForLesson(next, sourceId).length) {
-      setError(
-        "That position overlaps another lesson. Move it before or after a different lesson.",
-      );
-      resetLessonDrag();
-      return;
-    }
     const moved = next.find((entry) => entry.id === sourceId);
     if (!moved) return;
+    const conflictCount = scheduleConflictsForLesson(next, sourceId).length;
     stageOperations([...operations, lessonEditOperation(moved)]);
     resetLessonDrag();
     setError("");
-    setMessage(message);
+    setMessage(
+      conflictCount
+        ? `${message} ${conflictCount} conflict${conflictCount === 1 ? "" : "s"} to review.`
+        : message,
+    );
   }
 
   function moveLessonToDate(sourceId: string, date: string) {
@@ -1027,9 +1033,9 @@ export default function CfiScheduleManager() {
           clientY,
           rect.top,
           rect.height,
-          target.entry_type === "lesson",
+          canSwapWithEntry(target),
         );
-        if (mode === "swap" && target.entry_type === "lesson")
+        if (mode === "swap" && canSwapWithEntry(target))
           void swapLessons(sourceId, target.id);
         else
           moveLessonRelative(
@@ -1061,7 +1067,7 @@ export default function CfiScheduleManager() {
     if (pending.id === sourceId) return false;
     const target = entries.find((entry) => entry.id === pending.id);
     if (!target) return false;
-    if (pending.mode === "swap" && target.entry_type === "lesson")
+    if (pending.mode === "swap" && canSwapWithEntry(target))
       void swapLessons(sourceId, target.id);
     else
       moveLessonRelative(
@@ -1078,13 +1084,6 @@ export default function CfiScheduleManager() {
     setError("");
     try {
       const next = swapScheduleLessons(entries, sourceId, targetId);
-      if (scheduleHasOverlap(next)) {
-        setError(
-          "These lesson lengths do not fit cleanly in each other's positions. Edit one lesson first, then try the swap again.",
-        );
-        setLessonDropTarget(null);
-        return;
-      }
       const swappedEntries = scheduleChanges(entries, next).map(
         (change) => change.after,
       );
@@ -1109,6 +1108,7 @@ export default function CfiScheduleManager() {
       );
     } catch (failure) {
       setError(getErrorMessage(failure, "Unable to swap these lessons."));
+      resetLessonDrag();
     }
   }
 
@@ -1868,6 +1868,11 @@ export default function CfiScheduleManager() {
     ) {
       warnings.push("This day's lessons exceed your total teaching hours.");
     }
+    for (const conflict of scheduleConflictsForLesson(schedule, entry.id)) {
+      warnings.push(
+        `Overlaps ${conflict.student_name ?? "another lesson"} (${formatTime(conflict.start_at)}–${formatTime(conflict.end_at)}).`,
+      );
+    }
     return warnings;
   }
 
@@ -1885,15 +1890,6 @@ export default function CfiScheduleManager() {
     if (!lesson.studentUserId || !lesson.date || !lesson.start) return;
     try {
       const operation = lessonOperation(crypto.randomUUID());
-      const next = applyScheduleOperations(entries, [operation]);
-      const editedId =
-        operation.type === "add" ? operation.entry.id : operation.id;
-      if (scheduleConflictsForLesson(next, editedId).length) {
-        setError(
-          "This time overlaps another lesson. Edit the affected lesson below, then save this one.",
-        );
-        return;
-      }
       const warnings = calculateLessonWarnings();
       if (warnings.length && !force) {
         setLessonWarnings(warnings);
@@ -3103,7 +3099,7 @@ export default function CfiScheduleManager() {
                         ? lessonDropTarget.mode
                         : null;
                     const className = `${styles.entry} ${entry.entry_type === "unavailable" ? (entry.unavailable_kind === "aircraft" ? styles.aircraftUnavailable : styles.busy) : entry.lesson_kind === "ground" ? styles.ground : entry.lesson_kind === "solo" ? styles.solo : styles.flight} ${entry.aircraft_status && entry.aircraft_status !== "available" ? styles.aircraftStatusWarning : ""} ${dropMode === "swap" ? styles.swapTarget : dropMode === "before" ? styles.dropBefore : dropMode === "after" ? styles.dropAfter : ""}`;
-                    const canSwapEntry =
+                    const canDragEntry =
                       isCfiView &&
                       entry.entry_type === "lesson" &&
                       entry.status === "scheduled" &&
@@ -3117,7 +3113,7 @@ export default function CfiScheduleManager() {
                         className={className}
                         data-schedule-entry-id={entry.id}
                         disabled={!weekReady || saving}
-                        draggable={canSwapEntry && !saving}
+                        draggable={canDragEntry && !saving}
                         data-drop-label={
                           dropMode
                             ? dropMode === "swap"
@@ -3128,12 +3124,12 @@ export default function CfiScheduleManager() {
                             : undefined
                         }
                         title={
-                          canSwapEntry
+                          canDragEntry
                             ? "Drag to another day, or before, onto, or after an entry"
                             : undefined
                         }
                         onDragStart={(event) => {
-                          if (!canSwapEntry) {
+                          if (!canDragEntry) {
                             event.preventDefault();
                             return;
                           }
@@ -3162,7 +3158,7 @@ export default function CfiScheduleManager() {
                               event.clientY,
                               rect.top,
                               rect.height,
-                              entry.entry_type === "lesson",
+                              canSwapWithEntry(entry),
                             ),
                           } as const;
                           pendingLessonDrop.current = {
@@ -3184,9 +3180,9 @@ export default function CfiScheduleManager() {
                             event.clientY,
                             rect.top,
                             rect.height,
-                            entry.entry_type === "lesson",
+                            canSwapWithEntry(entry),
                           );
-                          if (mode === "swap" && entry.entry_type === "lesson")
+                          if (mode === "swap" && canSwapWithEntry(entry))
                             void swapLessons(sourceId, entry.id);
                           else
                             moveLessonRelative(
@@ -4787,8 +4783,7 @@ export default function CfiScheduleManager() {
             disabled={
               saving ||
               !lesson.studentUserId ||
-              (lesson.kind === "solo" && !lesson.aircraftId) ||
-              lessonConflicts.length > 0
+              (lesson.kind === "solo" && !lesson.aircraftId)
             }
             onClick={() => void saveLesson(lessonWarnings.length > 0)}
           >

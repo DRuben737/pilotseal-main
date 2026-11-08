@@ -58,7 +58,10 @@ assert.equal(Date.parse(swapped.find(e => e.id === 'a').end_at) - Date.parse(swa
 assert.equal(swapped.find(e => e.id === 'a').lesson_kind, a.lesson_kind, 'lesson details stay with the student');
 assert.equal(scheduleChanges(original, swapped).length, 2, 'a swap publishes exactly two edits');
 assert.throws(() => swapScheduleLessons(original, 'a', 'a'), /different lessons/);
-assert.throws(() => swapScheduleLessons([...original, { ...c, id:'same-student', student_user_id:'a' }], 'a', 'same-student'), /different students/);
+const sameStudentTarget={...c,id:'same-student',student_user_id:'a'};
+const sameStudentSwap=swapScheduleLessons([...original,sameStudentTarget],'a','same-student');
+assert.equal(sameStudentSwap.find(e=>e.id==='a').start_at,new Date(sameStudentTarget.start_at).toISOString(),'the same student can swap two lessons');
+assert.equal(sameStudentSwap.find(e=>e.id==='same-student').start_at,new Date(a.start_at).toISOString(),'both same-student lesson positions are exchanged');
 const movedToNextDay=moveScheduleLesson(original,'a','2026-09-15T13:00:00.000Z');
 assert.equal(movedToNextDay.find(e=>e.id==='a').start_at,'2026-09-15T13:00:00.000Z','a lesson can move to another date');
 assert.equal(Date.parse(movedToNextDay.find(e=>e.id==='a').end_at)-Date.parse(movedToNextDay.find(e=>e.id==='a').start_at),Date.parse(a.end_at)-Date.parse(a.start_at),'moving keeps the lesson duration');
@@ -76,7 +79,10 @@ assert.equal(scheduleHasOverlap([{...delegated,student_user_id:'same-student'},{
 // Pure scheduling checks: no database or network calls.
 const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.meta.url), 'utf8'))
   .replace('import { getSupabaseClient } from "@/lib/supabase";', 'const getSupabaseClient = () => { throw new Error("Network access is forbidden in this test"); };')
-  .replace(/import \{\s*fetchScheduleTrainingSubjects,\s*type ScheduleTrainingSubject,\s*\} from "@\/lib\/training-guide";/, 'const fetchScheduleTrainingSubjects = async () => [];');
+  .replace(
+    /import \{\s*fetchScheduleTrainingCourseModules,\s*fetchScheduleTrainingSubjects,\s*type ScheduleTrainingCourseModule,\s*type ScheduleTrainingSubject,\s*\} from "@\/lib\/training-guide";/,
+    'const fetchScheduleTrainingCourseModules = async () => [];\nconst fetchScheduleTrainingSubjects = async () => [];',
+  );
 const scheduleCompiled = ts.transpileModule(scheduleSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { availabilityEndToMinutes, defaultTeachingRules, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd, normalizeAvailabilityTimeRows } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
 assert.equal(availabilityEndToMinutes('00:00'),1440,'native midnight end time saves as the end of the day');

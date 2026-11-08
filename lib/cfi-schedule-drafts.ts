@@ -181,8 +181,6 @@ export function swapScheduleLessons(
     throw new Error(
       "One of these lessons is no longer available. Refresh and try again.",
     );
-  if (source.student_user_id === target.student_user_id)
-    throw new Error("Choose lessons for two different students.");
 
   const moveTo = (entry: ScheduleEntry, startAt: string) => {
     const duration = Date.parse(entry.end_at) - Date.parse(entry.start_at);
