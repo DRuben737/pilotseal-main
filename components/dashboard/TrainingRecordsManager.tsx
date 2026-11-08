@@ -884,7 +884,7 @@ export default function TrainingRecordsManager({
       setBusy(false);
     }
   }
-  function printRecords(studentId: string) {
+  async function printRecords(studentId: string) {
     if (!studentId) return;
     flushSync(() => setPrintStudentId(studentId));
     document.body.classList.add("training-record-printing");
@@ -893,8 +893,35 @@ export default function TrainingRecordsManager({
       setPrintStudentId("");
     };
     window.addEventListener("afterprint", cleanup, { once: true });
+    const printLogo = document.querySelector<HTMLImageElement>(
+      `.${styles.printOnly} img[alt="USATS"]`,
+    );
+    if (printLogo) {
+      if (!printLogo.complete) {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            printLogo.addEventListener("load", () => resolve(), {
+              once: true,
+            });
+            printLogo.addEventListener("error", () => resolve(), {
+              once: true,
+            });
+          }),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 5000)),
+        ]);
+      }
+      try {
+        await printLogo.decode();
+      } catch {
+        // Continue to the print dialog if the browser has already decoded it.
+      }
+    }
+    await new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(() => resolve()),
+      ),
+    );
     window.print();
-    window.setTimeout(cleanup, 1500);
   }
   function toggleStudent(studentId: string) {
     setExpandedStudents((current) => {
