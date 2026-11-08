@@ -287,11 +287,17 @@
   }
   .printModuleTitle {
     display: grid;
+    grid-template-rows: auto 1fr;
     place-items: center;
+    padding: 0.08in 0 0.04in;
     border-right: 1px solid #111;
     font-size: 7.2pt;
     font-weight: 700;
     text-align: center;
+  }
+  .printModuleTitle strong {
+    align-self: center;
+    font-size: 12pt;
   }
   .printScoreRows {
     border-right: 1px solid #111;

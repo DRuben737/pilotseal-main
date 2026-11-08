@@ -249,20 +249,19 @@ function EvaluationGrid({ record }: { record: TrainingRecord }) {
     ],
   ];
   const srm = record.scores.find((score) => /SRM|CRM/i.test(score.text));
-  const moduleScores = record.scores.filter(
-    (score) => score.score != null && score !== srm,
+  const scoresByPosition = new Map(
+    record.scores
+      .filter((score) => score !== srm && score.score != null)
+      .map((score) => [score.position, score.score]),
   );
-  const moduleScore = moduleScores.length
-    ? (
-        moduleScores.reduce((total, score) => total + (score.score ?? 0), 0) /
-        moduleScores.length
-      ).toFixed(1)
-    : "";
   return (
     <div className={styles.printEvaluation}>
       <div className={styles.printModuleTitle}>
-        Module
-        <br />#
+        <span>
+          Module
+          <br />#
+        </span>
+        <strong>{record.module_number}</strong>
       </div>
       <div className={styles.printScoreRows}>
         {positions.map((row, rowIndex) => (
@@ -275,8 +274,8 @@ function EvaluationGrid({ record }: { record: TrainingRecord }) {
                     : ""
                   : position === "SRM/CRM"
                     ? (srm?.score ?? "")
-                    : position === record.module_number
-                      ? moduleScore
+                    : typeof position === "number"
+                      ? (scoresByPosition.get(position) ?? "")
                       : "";
               return (
                 <div
@@ -332,8 +331,10 @@ function EmptyPrintLog({ showHeader }: { showHeader: boolean }) {
       </div>
       <div className={styles.printEvaluation}>
         <div className={styles.printModuleTitle}>
-          Module
-          <br />#
+          <span>
+            Module
+            <br />#
+          </span>
         </div>
         <div className={styles.printScoreRows}>
           {positions.map((row, rowIndex) => (
@@ -494,7 +495,7 @@ function TrainingRecordPrint({ records }: { records: TrainingRecord[] }) {
           >
             <header className={styles.printHeader}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/usats-training-record-logo.svg" alt="USATS" />
+              <img src="/brand/usats-training-record-logo.png" alt="USATS" />
               <h1>TRAINING RECORD</h1>
               <span />
             </header>
@@ -571,6 +572,9 @@ export default function TrainingRecordsManager({
   const [courseFilter, setCourseFilter] = useState("");
   const [printStudentId, setPrintStudentId] = useState("");
   const [schedulePrefill, setSchedulePrefill] = useState(false);
+  const [expandedStudents, setExpandedStudents] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   async function reload() {
     if (!session?.user?.id || !activeOrganizationId) return;
@@ -891,6 +895,14 @@ export default function TrainingRecordsManager({
     window.addEventListener("afterprint", cleanup, { once: true });
     window.print();
     window.setTimeout(cleanup, 1500);
+  }
+  function toggleStudent(studentId: string) {
+    setExpandedStudents((current) => {
+      const next = new Set(current);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      return next;
+    });
   }
 
   return (
@@ -1391,81 +1403,117 @@ export default function TrainingRecordsManager({
                   No training records.
                 </p>
               ) : (
-                recordGroups.map(([studentId, studentRecords]) => (
-                  <section
-                    className="overflow-hidden border border-slate-200 bg-white"
-                    key={studentId}
-                  >
-                    <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
-                      <div>
-                        <h2 className="text-sm font-semibold text-slate-950">
-                          {studentRecords[0].student_name}
-                        </h2>
-                        <p className="text-xs text-slate-500">
-                          {studentRecords.length} log
-                          {studentRecords.length === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                      <button
-                        className="secondary-button cursor-pointer"
-                        type="button"
-                        onClick={() => printRecords(studentId)}
+                recordGroups.map(([studentId, studentRecords]) => {
+                  const expanded = expandedStudents.has(studentId);
+                  const moduleNumbers = Array.from(
+                    new Set(
+                      studentRecords.map((record) => record.module_number),
+                    ),
+                  ).sort((left, right) => left - right);
+                  const detailsId = `training-records-${studentId}`;
+                  return (
+                    <section
+                      className="overflow-hidden border border-slate-200 bg-white"
+                      key={studentId}
+                    >
+                      <header
+                        className={`flex items-center justify-between gap-3 bg-slate-50 px-4 py-2.5 ${expanded ? "border-b border-slate-200" : ""}`}
                       >
-                        Print student
-                      </button>
-                    </header>
-                    <div className="divide-y divide-slate-200">
-                      {studentRecords.map((record) => (
-                        <article
-                          className="grid gap-3 px-4 py-3 md:grid-cols-[1fr_auto] md:items-center"
-                          key={record.id}
+                        <button
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={detailsId}
+                          onClick={() => toggleStudent(studentId)}
                         >
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <strong className="text-sm text-slate-950">
-                                {record.student_name}
-                              </strong>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${record.final_status === "completed" ? "bg-emerald-100 text-emerald-800" : record.final_status === "unsatisfactory" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}
-                              >
-                                {record.final_status
-                                  ? FINAL_LABELS[record.final_status]
-                                  : "Draft"}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-sm text-slate-700">
-                              {record.course_title} · Stage{" "}
-                              {record.stage_number} · Module{" "}
-                              {record.module_number}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {displayDate(record.lesson_date)} ·{" "}
-                              {record.instructor_name} ·{" "}
-                              {record.flight_duration.toFixed(1)} hr
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              className="secondary-button cursor-pointer"
-                              type="button"
-                              onClick={() => editRecord(record)}
+                          <span
+                            className={`text-xs text-slate-500 transition-transform ${expanded ? "rotate-90" : ""}`}
+                            aria-hidden="true"
+                          >
+                            ▶
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-slate-950">
+                              {studentRecords[0].student_name}
+                            </span>
+                            <span className="mt-1 flex flex-wrap gap-1.5">
+                              {moduleNumbers.map((moduleNumber) => (
+                                <span
+                                  className="border border-slate-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-700"
+                                  key={moduleNumber}
+                                >
+                                  M{moduleNumber}
+                                </span>
+                              ))}
+                            </span>
+                          </span>
+                        </button>
+                        <button
+                          className="secondary-button shrink-0 cursor-pointer"
+                          type="button"
+                          onClick={() => printRecords(studentId)}
+                        >
+                          Print student
+                        </button>
+                      </header>
+                      {expanded ? (
+                        <div
+                          className="divide-y divide-slate-200"
+                          id={detailsId}
+                        >
+                          {studentRecords.map((record) => (
+                            <article
+                              className="grid gap-3 px-4 py-3 md:grid-cols-[1fr_auto] md:items-center"
+                              key={record.id}
                             >
-                              Edit
-                            </button>
-                            <button
-                              className="secondary-button cursor-pointer text-red-700"
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void removeRecord(record)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                ))
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <strong className="text-sm text-slate-950">
+                                    {record.student_name}
+                                  </strong>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${record.final_status === "completed" ? "bg-emerald-100 text-emerald-800" : record.final_status === "unsatisfactory" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}
+                                  >
+                                    {record.final_status
+                                      ? FINAL_LABELS[record.final_status]
+                                      : "Draft"}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-sm text-slate-700">
+                                  {record.course_title} · Stage{" "}
+                                  {record.stage_number} · Module{" "}
+                                  {record.module_number}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {displayDate(record.lesson_date)} ·{" "}
+                                  {record.instructor_name} ·{" "}
+                                  {record.flight_duration.toFixed(1)} hr
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  className="secondary-button cursor-pointer"
+                                  type="button"
+                                  onClick={() => editRecord(record)}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="secondary-button cursor-pointer text-red-700"
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => void removeRecord(record)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : null}
+                    </section>
+                  );
+                })
               )}
             </section>
           </>
