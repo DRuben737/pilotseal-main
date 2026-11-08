@@ -665,14 +665,16 @@ export default function TrainingRecordsManager({
   const groundSelected = isGroundModule(selectedModule);
   const visibleRecords = useMemo(
     () =>
-      records.filter(
-        (record) =>
-          (!studentQuery.trim() ||
-            record.student_name
-              .toLocaleLowerCase()
-              .includes(studentQuery.trim().toLocaleLowerCase())) &&
-          (!courseFilter || record.course_id === courseFilter),
-      ),
+      courseFilter
+        ? records.filter(
+            (record) =>
+              (!studentQuery.trim() ||
+                record.student_name
+                  .toLocaleLowerCase()
+                  .includes(studentQuery.trim().toLocaleLowerCase())) &&
+              record.course_id === courseFilter,
+          )
+        : [],
     [courseFilter, records, studentQuery],
   );
   const recordGroups = useMemo(() => {
@@ -1463,7 +1465,7 @@ export default function TrainingRecordsManager({
                   value={courseFilter}
                   onChange={(event) => setCourseFilter(event.target.value)}
                 >
-                  <option value="">All courses</option>
+                  <option value="">Select course</option>
                   {Array.from(
                     new Map(
                       records.map((record) => [
@@ -1479,99 +1481,101 @@ export default function TrainingRecordsManager({
                 </select>
               </label>
             </section>
-            <section className="mt-3 grid gap-2">
-              {loading ? (
-                <p className="p-5 text-sm text-slate-600">Loading…</p>
-              ) : !visibleRecords.length ? (
-                <p className="p-5 text-sm text-slate-600">
-                  No training records.
-                </p>
-              ) : (
-                recordGroups.map(([groupKey, studentRecords]) => {
-                  const firstRecord = studentRecords[0];
-                  const expanded = expandedStudents.has(groupKey);
-                  const detailsId = `training-records-${groupKey.replaceAll(":", "-")}`;
-                  return (
-                    <section
-                      className="overflow-hidden border border-slate-200 bg-white"
-                      key={groupKey}
-                    >
-                      <header
-                        className={`flex items-center justify-between gap-3 px-3 py-2 ${expanded ? "border-b border-slate-200 bg-slate-50" : ""}`}
+            {courseFilter ? (
+              <section className="mt-3 grid gap-2">
+                {loading ? (
+                  <p className="p-5 text-sm text-slate-600">Loading…</p>
+                ) : !visibleRecords.length ? (
+                  <p className="p-5 text-sm text-slate-600">
+                    No training records.
+                  </p>
+                ) : (
+                  recordGroups.map(([groupKey, studentRecords]) => {
+                    const firstRecord = studentRecords[0];
+                    const expanded = expandedStudents.has(groupKey);
+                    const detailsId = `training-records-${groupKey.replaceAll(":", "-")}`;
+                    return (
+                      <section
+                        className="overflow-hidden border border-slate-200 bg-white"
+                        key={groupKey}
                       >
-                        <button
-                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
-                          type="button"
-                          aria-expanded={expanded}
-                          aria-controls={detailsId}
-                          onClick={() => toggleStudent(groupKey)}
+                        <header
+                          className={`flex items-center justify-between gap-3 px-3 py-2 ${expanded ? "border-b border-slate-200 bg-slate-50" : ""}`}
                         >
-                          <span
-                            className={`text-xs text-slate-500 transition-transform ${expanded ? "rotate-90" : ""}`}
-                            aria-hidden="true"
+                          <button
+                            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-controls={detailsId}
+                            onClick={() => toggleStudent(groupKey)}
                           >
-                            ▶
-                          </span>
-                          <span className="truncate text-sm font-semibold text-slate-950">
-                            {firstRecord.student_name}
-                          </span>
-                          <span className="border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-800">
-                            {courseCode(firstRecord.course_title)}
-                          </span>
-                        </button>
-                        <button
-                          className="shrink-0 cursor-pointer text-xs font-semibold text-blue-700 hover:text-blue-900"
-                          type="button"
-                          onClick={() =>
-                            printRecords(
-                              firstRecord.student_person_id,
-                              firstRecord.course_id,
-                            )
-                          }
-                        >
-                          Print record
-                        </button>
-                      </header>
-                      {expanded ? (
-                        <div
-                          className="divide-y divide-slate-200"
-                          id={detailsId}
-                        >
-                          {studentRecords.map((record) => (
-                            <article
-                              className="flex items-center justify-between gap-3 px-3 py-2"
-                              key={record.id}
+                            <span
+                              className={`text-xs text-slate-500 transition-transform ${expanded ? "rotate-90" : ""}`}
+                              aria-hidden="true"
                             >
-                              <strong className="text-xs font-semibold text-slate-700">
-                                Stage {record.stage_number} · M
-                                {record.module_number}
-                              </strong>
-                              <div className="flex gap-2">
-                                <button
-                                  className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-blue-700"
-                                  type="button"
-                                  onClick={() => editRecord(record)}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="cursor-pointer text-xs font-semibold text-red-700 hover:text-red-900"
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => void removeRecord(record)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-                      ) : null}
-                    </section>
-                  );
-                })
-              )}
-            </section>
+                              ▶
+                            </span>
+                            <span className="truncate text-sm font-semibold text-slate-950">
+                              {firstRecord.student_name}
+                            </span>
+                            <span className="border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-800">
+                              {courseCode(firstRecord.course_title)}
+                            </span>
+                          </button>
+                          <button
+                            className="shrink-0 cursor-pointer text-xs font-semibold text-blue-700 hover:text-blue-900"
+                            type="button"
+                            onClick={() =>
+                              printRecords(
+                                firstRecord.student_person_id,
+                                firstRecord.course_id,
+                              )
+                            }
+                          >
+                            Print record
+                          </button>
+                        </header>
+                        {expanded ? (
+                          <div
+                            className="divide-y divide-slate-200"
+                            id={detailsId}
+                          >
+                            {studentRecords.map((record) => (
+                              <article
+                                className="flex items-center justify-between gap-3 px-3 py-2"
+                                key={record.id}
+                              >
+                                <strong className="text-xs font-semibold text-slate-700">
+                                  Stage {record.stage_number} · M
+                                  {record.module_number}
+                                </strong>
+                                <div className="flex gap-2">
+                                  <button
+                                    className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-blue-700"
+                                    type="button"
+                                    onClick={() => editRecord(record)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    className="cursor-pointer text-xs font-semibold text-red-700 hover:text-red-900"
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void removeRecord(record)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        ) : null}
+                      </section>
+                    );
+                  })
+                )}
+              </section>
+            ) : null}
           </>
         )}
       </main>
