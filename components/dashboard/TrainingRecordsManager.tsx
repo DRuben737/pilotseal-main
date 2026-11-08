@@ -84,27 +84,42 @@ const PRINT_LABELS = [
   "Initial",
   "Initial",
 ];
+const PRINT_GROUP_CELLS = PRINT_GROUPS.map(([label, span], index, groups) => ({
+  label,
+  span,
+  start:
+    groups
+      .slice(0, index)
+      .reduce((total, [, previousSpan]) => total + previousSpan, 0) + 1,
+}));
 
 function PrintFlightHeader() {
   return (
-    <>
-      <div className={styles.printGroupRow}>
-        {PRINT_GROUPS.map(([label, span], index) => (
+    <div className={styles.printFlightHeader}>
+      {PRINT_GROUP_CELLS.map(({ label, span, start }, index) => (
+        <span
+          className={styles.printGroupCell}
+          style={{
+            gridColumn: `${start} / span ${span}`,
+            gridRow: index === 2 ? "1 / span 2" : "1",
+          }}
+          key={`${label}-${index}`}
+        >
+          {label}
+        </span>
+      ))}
+      {PRINT_LABELS.map((label, index) =>
+        index === 4 ? null : (
           <span
-            className={index === 2 ? styles.printInstructorGroup : undefined}
-            style={{ gridColumn: `span ${span}` }}
+            className={`${styles.printLabelCell} ${index >= 13 && index <= 16 ? styles.printSmallLabel : ""} ${index === 16 ? styles.printDiagonalCell : ""}`}
+            style={{ gridColumn: index + 1, gridRow: 2 }}
             key={`${label}-${index}`}
           >
             {label}
           </span>
-        ))}
-      </div>
-      <div className={styles.printLabelRow}>
-        {PRINT_LABELS.map((label, index) => (
-          <span key={`${label}-${index}`}>{label}</span>
-        ))}
-      </div>
-    </>
+        ),
+      )}
+    </div>
   );
 }
 
@@ -165,9 +180,17 @@ function studentValue(student: OrganizationStudent) {
 function studentName(student: OrganizationStudent) {
   return student.formal_name || student.account_nickname || "Student";
 }
-function displayDate(value: string) {
-  const [year, month, day] = value.split("-");
-  return year && month && day ? `${month}/${day}/${year}` : value;
+function courseCode(title: string) {
+  if (/instrument rating/i.test(title)) return "IR";
+  if (/commercial pilot/i.test(title)) return "CPL";
+  return (
+    title
+      .split(/\s+/)
+      .filter((word) => /^[a-z]/i.test(word))
+      .slice(0, 3)
+      .map((word) => word[0].toUpperCase())
+      .join("") || "COURSE"
+  );
 }
 function chunk<T>(items: T[], size: number) {
   return Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
@@ -579,9 +602,10 @@ export default function TrainingRecordsManager({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [studentFilter, setStudentFilter] = useState("");
+  const [studentQuery, setStudentQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [printStudentId, setPrintStudentId] = useState("");
+  const [printCourseId, setPrintCourseId] = useState("");
   const [schedulePrefill, setSchedulePrefill] = useState(false);
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(
     () => new Set(),
@@ -643,20 +667,33 @@ export default function TrainingRecordsManager({
     () =>
       records.filter(
         (record) =>
-          (!studentFilter || record.student_person_id === studentFilter) &&
+          (!studentQuery.trim() ||
+            record.student_name
+              .toLocaleLowerCase()
+              .includes(studentQuery.trim().toLocaleLowerCase())) &&
           (!courseFilter || record.course_id === courseFilter),
       ),
-    [courseFilter, records, studentFilter],
+    [courseFilter, records, studentQuery],
   );
   const recordGroups = useMemo(() => {
     const groups = new Map<string, TrainingRecord[]>();
     for (const record of visibleRecords) {
-      groups.set(record.student_person_id, [
-        ...(groups.get(record.student_person_id) ?? []),
-        record,
-      ]);
+      const key = `${record.student_person_id}:${record.course_id}`;
+      groups.set(key, [...(groups.get(key) ?? []), record]);
     }
-    return Array.from(groups.entries());
+    for (const group of groups.values()) {
+      group.sort(
+        (left, right) =>
+          left.stage_number - right.stage_number ||
+          left.module_number - right.module_number ||
+          left.lesson_date.localeCompare(right.lesson_date),
+      );
+    }
+    return Array.from(groups.entries()).sort(([, left], [, right]) =>
+      `${left[0].student_name}:${courseCode(left[0].course_title)}`.localeCompare(
+        `${right[0].student_name}:${courseCode(right[0].course_title)}`,
+      ),
+    );
   }, [visibleRecords]);
   const scoreableScores = form.scores.filter(
     (score) => score.minimum_score != null,
@@ -906,13 +943,17 @@ export default function TrainingRecordsManager({
       setBusy(false);
     }
   }
-  async function printRecords(studentId: string) {
-    if (!studentId) return;
-    flushSync(() => setPrintStudentId(studentId));
+  async function printRecords(studentId: string, courseId: string) {
+    if (!studentId || !courseId) return;
+    flushSync(() => {
+      setPrintStudentId(studentId);
+      setPrintCourseId(courseId);
+    });
     document.body.classList.add("training-record-printing");
     const cleanup = () => {
       document.body.classList.remove("training-record-printing");
       setPrintStudentId("");
+      setPrintCourseId("");
     };
     window.addEventListener("afterprint", cleanup, { once: true });
     const printLogo = document.querySelector<HTMLImageElement>(
@@ -945,11 +986,11 @@ export default function TrainingRecordsManager({
     );
     window.print();
   }
-  function toggleStudent(studentId: string) {
+  function toggleStudent(groupKey: string) {
     setExpandedStudents((current) => {
       const next = new Set(current);
-      if (next.has(studentId)) next.delete(studentId);
-      else next.add(studentId);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
       return next;
     });
   }
@@ -969,19 +1010,6 @@ export default function TrainingRecordsManager({
             </h1>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              className="secondary-button cursor-pointer"
-              type="button"
-              disabled={
-                !studentFilter ||
-                !records.some(
-                  (record) => record.student_person_id === studentFilter,
-                )
-              }
-              onClick={() => printRecords(studentFilter)}
-            >
-              Print selected student
-            </button>
             <button
               className="primary-button cursor-pointer"
               type="button"
@@ -1413,30 +1441,24 @@ export default function TrainingRecordsManager({
           </section>
         ) : (
           <>
-            <section className="mt-5 grid gap-3 border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
-              <label className="saas-field">
-                <span>Student</span>
-                <select
-                  value={studentFilter}
-                  onChange={(event) => setStudentFilter(event.target.value)}
-                >
-                  <option value="">All students</option>
-                  {Array.from(
-                    new Map(
-                      records.map((record) => [
-                        record.student_person_id,
-                        record.student_name,
-                      ]),
-                    ).entries(),
-                  ).map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+            <section className="mt-5 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+              <label className={styles.recordSearch}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
+                </svg>
+                <span className="sr-only">Search student</span>
+                <input
+                  type="search"
+                  placeholder="Search student"
+                  value={studentQuery}
+                  onChange={(event) => setStudentQuery(event.target.value)}
+                />
               </label>
-              <label className="saas-field">
-                <span>Course</span>
+              <label className={styles.recordCourseFilter}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 6h16M7 12h10m-7 6h4" />
+                </svg>
+                <span className="sr-only">Filter course</span>
                 <select
                   value={courseFilter}
                   onChange={(event) => setCourseFilter(event.target.value)}
@@ -1451,13 +1473,13 @@ export default function TrainingRecordsManager({
                     ).entries(),
                   ).map(([id, title]) => (
                     <option key={id} value={id}>
-                      {title}
+                      {courseCode(title)}
                     </option>
                   ))}
                 </select>
               </label>
             </section>
-            <section className="mt-4 grid gap-4">
+            <section className="mt-3 grid gap-2">
               {loading ? (
                 <p className="p-5 text-sm text-slate-600">Loading…</p>
               ) : !visibleRecords.length ? (
@@ -1465,28 +1487,24 @@ export default function TrainingRecordsManager({
                   No training records.
                 </p>
               ) : (
-                recordGroups.map(([studentId, studentRecords]) => {
-                  const expanded = expandedStudents.has(studentId);
-                  const moduleNumbers = Array.from(
-                    new Set(
-                      studentRecords.map((record) => record.module_number),
-                    ),
-                  ).sort((left, right) => left - right);
-                  const detailsId = `training-records-${studentId}`;
+                recordGroups.map(([groupKey, studentRecords]) => {
+                  const firstRecord = studentRecords[0];
+                  const expanded = expandedStudents.has(groupKey);
+                  const detailsId = `training-records-${groupKey.replaceAll(":", "-")}`;
                   return (
                     <section
                       className="overflow-hidden border border-slate-200 bg-white"
-                      key={studentId}
+                      key={groupKey}
                     >
                       <header
-                        className={`flex items-center justify-between gap-3 bg-slate-50 px-4 py-2.5 ${expanded ? "border-b border-slate-200" : ""}`}
+                        className={`flex items-center justify-between gap-3 px-3 py-2 ${expanded ? "border-b border-slate-200 bg-slate-50" : ""}`}
                       >
                         <button
-                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
                           type="button"
                           aria-expanded={expanded}
                           aria-controls={detailsId}
-                          onClick={() => toggleStudent(studentId)}
+                          onClick={() => toggleStudent(groupKey)}
                         >
                           <span
                             className={`text-xs text-slate-500 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -1494,28 +1512,24 @@ export default function TrainingRecordsManager({
                           >
                             ▶
                           </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-slate-950">
-                              {studentRecords[0].student_name}
-                            </span>
-                            <span className="mt-1 flex flex-wrap gap-1.5">
-                              {moduleNumbers.map((moduleNumber) => (
-                                <span
-                                  className="border border-slate-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-700"
-                                  key={moduleNumber}
-                                >
-                                  M{moduleNumber}
-                                </span>
-                              ))}
-                            </span>
+                          <span className="truncate text-sm font-semibold text-slate-950">
+                            {firstRecord.student_name}
+                          </span>
+                          <span className="border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-800">
+                            {courseCode(firstRecord.course_title)}
                           </span>
                         </button>
                         <button
-                          className="secondary-button shrink-0 cursor-pointer"
+                          className="shrink-0 cursor-pointer text-xs font-semibold text-blue-700 hover:text-blue-900"
                           type="button"
-                          onClick={() => printRecords(studentId)}
+                          onClick={() =>
+                            printRecords(
+                              firstRecord.student_person_id,
+                              firstRecord.course_id,
+                            )
+                          }
                         >
-                          Print student
+                          Print record
                         </button>
                       </header>
                       {expanded ? (
@@ -1525,43 +1539,23 @@ export default function TrainingRecordsManager({
                         >
                           {studentRecords.map((record) => (
                             <article
-                              className="grid gap-3 px-4 py-3 md:grid-cols-[1fr_auto] md:items-center"
+                              className="flex items-center justify-between gap-3 px-3 py-2"
                               key={record.id}
                             >
-                              <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <strong className="text-sm text-slate-950">
-                                    {record.student_name}
-                                  </strong>
-                                  <span
-                                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${record.final_status === "completed" ? "bg-emerald-100 text-emerald-800" : record.final_status === "unsatisfactory" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}
-                                  >
-                                    {record.final_status
-                                      ? FINAL_LABELS[record.final_status]
-                                      : "Draft"}
-                                  </span>
-                                </div>
-                                <p className="mt-1 text-sm text-slate-700">
-                                  {record.course_title} · Stage{" "}
-                                  {record.stage_number} · Module{" "}
-                                  {record.module_number}
-                                </p>
-                                <p className="mt-1 text-xs text-slate-500">
-                                  {displayDate(record.lesson_date)} ·{" "}
-                                  {record.instructor_name} ·{" "}
-                                  {record.flight_duration.toFixed(1)} hr
-                                </p>
-                              </div>
+                              <strong className="text-xs font-semibold text-slate-700">
+                                Stage {record.stage_number} · M
+                                {record.module_number}
+                              </strong>
                               <div className="flex gap-2">
                                 <button
-                                  className="secondary-button cursor-pointer"
+                                  className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-blue-700"
                                   type="button"
                                   onClick={() => editRecord(record)}
                                 >
                                   Edit
                                 </button>
                                 <button
-                                  className="secondary-button cursor-pointer text-red-700"
+                                  className="cursor-pointer text-xs font-semibold text-red-700 hover:text-red-900"
                                   type="button"
                                   disabled={busy}
                                   onClick={() => void removeRecord(record)}
@@ -1583,9 +1577,11 @@ export default function TrainingRecordsManager({
       </main>
       <TrainingRecordPrint
         records={
-          printStudentId
+          printStudentId && printCourseId
             ? records.filter(
-                (record) => record.student_person_id === printStudentId,
+                (record) =>
+                  record.student_person_id === printStudentId &&
+                  record.course_id === printCourseId,
               )
             : []
         }
