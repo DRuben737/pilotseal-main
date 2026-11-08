@@ -186,6 +186,20 @@ export async function fetchMyTrainingRecords() {
   });
 }
 
+export async function fetchOrganizationTrainingRecords(
+  organizationId: string,
+) {
+  const { data, error } = await getSupabaseClient().rpc(
+    "list_organization_training_records",
+    { p_organization_id: organizationId },
+  );
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []).flatMap((value) => {
+    const record = normalizeRecord(value);
+    return record ? [record] : [];
+  });
+}
+
 export async function fetchTrainingRecordInstructors(
   organizationId: string,
 ): Promise<TrainingRecordInstructor[]> {

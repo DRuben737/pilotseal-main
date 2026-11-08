@@ -102,6 +102,12 @@ export const dashboardOrganizationNavigation: DashboardNavItem[] = [
     access: "organization",
   },
   {
+    href: "/console/organization/training-records",
+    label: "Training Records",
+    access: "organization-manager",
+    organizationPermission: "endorsements",
+  },
+  {
     href: "/console/organization/people",
     label: "Team management",
     access: "organization-manager",

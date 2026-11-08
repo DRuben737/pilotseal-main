@@ -27,6 +27,12 @@ select has_function(
 );
 select has_function(
   'public',
+  'list_organization_training_records',
+  array['uuid'],
+  'organization managers can list organization training records'
+);
+select has_function(
+  'public',
   'delete_my_training_record',
   array['uuid'],
   'instructors can delete their training record'
@@ -89,6 +95,11 @@ insert into public.organization_members (
     current_setting('training_record.organization')::uuid,
     current_setting('training_record.student')::uuid,
     'member', 'student', current_setting('training_record.admin')::uuid
+  ),
+  (
+    current_setting('training_record.organization')::uuid,
+    current_setting('training_record.admin')::uuid,
+    'organization_admin', null, current_setting('training_record.admin')::uuid
   )
 on conflict (organization_id, user_id) do update
 set role = excluded.role, teaching_role = excluded.teaching_role;
@@ -186,6 +197,33 @@ select is(
   jsonb_array_length(public.list_my_training_records()),
   1,
   'the linked student can read the completed record'
+);
+
+select throws_ok(
+  $$ select public.list_organization_training_records(current_setting('training_record.organization')::uuid) $$,
+  '42501',
+  'Only an organization Owner or Admin can view all training records.',
+  'a student cannot list all organization training records'
+);
+
+select set_config('request.jwt.claim.sub', current_setting('training_record.admin'), true);
+
+select is(
+  jsonb_array_length(
+    public.list_organization_training_records(
+      current_setting('training_record.organization')::uuid
+    )
+  ),
+  1,
+  'an organization admin can see the instructor-created training record'
+);
+
+select is(
+  public.list_organization_training_records(
+    current_setting('training_record.organization')::uuid
+  )->0->>'student_name',
+  'Training Record Student',
+  'the organization list returns the student record snapshot'
 );
 
 select throws_ok(

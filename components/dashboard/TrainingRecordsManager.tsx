@@ -17,6 +17,7 @@ import {
 import {
   deleteMyTrainingRecord,
   fetchMyTrainingRecords,
+  fetchOrganizationTrainingRecords,
   fetchTrainingRecordInstructors,
   saveMyTrainingRecord,
   type TrainingRecord,
@@ -540,7 +541,11 @@ function TrainingRecordPrint({ records }: { records: TrainingRecord[] }) {
   );
 }
 
-export default function TrainingRecordsManager() {
+export default function TrainingRecordsManager({
+  organizationView = false,
+}: {
+  organizationView?: boolean;
+}) {
   const searchParams = useSearchParams();
   const prefillApplied = useRef(false);
   const { session } = useAuthSession();
@@ -573,7 +578,9 @@ export default function TrainingRecordsManager() {
     try {
       const [nextRecords, nextCourses, nextStudents, nextInstructors] =
         await Promise.all([
-          fetchMyTrainingRecords(),
+          organizationView
+            ? fetchOrganizationTrainingRecords(activeOrganizationId)
+            : fetchMyTrainingRecords(),
           fetchMyScheduleTrainingCourses(),
           fetchOrganizationStudents(activeOrganizationId),
           fetchTrainingRecordInstructors(activeOrganizationId),
@@ -607,7 +614,7 @@ export default function TrainingRecordsManager() {
     void reload();
     // Reload is intentionally keyed to the signed-in user and selected organization.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, activeOrganizationId]);
+  }, [session?.user?.id, activeOrganizationId, organizationView]);
   const selectedCourse =
     courses.find((course) => course.id === form.course_id) ?? null;
   const selectedModule =
