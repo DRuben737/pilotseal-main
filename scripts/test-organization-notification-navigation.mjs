@@ -11,6 +11,7 @@ const compiledModule = { exports: {} };
 vm.runInThisContext(`(function(module,exports){${code}\n})`)(compiledModule, compiledModule.exports);
 const { getDashboardLinksForWorkspace, getOrganizationDashboardHref, getDashboardWorkspace } = compiledModule.exports;
 const href = '/console/organization/notifications';
+const trainingRecordsHref = '/console/organization/training-records';
 const links = permissions => getDashboardLinksForWorkspace({ workspace: 'organization', enabledFeatureIds: [], organizationPermissions: permissions });
 
 test('organization notifications have a direct organization workspace entry', () => {
@@ -22,6 +23,13 @@ test('organization notifications have a direct organization workspace entry', ()
 });
 test('users without notification permission do not see the publishing entry', () => {
   for (const permissions of [[], ['members'], ['fleet', 'endorsements']]) assert(!links(permissions).some(item => item.href === href));
+});
+test('organization training records are hidden without endorsement-equivalent access', () => {
+  for (const permissions of [[], ['members'], ['fleet'], ['notifications']]) {
+    assert(!links(permissions).some(item => item.href === trainingRecordsHref));
+  }
+  const entry = links(['endorsements']).find(item => item.href === trainingRecordsHref);
+  assert.equal(entry?.organizationPermission, 'endorsements');
 });
 test('notification-only delegated access lands on the notification page', () => {
   assert.equal(getOrganizationDashboardHref(['notifications']), href);

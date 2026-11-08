@@ -80,6 +80,14 @@ function DashboardIcon({ kind }: { kind: string }) {
           <path d="M7.5 7.5h2M14.5 7.5h2M7.5 11h2M14.5 11h2" />
         </svg>
       );
+    case "Training Records":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
+          <rect x="5" y="3.5" width="14" height="17" rx="1.8" />
+          <path d="M9 3.5v2h6v-2M8.5 10h7M8.5 14h4.5M8.5 17h6" />
+          <path d="m15.2 13.6 1.2 1.2 2.2-2.5" />
+        </svg>
+      );
     case "Reports":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={common}>
