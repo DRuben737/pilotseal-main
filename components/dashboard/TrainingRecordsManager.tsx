@@ -1219,39 +1219,38 @@ export default function TrainingRecordsManager({
                           </strong>
                           <small>Minimum {score.minimum_score}</small>
                         </div>
-                        <fieldset>
-                          <legend className="sr-only">
-                            Score for {score.text}
-                          </legend>
+                        <div
+                          className={styles.scoreChoices}
+                          role="radiogroup"
+                          aria-label={`Score for ${score.text}`}
+                        >
                           {[1, 2, 3, 4, 5].map((value) => (
-                            <label
+                            <button
                               className={
                                 score.score === value
                                   ? styles.selectedScore
                                   : ""
                               }
+                              type="button"
+                              role="radio"
+                              aria-checked={score.score === value}
+                              aria-label={`${value} for ${score.text}`}
                               key={value}
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  scores: current.scores.map((item, index) =>
+                                    index === scoreIndex
+                                      ? { ...item, score: value }
+                                      : item,
+                                  ),
+                                }))
+                              }
                             >
-                              <input
-                                className="sr-only"
-                                type="radio"
-                                name={`score-${score.line_item_id}`}
-                                checked={score.score === value}
-                                onChange={() =>
-                                  setForm((current) => ({
-                                    ...current,
-                                    scores: current.scores.map((item, index) =>
-                                      index === scoreIndex
-                                        ? { ...item, score: value }
-                                        : item,
-                                    ),
-                                  }))
-                                }
-                              />
                               {value}
-                            </label>
+                            </button>
                           ))}
-                        </fieldset>
+                        </div>
                       </div>
                     ))}
                   </div>

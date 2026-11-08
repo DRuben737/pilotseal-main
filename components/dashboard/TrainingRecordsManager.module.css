@@ -76,11 +76,11 @@
   margin-top: 0.2rem;
   color: #64748b;
 }
-.scoreRow fieldset {
+.scoreChoices {
   display: flex;
   gap: 0.35rem;
 }
-.scoreRow fieldset label {
+.scoreChoices button {
   display: grid;
   width: 2.25rem;
   height: 2.25rem;
@@ -92,10 +92,15 @@
   font-size: 0.85rem;
   font-weight: 700;
 }
-.scoreRow fieldset label:hover {
+.scoreChoices button:hover {
   background: #f8fafc;
 }
-.scoreRow fieldset .selectedScore {
+.scoreChoices button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.scoreChoices .selectedScore,
+.scoreChoices .selectedScore:hover {
   border-color: #1d4ed8;
   background: #1d4ed8;
   color: #fff;
@@ -111,7 +116,7 @@
   .scoreRow {
     grid-template-columns: 1fr;
   }
-  .scoreRow fieldset label {
+  .scoreChoices button {
     width: 2.5rem;
   }
 }
