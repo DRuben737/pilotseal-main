@@ -98,6 +98,7 @@ import {
   fetchTrainingSubjects,
   trainingCourseCode,
   trainingCourseModuleLabel,
+  trainingCourseTrack,
   type ScheduleTrainingCourse,
   type ScheduleTrainingCourseModule,
   type ScheduleTrainingSubject,
@@ -216,17 +217,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error)
     return String(error.message);
   return fallback;
-}
-
-function trainingCourseTrack(course: ScheduleTrainingCourse) {
-  const identity = `${course.stable_key} ${course.title}`.toLowerCase();
-  if (identity.includes("ground")) return "Ground";
-  if (identity.includes("flight")) return "Flight";
-  return course.modules.some((module) =>
-    module.module_type.toLowerCase().includes("flight"),
-  )
-    ? "Flight"
-    : "Ground";
 }
 
 function DisclosureChevron({ className = "" }: { className?: string }) {
@@ -3669,6 +3659,10 @@ export default function CfiScheduleManager() {
                             : "Course module"}
                         </strong>
                         {isCfiView &&
+                        trainingCourseTrack(snapshot?.course ?? {
+                          stable_key: "",
+                          title: "",
+                        }) === "Flight" &&
                         snapshot?.course.id &&
                         detailEntry.student_user_id ? (
                           <Link

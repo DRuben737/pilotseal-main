@@ -11,6 +11,7 @@ import {
 } from "@/lib/organizations";
 import {
   fetchMyScheduleTrainingCourses,
+  trainingCourseTrack,
   type ScheduleTrainingCourse,
   type TrainingCourseModule,
 } from "@/lib/training-guide";
@@ -594,7 +595,8 @@ export default function TrainingRecordsManager({
         nextCourses.filter(
           (course) =>
             course.organization_id === activeOrganizationId &&
-            /U\.S\. Aviation Training Solutions/i.test(course.provider_name),
+            /U\.S\. Aviation Training Solutions/i.test(course.provider_name) &&
+            trainingCourseTrack(course) === "Flight",
         ),
       );
       setStudents(nextStudents);
@@ -1034,7 +1036,7 @@ export default function TrainingRecordsManager({
                       <option value="">Select course</option>
                       {courses.map((course) => (
                         <option key={course.id} value={course.id}>
-                          {course.title}
+                          {course.title} — Flight
                         </option>
                       ))}
                     </select>

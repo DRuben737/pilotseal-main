@@ -70,6 +70,25 @@ select set_config(
   true
 );
 select set_config(
+  'training_record.ground_course',
+  (
+    select id::text
+    from public.training_courses
+    where stable_key = 'usats.instrument-rating-airplane-single-engine-land.ground.rev-0'
+  ),
+  true
+);
+select set_config(
+  'training_record.ground_module',
+  (
+    select module.id::text
+    from public.training_course_modules module
+    where module.course_id = current_setting('training_record.ground_course')::uuid
+      and module.module_number = 1
+  ),
+  true
+);
+select set_config(
   'training_record.scores',
   (
     select jsonb_agg(jsonb_build_object(
@@ -105,9 +124,14 @@ on conflict (organization_id, user_id) do update
 set role = excluded.role, teaching_role = excluded.teaching_role;
 
 insert into public.organization_training_courses (organization_id, course_id)
-values (
+values
+(
   current_setting('training_record.organization')::uuid,
   current_setting('training_record.course')::uuid
+),
+(
+  current_setting('training_record.organization')::uuid,
+  current_setting('training_record.ground_course')::uuid
 )
 on conflict (organization_id, course_id) do update set enabled = true;
 
@@ -153,6 +177,24 @@ select lives_ok(
     ))
   $$,
   'the assigned instructor saves a fully scored module'
+);
+
+select throws_ok(
+  $$
+    select public.save_my_training_record(jsonb_build_object(
+      'organization_id', current_setting('training_record.organization'),
+      'instructor_user_id', current_setting('training_record.cfi'),
+      'student_person_id', '61000000-0000-4000-8000-000000000001',
+      'course_id', current_setting('training_record.ground_course'),
+      'course_module_id', current_setting('training_record.ground_module'),
+      'lesson_date', '2026-11-05',
+      'final_status', 'incomplete',
+      'scores', '[]'::jsonb
+    ))
+  $$,
+  '22023',
+  'Ground courses require the Ground Training Record format.',
+  'the flight record API rejects a ground-school course'
 );
 
 select is(

@@ -214,6 +214,22 @@ export type TrainingCourse = {
 
 type TrainingCourseIdentity = Pick<TrainingCourse, "stable_key" | "title">;
 
+export function trainingCourseTrack(
+  course: TrainingCourseIdentity &
+    Partial<Pick<TrainingCourse, "modules">>,
+): "Ground" | "Flight" {
+  const identity = `${course.stable_key} ${course.title}`.toLowerCase();
+  if (/(^|[.\s-])ground([.\s-]|$)/.test(identity)) return "Ground";
+  if (/(^|[.\s-])flight([.\s-]|$)/.test(identity)) return "Flight";
+  if (
+    course.modules?.some((module) =>
+      module.module_type.toLowerCase().includes("flight"),
+    )
+  )
+    return "Flight";
+  return "Flight";
+}
+
 export function trainingCourseCode(course: TrainingCourseIdentity) {
   const identity = `${course.stable_key} ${course.title}`.toLowerCase();
   if (identity.includes("instrument-rating")) return "IR";
