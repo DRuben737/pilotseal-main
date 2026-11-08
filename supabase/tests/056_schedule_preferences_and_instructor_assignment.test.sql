@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
-select set_config('schedule_collab.cfi',(select id::text from public.profiles where email='instructor.one@example.test'),true);
+select set_config('schedule_collab.cfi',(select id::text from public.profiles where email='cfi@example.test'),true);
 select set_config('schedule_collab.student',(select id::text from public.profiles where email='pilot.one@example.test'),true);
 select set_config('schedule_collab.assigned',(select id::text from public.profiles where email='platform.admin@example.test'),true);
 select set_config('schedule_collab.organization','10000000-0000-4000-8000-000000000001',true);

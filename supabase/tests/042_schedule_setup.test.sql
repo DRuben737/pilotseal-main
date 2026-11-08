@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 select set_config('setup.cfi',(select id::text from public.profiles where email='pilot.one@example.test'),true);
-select set_config('setup.student',(select id::text from public.profiles where email='instructor.one@example.test'),true);
+select set_config('setup.student',(select id::text from public.profiles where email='cfi@example.test'),true);
 select set_config('setup.other',(select id::text from public.profiles where email='platform.admin@example.test'),true);
 select set_config('request.jwt.claim.sub',current_setting('setup.cfi'),true);
 set local role authenticated;

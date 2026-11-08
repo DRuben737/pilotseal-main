@@ -195,7 +195,7 @@ select is(
 reset role;
 select set_config(
   'request.jwt.claim.sub',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 set local role authenticated;

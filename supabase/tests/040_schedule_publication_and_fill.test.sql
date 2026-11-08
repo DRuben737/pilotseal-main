@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(29);
 select set_config('schedule_test.cfi', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
-select set_config('schedule_test.student', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('schedule_test.student', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 select set_config('schedule_test.other', (select id::text from public.profiles where email = 'platform.admin@example.test'), true);
 insert into public.saved_people(id,user_id,role,display_name,cert_number) values
  ('50000000-0000-4000-8000-000000000001',current_setting('schedule_test.cfi')::uuid,'student','Draft student','DRAFT-1'),

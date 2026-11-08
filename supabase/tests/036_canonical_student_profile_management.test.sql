@@ -9,7 +9,7 @@ select has_function('public', 'save_managed_student_profile', array['uuid','uuid
 
 insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values
-  ('46000000-0000-4000-8000-000000000001', (select id from public.profiles where email = 'instructor.one@example.test'), 'student', 'Taylor Formal Pilot', 'OWNER-42'),
+  ('46000000-0000-4000-8000-000000000001', (select id from public.profiles where email = 'cfi@example.test'), 'student', 'Taylor Formal Pilot', 'OWNER-42'),
   ('46000000-0000-4000-8000-000000000002', current_setting('pilotseal_test.student_id')::uuid, 'self', 'TaylorNickname', null);
 update public.profiles set self_person_id = '46000000-0000-4000-8000-000000000002', display_name = 'TaylorNickname'
 where email = 'pilot.one@example.test';
@@ -18,12 +18,12 @@ insert into public.saved_person_certificates (
   certificate_level, ratings, additional_privileges
 ) values (
   '56000000-0000-4000-8000-000000000001',
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   '46000000-0000-4000-8000-000000000001', 'pilot', 'OWNER-42',
   'Private', array['ASEL'], '["Student pilot privileges"]'::jsonb
 );
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select set_config(
   'pilotseal_test.canonical_link_request',
@@ -52,7 +52,7 @@ select is(
   'link merge fills a missing canonical certificate from Saved People'
 );
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.save_managed_student_profile(

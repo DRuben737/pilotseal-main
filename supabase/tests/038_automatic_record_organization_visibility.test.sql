@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(38);
 
-select set_config('pilotseal_test.instructor_id', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('pilotseal_test.instructor_id', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 select set_config('pilotseal_test.student_id', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 
 select has_table('private', 'endorsement_record_organization_access', 'endorsement organization access relation exists');

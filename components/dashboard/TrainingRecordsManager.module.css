@@ -1,0 +1,412 @@
+.screenOnly {
+  display: block;
+}
+.printOnly {
+  display: none;
+}
+
+.stepNav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.stepButton {
+  display: flex;
+  min-height: 3.2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-right: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.stepButton:last-child {
+  border-right: 0;
+}
+.stepButton span {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.7rem;
+}
+.stepActive {
+  color: #1d4ed8;
+  box-shadow: inset 0 -3px #2563eb;
+}
+.stepActive span {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+.stepDone {
+  color: #166534;
+}
+.stepDone span {
+  border-color: #16a34a;
+  color: #166534;
+}
+
+.scoreTable {
+  border: 1px solid #cbd5e1;
+}
+.scoreRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.scoreRow:last-child {
+  border-bottom: 0;
+}
+.scoreRow strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.875rem;
+}
+.scoreRow small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #64748b;
+}
+.scoreRow fieldset {
+  display: flex;
+  gap: 0.35rem;
+}
+.scoreRow fieldset label {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.scoreRow fieldset label:hover {
+  background: #f8fafc;
+}
+.scoreRow fieldset .selectedScore {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .stepButton {
+    min-height: 3.7rem;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.68rem;
+  }
+  .scoreRow {
+    grid-template-columns: 1fr;
+  }
+  .scoreRow fieldset label {
+    width: 2.5rem;
+  }
+}
+
+@media print {
+  @page {
+    size: letter landscape;
+    margin: 0.15in 0.55in 0.25in;
+  }
+
+  :global(body.training-record-printing) * {
+    visibility: hidden !important;
+  }
+  :global(body.training-record-printing) .printOnly,
+  :global(body.training-record-printing) .printOnly * {
+    visibility: visible !important;
+  }
+  :global(body.training-record-printing) {
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  .screenOnly {
+    display: none !important;
+  }
+  .printOnly {
+    display: block !important;
+    position: absolute;
+    z-index: 2147483647;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #111;
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    print-color-adjust: exact;
+  }
+  .printPage {
+    box-sizing: border-box;
+    width: 100%;
+    height: 8.1in;
+    overflow: hidden;
+    break-after: page;
+  }
+  .printPage:last-child {
+    break-after: auto;
+  }
+  .printHeader {
+    position: relative;
+    height: 0.74in;
+  }
+  .printHeader img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1.9in;
+    height: 0.74in;
+    object-fit: contain;
+    object-position: left center;
+  }
+  .printHeader h1 {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-size: 14pt;
+    font-weight: 800;
+  }
+  .printMeta {
+    display: grid;
+    grid-template-columns: 1.7fr 2.2fr 0.7fr 0.55fr 0.55fr;
+    height: 0.33in;
+    font-size: 8pt;
+  }
+  .printMeta > div {
+    padding: 0.02in 0.05in;
+    white-space: nowrap;
+  }
+  .printMeta strong {
+    font-size: 11.5pt;
+  }
+  .printName {
+    padding-left: 0.12in !important;
+  }
+  .printLogs {
+    border: 1.2px solid #111;
+    border-bottom: 0;
+  }
+  .printLog {
+    overflow: hidden;
+    border-bottom: 1.2px solid #111;
+    break-inside: avoid;
+  }
+  .printGroupRow,
+  .printLabelRow,
+  .printValueRow {
+    display: grid;
+    grid-template-columns: 0.38fr 0.42fr 0.7fr 0.7fr 1.25fr 0.38fr 0.38fr 0.42fr 0.42fr 0.42fr 0.42fr 0.42fr 0.42fr 0.46fr 0.46fr 0.5fr 0.56fr 1.25fr 0.66fr 0.62fr 0.66fr;
+  }
+  .printGroupRow {
+    height: 0.17in;
+    border-bottom: 1px solid #111;
+  }
+  .printGroupRow span,
+  .printLabelRow span,
+  .printValueRow span {
+    display: grid;
+    min-width: 0;
+    place-items: center;
+    overflow: hidden;
+    border-right: 1px solid #111;
+    text-align: center;
+  }
+  .printGroupRow span:last-child,
+  .printLabelRow span:last-child,
+  .printValueRow span:last-child {
+    border-right: 0;
+  }
+  .printGroupRow span {
+    padding: 0.01in;
+    font-size: 6.2pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .printLabelRow {
+    height: 0.25in;
+    border-bottom: 1px solid #111;
+  }
+  .printLabelRow span {
+    padding: 0.01in;
+    font-size: 5.6pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .printLabelRow span:nth-child(14),
+  .printLabelRow span:nth-child(15),
+  .printLabelRow span:nth-child(16),
+  .printLabelRow span:nth-child(17) {
+    font-size: 4.3pt;
+    letter-spacing: -0.05pt;
+  }
+  .printLabelRow span:nth-child(17),
+  .printValueRow span:nth-child(17) {
+    background: linear-gradient(
+      to bottom right,
+      transparent 49.2%,
+      #111 49.4%,
+      #111 50.6%,
+      transparent 50.8%
+    );
+  }
+  .printValueRow {
+    height: 0.26in;
+    border-bottom: 1.2px solid #111;
+  }
+  .printValueRow span {
+    padding: 0.025in 0.01in;
+    font-size: 6.4pt;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .printEvaluation {
+    display: grid;
+    height: 1.7in;
+    grid-template-columns: 0.42in 1.9in 1fr;
+  }
+  .printModuleTitle {
+    display: grid;
+    place-items: center;
+    border-right: 1px solid #111;
+    font-size: 7.2pt;
+    font-weight: 700;
+    text-align: center;
+  }
+  .printScoreRows {
+    border-right: 1px solid #111;
+  }
+  .printScoreRow {
+    display: grid;
+    height: 0.5667in;
+    grid-template-columns: repeat(10, 1fr);
+  }
+  .printScoreRow + .printScoreRow {
+    border-top: 1px solid #111;
+  }
+  .printScorePair {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    border-right: 1px solid #111;
+    min-width: 0;
+  }
+  .printScorePair:last-child {
+    border-right: 0;
+  }
+  .printFinalPair {
+    grid-column: span 2;
+  }
+  .printScoreCell {
+    display: grid;
+    place-items: center;
+    border-bottom: 1px solid #777;
+    font-size: 5.6pt;
+    font-weight: 700;
+  }
+  .printSrmCell {
+    font-size: 3.8pt;
+    line-height: 0.8;
+  }
+  .printScoreValue {
+    display: grid;
+    place-items: center;
+    font-size: 6.7pt;
+    font-weight: 700;
+  }
+  .printFinalValue {
+    padding: 0.01in;
+    font-size: 4.8pt;
+    line-height: 1;
+    text-align: center;
+  }
+  .printRemarks {
+    overflow: hidden;
+    padding: 0.07in 0.1in;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 0.415in,
+      #777 0.425in,
+      transparent 0.435in
+    );
+    font-size: 6.5pt;
+    line-height: 0.425in;
+    white-space: pre-wrap;
+  }
+  .printTotals {
+    position: relative;
+    display: grid;
+    height: 0.72in;
+    grid-template-rows: repeat(3, 0.22in);
+    border: 0;
+    font-size: 6.1pt;
+  }
+  .printTotalsRow {
+    display: grid;
+    grid-template-columns: 2.55in repeat(13, minmax(0, 1fr)) 0.22in 3.05in;
+  }
+  .printTotalsRow + .printTotalsRow {
+    border-top: 0;
+  }
+  .printTotalsRow strong {
+    padding: 0.035in;
+    border-top: 1px solid #111;
+    border-bottom: 1px solid #111;
+    border-left: 1.2px solid #111;
+    border-right: 1px solid #111;
+    font-size: 8pt;
+  }
+  .printTotalsRow span {
+    display: grid;
+    place-items: center;
+    border-top: 1px solid #111;
+    border-bottom: 1px solid #111;
+    border-right: 1px solid #111;
+  }
+  .printTotalsRow span:last-child {
+    border-right: 1px solid #111;
+  }
+  .printTotalsRow i {
+    border-top: 1px solid #111;
+    border-bottom: 1px solid #111;
+    border-right: 1px solid #111;
+    background: linear-gradient(
+      to bottom right,
+      transparent 48%,
+      #111 48.5%,
+      #111 51.5%,
+      transparent 52%
+    );
+  }
+  .printTotalsRow small {
+    display: flex;
+    align-items: center;
+    padding-left: 0.07in;
+    font-size: 5.3pt;
+    font-style: normal;
+    line-height: 1;
+  }
+  .printFormCode {
+    position: absolute;
+    right: 0.04in;
+    bottom: 0.04in;
+    background: #eee;
+    padding: 0.035in 0.12in;
+    font-size: 6pt;
+  }
+}

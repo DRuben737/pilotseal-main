@@ -9,7 +9,7 @@ select has_function('public', 'create_and_finalize_flight_brief', array['jsonb',
 select has_function('public', 'list_my_linked_person_certificates', array[]::text[], 'linked certificate aggregation RPC exists');
 select has_function('public', 'list_organization_endorsement_records', array['uuid'], 'derived organization endorsement listing RPC exists');
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.save_asr_draft(
@@ -27,7 +27,7 @@ reset role;
 
 insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values
-  ('45000000-0000-4000-8000-000000000001', (select id from public.profiles where email = 'instructor.one@example.test'), 'student', 'Avery Full Legal Name', null),
+  ('45000000-0000-4000-8000-000000000001', (select id from public.profiles where email = 'cfi@example.test'), 'student', 'Avery Full Legal Name', null),
   ('45000000-0000-4000-8000-000000000002', (select id from public.profiles where email = 'pilot.one@example.test'), 'self', 'Student Account Alias', null);
 update public.profiles
 set self_person_id = '45000000-0000-4000-8000-000000000002'
@@ -45,7 +45,7 @@ values (
   '["Private — ASEL"]'::jsonb, array['AMEL']
 );
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.create_endorsement_record(
@@ -83,11 +83,11 @@ reset role;
 
 select is(
   (select user_id from public.endorsement_records where id = '65000000-0000-4000-8000-000000000001'),
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   'linking does not change endorsement ownership'
 );
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select is(
   (select count(*) from public.list_my_linked_person_certificates() where person_id = '45000000-0000-4000-8000-000000000001' and certificate_number = 'PILOT-LINKED-1'),
@@ -136,7 +136,7 @@ select is((select count(*) from public.flight_briefs where aircraft_tail_number 
 select is((select count(*) from public.flight_briefs where aircraft_tail_number = 'NATOMIC' and status = 'draft'), 0::bigint, 'atomic creation retains no half brief');
 reset role;
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select is((select count(*) from public.list_organization_students('10000000-0000-4000-8000-000000000001')), 1::bigint, 'endorsement student picker excludes instructors and administrators');
 reset role;

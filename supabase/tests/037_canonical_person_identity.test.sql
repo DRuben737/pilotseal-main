@@ -19,7 +19,7 @@ insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values
   (
     '47000000-0000-4000-8000-000000000001',
-    (select id from public.profiles where email = 'instructor.one@example.test'),
+    (select id from public.profiles where email = 'cfi@example.test'),
     'student', 'Avery One Person', 'ONE-100'
   ),
   (
@@ -36,14 +36,14 @@ insert into public.saved_person_certificates (
   certificate_level, ratings
 ) values (
   '57000000-0000-4000-8000-000000000001',
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   '47000000-0000-4000-8000-000000000001', 'pilot', 'ONE-100',
   'Private', array['ASEL']
 );
 
 select set_config(
   'request.jwt.claim.sub',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 update public.organization_people
@@ -90,7 +90,7 @@ select is(
 
 select set_config(
   'request.jwt.claim.sub',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 set local role authenticated;
@@ -196,7 +196,7 @@ select set_config(
 
 select set_config(
   'request.jwt.claim.sub',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 set local role authenticated;

@@ -15,7 +15,7 @@ select is((select relrowsecurity from pg_class join pg_namespace on pg_namespace
 select is((select relrowsecurity from pg_class join pg_namespace on pg_namespace.oid = pg_class.relnamespace where pg_namespace.nspname = 'public' and pg_class.relname = 'cfi_schedule_events'), true, 'schedule events use RLS');
 
 select set_config('pilotseal_test.cfi_id', (select id::text from public.profiles where email = 'pilot.one@example.test'), false);
-select set_config('pilotseal_test.student_one_id', (select id::text from public.profiles where email = 'instructor.one@example.test'), false);
+select set_config('pilotseal_test.student_one_id', (select id::text from public.profiles where email = 'cfi@example.test'), false);
 select set_config('pilotseal_test.student_two_id', (select id::text from public.profiles where email = 'platform.admin@example.test'), false);
 
 insert into public.saved_people (id, user_id, role, display_name, cert_number)

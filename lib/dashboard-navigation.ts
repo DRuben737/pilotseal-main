@@ -35,6 +35,11 @@ export const dashboardPrimaryNavigation: DashboardNavItem[] = [
     label: "Training Guide",
     access: "all",
   },
+  {
+    href: "/console/personal/training-records",
+    label: "Training Records",
+    access: "all",
+  },
   { href: "/console/personal/people", label: "People", access: "all" },
   {
     href: "/console/personal/aircraft",

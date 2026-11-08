@@ -34,7 +34,7 @@ select has_function(
 
 select set_config(
   'schedule_course.cfi',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 select set_config(

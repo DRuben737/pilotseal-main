@@ -10,6 +10,8 @@ select has_table(
   'dashboard preferences table exists'
 );
 
+delete from public.dashboard_preferences;
+
 select is(
   (
     select relrowsecurity
@@ -52,7 +54,7 @@ select is(
 reset role;
 select set_config(
   'request.jwt.claim.sub',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 set local role authenticated;
@@ -66,7 +68,7 @@ select is(
 select lives_ok(
   format(
     'insert into public.dashboard_preferences (user_id, quick_action_ids) values (%L, array[''flight_brief''])',
-    (select id::text from public.profiles where email = 'instructor.one@example.test')
+    (select id::text from public.profiles where email = 'cfi@example.test')
   ),
   'second user can independently save dashboard preferences'
 );

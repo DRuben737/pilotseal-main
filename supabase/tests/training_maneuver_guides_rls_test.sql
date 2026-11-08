@@ -7,7 +7,7 @@ select has_table('public', 'instructor_training_maneuver_overrides', 'instructor
 select has_function('private', 'can_read_organization_training_maneuver', array['uuid','uuid'], 'organization maneuver access helper exists');
 select has_function('private', 'can_read_instructor_training_maneuver', array['uuid','uuid','uuid'], 'instructor maneuver access helper exists');
 
-select set_config('maneuver_guide.cfi',(select id::text from public.profiles where email='instructor.one@example.test'),true);
+select set_config('maneuver_guide.cfi',(select id::text from public.profiles where email='cfi@example.test'),true);
 select set_config('maneuver_guide.student',(select id::text from public.profiles where email='pilot.one@example.test'),true);
 select set_config('maneuver_guide.admin',(select id::text from public.profiles where email='platform.admin@example.test'),true);
 select set_config('maneuver_guide.organization','10000000-0000-4000-8000-000000000001',true);

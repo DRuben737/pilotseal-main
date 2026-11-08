@@ -35,13 +35,13 @@ where id = '82000000-0000-4000-8000-000000000042';
 
 select set_config(
   'pilotseal_test.instructor_id',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 select set_config(
   'pilotseal_test.instructor_name',
   (select coalesce(nullif(btrim(display_name), ''), email)
-   from public.profiles where email = 'instructor.one@example.test'),
+   from public.profiles where email = 'cfi@example.test'),
   true
 );
 select set_config(

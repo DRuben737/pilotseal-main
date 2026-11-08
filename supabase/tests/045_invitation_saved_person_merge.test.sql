@@ -4,7 +4,7 @@ select plan(10);
 
 select set_config(
   'pilotseal_test.instructor_id',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 select set_config(

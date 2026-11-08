@@ -24,11 +24,11 @@ select is(
 insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values (
   '49000000-0000-4000-8000-000000000001',
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   'student', 'Jordan Student', 'STU-490'
 );
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.create_student_record_folder('49000000-0000-4000-8000-000000000001')$$,
@@ -140,7 +140,7 @@ insert into public.endorsement_records (
   endorsement_date, template_titles, storage_path, file_size_bytes
 ) values (
   '69000000-0000-4000-8000-000000000001',
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   '49000000-0000-4000-8000-000000000001', 'Jordan Student', 'STU-490',
   'Morgan Testflight', '10/02/2026', array['Trigger test'], 'test/trigger.pdf', 100
 );

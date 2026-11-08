@@ -25,7 +25,7 @@ const cfi = createClient(status.API_URL,status.ANON_KEY ?? status.PUBLISHABLE_KE
 const student = createClient(status.API_URL,status.ANON_KEY ?? status.PUBLISHABLE_KEY,options);
 const unwrap = ({ data,error }) => { if (error) throw new Error(error.message); return data; };
 const cfiAuth = unwrap(await cfi.auth.signInWithPassword({email:'pilot.one@example.test',password:'LocalPilot!2026'}));
-const studentAuth = unwrap(await student.auth.signInWithPassword({email:'instructor.one@example.test',password:'LocalInstructor!2026'}));
+const studentAuth = unwrap(await student.auth.signInWithPassword({email:'cfi@example.test',password:'123456778'}));
 const cfiId = cfiAuth.user.id, studentId = studentAuth.user.id;
 const priorPreferences=unwrap(await admin.from('dashboard_preferences').select('*').in('user_id',[cfiId,studentId]));
 const priorNotificationIds=new Set(unwrap(await admin.from('notifications').select('id').eq('recipient_user_id',studentId).eq('kind','schedule')).map(row=>row.id));
@@ -39,7 +39,11 @@ const blockId='51000000-0000-4000-8000-000000000030';
 const directBlockIds=[];
 const actualDay = new Date(); actualDay.setHours(0,0,0,0);
 const base = new Date(actualDay); base.setDate(base.getDate()-((base.getDay()+6)%7)+2); base.setHours(7,0,0,0);
-if (base < actualDay) base.setTime(actualDay.getTime() + 7 * 60 * 60 * 1000);
+if (base < actualDay) {
+  base.setTime(actualDay.getTime());
+  if (base.getDay() === 0) base.setDate(base.getDate() - 1);
+  base.setHours(7,0,0,0);
+}
 const at = (hour) => { const d=new Date(base);d.setHours(hour,0,0,0);return d.toISOString(); };
 const today=[base.getFullYear(),String(base.getMonth()+1).padStart(2,'0'),String(base.getDate()).padStart(2,'0')].join('-');
 const nextDay=new Date(base);nextDay.setDate(nextDay.getDate()+1);

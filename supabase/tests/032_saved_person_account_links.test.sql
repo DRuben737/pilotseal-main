@@ -49,13 +49,13 @@ insert into public.endorsement_records (
 
 select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 set local role authenticated;
-select lives_ok($$select public.request_saved_person_account_link('40000000-0000-4000-8000-000000000001', 'instructor.one@example.test')$$, 'owner can request a link to a verified account');
+select lives_ok($$select public.request_saved_person_account_link('40000000-0000-4000-8000-000000000001', 'cfi@example.test')$$, 'owner can request a link to a verified account');
 select is((select count(*) from public.saved_person_account_link_requests where saved_person_id = '40000000-0000-4000-8000-000000000001' and status = 'pending'), 1::bigint, 'link stays pending until student accepts');
 select is((select count(*) from public.saved_person_account_links where saved_person_id = '40000000-0000-4000-8000-000000000001'), 0::bigint, 'request does not create a formal link');
 select throws_ok($$select public.request_saved_person_account_link('40000000-0000-4000-8000-000000000001', 'pilot.one@example.test')$$, '22023', 'A saved person cannot be linked to your own account.', 'owners cannot request links to themselves');
 
 reset role;
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select is((select count(*) from public.list_my_saved_person_link_requests() where direction = 'incoming' and status = 'pending'), 1::bigint, 'target sees the pending request');
 select is((select count(*) from public.endorsement_records where id = '60000000-0000-4000-8000-000000000032'), 0::bigint, 'target cannot read historical endorsements before accepting the identity link');
@@ -79,14 +79,14 @@ select is((select count(*) from public.saved_person_account_links), 1::bigint, '
 select is((select count(*) from public.saved_person_account_link_requests where status = 'accepted'), 1::bigint, 'acceptance remains in the audit trail');
 
 reset role;
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok($$select public.unlink_saved_person_account('40000000-0000-4000-8000-000000000001')$$, 'linked student can unlink their identity');
 reset role;
 select is((select count(*) from public.saved_person_account_links), 0::bigint, 'student unlink removes the logical link');
 
 set local role anon;
-select throws_ok($$select public.request_saved_person_account_link('40000000-0000-4000-8000-000000000001', 'instructor.one@example.test')$$, '42501', 'permission denied for function request_saved_person_account_link', 'anonymous callers cannot execute requests');
+select throws_ok($$select public.request_saved_person_account_link('40000000-0000-4000-8000-000000000001', 'cfi@example.test')$$, '42501', 'permission denied for function request_saved_person_account_link', 'anonymous callers cannot execute requests');
 
 select * from finish();
 rollback;

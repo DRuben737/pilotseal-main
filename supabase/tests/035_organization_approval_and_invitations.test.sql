@@ -89,7 +89,7 @@ set local role anon;
 select is((select organization_name from public.get_organization_invitation(current_setting('pilotseal_test.invite_token'))), 'PilotSeal Local Test School', 'anonymous recipient can preview the organization through the unguessable token');
 reset role;
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select throws_ok(
   $$select public.accept_organization_member_invitation(current_setting('pilotseal_test.invite_token'))$$,

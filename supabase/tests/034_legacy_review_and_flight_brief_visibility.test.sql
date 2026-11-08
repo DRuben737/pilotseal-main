@@ -14,7 +14,7 @@ insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values
 (
   '40000000-0000-4000-8000-000000000034',
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   'student', 'Avery Legacy', 'LEGACY-34'
 ),
 (
@@ -30,7 +30,7 @@ where email = 'pilot.one@example.test';
 insert into public.saved_person_account_links (saved_person_id, owner_user_id, linked_user_id)
 values (
   '40000000-0000-4000-8000-000000000034',
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   (select id from public.profiles where email = 'pilot.one@example.test')
 );
 
@@ -39,11 +39,11 @@ insert into public.endorsement_records (
   endorsement_date, template_titles, storage_path, scope_status, created_at
 ) values (
   '60000000-0000-4000-8000-000000000034',
-  (select id from public.profiles where email = 'instructor.one@example.test'),
+  (select id from public.profiles where email = 'cfi@example.test'),
   '10000000-0000-4000-8000-000000000001',
   '40000000-0000-4000-8000-000000000034',
   'Avery Legacy', 'Morgan Testflight', '01/01/2020', array['Legacy test'],
-  (select id::text from public.profiles where email = 'instructor.one@example.test') || '/60000000-0000-4000-8000-000000000034.pdf',
+  (select id::text from public.profiles where email = 'cfi@example.test') || '/60000000-0000-4000-8000-000000000034.pdf',
   'pending_review', '2020-01-01 12:00:00+00'
 );
 
@@ -118,7 +118,7 @@ reset role;
 select is((select organization_id from public.flight_briefs where id = '70000000-0000-4000-8000-000000000035'), null::uuid, 'automatic visibility does not turn an organization into a save destination');
 select is((select count(*) from public.flight_brief_organization_shares where source_brief_id = '70000000-0000-4000-8000-000000000035'), 0::bigint, 'automatic visibility creates no duplicate Flight Brief');
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000034'), 1::bigint, 'organization instructor can read an automatically associated member draft');
 select is((select count(*) from public.flight_briefs where id = '70000000-0000-4000-8000-000000000035'), 1::bigint, 'organization instructor reads the same finalized record rather than a copy');

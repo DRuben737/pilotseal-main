@@ -73,8 +73,8 @@ const syntheticUsers = [
     profileRole: "user",
   },
   {
-    email: "instructor.one@example.test",
-    password: "LocalInstructor!2026",
+    email: "cfi@example.test",
+    password: "123456778",
     displayName: "Morgan Testflight",
     profileRole: "user",
   },
@@ -122,6 +122,8 @@ const [owner, instructor] = seededUsers;
 const organizationId = "10000000-0000-4000-8000-000000000001";
 const modelId = "20000000-0000-4000-8000-000000000001";
 const aircraftId = "30000000-0000-4000-8000-000000000001";
+const instructorPersonId = "62000000-0000-4000-8000-000000000001";
+const instructorCertificateId = "62000000-0000-4000-8000-000000000002";
 
 const operations = [
   admin
@@ -222,6 +224,68 @@ const { error: assignmentError } = await admin
     { onConflict: "aircraft_id,organization_id" },
   );
 if (assignmentError) throw assignmentError;
+
+const instructorSetupOperations = [
+  admin.from("saved_people").upsert(
+    {
+      id: instructorPersonId,
+      user_id: instructor.id,
+      role: "self",
+      display_name: instructor.displayName,
+    },
+    { onConflict: "id" },
+  ),
+  admin.from("saved_person_certificates").upsert(
+    {
+      id: instructorCertificateId,
+      user_id: instructor.id,
+      person_id: instructorPersonId,
+      certificate_type: "flight_instructor",
+      certificate_number: "CFI-LOCAL",
+      ratings: ["ASEL"],
+      last_event_date: new Date().toISOString().slice(0, 10),
+    },
+    { onConflict: "id" },
+  ),
+];
+for (const operation of instructorSetupOperations) {
+  const { error } = await operation;
+  if (error) throw error;
+}
+
+const { error: selfPersonError } = await admin
+  .from("profiles")
+  .update({ self_person_id: instructorPersonId })
+  .eq("id", instructor.id);
+if (selfPersonError) throw selfPersonError;
+
+const { error: preferenceError } = await admin.from("dashboard_preferences").upsert(
+  {
+    user_id: instructor.id,
+    enabled_feature_ids: ["cfi_schedule"],
+  },
+  { onConflict: "user_id" },
+);
+if (preferenceError) throw preferenceError;
+
+const { data: usatsCourse, error: courseError } = await admin
+  .from("training_courses")
+  .select("id")
+  .eq(
+    "stable_key",
+    "usats.instrument-rating-airplane-single-engine-land.rev-0",
+  )
+  .maybeSingle();
+if (courseError) throw courseError;
+if (usatsCourse) {
+  const { error: courseAssignmentError } = await admin
+    .from("organization_training_courses")
+    .upsert(
+      { organization_id: organizationId, course_id: usatsCourse.id },
+      { onConflict: "organization_id,course_id" },
+    );
+  if (courseAssignmentError) throw courseAssignmentError;
+}
 
 console.log(
   "Seeded 3 synthetic local users, 1 organization, 1 model, and 1 aircraft.",

@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 select set_config('guest.cfi',(select id::text from public.profiles where email='pilot.one@example.test'),true);
-select set_config('guest.student',(select id::text from public.profiles where email='instructor.one@example.test'),true);
+select set_config('guest.student',(select id::text from public.profiles where email='cfi@example.test'),true);
 select set_config('guest.other',(select id::text from public.profiles where email='platform.admin@example.test'),true);
 select set_config('guest.auth_count',(select count(*)::text from auth.users),true);
 insert into public.saved_people(id,user_id,role,display_name,cert_number) values

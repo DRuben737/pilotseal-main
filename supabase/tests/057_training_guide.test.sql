@@ -16,7 +16,7 @@ select has_function('public', 'list_my_training_guide_subjects', array['uuid'], 
 select has_function('public', 'get_my_training_guide_subject', array['uuid'], 'student can open an assigned subject');
 select has_function('public', 'save_my_training_guide_progress', array['uuid','text','text[]'], 'student can save a study bookmark');
 
-select set_config('training_guide.cfi',(select id::text from public.profiles where email='instructor.one@example.test'),true);
+select set_config('training_guide.cfi',(select id::text from public.profiles where email='cfi@example.test'),true);
 select set_config('training_guide.student',(select id::text from public.profiles where email='pilot.one@example.test'),true);
 select set_config('training_guide.admin',(select id::text from public.profiles where email='platform.admin@example.test'),true);
 select set_config('training_guide.organization','10000000-0000-4000-8000-000000000001',true);

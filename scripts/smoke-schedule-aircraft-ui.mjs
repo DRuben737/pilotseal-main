@@ -18,7 +18,7 @@ const cfi=createClient(env.API_URL,env.ANON_KEY ?? env.PUBLISHABLE_KEY,options);
 const unwrap=({data,error})=>{if(error) throw new Error(error.message);return data;};
 const auth=unwrap(await cfi.auth.signInWithPassword({email:'pilot.one@example.test',password:'LocalPilot!2026'}));
 const cfiId=auth.user.id;
-const studentId=unwrap(await admin.from('profiles').select('id').eq('email','instructor.one@example.test').single()).id;
+const studentId=unwrap(await admin.from('profiles').select('id').eq('email','cfi@example.test').single()).id;
 const personId='55000000-0000-4000-8000-000000000001';
 const selfId='55000000-0000-4000-8000-000000000002';
 const certId='55000000-0000-4000-8000-000000000003';
@@ -183,7 +183,7 @@ try{
 
   unwrap(await admin.from('organization_members').update({teaching_role:'student'}).eq('organization_id',organizationId).eq('user_id',studentId));
   const studentClient=createClient(env.API_URL,env.ANON_KEY ?? env.PUBLISHABLE_KEY,options);
-  const studentAuth=unwrap(await studentClient.auth.signInWithPassword({email:'instructor.one@example.test',password:'LocalInstructor!2026'}));
+  const studentAuth=unwrap(await studentClient.auth.signInWithPassword({email:'cfi@example.test',password:'123456778'}));
   const studentContext=await browser.newContext({viewport:{width:390,height:900},timezoneId:'America/New_York'});
   await studentContext.route('**/*',route=>isLocal(route.request().url())?route.continue():route.abort());
   await studentContext.addInitScript(({key,value})=>localStorage.setItem(key,value),{key,value:JSON.stringify(studentAuth.session)});

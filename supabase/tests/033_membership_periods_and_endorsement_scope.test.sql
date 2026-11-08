@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(31);
-select set_config('pilotseal_test.instructor_id', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('pilotseal_test.instructor_id', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 select set_config('pilotseal_test.student_id', (select id::text from public.profiles where email = 'pilot.one@example.test'), true);
 
 select has_table('public', 'organization_membership_periods', 'membership periods table exists');
@@ -13,11 +13,11 @@ insert into public.saved_people (id, user_id, role, display_name, cert_number)
 values ('40000000-0000-4000-8000-000000000002', (select id from public.profiles where email = 'pilot.one@example.test'), 'self', 'Avery Testpilot', 'STUDENT-1');
 update public.profiles set self_person_id = '40000000-0000-4000-8000-000000000002' where email = 'pilot.one@example.test';
 insert into public.saved_people (id, user_id, role, display_name, cert_number)
-values ('40000000-0000-4000-8000-000000000003', (select id from public.profiles where email = 'instructor.one@example.test'), 'student', 'Avery Testpilot', 'STUDENT-1');
+values ('40000000-0000-4000-8000-000000000003', (select id from public.profiles where email = 'cfi@example.test'), 'student', 'Avery Testpilot', 'STUDENT-1');
 insert into public.saved_person_account_links (owner_user_id, saved_person_id, linked_user_id)
-values ((select id from public.profiles where email = 'instructor.one@example.test'), '40000000-0000-4000-8000-000000000003', (select id from public.profiles where email = 'pilot.one@example.test'));
+values ((select id from public.profiles where email = 'cfi@example.test'), '40000000-0000-4000-8000-000000000003', (select id from public.profiles where email = 'pilot.one@example.test'));
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.create_endorsement_record(
@@ -41,7 +41,7 @@ reset role;
 select is((select count(*) from public.organization_members where organization_id = '10000000-0000-4000-8000-000000000001' and user_id = (select id from public.profiles where email = 'pilot.one@example.test')), 0::bigint, 'leaving removes current membership');
 select ok((select left_at is not null from public.organization_membership_periods where organization_id = '10000000-0000-4000-8000-000000000001' and user_id = (select id from public.profiles where email = 'pilot.one@example.test')), 'leaving closes the active membership period');
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.create_endorsement_record(
@@ -69,7 +69,7 @@ set local role authenticated;
 select is((select count(*) from public.endorsement_records where id in ('60000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000003')), 3::bigint, 'linked student can read every successfully issued endorsement regardless of organization visibility');
 reset role;
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select set_config('pilotseal_test.rejoin_token', invite_token, true)
@@ -89,7 +89,7 @@ select lives_ok(
 reset role;
 select is((select count(*) from public.organization_membership_periods where organization_id = '10000000-0000-4000-8000-000000000001' and user_id = (select id from public.profiles where email = 'pilot.one@example.test')), 2::bigint, 'rejoining creates a distinct membership period');
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.create_endorsement_record(
@@ -109,7 +109,7 @@ select set_config(
   (select created_at::text from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'),
   true
 );
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$select public.replace_endorsement_record(
@@ -131,7 +131,7 @@ select is(
 );
 select is(
   (select storage_path from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'),
-  (select id::text from public.profiles where email = 'instructor.one@example.test') || '/60000000-0000-4000-8000-000000000001-replacement.pdf',
+  (select id::text from public.profiles where email = 'cfi@example.test') || '/60000000-0000-4000-8000-000000000001-replacement.pdf',
   'replacement switches the active PDF path'
 );
 select is(
@@ -165,7 +165,7 @@ select is(
   'student cannot delete an endorsement issued to them'
 );
 
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'instructor.one@example.test'), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where email = 'cfi@example.test'), true);
 set local role authenticated;
 select lives_ok(
   $$delete from public.endorsement_records where id = '60000000-0000-4000-8000-000000000001'$$,

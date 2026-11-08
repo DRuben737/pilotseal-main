@@ -14,6 +14,14 @@ const USERNAME_EMAIL_DOMAIN = "pilotseal.com";
 function loginEmailFromIdentifier(identifier: string) {
   const normalizedIdentifier = identifier.trim().toLowerCase();
 
+  if (
+    normalizedIdentifier === "cfi" &&
+    typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  ) {
+    return "cfi@example.test";
+  }
+
   return normalizedIdentifier.includes("@")
     ? normalizedIdentifier
     : `${normalizedIdentifier}@${USERNAME_EMAIL_DOMAIN}`;

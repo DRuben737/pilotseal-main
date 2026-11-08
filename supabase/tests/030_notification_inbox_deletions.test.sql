@@ -61,7 +61,7 @@ select is(
 reset role;
 select set_config(
   'request.jwt.claim.sub',
-  (select id::text from public.profiles where email = 'instructor.one@example.test'),
+  (select id::text from public.profiles where email = 'cfi@example.test'),
   true
 );
 set local role authenticated;
@@ -76,7 +76,7 @@ select lives_ok(
   format(
     'insert into public.notification_inbox_deletions (notification_id, user_id) values (%L, %L)',
     '40000000-0000-4000-8000-000000000001',
-    (select id::text from public.profiles where email = 'instructor.one@example.test')
+    (select id::text from public.profiles where email = 'cfi@example.test')
   ),
   'second user can independently delete the same notification'
 );

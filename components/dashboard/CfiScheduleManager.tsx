@@ -181,6 +181,30 @@ function formatDate(input: Date) {
   }).format(input);
 }
 
+function trainingRecordHref(input: {
+  organizationId: string;
+  studentId: string;
+  instructorId: string;
+  courseId: string;
+  moduleId: string;
+  date: string;
+  tailNumber?: string | null;
+  aircraftType?: string | null;
+}) {
+  const params = new URLSearchParams({
+    action: "new",
+    organization: input.organizationId,
+    student: input.studentId,
+    instructor: input.instructorId,
+    course: input.courseId,
+    module: input.moduleId,
+    date: input.date,
+  });
+  if (input.tailNumber) params.set("tail", input.tailNumber);
+  if (input.aircraftType) params.set("type", input.aircraftType);
+  return `/console/personal/training-records?${params.toString()}`;
+}
+
 function formatTime(input: string) {
   return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
@@ -291,7 +315,9 @@ export default function CfiScheduleManager() {
   const [agendaDays, setAgendaDays] = useState(14);
   const [layout, setLayout] = useState<"list" | "calendar">("calendar");
   const layoutWasSelected = useRef(false);
-  const pendingReturn = useRef<{ entryId: string; scrollY: number } | null>(null);
+  const pendingReturn = useRef<{ entryId: string; scrollY: number } | null>(
+    null,
+  );
   const [eligibility, setEligibility] = useState<ScheduleEligibility | null>(
     null,
   );
@@ -850,7 +876,8 @@ export default function CfiScheduleManager() {
         lessonDragCancelled.current = true;
     };
     document.addEventListener("keydown", cancelLessonDrag, true);
-    return () => document.removeEventListener("keydown", cancelLessonDrag, true);
+    return () =>
+      document.removeEventListener("keydown", cancelLessonDrag, true);
   }, []);
 
   useEffect(() => {
@@ -3022,25 +3049,26 @@ export default function CfiScheduleManager() {
                           "1 training subject")
                         : `${entry.training_subjects.length} training subjects`
                       : "";
-                    const courseModuleLabel =
-                      entry.training_course_modules?.length
-                        ? entry.training_course_modules.length === 1
-                          ? (() => {
-                              const snapshot =
-                                entry.training_course_modules?.[0]
-                                  .module_snapshot;
-                              return snapshot
-                                ? trainingCourseModuleLabel(
-                                    snapshot.course,
-                                    snapshot.module,
-                                  )
-                                : "1 course module";
-                            })()
-                          : `${entry.training_course_modules.length} course modules`
-                        : "";
-                    const trainingLabels = [courseModuleLabel, subjectLabel].filter(
-                      Boolean,
-                    );
+                    const courseModuleLabel = entry.training_course_modules
+                      ?.length
+                      ? entry.training_course_modules.length === 1
+                        ? (() => {
+                            const snapshot =
+                              entry.training_course_modules?.[0]
+                                .module_snapshot;
+                            return snapshot
+                              ? trainingCourseModuleLabel(
+                                  snapshot.course,
+                                  snapshot.module,
+                                )
+                              : "1 course module";
+                          })()
+                        : `${entry.training_course_modules.length} course modules`
+                      : "";
+                    const trainingLabels = [
+                      courseModuleLabel,
+                      subjectLabel,
+                    ].filter(Boolean);
                     const assignmentLabel =
                       entry.entry_type !== "lesson"
                         ? ""
@@ -3640,6 +3668,49 @@ export default function CfiScheduleManager() {
                               )
                             : "Course module"}
                         </strong>
+                        {isCfiView &&
+                        snapshot?.course.id &&
+                        detailEntry.student_user_id ? (
+                          <Link
+                            className="mt-2 inline-flex min-h-8 items-center border border-blue-700 px-2.5 text-xs font-semibold text-blue-800 hover:bg-blue-50"
+                            href={trainingRecordHref({
+                              organizationId: item.organization_id,
+                              studentId: detailEntry.student_user_id,
+                              instructorId:
+                                detailEntry.assigned_instructor_user_id ??
+                                detailEntry.scheduled_by_user_id ??
+                                userId,
+                              courseId: snapshot.course.id,
+                              moduleId: item.course_module_id,
+                              date: localDateKey(
+                                new Date(detailEntry.start_at),
+                              ),
+                              tailNumber: detailEntry.aircraft_tail_number,
+                              aircraftType:
+                                aircraft.find(
+                                  (candidate) =>
+                                    candidate.id === detailEntry.aircraft_id,
+                                )?.model_name ?? null,
+                            })}
+                            onClick={() => {
+                              sessionStorage.setItem(
+                                "pilotseal:schedule-return",
+                                JSON.stringify({
+                                  pathname,
+                                  selectedDate,
+                                  layout,
+                                  weekStart: localDateKey(weekStart),
+                                  agendaStart,
+                                  agendaDays,
+                                  entryId: detailEntry.id,
+                                  scrollY: window.scrollY,
+                                }),
+                              );
+                            }}
+                          >
+                            Add training record
+                          </Link>
+                        ) : null}
                         {snapshot?.course.title ? (
                           <span className="mt-1 block text-xs text-slate-500">
                             {snapshot.course.title}
@@ -3690,10 +3761,7 @@ export default function CfiScheduleManager() {
                   {detailEntry.training_subjects.map((item) => {
                     const snapshot = item.subject_snapshot;
                     return (
-                      <div
-                        key={item.subject_id}
-                        className="text-sm"
-                      >
+                      <div key={item.subject_id} className="text-sm">
                         <Link
                           className="flex min-h-11 cursor-pointer items-center justify-between gap-3 border border-slate-200 bg-white px-3 py-2 font-semibold text-blue-800 transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
                           href={`/console/personal/training-guide/${item.subject_id}?instructor=${encodeURIComponent(detailEntry.assigned_instructor_user_id ?? item.instructor_guide_snapshot?.instructor_user_id ?? detailEntry.scheduled_by_user_id ?? "")}${item.organization_id ? `&organization=${encodeURIComponent(item.organization_id)}` : ""}&returnTo=${encodeURIComponent(pathname)}`}
@@ -4507,6 +4575,47 @@ export default function CfiScheduleManager() {
                             ? trainingCourseModuleLabel(course, courseModule)
                             : "Course module"}
                         </strong>
+                        {lesson.id && course ? (
+                          <Link
+                            className="shrink-0 text-xs font-semibold text-blue-800 hover:underline"
+                            href={trainingRecordHref({
+                              organizationId: item.organization_id,
+                              studentId: lesson.studentUserId,
+                              instructorId:
+                                lesson.assignedInstructorId || userId,
+                              courseId: course.id,
+                              moduleId: item.course_module_id,
+                              date: lesson.date,
+                              tailNumber:
+                                aircraft.find(
+                                  (candidate) =>
+                                    candidate.id === lesson.aircraftId,
+                                )?.tail_number ?? null,
+                              aircraftType:
+                                aircraft.find(
+                                  (candidate) =>
+                                    candidate.id === lesson.aircraftId,
+                                )?.model_name ?? null,
+                            })}
+                            onClick={() => {
+                              sessionStorage.setItem(
+                                "pilotseal:schedule-return",
+                                JSON.stringify({
+                                  pathname,
+                                  selectedDate,
+                                  layout,
+                                  weekStart: localDateKey(weekStart),
+                                  agendaStart,
+                                  agendaDays,
+                                  entryId: lesson.id,
+                                  scrollY: window.scrollY,
+                                }),
+                              );
+                            }}
+                          >
+                            Add record
+                          </Link>
+                        ) : null}
                         <button
                           type="button"
                           className="text-xs text-slate-600"
