@@ -123,6 +123,38 @@ insert into public.organization_members (
 on conflict (organization_id, user_id) do update
 set role = excluded.role, teaching_role = excluded.teaching_role;
 
+insert into public.organization_people (
+  organization_id, email, organization_display_name, teaching_role,
+  user_id, status, added_by, linked_at
+)
+select
+  current_setting('training_record.organization')::uuid,
+  profile.email,
+  case profile.id
+    when current_setting('training_record.cfi')::uuid then 'Official Instructor Name'
+    else 'Official Student Name'
+  end,
+  case profile.id
+    when current_setting('training_record.cfi')::uuid then 'instructor'
+    else 'student'
+  end,
+  profile.id,
+  'linked',
+  current_setting('training_record.admin')::uuid,
+  timezone('utc', now())
+from public.profiles profile
+where profile.id in (
+  current_setting('training_record.cfi')::uuid,
+  current_setting('training_record.student')::uuid
+)
+on conflict on constraint organization_people_organization_id_normalized_email_key
+do update set
+  organization_display_name = excluded.organization_display_name,
+  teaching_role = excluded.teaching_role,
+  user_id = excluded.user_id,
+  status = excluded.status,
+  linked_at = excluded.linked_at;
+
 insert into public.organization_training_courses (organization_id, course_id)
 values
 (
@@ -232,6 +264,16 @@ select is(
   4,
   'the saved record contains a snapshot of every Module 1 line item'
 );
+select is(
+  public.list_my_training_records()->0->>'instructor_name',
+  'Official Instructor Name',
+  'the record uses the instructor official organization name instead of a profile nickname'
+);
+select is(
+  public.list_my_training_records()->0->>'student_name',
+  'Official Student Name',
+  'the record uses the student official organization name instead of a profile nickname'
+);
 
 select set_config('request.jwt.claim.sub', current_setting('training_record.student'), true);
 
@@ -244,7 +286,7 @@ select is(
 select throws_ok(
   $$ select public.list_organization_training_records(current_setting('training_record.organization')::uuid) $$,
   '42501',
-  'Only an organization Owner or Admin can view all training records.',
+  'Training record organization access is required.',
   'a student cannot list all organization training records'
 );
 
@@ -264,8 +306,8 @@ select is(
   public.list_organization_training_records(
     current_setting('training_record.organization')::uuid
   )->0->>'student_name',
-  'Training Record Student',
-  'the organization list returns the student record snapshot'
+  'Official Student Name',
+  'the organization list returns the student official name'
 );
 
 select throws_ok(

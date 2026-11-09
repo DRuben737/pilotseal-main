@@ -330,6 +330,26 @@
     font-weight: 500;
     line-height: 1;
   }
+  .printValueRow .printLandingValue {
+    position: relative;
+    display: block;
+    padding: 0;
+  }
+  .printLandingValue b {
+    position: absolute;
+    z-index: 1;
+    font-size: 5.8pt;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .printLandingValue b:first-child {
+    top: 0.035in;
+    left: 0.055in;
+  }
+  .printLandingValue b:last-child {
+    right: 0.055in;
+    bottom: 0.035in;
+  }
   .printEvaluation {
     display: grid;
     height: 1.7in;

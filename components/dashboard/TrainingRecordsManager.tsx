@@ -422,7 +422,7 @@ function PrintLog({
     ["Instrument", record.approaches || ""],
     [
       "Day/Night",
-      `${record.landings_day || ""}/${record.landings_night || ""}`,
+      "",
     ],
     [
       "Route (From / To)",
@@ -436,9 +436,16 @@ function PrintLog({
     <article className={styles.printLog}>
       {showHeader ? <PrintFlightHeader /> : null}
       <div className={styles.printValueRow}>
-        {cells.map(([, value], index) => (
-          <span key={index}>{value}</span>
-        ))}
+        {cells.map(([, value], index) =>
+          index === 16 ? (
+            <span className={styles.printLandingValue} key={index}>
+              <b>{record.landings_day || ""}</b>
+              <b>{record.landings_night || ""}</b>
+            </span>
+          ) : (
+            <span key={index}>{value}</span>
+          ),
+        )}
       </div>
       <EvaluationGrid record={record} />
     </article>
