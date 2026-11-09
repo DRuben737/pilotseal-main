@@ -123,6 +123,20 @@ insert into public.organization_members (
 on conflict (organization_id, user_id) do update
 set role = excluded.role, teaching_role = excluded.teaching_role;
 
+update public.saved_people person
+set display_name = case profile.id
+  when current_setting('training_record.cfi')::uuid then 'Official Instructor Name'
+  else 'Official Student Name'
+end
+from public.profiles profile
+where person.id = profile.self_person_id
+  and person.user_id = profile.id
+  and person.role = 'self'
+  and profile.id in (
+    current_setting('training_record.cfi')::uuid,
+    current_setting('training_record.student')::uuid
+  );
+
 insert into public.organization_people (
   organization_id, email, organization_display_name, teaching_role,
   user_id, status, added_by, linked_at
@@ -131,8 +145,8 @@ select
   current_setting('training_record.organization')::uuid,
   profile.email,
   case profile.id
-    when current_setting('training_record.cfi')::uuid then 'Official Instructor Name'
-    else 'Official Student Name'
+    when current_setting('training_record.cfi')::uuid then 'Instructor Nickname'
+    else 'Student Nickname'
   end,
   case profile.id
     when current_setting('training_record.cfi')::uuid then 'instructor'
@@ -271,8 +285,8 @@ select is(
 );
 select is(
   public.list_my_training_records()->0->>'student_name',
-  'Official Student Name',
-  'the record uses the student official organization name instead of a profile nickname'
+  'Training Record Student',
+  'the record uses the linked student formal name instead of an account nickname'
 );
 
 select set_config('request.jwt.claim.sub', current_setting('training_record.student'), true);
@@ -306,7 +320,7 @@ select is(
   public.list_organization_training_records(
     current_setting('training_record.organization')::uuid
   )->0->>'student_name',
-  'Official Student Name',
+  'Training Record Student',
   'the organization list returns the student official name'
 );
 
