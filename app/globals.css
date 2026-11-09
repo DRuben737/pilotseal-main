@@ -9673,6 +9673,41 @@ summary:focus-visible {
   font-size: 12px;
 }
 
+@media (max-width: 760px) {
+  .admin-dialog,
+  .console-dialog-surface {
+    max-width: 100vw !important;
+    overflow-x: clip;
+    overscroll-behavior-inline: none;
+  }
+
+  .admin-dialog > :is(header, div),
+  .console-dialog-surface > :is(header, div),
+  .admin-dialog :is(form, fieldset, label, section, article, .grid, .flex),
+  .console-dialog-surface :is(form, fieldset, label, section, article, .grid, .flex) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .console-shell :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea
+  ),
+  .admin-dialog :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea
+  ),
+  .console-dialog-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea
+  ) {
+    font-size: 16px;
+  }
+}
+
 @media (min-width: 761px) {
   .console-shell {
     height: 100dvh;

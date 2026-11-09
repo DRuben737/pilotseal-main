@@ -570,7 +570,7 @@ export function QuickEditPopover({
               role="dialog"
               aria-modal="false"
               aria-labelledby={titleId}
-              className="fixed z-[95] w-[min(20rem,calc(100vw-1.5rem))] rounded-sm border border-slate-200 bg-white p-3 shadow-lg"
+              className="console-dialog-surface fixed z-[95] w-[min(20rem,calc(100vw-1.5rem))] rounded-sm border border-slate-200 bg-white p-3 shadow-lg"
               style={position}
             >
               <h2 id={titleId} className="text-sm font-semibold text-slate-950">{label}</h2>

@@ -62,8 +62,25 @@ async function contextFor(session) {
   return {context,page};
 }
 async function menuAction(page, name, menu = "Schedule options") {
+  const notification=page.getByLabel('New notification',{exact:true});
+  if (await notification.isVisible().catch(()=>false)) {
+    await notification.getByRole('button',{name:'Dismiss notification',exact:true}).click();
+  }
   await page.getByRole('button',{name:menu,exact:true}).click();
-  await page.getByRole('menuitem',{name,exact:true}).click();
+  await page.getByRole('menuitem',{name,exact:true}).click({force:true});
+}
+async function assertMobileDialogFits(page, dialog, label) {
+  const metrics=await dialog.evaluate((element)=>({
+    clientWidth:element.clientWidth,
+    scrollWidth:element.scrollWidth,
+    controlFontSizes:Array.from(element.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea'))
+      .filter((control)=>control.getClientRects().length>0)
+      .map((control)=>Number.parseFloat(getComputedStyle(control).fontSize)),
+  }));
+  assert(metrics.scrollWidth<=metrics.clientWidth+1,`${label} stays within its mobile dialog`);
+  assert(metrics.controlFontSizes.length>0,`${label} exposes its form controls`);
+  assert(metrics.controlFontSizes.every((size)=>size>=16),`${label} controls do not trigger iPhone focus zoom`);
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${label} does not widen the page`);
 }
 try {
   if (!skipOnboarding) {
@@ -107,6 +124,23 @@ try {
   await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
   assert.equal(await page.getByLabel('Schedule workspace',{exact:true}).getByRole('heading').count(),0,'no duplicate feature title');
   assert.equal(await page.getByRole('link',{name:'Overview',exact:true}).count(),0,'personal navigation has no redundant Overview');
+  await page.setViewportSize({width:390,height:844});
+  await menuAction(page,'Add lesson','Add to schedule');
+  let mobileDialog=page.getByRole('dialog',{name:'Add lesson',exact:true});
+  await assertMobileDialogFits(page,mobileDialog,'Add lesson');
+  await page.setViewportSize({width:320,height:700});
+  await assertMobileDialogFits(page,mobileDialog,'Add lesson at 320px');
+  await mobileDialog.getByLabel('Close',{exact:true}).click();
+  await page.setViewportSize({width:390,height:844});
+  await menuAction(page,'My teaching time');
+  mobileDialog=page.getByRole('dialog',{name:'My teaching time',exact:true});
+  await assertMobileDialogFits(page,mobileDialog,'Teaching time');
+  await mobileDialog.getByLabel('Close',{exact:true}).click();
+  await menuAction(page,'Auto schedule','Add to schedule');
+  mobileDialog=page.getByRole('dialog',{name:'Automatic scheduling',exact:true});
+  await assertMobileDialogFits(page,mobileDialog,'Automatic scheduling');
+  await mobileDialog.getByLabel('Close',{exact:true}).click();
+  await page.setViewportSize({width:1440,height:1100});
   const firstLesson=page.locator(`[data-schedule-entry-id="${eventIds[0]}"]`);
   const thirdLesson=page.locator(`[data-schedule-entry-id="${eventIds[2]}"]`);
   await firstLesson.dragTo(thirdLesson);
