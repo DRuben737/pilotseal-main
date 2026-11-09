@@ -693,6 +693,54 @@ export async function fetchOrganizationTrainingCourses(organizationId: string) {
   });
 }
 
+export async function fetchPlatformTrainingCourses() {
+  const { data, error } = await getSupabaseClient().rpc(
+    "list_platform_training_courses",
+  );
+  if (error) throw error;
+  if (!Array.isArray(data)) return [] as TrainingCourse[];
+  return data.flatMap((value) => {
+    const course = normalizeTrainingCourse(value);
+    return course ? [course] : [];
+  });
+}
+
+export async function updateTrainingCourseModule(input: {
+  id: string;
+  stage_number: number;
+  module_number: number;
+  module_type: string;
+  duration_label: string;
+  duration_hours: number | null;
+  lesson_objective: string;
+  study_material: string;
+  completion_standards: string;
+  source_page: number;
+  line_items: Array<{
+    id: string;
+    text: string;
+    minimum_score: number | null;
+  }>;
+}) {
+  const { error } = await getSupabaseClient().rpc(
+    "update_training_course_module",
+    {
+      p_module_id: input.id,
+      p_stage_number: input.stage_number,
+      p_module_number: input.module_number,
+      p_module_type: input.module_type,
+      p_duration_label: input.duration_label,
+      p_duration_hours: input.duration_hours,
+      p_lesson_objective: input.lesson_objective,
+      p_study_material: input.study_material,
+      p_completion_standards: input.completion_standards,
+      p_source_page: input.source_page,
+      p_line_items: input.line_items,
+    },
+  );
+  if (error) throw error;
+}
+
 export async function fetchMyScheduleTrainingCourses() {
   const { data, error } = await getSupabaseClient().rpc(
     "list_my_schedule_training_courses",

@@ -26,6 +26,7 @@ import {
   fetchMyInstructorTrainingGuides,
   fetchInstructorTrainingManeuverOverrides,
   fetchOrganizationTrainingCourses,
+  fetchPlatformTrainingCourses,
   fetchOrganizationTrainingManeuverGuides,
   fetchOrganizationTrainingGuides,
   fetchStudentTrainingSubjectNotes,
@@ -41,6 +42,7 @@ import {
   trainingCourseCode,
   trainingCourseModuleLabel,
   updateCommunityTrainingNote,
+  updateTrainingCourseModule,
   type CommunityTrainingNote,
   type InstructorTrainingGuide,
   type InstructorTrainingManeuverOverride,
@@ -65,6 +67,7 @@ import { fetchScheduleEligibility } from "@/lib/dashboard-preferences";
 type Workspace = "personal" | "organization" | "platform";
 type Drawer =
   | "course-module"
+  | "course-module-editor"
   | "subject"
   | "platform-editor"
   | "organization-editor"
@@ -140,6 +143,39 @@ type InstructorManeuverDraft = {
   callouts: string;
   resources: string;
 };
+
+type CourseModuleDraft = {
+  id: string;
+  stageNumber: number;
+  moduleNumber: number;
+  moduleType: string;
+  durationLabel: string;
+  durationHours: string;
+  lessonObjective: string;
+  studyMaterial: string;
+  completionStandards: string;
+  sourcePage: number;
+  lineItems: Array<{
+    key: string;
+    id: string;
+    text: string;
+    minimumScore: string;
+  }>;
+};
+
+const blankCourseModuleDraft = (): CourseModuleDraft => ({
+  id: "",
+  stageNumber: 1,
+  moduleNumber: 1,
+  moduleType: "",
+  durationLabel: "",
+  durationHours: "",
+  lessonObjective: "",
+  studyMaterial: "",
+  completionStandards: "",
+  sourcePage: 1,
+  lineItems: [],
+});
 
 function lines(value: string) {
   return value
@@ -875,6 +911,8 @@ export default function TrainingGuideManager({
   const [selectedModuleNumber, setSelectedModuleNumber] = useState<
     number | null
   >(null);
+  const [openCourseCode, setOpenCourseCode] = useState<string | null>(null);
+  const [openTrackKey, setOpenTrackKey] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [personalMode, setPersonalMode] = useState<"study" | "instructor">(
     "study",
@@ -920,6 +958,9 @@ export default function TrainingGuideManager({
     stepId: "",
     body: "",
   });
+  const [courseModuleForm, setCourseModuleForm] = useState(
+    blankCourseModuleDraft,
+  );
 
   const selectedSubject =
     subjects.find((subject) => subject.id === selectedSubjectId) ?? null;
@@ -929,6 +970,9 @@ export default function TrainingGuideManager({
     selectedCourse?.modules.find(
       (module) => module.module_number === selectedModuleNumber,
     ) ?? null;
+  const canEditCourseModules =
+    workspace === "platform" ||
+    activeOrganization?.member_role === "platform_admin";
   const selectedOrganizationGuide =
     organizationGuides.find(
       (guide) => guide.subject_id === selectedSubjectId,
@@ -1008,9 +1052,11 @@ export default function TrainingGuideManager({
       workspace === "personal"
         ? fetchMyTrainingGuideSubjects(organizationId)
         : Promise.resolve([]),
-      organizationId && workspace !== "platform"
-        ? fetchOrganizationTrainingCourses(organizationId)
-        : Promise.resolve([]),
+      workspace === "platform"
+        ? fetchPlatformTrainingCourses()
+        : organizationId
+          ? fetchOrganizationTrainingCourses(organizationId)
+          : Promise.resolve([]),
       fetchScheduleEligibility(),
     ]);
     setSubjects(nextSubjects);
@@ -1113,6 +1159,132 @@ export default function TrainingGuideManager({
     setSelectedModuleNumber(module.module_number);
     setDrawer("course-module");
     setStatus("");
+  }
+
+  function openCourseModuleEditor() {
+    if (!selectedCourseModule || !canEditCourseModules) return;
+    setCourseModuleForm({
+      id: selectedCourseModule.id,
+      stageNumber: selectedCourseModule.stage_number,
+      moduleNumber: selectedCourseModule.module_number,
+      moduleType: selectedCourseModule.module_type,
+      durationLabel: selectedCourseModule.duration_label,
+      durationHours:
+        selectedCourseModule.duration_hours === null
+          ? ""
+          : String(selectedCourseModule.duration_hours),
+      lessonObjective: selectedCourseModule.lesson_objective,
+      studyMaterial: selectedCourseModule.study_material,
+      completionStandards: selectedCourseModule.completion_standards,
+      sourcePage: selectedCourseModule.source_page,
+      lineItems: selectedCourseModule.line_items.map((item) => ({
+        key: item.id || crypto.randomUUID(),
+        id: item.id,
+        text: item.text,
+        minimumScore:
+          item.minimum_score === null ? "" : String(item.minimum_score),
+      })),
+    });
+    setDrawer("course-module-editor");
+    setStatus("");
+  }
+
+  function updateCourseModuleLineItem(
+    key: string,
+    changes: Partial<CourseModuleDraft["lineItems"][number]>,
+  ) {
+    setCourseModuleForm((current) => ({
+      ...current,
+      lineItems: current.lineItems.map((item) =>
+        item.key === key ? { ...item, ...changes } : item,
+      ),
+    }));
+  }
+
+  function moveCourseModuleLineItem(key: string, offset: -1 | 1) {
+    setCourseModuleForm((current) => {
+      const index = current.lineItems.findIndex((item) => item.key === key);
+      const nextIndex = index + offset;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.lineItems.length)
+        return current;
+      const lineItems = [...current.lineItems];
+      [lineItems[index], lineItems[nextIndex]] = [
+        lineItems[nextIndex],
+        lineItems[index],
+      ];
+      return { ...current, lineItems };
+    });
+  }
+
+  async function handleSaveCourseModule() {
+    if (!courseModuleForm.id || !canEditCourseModules) return;
+    const durationHours = courseModuleForm.durationHours.trim()
+      ? Number(courseModuleForm.durationHours)
+      : null;
+    if (
+      courseModuleForm.stageNumber < 1 ||
+      courseModuleForm.moduleNumber < 1 ||
+      courseModuleForm.sourcePage < 1 ||
+      !courseModuleForm.moduleType.trim() ||
+      !courseModuleForm.durationLabel.trim() ||
+      !courseModuleForm.lessonObjective.trim() ||
+      (durationHours !== null &&
+        (!Number.isFinite(durationHours) || durationHours <= 0))
+    ) {
+      setStatus(
+        "Enter valid stage, module, duration, source page, type, and objective values.",
+      );
+      return;
+    }
+    if (courseModuleForm.lineItems.some((item) => !item.text.trim())) {
+      setStatus("Every line item needs text.");
+      return;
+    }
+    const lineItems = courseModuleForm.lineItems.map((item) => ({
+      id: item.id,
+      text: item.text.trim(),
+      minimum_score: item.minimumScore.trim()
+        ? Number(item.minimumScore)
+        : null,
+    }));
+    if (
+      lineItems.some(
+        (item) =>
+          item.minimum_score !== null &&
+          (!Number.isInteger(item.minimum_score) ||
+            item.minimum_score < 1 ||
+            item.minimum_score > 5),
+      )
+    ) {
+      setStatus("Minimum scores must be whole numbers from 1 to 5.");
+      return;
+    }
+
+    setSaving(true);
+    setStatus("");
+    try {
+      await updateTrainingCourseModule({
+        id: courseModuleForm.id,
+        stage_number: courseModuleForm.stageNumber,
+        module_number: courseModuleForm.moduleNumber,
+        module_type: courseModuleForm.moduleType.trim(),
+        duration_label: courseModuleForm.durationLabel.trim(),
+        duration_hours: durationHours,
+        lesson_objective: courseModuleForm.lessonObjective.trim(),
+        study_material: courseModuleForm.studyMaterial,
+        completion_standards: courseModuleForm.completionStandards,
+        source_page: courseModuleForm.sourcePage,
+        line_items: lineItems,
+      });
+      setSelectedModuleNumber(courseModuleForm.moduleNumber);
+      await reload();
+      setDrawer("course-module");
+      setStatus("Course module saved.");
+    } catch (error) {
+      setStatus(errorMessage(error, "Unable to save this course module."));
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openPlatformEditor(subject?: TrainingSubject) {
@@ -1514,9 +1686,19 @@ export default function TrainingGuideManager({
             ).map(([code, courses]) => (
               <details
                 key={code}
+                open={openCourseCode === code}
                 className="group/course overflow-hidden rounded-lg bg-white/80"
               >
-                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2.5 px-3.5 py-2 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                <summary
+                  className="flex min-h-10 cursor-pointer list-none items-center gap-2.5 px-3.5 py-2 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setOpenCourseCode((current) =>
+                      current === code ? null : code,
+                    );
+                    setOpenTrackKey(null);
+                  }}
+                >
                   <span className="min-w-0 flex-1">
                     <strong className="block text-xs font-semibold text-slate-950">
                       {code} 141
@@ -1544,9 +1726,19 @@ export default function TrainingGuideManager({
                   ).map(([track, trackCourses]) => (
                     <details
                       key={track}
+                      open={openTrackKey === `${code}:${track}`}
                       className="group/track overflow-hidden rounded-lg bg-blue-50/70"
                     >
-                      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-2 transition-colors duration-200 hover:bg-blue-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden">
+                      <summary
+                        className="flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-2 transition-colors duration-200 hover:bg-blue-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700 [&::-webkit-details-marker]:hidden"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          const trackKey = `${code}:${track}`;
+                          setOpenTrackKey((current) =>
+                            current === trackKey ? null : trackKey,
+                          );
+                        }}
+                      >
                         <strong className="min-w-0 flex-1 text-xs font-semibold text-blue-950">
                           {track}
                         </strong>
@@ -1802,6 +1994,25 @@ export default function TrainingGuideManager({
       >
         {selectedCourseModule ? (
           <div className="grid gap-4">
+            {status ? (
+              <p
+                role="status"
+                className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-700"
+              >
+                {status}
+              </p>
+            ) : null}
+            {canEditCourseModules ? (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="secondary-button cursor-pointer"
+                  onClick={openCourseModuleEditor}
+                >
+                  Edit module
+                </button>
+              </div>
+            ) : null}
             <section className="rounded-xl bg-slate-50 p-4">
               <h2 className="mb-2 text-[13px] font-semibold text-slate-950">
                 Lesson Objective
@@ -1868,6 +2079,289 @@ export default function TrainingGuideManager({
             </section>
           </div>
         ) : null}
+      </DetailDrawer>
+
+      <DetailDrawer
+        open={
+          drawer === "course-module-editor" && Boolean(courseModuleForm.id)
+        }
+        onClose={() => setDrawer("course-module")}
+        title={
+          selectedCourse && selectedCourseModule
+            ? `Edit ${trainingCourseModuleLabel(selectedCourse, selectedCourseModule)}`
+            : "Edit module"
+        }
+        description={selectedCourse?.title}
+        width="wide"
+      >
+        <form
+          className="grid gap-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSaveCourseModule();
+          }}
+        >
+          {status ? (
+            <p
+              role="status"
+              className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            >
+              {status}
+            </p>
+          ) : null}
+
+          <section className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="saas-field">
+              <span>Stage</span>
+              <input
+                required
+                type="number"
+                min={1}
+                value={courseModuleForm.stageNumber}
+                onChange={(event) =>
+                  setCourseModuleForm((current) => ({
+                    ...current,
+                    stageNumber: Number(event.target.value),
+                  }))
+                }
+              />
+            </label>
+            <label className="saas-field">
+              <span>Module</span>
+              <input
+                required
+                type="number"
+                min={1}
+                value={courseModuleForm.moduleNumber}
+                onChange={(event) =>
+                  setCourseModuleForm((current) => ({
+                    ...current,
+                    moduleNumber: Number(event.target.value),
+                  }))
+                }
+              />
+            </label>
+            <label className="saas-field">
+              <span>Module type</span>
+              <input
+                required
+                value={courseModuleForm.moduleType}
+                onChange={(event) =>
+                  setCourseModuleForm((current) => ({
+                    ...current,
+                    moduleType: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="saas-field">
+              <span>Duration label</span>
+              <input
+                required
+                value={courseModuleForm.durationLabel}
+                onChange={(event) =>
+                  setCourseModuleForm((current) => ({
+                    ...current,
+                    durationLabel: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="saas-field">
+              <span>Duration hours</span>
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={courseModuleForm.durationHours}
+                onChange={(event) =>
+                  setCourseModuleForm((current) => ({
+                    ...current,
+                    durationHours: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="saas-field">
+              <span>Source page</span>
+              <input
+                required
+                type="number"
+                min={1}
+                value={courseModuleForm.sourcePage}
+                onChange={(event) =>
+                  setCourseModuleForm((current) => ({
+                    ...current,
+                    sourcePage: Number(event.target.value),
+                  }))
+                }
+              />
+            </label>
+          </section>
+
+          <label className="saas-field">
+            <span>Lesson objective</span>
+            <textarea
+              required
+              rows={5}
+              value={courseModuleForm.lessonObjective}
+              onChange={(event) =>
+                setCourseModuleForm((current) => ({
+                  ...current,
+                  lessonObjective: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <section className="grid gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-950">
+                Line items
+              </h2>
+              <button
+                type="button"
+                className="secondary-button cursor-pointer"
+                onClick={() =>
+                  setCourseModuleForm((current) => ({
+                    ...current,
+                    lineItems: [
+                      ...current.lineItems,
+                      {
+                        key: crypto.randomUUID(),
+                        id: "",
+                        text: "",
+                        minimumScore: "",
+                      },
+                    ],
+                  }))
+                }
+              >
+                Add line item
+              </button>
+            </div>
+            <div className="grid gap-1.5">
+              {courseModuleForm.lineItems.map((item, index) => (
+                <div
+                  key={item.key}
+                  className="grid min-h-10 grid-cols-[2rem_minmax(0,1fr)_5rem_auto] items-center gap-2 rounded-md bg-slate-50 px-2 py-1.5"
+                >
+                  <span className="text-center text-xs font-semibold text-slate-500">
+                    {index + 1}
+                  </span>
+                  <input
+                    required
+                    aria-label={`Line item ${index + 1}`}
+                    className="h-9 min-w-0 rounded-sm border border-slate-300 bg-white px-2 text-sm"
+                    value={item.text}
+                    onChange={(event) =>
+                      updateCourseModuleLineItem(item.key, {
+                        text: event.target.value,
+                      })
+                    }
+                  />
+                  <select
+                    aria-label={`Line item ${index + 1} minimum score`}
+                    className="h-9 rounded-sm border border-slate-300 bg-white px-2 text-sm"
+                    value={item.minimumScore}
+                    onChange={(event) =>
+                      updateCourseModuleLineItem(item.key, {
+                        minimumScore: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">No score</option>
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <option key={score} value={score}>
+                        {score}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={`Move line item ${index + 1} up`}
+                      className="h-8 w-8 rounded-sm text-sm text-slate-600 hover:bg-white disabled:opacity-35"
+                      disabled={index === 0}
+                      onClick={() => moveCourseModuleLineItem(item.key, -1)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move line item ${index + 1} down`}
+                      className="h-8 w-8 rounded-sm text-sm text-slate-600 hover:bg-white disabled:opacity-35"
+                      disabled={index === courseModuleForm.lineItems.length - 1}
+                      onClick={() => moveCourseModuleLineItem(item.key, 1)}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remove line item ${index + 1}`}
+                      className="h-8 rounded-sm px-2 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                      onClick={() =>
+                        setCourseModuleForm((current) => ({
+                          ...current,
+                          lineItems: current.lineItems.filter(
+                            (candidate) => candidate.key !== item.key,
+                          ),
+                        }))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <label className="saas-field">
+            <span>Study material / content</span>
+            <textarea
+              rows={8}
+              value={courseModuleForm.studyMaterial}
+              onChange={(event) =>
+                setCourseModuleForm((current) => ({
+                  ...current,
+                  studyMaterial: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <label className="saas-field">
+            <span>Completion standards</span>
+            <textarea
+              rows={5}
+              value={courseModuleForm.completionStandards}
+              onChange={(event) =>
+                setCourseModuleForm((current) => ({
+                  ...current,
+                  completionStandards: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <div className="sticky -bottom-5 flex justify-end gap-2 border-t border-slate-200 bg-white/95 py-3 backdrop-blur">
+            <button
+              type="button"
+              className="ghost-button cursor-pointer"
+              onClick={() => setDrawer("course-module")}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="primary-button cursor-pointer"
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save module"}
+            </button>
+          </div>
+        </form>
       </DetailDrawer>
 
       <DetailDrawer
