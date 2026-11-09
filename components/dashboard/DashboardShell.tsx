@@ -269,9 +269,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
   const [featuresReadyUserId, setFeaturesReadyUserId] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const mobileNavigationRef = useRef<HTMLElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const sidebarExpanded = true;
+  const sidebarPreferenceStorageKey = session?.user?.id
+    ? `pilotseal:console-sidebar-expanded:${session.user.id}`
+    : "";
 
   useEffect(() => {
     if (!loading && !session?.user) {
@@ -283,6 +286,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!sidebarPreferenceStorageKey) return;
+    setSidebarExpanded(window.localStorage.getItem(sidebarPreferenceStorageKey) !== "false");
+  }, [sidebarPreferenceStorageKey]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -572,6 +580,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     }
   }
 
+  function toggleSidebar() {
+    setSidebarExpanded((expanded) => {
+      const nextExpanded = !expanded;
+      if (sidebarPreferenceStorageKey) {
+        window.localStorage.setItem(sidebarPreferenceStorageKey, String(nextExpanded));
+      }
+      return nextExpanded;
+    });
+  }
+
   return (
     <main className="page-shell dashboard-shell console-shell px-3">
       <div className="site-shell page-stack">
@@ -579,6 +597,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           <section className="dashboard-app-layout flex items-start gap-3 sm:gap-4">
             <div className="dashboard-sidebar-slot" data-expanded={sidebarExpanded}>
               <aside
+                id="dashboard-console-sidebar"
                 className="dashboard-sidebar"
                 data-expanded={sidebarExpanded}
                 aria-label={`${workspaceLabel} navigation`}
@@ -654,6 +673,24 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 </nav>
 
                 <footer className="dashboard-sidebar-footer">
+                  <button
+                    type="button"
+                    aria-controls="dashboard-console-sidebar"
+                    aria-expanded={sidebarExpanded}
+                    aria-label={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                    title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                    className="dashboard-sidebar-link dashboard-sidebar-toggle w-full"
+                    onClick={toggleSidebar}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="h-[18px] w-[18px]">
+                        <path d={sidebarExpanded ? "m12.5 4-6 6 6 6" : "m7.5 4 6 6-6 6"} />
+                      </svg>
+                    </span>
+                    <span className="dashboard-sidebar-copy min-w-0 flex-1 truncate">
+                      {sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                    </span>
+                  </button>
                   <Link href="/home" aria-label="Back to PilotSeal" title="Back to PilotSeal" className="dashboard-sidebar-link">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="h-[18px] w-[18px]">

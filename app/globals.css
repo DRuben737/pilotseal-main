@@ -895,48 +895,10 @@ summary:focus-visible {
     width: 3.625rem;
   }
 
-  .dashboard-sidebar[data-expanded="false"],
-  .dashboard-sidebar[data-expanded="false"]:hover,
-  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) {
+  .dashboard-sidebar[data-expanded="false"] {
     width: 3.625rem;
     padding: 0.25rem;
     box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
-  }
-
-  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-sidebar-copy,
-  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-sidebar-copy {
-    width: 0;
-    flex: 0 0 0;
-    overflow: hidden;
-    opacity: 0;
-    visibility: hidden;
-  }
-
-  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-workspace-switcher,
-  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-workspace-switcher {
-    max-height: 0;
-    margin-top: 0;
-    border-color: transparent;
-    padding-top: 0;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-sidebar-section-label,
-  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-sidebar-section-label {
-    min-width: 0;
-    max-height: 0;
-    padding-block: 0;
-    opacity: 0;
-  }
-
-  .dashboard-sidebar[data-expanded="false"]:hover .dashboard-sidebar-link,
-  .dashboard-sidebar[data-expanded="false"]:has(:focus-visible) .dashboard-sidebar-link {
-    width: 3rem;
-    min-width: 0;
-    justify-content: center;
-    gap: 0;
-    padding: 0;
   }
 }
 
