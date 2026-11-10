@@ -1362,18 +1362,21 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   background: transparent;
 }
 
-.console-page-subnavigation [role="tab"] {
+.console-page-subnavigation [role="tab"],
+.console-page-subnavigation > button {
   border-bottom-color: transparent !important;
   color: var(--ps-ink-muted) !important;
   transition: color var(--ps-motion-fast) var(--ps-motion-curve), border-color var(--ps-motion-fast) var(--ps-motion-curve), background-color var(--ps-motion-fast) var(--ps-motion-curve);
 }
 
-.console-page-subnavigation [role="tab"]:hover {
+.console-page-subnavigation [role="tab"]:hover,
+.console-page-subnavigation > button:hover {
   background: var(--ps-surface-1) !important;
   color: var(--ps-ink) !important;
 }
 
-.console-page-subnavigation [role="tab"][aria-selected="true"] {
+.console-page-subnavigation [role="tab"][aria-selected="true"],
+.console-page-subnavigation > button[aria-current="page"] {
   border-bottom-color: var(--ps-ink) !important;
   color: var(--ps-ink) !important;
 }
@@ -1525,6 +1528,23 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   color: var(--ps-ink-soft);
 }
 
+.admin-dialog :is(input[type="checkbox"], input[type="radio"]),
+.console-dialog-surface :is(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--ps-meadow-strong);
+}
+
+.admin-dialog [role="tab"],
+.console-dialog-surface [role="tab"] {
+  border-bottom-color: transparent !important;
+  color: var(--ps-ink-muted) !important;
+}
+
+.admin-dialog [role="tab"][aria-selected="true"],
+.console-dialog-surface [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--ps-ink) !important;
+  color: var(--ps-ink) !important;
+}
+
 .dashboard-mobile-navigation {
   color: var(--ps-ink);
 }
@@ -1567,7 +1587,34 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   }
 
   .dashboard-admin-chrome {
-    margin: calc(var(--ps-space-100) * -1) calc(var(--ps-space-200) * -1) var(--ps-space-200);
+    margin: 0 0 var(--ps-space-200);
+    background: transparent;
+  }
+
+  .dashboard-breadcrumbs {
+    display: flex;
+    min-height: 0;
+    align-items: center;
+    border: 0;
+    padding: var(--ps-space-50) 0 var(--ps-space-100);
+    overflow: visible;
+  }
+
+  .dashboard-breadcrumbs span:first-child,
+  .dashboard-breadcrumbs span[aria-hidden="true"] {
+    display: none;
+  }
+
+  .dashboard-breadcrumbs span:last-child {
+    color: var(--ps-ink);
+    font-size: var(--ps-text-xl);
+    font-weight: 600;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  .dashboard-content:has(h1) .dashboard-admin-chrome {
+    display: none;
   }
 
   .dashboard-mobile-navigation {
@@ -1578,6 +1625,25 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
 
   .dashboard-mobile-page-menu {
     position: relative;
+  }
+
+  .dashboard-content .admin-toolbar > :has(> .admin-compact-button-primary) {
+    width: 100%;
+  }
+
+  .dashboard-content .admin-toolbar .admin-compact-button-primary {
+    width: 100%;
+  }
+
+  .dashboard-setting-row > .saas-section-toggle > .saas-section-toggle-main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .dashboard-setting-row > .saas-section-toggle > .saas-inline-actions {
+    width: auto;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
   }
 
   #dashboard-mobile-page-list {
