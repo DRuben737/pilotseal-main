@@ -623,6 +623,7 @@ function EndorsementGenerator() {
   const [guestRegisterPromptOpen, setGuestRegisterPromptOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [latestPdfBlob, setLatestPdfBlob] = useState(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [savingRecord, setSavingRecord] = useState(false);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printFormat, setPrintFormat] = useState('letter');
@@ -631,7 +632,7 @@ function EndorsementGenerator() {
   const [generatorMode, setGeneratorMode] = useState('customized');
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then preview to confirm and open the PDF packet.');
+  const [statusMessage, setStatusMessage] = useState('Fill the form, select endorsements, then print the PDF packet.');
   const [templateFieldData, setTemplateFieldData] = useState({});
   const [activeSuggestionField, setActiveSuggestionField] = useState('');
   const [sessionIdentity, setSessionIdentity] = useState('');
@@ -1028,7 +1029,7 @@ function EndorsementGenerator() {
         defaultCfiAppliedRef.current = true;
         setStatusMessage(
           requestedTemplates.every((title) => templateCatalog[title])
-            ? 'Editing an issued endorsement. Preview it, then replace the saved record. Add the signature again if needed.'
+            ? 'Editing an issued endorsement. Print it to replace the saved record. Add the signature again if needed.'
             : 'One or more legacy templates are no longer available. Select replacement templates and complete every required field before saving.'
         );
       } catch (error) {
@@ -1204,7 +1205,7 @@ function EndorsementGenerator() {
     setSignaturePreviewDataUrl(dataUrl);
     resetGeneratedPdf();
     setSignatureModalOpen(false);
-    setStatusMessage('Signature saved. Preview the PDF again to include the updated signature.');
+    setStatusMessage('Signature saved. Print the PDF to include the updated signature.');
   };
 
   const clearMobileSignature = () => {
@@ -1229,8 +1230,8 @@ function EndorsementGenerator() {
     setErrors({});
     setStatusMessage(
       nextMode === 'blank'
-        ? 'Select blank endorsement templates, then preview the reusable PDF before printing.'
-        : 'Fill the form, select endorsements, then preview to confirm and open the PDF packet.'
+        ? 'Select blank endorsement templates, then print the reusable PDF.'
+        : 'Fill the form, select endorsements, then print the PDF packet.'
     );
   };
   const handleChange = (field) => (event) => {
@@ -1530,7 +1531,7 @@ function EndorsementGenerator() {
 
   const buildPdfUrl = async () => {
     if (!validateForm()) {
-      setStatusMessage('Resolve the highlighted fields before previewing the PDF.');
+      setStatusMessage('Resolve the highlighted fields before printing the PDF.');
       return null;
     }
 
@@ -1705,41 +1706,31 @@ function EndorsementGenerator() {
     }
   };
 
-  const handlePreview = async () => {
+  const handlePrint = async () => {
     if (!validateForm()) {
-      setStatusMessage('Resolve the highlighted fields before previewing the PDF.');
+      setStatusMessage('Resolve the highlighted fields before printing the PDF.');
       return;
     }
 
     const confirmed = window.confirm(
       generatorMode === 'blank'
-        ? `Preview ${selectedTemplates.length} reusable blank endorsement template(s)?`
-        : `Preview ${selectedTemplates.length} endorsement draft(s)?\n\nInstructor: ${formData.instructorName.trim()}\nStudent: ${formData.studentName.trim()}\nDate: ${formatDateForPdf(formData.date)}`
+        ? `Print ${selectedTemplates.length} reusable blank endorsement template(s)?`
+        : `Print ${selectedTemplates.length} endorsement(s)?\n\nInstructor: ${formData.instructorName.trim()}\nStudent: ${formData.studentName.trim()}\nDate: ${formatDateForPdf(formData.date)}`
     );
 
     if (!confirmed) {
-      setStatusMessage('Preview cancelled. Review the confirmation details and try again when ready.');
+      setStatusMessage('Print cancelled. Review the confirmation details and try again when ready.');
       return;
     }
 
-    const previewWindow = window.open('', '_blank');
-    if (!previewWindow) {
-      setStatusMessage('The preview window was blocked by the browser.');
-      return;
-    }
-
-    previewWindow.document.write('<title>PilotSeal PDF Preview</title><p style="font-family: sans-serif; padding: 20px;">Generating PDF preview...</p>');
-
-    const nextPdf = await buildPdfUrl();
-    if (!nextPdf) {
-      previewWindow.close();
-      return;
-    }
-
-    previewWindow.location.href = nextPdf.url;
-
-    if (generatorMode === 'customized' && !session?.user?.id) {
-      setGuestRegisterPromptOpen(true);
+    setGeneratingPdf(true);
+    try {
+      const nextPdf = await buildPdfUrl();
+      if (nextPdf) {
+        setPrintModalOpen(true);
+      }
+    } finally {
+      setGeneratingPdf(false);
     }
   };
 
@@ -1831,15 +1822,6 @@ function EndorsementGenerator() {
     } finally {
       setSavingRecord(false);
     }
-  };
-
-  const handlePrint = () => {
-    if (!pdfUrl) {
-      setStatusMessage('Open a preview first to generate the PDF before printing.');
-      return;
-    }
-
-    setPrintModalOpen(true);
   };
 
   const buildAvery5163PdfUrl = async () => {
@@ -2046,6 +2028,9 @@ function EndorsementGenerator() {
 
     rememberPrintablePdf(printablePdf.url, printFormat === 'avery-5163');
     requestPrintDialog(printablePdf.url);
+    if (generatorMode === 'customized' && !session?.user?.id) {
+      setGuestRegisterPromptOpen(true);
+    }
   };
 
   const handleOpenPrintablePdf = () => {
@@ -2275,7 +2260,7 @@ function EndorsementGenerator() {
                   <div>
                     <h2>Template details</h2>
                     <p className={styles.sectionCopy}>
-                      Complete the extra endorsement-specific entries in a separate dialog before previewing the PDF.
+                      Complete the extra endorsement-specific entries in a separate dialog before printing the PDF.
                     </p>
                   </div>
                   <button className={styles.ghostButton} onClick={openDetailsModal} type="button">
@@ -2343,11 +2328,13 @@ function EndorsementGenerator() {
               />
 
               <div className={styles.actionRow}>
-                <button className={styles.secondaryButton} onClick={handlePreview} type="button">
-                  Preview
-                </button>
-                <button className={styles.secondaryButton} onClick={handlePrint} type="button" disabled={!pdfUrl || savingRecord}>
-                  {savingRecord ? 'Saving...' : editingRecord ? 'Replace & print' : 'Print'}
+                <button
+                  className={styles.secondaryButton}
+                  onClick={handlePrint}
+                  type="button"
+                  disabled={generatingPdf || savingRecord}
+                >
+                  {generatingPdf ? 'Generating...' : savingRecord ? 'Saving...' : editingRecord ? 'Replace & print' : 'Print'}
                 </button>
                 {printablePdfUrl ? (
                   <button className={styles.secondaryButton} onClick={handleOpenPrintablePdf} type="button">
