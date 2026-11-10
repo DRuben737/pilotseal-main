@@ -1163,31 +1163,43 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
 }
 
 .dashboard-workspace-grid {
-  border: 1px solid var(--ps-line);
-  border-radius: var(--ps-radius-md);
-  background: var(--ps-surface-0);
-  corner-shape: squircle;
+  gap: var(--ps-space-100);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 var(--ps-space-50);
 }
 
 .dashboard-workspace-link {
-  border-radius: var(--ps-radius-sm);
+  min-height: 2rem;
+  flex-direction: row;
+  gap: var(--ps-space-50);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: var(--ps-space-75) 0 var(--ps-space-50);
   color: var(--ps-ink-muted);
-  font-weight: 600;
-  corner-shape: squircle;
+  font-size: var(--ps-text-xs);
+  font-weight: 550;
+  line-height: 1;
 }
 
 .dashboard-workspace-link:hover,
 .dashboard-workspace-link:focus-visible {
-  background: var(--ps-surface-2);
+  background: transparent;
   color: var(--ps-ink);
 }
 
 .dashboard-workspace-link-active,
 .dashboard-workspace-link-active:hover,
 .dashboard-workspace-link-active:focus-visible {
-  background: var(--ps-surface-3);
+  border-bottom-color: var(--ps-ink);
+  background: transparent;
   color: var(--ps-ink);
-  box-shadow: inset 0 0 0 1px var(--ps-line-strong);
+  box-shadow: none;
+}
+
+.dashboard-workspace-link svg {
+  display: none;
 }
 
 .dashboard-sidebar-link {
