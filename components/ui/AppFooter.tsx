@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const appRoutePrefixes = [
+  "/home",
   "/dashboard",
   "/tools",
   "/account",
@@ -19,7 +20,19 @@ export default function AppFooter() {
     pathname === prefix || pathname.startsWith(`${prefix}/`)
   ));
 
-  if (isApplicationRoute) return null;
+  if (isApplicationRoute) {
+    return (
+      <footer className={`app-footer-compact ${pathname === "/home" ? "app-footer-compact-home" : ""}`}>
+        <nav aria-label="Site information">
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/disclaimer">Disclaimer</Link>
+          <Link href="/sitelog">Site log</Link>
+          <a href="mailto:admin@pilotseal.com">Contact</a>
+        </nav>
+        <span>© {new Date().getFullYear()} PilotSeal</span>
+      </footer>
+    );
+  }
 
   return (
     <footer className="app-footer-shell px-3">
@@ -37,6 +50,7 @@ export default function AppFooter() {
             <div className="mt-4 grid gap-3">
               <Link href="/home">Home</Link>
               <Link href="/tools">Tools</Link>
+              <Link href="/learn">Learn</Link>
               <Link href="/endorsements">Endorsements</Link>
               <Link href="/read">Read</Link>
             </div>

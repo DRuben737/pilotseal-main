@@ -15,24 +15,14 @@ export function AdminPageHeader({
   description?: string;
   action?: ReactNode;
 }) {
-  if (!action) {
-    return (
-      <div className="sr-only">
-        {eyebrow ? <p>{eyebrow}</p> : null}
-        <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
-      </div>
-    );
-  }
-
   return (
-    <header className="admin-page-header flex min-h-12 items-center justify-end border-b border-slate-200 bg-white py-2">
-      <div className="sr-only">
-        {eyebrow ? <p>{eyebrow}</p> : null}
+    <header className="admin-page-header">
+      <div className="admin-page-heading-copy">
+        {eyebrow ? <p className="admin-page-eyebrow">{eyebrow}</p> : null}
         <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
+        {description ? <p className="admin-page-description">{description}</p> : null}
       </div>
-      <div className="shrink-0">{action}</div>
+      {action ? <div className="admin-page-action">{action}</div> : null}
     </header>
   );
 }
@@ -302,7 +292,7 @@ export function CompactButton({
   return (
     <button
       {...props}
-      className={`min-h-8 cursor-pointer rounded-sm border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]} ${className}`}
+      className={`admin-compact-button admin-compact-button-${tone} min-h-8 cursor-pointer rounded-sm border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]} ${className}`}
     >
       {children}
     </button>

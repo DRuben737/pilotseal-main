@@ -348,13 +348,16 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
 
       <DetailDrawer open={drawerMode === "organization"} onClose={() => setDrawerMode(null)} title="Add organization" description="Create the organization and assign its first Owner in one step.">
         <form onSubmit={handleCreateOrganization}>
-          <WorksheetGrid label="New organization details">
-            <thead><tr><WorksheetHeader>Organization name</WorksheetHeader><WorksheetHeader>Owner email</WorksheetHeader></tr></thead>
-            <tbody><tr>
-              <WorksheetCell><input autoFocus required minLength={2} maxLength={120} aria-label="Organization name" value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} className={worksheetInputClass} placeholder="Flight school name" /></WorksheetCell>
-              <WorksheetCell><input required type="email" autoComplete="off" aria-label="Owner registered email" value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)} className={worksheetInputClass} placeholder="owner@example.com" /></WorksheetCell>
-            </tr></tbody>
-          </WorksheetGrid>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-700">
+              Organization name
+              <input autoFocus required minLength={2} maxLength={120} value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} className={worksheetInputClass} placeholder="Flight school name" />
+            </label>
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-700">
+              Owner email
+              <input required type="email" autoComplete="off" value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)} className={worksheetInputClass} placeholder="owner@example.com" />
+            </label>
+          </div>
           <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Reason<textarea required minLength={3} maxLength={500} rows={3} value={organizationReason} onChange={(event) => setOrganizationReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
           <DrawerActions busy={busy} onCancel={() => setDrawerMode(null)} submitLabel="Create organization" />
         </form>
@@ -362,13 +365,16 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
 
       <DetailDrawer open={drawerMode === "admin"} onClose={() => setDrawerMode(null)} title="Grant platform access" description="This does not change the account's organization role.">
         <form onSubmit={handleGrant}>
-          <WorksheetGrid label="Platform administrator details">
-            <thead><tr><WorksheetHeader>Registered email</WorksheetHeader><WorksheetHeader>Reason</WorksheetHeader></tr></thead>
-            <tbody><tr>
-              <WorksheetCell><input autoFocus required type="email" autoComplete="off" aria-label="Registered email" value={email} onChange={(event) => setEmail(event.target.value)} className={worksheetInputClass} placeholder="admin@example.com" /></WorksheetCell>
-              <WorksheetCell><input required minLength={3} maxLength={500} aria-label="Reason" value={grantReason} onChange={(event) => setGrantReason(event.target.value)} className={worksheetInputClass} placeholder="Why access is needed" /></WorksheetCell>
-            </tr></tbody>
-          </WorksheetGrid>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-700">
+              Registered email
+              <input autoFocus required type="email" autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} className={worksheetInputClass} placeholder="admin@example.com" />
+            </label>
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-700">
+              Reason
+              <input required minLength={3} maxLength={500} value={grantReason} onChange={(event) => setGrantReason(event.target.value)} className={worksheetInputClass} placeholder="Why access is needed" />
+            </label>
+          </div>
           <DrawerActions busy={busy} onCancel={() => setDrawerMode(null)} submitLabel="Grant access" />
         </form>
       </DetailDrawer>
@@ -394,7 +400,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
 }
 
 function DrawerActions({ busy, onCancel, submitLabel }: { busy: boolean; onCancel: () => void; submitLabel: string }) {
-  return <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={onCancel}>Cancel</CompactButton><CompactButton type="submit" tone="primary" disabled={busy}>{busy ? "Saving…" : submitLabel}</CompactButton></div>;
+  return <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:justify-end"><CompactButton className="w-full sm:w-auto" type="button" onClick={onCancel}>Cancel</CompactButton><CompactButton className="w-full sm:w-auto" type="submit" tone="primary" disabled={busy}>{busy ? "Saving…" : submitLabel}</CompactButton></div>;
 }
 
 function formatDate(value: string | null) {

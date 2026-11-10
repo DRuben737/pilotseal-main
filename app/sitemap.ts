@@ -22,6 +22,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     { url: `${baseUrl}/home`, lastModified: new Date() },
+    { url: `${baseUrl}/learn`, lastModified: new Date() },
+    { url: `${baseUrl}/learn/piston-engine`, lastModified: new Date() },
     { url: `${baseUrl}/read`, lastModified: new Date() },
     ...articles.map((article) => ({
       url: `${baseUrl}/read/${article.slug}`,

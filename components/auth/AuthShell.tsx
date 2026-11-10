@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import authWorkspaceImage from "@/images/auth-workspace-illustration.png";
+import authWorkspaceImage from "@/images/pilotseal-valley-background-v2.jpg";
 
 export default function AuthShell({
   children,
@@ -14,21 +14,19 @@ export default function AuthShell({
   return (
     <main className="page-shell px-3">
       <div className="site-shell page-stack">
-        <section className="grid gap-8 lg:min-h-[calc(100vh-11rem)] lg:grid-cols-[minmax(260px,420px)_minmax(360px,0.9fr)] lg:items-center">
-          <div className="relative hidden min-h-[24rem] overflow-hidden rounded-[1.25rem] border border-slate-200/80 lg:block">
-            <div className="absolute inset-0">
-              <Image
-                src={authWorkspaceImage}
-                alt="PilotSeal workspace illustration"
-                className="h-full w-full object-cover"
-                priority={imagePriority}
-              />
-            </div>
-            <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(8,22,45,0.92),rgba(18,58,117,0.76),rgba(255,255,255,0.08))]" />
+        <section className="auth-shell">
+          <div className="auth-shell-media">
+            <Image
+              src={authWorkspaceImage}
+              alt="Mountain valley viewed from the air"
+              fill
+              sizes="(min-width: 960px) 45vw, 0px"
+              priority={imagePriority}
+            />
           </div>
 
-          <div className="flex items-start lg:items-center lg:border-l lg:border-slate-200/70 lg:pl-8">
-            <div className="w-full max-w-md space-y-6">{children}</div>
+          <div className="auth-shell-panel">
+            <div className="auth-shell-content space-y-6">{children}</div>
           </div>
         </section>
       </div>

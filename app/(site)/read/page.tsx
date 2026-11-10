@@ -111,10 +111,11 @@ export default async function ReadPage({ searchParams }: ReadPageProps) {
     <main className="page-shell read-page px-3">
       <div className="read-shell">
         <header className="read-masthead">
-          <p>
-            Use Read to browse short aviation notes. Pick or search a topic, then open a
-            post for the full explanation.
-          </p>
+          <div className="read-masthead-copy">
+            <p className="eyebrow">Pilot notes</p>
+            <h1>Read for the next decision.</h1>
+            <p>Concise guidance for training, currency, and instructor workflows.</p>
+          </div>
           <form className="read-search" action="/read">
             {selectedCategory ? (
               <input type="hidden" name="category" value={selectedCategory} />

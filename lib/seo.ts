@@ -89,6 +89,37 @@ export function buildArticleSchema({
   };
 }
 
+export function buildLearningResourceSchema({
+  name,
+  description,
+  path,
+  audience,
+}: {
+  name: string;
+  description: string;
+  path: string;
+  audience: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "LearningResource",
+    name,
+    description,
+    url: toAbsoluteUrl(path),
+    learningResourceType: "Interactive demonstration",
+    educationalUse: "Instruction",
+    audience: {
+      "@type": "EducationalAudience",
+      educationalRole: audience,
+    },
+    provider: {
+      "@type": "Organization",
+      name: "PilotSeal",
+      url: getSiteUrl(),
+    },
+  };
+}
+
 export function buildFaqSchema(
   faqs: Array<{ q: string; a: string }> | undefined
 ) {

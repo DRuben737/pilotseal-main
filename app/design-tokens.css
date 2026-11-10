@@ -1,0 +1,172 @@
+:root {
+  color-scheme: light;
+
+  --ps-ink: #20231f;
+  --ps-ink-soft: #4f554d;
+  --ps-ink-muted: #686d65;
+  --ps-ink-faint: #858a82;
+
+  --ps-surface-0: #f7f3eb;
+  --ps-surface-1: #faf7f0;
+  --ps-surface-2: #fdfaf4;
+  --ps-surface-3: #fffdf8;
+
+  --ps-sky: #dbe7e8;
+  --ps-sky-strong: #6f8f94;
+  --ps-meadow: #dfe8d5;
+  --ps-meadow-strong: #52705a;
+  --ps-warning: #8a642f;
+  --ps-danger: #8a3f3b;
+
+  --ps-line: rgba(32, 35, 31, 0.1);
+  --ps-line-strong: rgba(32, 35, 31, 0.16);
+
+  --ps-font-display: Georgia, "Times New Roman", serif;
+  --ps-font-sans: "Manrope", var(--font-inter), system-ui, sans-serif;
+  --ps-font-mono: "Geist Mono", ui-monospace, monospace;
+
+  --ps-text-xs: 0.75rem;
+  --ps-text-sm: 0.875rem;
+  --ps-text-base: 1rem;
+  --ps-text-lg: 1.125rem;
+  --ps-text-xl: 1.25rem;
+  --ps-text-2xl: 1.5rem;
+  --ps-text-3xl: 1.875rem;
+  --ps-text-4xl: 2.25rem;
+  --ps-text-5xl: 3rem;
+  --ps-text-6xl: 3.75rem;
+
+  --ps-space-0: 0;
+  --ps-space-25: 0.125rem;
+  --ps-space-50: 0.25rem;
+  --ps-space-75: 0.5rem;
+  --ps-space-100: 0.75rem;
+  --ps-space-200: 1rem;
+  --ps-space-300: 1.5rem;
+  --ps-space-400: 2rem;
+  --ps-space-500: 2.5rem;
+  --ps-space-600: 3rem;
+  --ps-space-700: 4rem;
+  --ps-space-800: 5rem;
+  --ps-space-900: 6rem;
+
+  --ps-radius-sm: 0.5rem;
+  --ps-radius-md: 0.75rem;
+  --ps-radius-lg: 1rem;
+  --ps-radius-xl: 1.5rem;
+  --ps-radius-pill: 999px;
+
+  --ps-motion-fast: 220ms;
+  --ps-motion-base: 300ms;
+  --ps-motion-enter: 420ms;
+  --ps-motion-reveal: 700ms;
+  --ps-motion-curve: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --ps-focus-ring: 0 0 0 3px var(--ps-surface-3), 0 0 0 6px rgba(32, 35, 31, 0.24);
+  --ps-shadow-float: 0 24px 64px rgba(32, 35, 31, 0.12);
+
+  --ps-content-copy: 42.5rem;
+  --ps-content-wide: 90rem;
+  --ps-touch-target: 2.75rem;
+}
+
+.ps-display-1 {
+  font-family: var(--ps-font-display);
+  font-size: var(--ps-text-6xl);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.ps-display-2 {
+  font-family: var(--ps-font-display);
+  font-size: var(--ps-text-5xl);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.ps-heading-1 {
+  font-family: var(--ps-font-sans);
+  font-size: var(--ps-text-4xl);
+  font-weight: 600;
+  line-height: 2.5rem;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.ps-heading-2 {
+  font-family: var(--ps-font-sans);
+  font-size: var(--ps-text-3xl);
+  font-weight: 600;
+  line-height: 2.25rem;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.ps-heading-3 {
+  font-family: var(--ps-font-sans);
+  font-size: var(--ps-text-2xl);
+  font-weight: 600;
+  line-height: 2rem;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.ps-body,
+.ps-body-small {
+  font-family: var(--ps-font-sans);
+  font-weight: 400;
+  text-wrap: pretty;
+}
+
+.ps-body {
+  font-size: var(--ps-text-base);
+  line-height: 1.5rem;
+}
+
+.ps-body-small {
+  font-size: var(--ps-text-sm);
+  line-height: 1.25rem;
+}
+
+.ps-label {
+  font-family: var(--ps-font-sans);
+  font-size: var(--ps-text-xs);
+  font-weight: 600;
+  line-height: 1rem;
+}
+
+.ps-numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-inline-icon {
+  transform: translateY(0.125em);
+}
+
+.ps-squircle {
+  corner-shape: squircle;
+}
+
+.ps-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--ps-focus-ring);
+}
+
+@media (max-width: 760px) {
+  .ps-display-1 {
+    font-size: var(--ps-text-5xl);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ps-motion-fast: 0ms;
+    --ps-motion-base: 0ms;
+    --ps-motion-enter: 0ms;
+    --ps-motion-reveal: 0ms;
+  }
+}

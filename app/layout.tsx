@@ -6,6 +6,9 @@ import OrganizationProvider from "@/components/organizations/OrganizationProvide
 import { getSiteUrl } from "@/lib/seo";
 import { ToolProvider } from "@/stores/toolState";
 import "./globals.css";
+import "./design-tokens.css";
+import "./design-system.css";
+import "@/components/iso/iso.css";
 import "@/components/tools-native/styles/Nighttime.css";
 import "@/components/tools-native/styles/EndorsementGenerator.css";
 import "@/components/tools-native/styles/FlightBrief.css";
@@ -49,7 +52,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body className={`${inter.variable} ${inter.className} app-body text-black`}>
+      <body className={`${inter.variable} ${inter.className} app-body`}>
         <ToolProvider>
           <AuthSessionProvider>
             <OrganizationProvider>

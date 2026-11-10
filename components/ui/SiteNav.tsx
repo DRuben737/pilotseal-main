@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import UserMenu from "@/components/ui/UserMenu";
@@ -14,6 +14,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 const publicNavItems = [
   { href: "/home", label: "Home" },
   { href: "/tools", label: "Tools" },
+  { href: "/learn", label: "Learn" },
   { href: "/read", label: "Read" },
 ];
 
@@ -21,6 +22,7 @@ export default function SiteNav() {
   const pathname = usePathname();
   const { loading, session } = useAuthSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const [displayName, setDisplayName] = useState("");
   const [defaultCfiName, setDefaultCfiName] = useState("");
 
@@ -71,6 +73,25 @@ export default function SiteNav() {
     setMobileOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setMobileOpen(false);
+      toggleRef.current?.focus();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileOpen]);
+
   return (
     <div className="site-nav">
       <div className="site-nav-desktop">
@@ -103,6 +124,7 @@ export default function SiteNav() {
       </div>
 
       <button
+        ref={toggleRef}
         type="button"
         className={`site-nav-toggle ${mobileOpen ? "site-nav-toggle-open" : ""}`}
         aria-expanded={mobileOpen}
@@ -115,9 +137,19 @@ export default function SiteNav() {
         <span />
       </button>
 
+      <button
+        type="button"
+        className={`site-nav-backdrop ${mobileOpen ? "site-nav-backdrop-open" : ""}`}
+        aria-label="Close navigation"
+        aria-hidden={!mobileOpen}
+        tabIndex={mobileOpen ? 0 : -1}
+        onClick={() => setMobileOpen(false)}
+      />
+
       <div
         id="site-mobile-menu"
         className={`site-nav-menu ${mobileOpen ? "site-nav-menu-open" : ""}`}
+        aria-hidden={!mobileOpen}
       >
         <div className="site-nav-mobile-head">
           <span>Navigation</span>
@@ -133,6 +165,7 @@ export default function SiteNav() {
                   : ""
               }`}
               href={item.href}
+              tabIndex={mobileOpen ? 0 : -1}
               onClick={() => setMobileOpen(false)}
             >
               {item.label}
@@ -143,6 +176,7 @@ export default function SiteNav() {
             <Link
               className="site-nav-link site-nav-link-active site-nav-mobile-login"
               href="/login"
+              tabIndex={mobileOpen ? 0 : -1}
               onClick={() => setMobileOpen(false)}
             >
               {loading ? "Loading..." : "Login"}
@@ -152,6 +186,7 @@ export default function SiteNav() {
               <Link
                 href="/console"
                 className="site-nav-link"
+                tabIndex={mobileOpen ? 0 : -1}
                 onClick={() => setMobileOpen(false)}
               >
                 Management Console
@@ -159,6 +194,7 @@ export default function SiteNav() {
               <Link
                 href="/console/personal/account"
                 className="site-nav-link"
+                tabIndex={mobileOpen ? 0 : -1}
                 onClick={() => setMobileOpen(false)}
               >
                 Account
@@ -167,6 +203,7 @@ export default function SiteNav() {
               <button
                 type="button"
                 className="danger-button site-nav-mobile-signout"
+                tabIndex={mobileOpen ? 0 : -1}
                 onClick={async () => {
                   try {
                     const supabase = getSupabaseClient();

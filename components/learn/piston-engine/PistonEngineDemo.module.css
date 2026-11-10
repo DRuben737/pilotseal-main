@@ -1,0 +1,447 @@
+.demo {
+  --cycle-accent: #d8662c;
+  --fuel-accent: #1f83ae;
+  --ignition-accent: #d39421;
+  --oil-accent: #a97822;
+  --cooling-accent: #3f8eb6;
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  color: #172b3a;
+}
+
+.demo :global(.iso-figure) {
+  margin: 0;
+}
+
+.demo :global(.iso-plate) {
+  overflow: hidden;
+  min-height: 570px;
+  padding: 3.25rem 1.2rem 3rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 51% 48%, rgba(217, 229, 235, 0.82), transparent 46%),
+    #fbfcfd;
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.08);
+  --anatomy-card: #fbfcfd;
+  --anatomy-paper: #fbfcfd;
+  --anatomy-face: #f7f9fa;
+  --anatomy-top: #ffffff;
+  --anatomy-shade-0: #98a8b2;
+  --anatomy-shade-1: #adbac3;
+  --anatomy-shade-2: #c1ccd2;
+  --anatomy-shade-3: #d6dee2;
+  --anatomy-hi: #213b4d;
+  --anatomy-mid: #607988;
+  --anatomy-lo: #94a5af;
+  --anatomy-faint: #c5cfd4;
+  --anatomy-lit: #0d2637;
+  --anatomy-lit-top: #f8fbfc;
+  --anatomy-lit-shade: #d8e2e7;
+  --anatomy-halo: #6c8391;
+  --anatomy-halo-opacity: 0.24;
+  --anatomy-text: #233b4b;
+  --anatomy-muted: #657986;
+  --anatomy-strong: #132536;
+  --anatomy-weight: 0.72px;
+}
+
+.demo :global(.iso-plate-corners) {
+  z-index: 6;
+  inset: 1.2rem 1.35rem;
+}
+
+.demo :global(.iso-plate-corner) {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+}
+
+.stageFocus {
+  outline: none;
+}
+
+.stageFocus:focus-visible {
+  border-radius: 12px;
+  outline: 2px solid #0878b9;
+  outline-offset: 5px;
+}
+
+.engineFigure {
+  width: 100%;
+}
+
+.engineFigure :global(.iso-svg) {
+  display: block;
+  width: min(100%, 1120px);
+  height: 470px;
+  overflow: visible;
+}
+
+.demo :global(.engine-art) {
+  transition: opacity 220ms ease;
+}
+
+.demo :global([data-system-part]) {
+  transition: opacity 220ms ease;
+}
+
+.demo:not([data-mode="overview"]) :global([data-system-part]) {
+  opacity: 0.15;
+}
+
+.demo[data-mode="cycle"] :global([data-system-part~="cycle"]),
+.demo[data-mode="fuel-air"] :global([data-system-part~="fuel-air"]),
+.demo[data-mode="ignition"] :global([data-system-part~="ignition"]),
+.demo[data-mode="oil"] :global([data-system-part~="oil"]),
+.demo[data-mode="cooling-exhaust"] :global([data-system-part~="cooling-exhaust"]) {
+  opacity: 1;
+}
+
+.demo[data-mode="cycle"] :global([data-system-part~="cycle"]) {
+  --anatomy-hi: var(--cycle-accent);
+  --anatomy-mid: #b96f49;
+  --anatomy-lit: #b84a19;
+}
+
+.demo[data-mode="fuel-air"] :global([data-system-part~="fuel-air"]) {
+  --anatomy-hi: var(--fuel-accent);
+  --anatomy-mid: #5b94ad;
+  --anatomy-lit: #096b95;
+}
+
+.demo[data-mode="ignition"] :global([data-system-part~="ignition"]) {
+  --anatomy-hi: var(--ignition-accent);
+  --anatomy-mid: #b99046;
+  --anatomy-lit: #a16c06;
+}
+
+.demo[data-mode="oil"] :global([data-system-part~="oil"]) {
+  --anatomy-hi: var(--oil-accent);
+  --anatomy-mid: #aa874a;
+  --anatomy-lit: #845a09;
+}
+
+.demo[data-mode="cooling-exhaust"] :global([data-system-part~="cooling-exhaust"]) {
+  --anatomy-hi: var(--cooling-accent);
+  --anatomy-mid: #6895ab;
+  --anatomy-lit: #236b91;
+}
+
+.demo :global(.engine-flow) {
+  display: none;
+  fill: currentColor;
+  color: var(--anatomy-lit);
+  filter: drop-shadow(0 0 2px color-mix(in srgb, currentColor 45%, transparent));
+}
+
+.demo[data-mode="fuel-air"] :global([data-system-part~="fuel-air"] .engine-flow),
+.demo[data-mode="ignition"] :global([data-system-part~="ignition"] .engine-flow),
+.demo[data-mode="oil"] :global([data-system-part~="oil"] .engine-flow),
+.demo[data-mode="cooling-exhaust"] :global([data-system-part~="cooling-exhaust"] .engine-flow) {
+  display: block;
+}
+
+.demo :global(.engine-cut-window) {
+  fill: url(#engine-cut-window-fill);
+  stroke: #152c3a;
+  stroke-width: 1.1;
+}
+
+.demo[data-mode="overview"] :global(.engine-ignition-harness) {
+  opacity: 0.58;
+}
+
+.demo :global(.engine-cut-edge) {
+  fill: none;
+  stroke: #1e394a;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.demo :global(.engine-combustion) {
+  fill: url(#engine-combustion-fill);
+  opacity: 0;
+  mix-blend-mode: multiply;
+}
+
+.demo :global(.engine-wrist-pin) {
+  fill: #728793;
+  stroke: #e8eef1;
+  stroke-width: 0.8;
+}
+
+.demo :global(.engine-rod) {
+  fill: none;
+  stroke: #97a8b1;
+  stroke-width: 10;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 0 #203744);
+}
+
+.demo :global(.engine-crank-web) {
+  fill: #667c89;
+  stroke: #183141;
+  stroke-width: 1.2;
+}
+
+.demo :global(.engine-crank-journal),
+.demo :global(.engine-crank-pin) {
+  fill: #c8d3d8;
+  stroke: #183141;
+  stroke-width: 1;
+}
+
+.demo :global(.engine-counterweight) {
+  fill: #455f6f;
+  stroke: #183141;
+  stroke-width: 1;
+}
+
+.demo :global(.engine-valve path) {
+  fill: none;
+  stroke: #c7d2d8;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+}
+
+.demo :global(.engine-valve ellipse) {
+  fill: #b5c2c9;
+  stroke: #193342;
+  stroke-width: 1;
+}
+
+.demo :global(.engine-rockers path) {
+  fill: none;
+  stroke: #b7c4ca;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.demo :global(.engine-rockers circle) {
+  fill: #1b3544;
+}
+
+.demo :global(.engine-spark) {
+  fill: none;
+  stroke: #f0a126;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  opacity: 0;
+  filter: drop-shadow(0 0 4px #ffd66d);
+}
+
+.demo :global(.engine-cylinder[data-cylinder="1"] .engine-rocker-cover) {
+  opacity: 0.22;
+}
+
+.demo :global(.engine-cylinder[data-cylinder="1"] .engine-head-fins) {
+  opacity: 0.45;
+}
+
+.demo :global(.engine-halo) {
+  transform: translateY(8px) scale(0.9);
+  transform-origin: center;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: start;
+  gap: 0.9rem;
+}
+
+.playButton,
+.speedGroup button,
+.systemPicker button {
+  min-height: 43px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 11px;
+  background: #fff;
+  color: #263b4a;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.playButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 1rem;
+}
+
+.playButton:hover,
+.speedGroup button:hover,
+.systemPicker button:hover {
+  border-color: rgba(0, 102, 204, 0.5);
+}
+
+.playButton:focus-visible,
+.speedGroup button:focus-visible,
+.systemPicker button:focus-visible,
+.scrubber input:focus-visible {
+  outline: 2px solid #1681bf;
+  outline-offset: 2px;
+}
+
+.timeline {
+  display: grid;
+  gap: 0.35rem;
+  padding-top: 0.35rem;
+}
+
+.scrubber {
+  display: flex;
+  align-items: center;
+}
+
+.scrubber input {
+  width: 100%;
+  accent-color: #0878b9;
+  cursor: ew-resize;
+}
+
+.cycleScale {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) auto;
+  color: #73828c;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.cycleScale span:not(:last-child) {
+  border-left: 1px solid #cbd4d9;
+  padding-left: 0.35rem;
+}
+
+.cycleScale span:last-child {
+  transform: translateX(0.2rem);
+}
+
+.speedGroup {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.speedGroup button {
+  min-width: 49px;
+  padding: 0 0.65rem;
+}
+
+.speedGroup .activeSpeed,
+.systemPicker .activeSystem {
+  border-color: #0878b9;
+  background: #e9f5fb;
+  color: #075f90;
+}
+
+.systemPicker {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.1rem 0 0.35rem;
+  scrollbar-width: thin;
+}
+
+.systemPicker button {
+  flex: 0 0 auto;
+  padding: 0 0.95rem;
+}
+
+.systemNote {
+  min-height: 3rem;
+  margin: -0.2rem 0 0;
+  color: #5f6f7a;
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 700px) {
+  .demo :global(.iso-plate) {
+    min-height: 490px;
+    padding: 3rem 0 3.5rem;
+    border-radius: 17px;
+  }
+
+  .engineFigure :global(.iso-svg) {
+    width: 108%;
+    max-width: none;
+    height: 420px;
+    margin-left: -4%;
+  }
+
+  .demo :global(.iso-plate-corner) {
+    font-size: 0.62rem;
+  }
+
+  .demo :global(.iso-plate-corner[data-corner="title"]) {
+    display: none;
+  }
+
+  .controls {
+    grid-template-columns: auto 1fr;
+  }
+
+  .speedGroup {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .cycleScale span {
+    font-size: 0;
+  }
+
+  .cycleScale span::after {
+    font-size: 0.58rem;
+  }
+
+  .cycleScale span:nth-child(1)::after { content: "0°"; }
+  .cycleScale span:nth-child(2)::after { content: "180°"; }
+  .cycleScale span:nth-child(3)::after { content: "360°"; }
+  .cycleScale span:nth-child(4)::after { content: "540°"; }
+  .cycleScale span:nth-child(5)::after { content: "720°"; }
+
+  .demo :global(.engine-details),
+  .demo :global(.engine-ignition-harness .tb-ring) {
+    display: none;
+  }
+}
+
+@media (max-width: 430px) {
+  .demo :global(.iso-plate) {
+    min-height: 430px;
+  }
+
+  .engineFigure :global(.iso-svg) {
+    height: 360px;
+  }
+
+  .demo :global(.iso-plate-corner[data-corner="hint"]) {
+    display: none;
+  }
+
+  .demo :global(.iso-plate-corner[data-corner="readout"]) {
+    max-width: 78%;
+    white-space: normal;
+    text-align: right;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo :global(.engine-flow animateMotion) {
+    display: none;
+  }
+
+  .demo :global([data-system-part]) {
+    transition: none;
+  }
+}

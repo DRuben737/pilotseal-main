@@ -295,6 +295,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!mobileMenuOpen) return;
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const handlePointerDown = (event: PointerEvent) => {
       if (event.target instanceof Node && !mobileNavigationRef.current?.contains(event.target)) {
         setMobileMenuOpen(false);
@@ -309,6 +312,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      document.body.style.overflow = previousOverflow;
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -744,8 +748,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   <button
                     ref={mobileMenuButtonRef}
                     type="button"
+                    aria-label={`${mobileMenuOpen ? "Close" : "Open"} ${workspaceLabel} navigation`}
                     aria-expanded={mobileMenuOpen}
                     aria-controls="dashboard-mobile-page-list"
+                    title={`${mobileMenuOpen ? "Close" : "Open"} ${workspaceLabel} navigation`}
                     onClick={() => setMobileMenuOpen((open) => !open)}
                   >
                     <span className="flex min-w-0 items-center gap-2">

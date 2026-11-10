@@ -106,8 +106,8 @@ export default function EndorsementsPage() {
               <p className="copy-muted mt-4 max-w-2xl leading-7">
                 Pick the scenario, scan the references, then draft.
               </p>
-              <p className="copy-muted mt-3 max-w-2xl text-sm leading-6">
-                Template data: {endorsementTemplateDataVersion.source}; source date {endorsementTemplateDataVersion.sourceDate}; updated {endorsementTemplateDataVersion.updatedAt}.
+              <p className="copy-muted mt-3 max-w-2xl text-sm leading-6 ps-numeric">
+                {endorsementTemplateDataVersion.source} · {endorsementTemplateDataVersion.sourceDate}
               </p>
 
               <div className="mt-5 flex flex-wrap gap-3">
@@ -153,9 +153,7 @@ export default function EndorsementsPage() {
                 High-priority endorsement guides
               </h2>
               <p className="copy-muted mt-3 max-w-3xl leading-8">
-                These are the pages most users need first. The guide entry is
-                intentionally near the top so you do not have to scroll through
-                an article before getting to the actual reading paths.
+                Start with the scenarios instructors and pilots use most often.
               </p>
             </div>
             <span className="reference-chip">13 guide pages live</span>

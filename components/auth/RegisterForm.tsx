@@ -240,7 +240,7 @@ export default function RegisterForm({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             readOnly={Boolean(inviteToken)}
-            placeholder="cfi@pilotseal.com"
+            placeholder="cfi@example.test"
             className="bg-transparent text-base text-slate-950 outline-none placeholder:text-slate-400"
             required
           />

@@ -10,13 +10,10 @@ export default function SiteHeader() {
   const pathname = usePathname();
   const isHome = pathname === "/home";
 
+  if (isHome) return null;
+
   return (
-    <header
-      className={[
-        "app-header-shell",
-        isHome ? "sticky top-0 z-80" : "relative z-10",
-      ].join(" ")}
-    >
+    <header className="app-header-shell relative z-10">
       <div className="site-shell flex items-center justify-between gap-6 px-1 py-4">
         <Link href="/home" className="site-brand-link">
           <span className="site-brand-logo-wrap">

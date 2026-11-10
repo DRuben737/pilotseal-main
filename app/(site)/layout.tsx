@@ -1,6 +1,7 @@
 import Script from "next/script";
 
 import AppFooter from "@/components/ui/AppFooter";
+import SiteContent from "@/components/ui/SiteContent";
 import SiteHeader from "@/components/ui/SiteHeader";
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
@@ -19,7 +20,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         `}
       </Script>
       <SiteHeader />
-      <div className="app-main-content pb-16 pt-6 sm:pt-10">{children}</div>
+      <SiteContent>{children}</SiteContent>
       <AppFooter />
     </>
   );
