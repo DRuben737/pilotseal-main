@@ -84,10 +84,13 @@ const scheduleSource = (await readFile(new URL('../lib/cfi-schedule.ts', import.
     'const fetchScheduleTrainingCourseModules = async () => [];\nconst fetchScheduleTrainingSubjects = async () => [];',
   );
 const scheduleCompiled = ts.transpileModule(scheduleSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { availabilityEndToMinutes, defaultTeachingRules, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd, normalizeAvailabilityTimeRows } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
+const { availabilityEndToMinutes, defaultTeachingRules, flightCategoryFromNote, generateAutomaticSchedule, getManualConflictWarnings, minutesToAvailabilityEnd, normalizeAvailabilityTimeRows, scheduleNoteWithFlightCategory, visibleScheduleNote } = await import(`data:text/javascript;base64,${Buffer.from(scheduleCompiled).toString('base64')}`);
 assert.equal(availabilityEndToMinutes('00:00'),1440,'native midnight end time saves as the end of the day');
 assert.equal(minutesToAvailabilityEnd(1440),'00:00','end-of-day availability loads into a valid native time input');
 assert.equal(availabilityEndToMinutes('18:30'),1110,'ordinary end times keep their minute value');
+assert.equal(flightCategoryFromNote('[[ps:flight:night_xc]] Auto-scheduled'),'night_xc','night XC survives the existing schedule note field');
+assert.equal(visibleScheduleNote('[[ps:flight:day_xc]] Auto-scheduled'),'Auto-scheduled','internal flight categories stay out of visible notes');
+assert.equal(scheduleNoteWithFlightCategory('standard','Brief route'),'Brief route','standard flights keep ordinary notes');
 assert.deepEqual(normalizeAvailabilityTimeRows([{start:'',end:''},{start:'09:00',end:'14:00'}]),[{startMinute:540,endMinute:840}],'a completely blank availability row is ignored');
 assert.throws(()=>normalizeAvailabilityTimeRows([{start:'09:00',end:''}]),/incomplete time/,'a partially completed availability row still requires attention');
 const slots = [{ student_user_id:'a', scope:'weekly', weekday:1, start_minute:420, end_minute:900, timezone:'America/New_York' }];
@@ -130,6 +133,19 @@ assert(Date.parse(generateAutomaticSchedule({...autoInput,slots:twoDaySlots,bloc
 const separateKinds=generateAutomaticSchedule({...autoInput,slots:[...twoDaySlots,{student_user_id:'a',scope:'weekly',weekday:3,start_minute:420,end_minute:900,timezone:'America/New_York'}],blocks:[],existingEntries:[a,existingGround],requests:[{studentUserId:'a',flightSessions:2,groundSessions:2}]});
 assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='flight').length,1,'existing Flight is deducted only from the Flight total');
 assert.equal(separateKinds.drafts.filter((draft)=>draft.lesson_kind==='ground').length,1,'existing Ground is deducted only from the Ground total');
+const xcSlots=[1,2].map((weekday)=>({student_user_id:'a',scope:'weekly',weekday,start_minute:420,end_minute:900,timezone:'America/New_York'}));
+const xcResult=generateAutomaticSchedule({...autoInput,slots:xcSlots,blocks:[],nightStartMinute:1080,requests:[{studentUserId:'a',flightSessions:2,groundSessions:0,dayXcSessions:1,nightXcSessions:0}]});
+assert.equal(xcResult.drafts.length,2,'XC replaces one Flight lesson instead of adding to the Flight total');
+assert.deepEqual(xcResult.drafts.map((draft)=>draft.flight_category).sort(),['day_xc','standard'],'the requested Flight total is split into standard and XC lessons');
+const dayXc=xcResult.drafts.find((draft)=>draft.flight_category==='day_xc');
+assert.equal((Date.parse(dayXc.end_at)-Date.parse(dayXc.start_at))/60000,180,'Day XC defaults to three hours');
+const nightSlot={student_user_id:'a',scope:'weekly',weekday:1,start_minute:1080,end_minute:1380,timezone:'America/New_York'};
+const nightXcResult=generateAutomaticSchedule({...autoInput,slots:[nightSlot],blocks:[],nightStartMinute:1080,requests:[{studentUserId:'a',flightSessions:1,groundSessions:0,dayXcSessions:0,nightXcSessions:1}]});
+assert.equal(nightXcResult.drafts[0].flight_category,'night_xc','Night XC is identified in the generated draft');
+assert.equal(new Date(nightXcResult.drafts[0].start_at).getHours(),18,'Night XC starts no earlier than the selected night boundary');
+assert.equal((Date.parse(nightXcResult.drafts[0].end_at)-Date.parse(nightXcResult.drafts[0].start_at))/60000,180,'Night XC defaults to three hours');
+const existingNightXc={...a,note:'[[ps:flight:night_xc]] Auto-scheduled'};
+assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[existingNightXc],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0,dayXcSessions:0,nightXcSessions:1}]}).drafts.length,0,'an existing Night XC satisfies both its category and the Flight total');
 const fairAccess=['fa','fb','fc'].map((id)=>({student_user_id:id,student_name:id.toUpperCase(),default_duration_min:120,default_weekly_sessions:3}));
 const fairSlots=fairAccess.flatMap((student)=>[3,4,5].map((weekday)=>({student_user_id:student.student_user_id,scope:'weekly',weekday,start_minute:420,end_minute:540,timezone:'America/New_York'})));
 const faMonday={...lesson('fa','07:00','09:00'),id:'fa-monday'};

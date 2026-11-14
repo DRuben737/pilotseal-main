@@ -30,6 +30,7 @@ import {
   fetchAvailabilityReview,
   confirmAvailabilityReview,
   type AvailabilityReview,
+  flightCategoryFromNote,
   generateAutomaticSchedule,
   getManualConflictWarnings,
   getWeekStart,
@@ -41,6 +42,7 @@ import {
   publishScheduleDraft,
   saveScheduleAircraftPreferences,
   saveTeachingRules,
+  scheduleNoteWithFlightCategory,
   removeDateAvailabilityOverride,
   removeWeekOverride,
   saveScheduleAvailability,
@@ -58,6 +60,7 @@ import {
   type ScheduleAircraftPreference,
   type ScheduleAssignmentInstructor,
   type LessonKind,
+  type FlightCategory,
   type LinkedScheduleCandidate,
   type ScheduleAccess,
   type ScheduleDraft,
@@ -67,6 +70,7 @@ import {
   type TeachingRules,
   type InstructorTimeOff,
   defaultTeachingRules,
+  visibleScheduleNote,
   type WeekOverride,
 } from "@/lib/cfi-schedule";
 import {
@@ -144,6 +148,7 @@ const emptyLesson = {
   originalStartAt: "",
   studentUserId: "",
   kind: "flight" as LessonKind,
+  flightCategory: "standard" as FlightCategory,
   date: "",
   start: "08:00",
   durationMin: 120,
@@ -432,6 +437,7 @@ export default function CfiScheduleManager() {
   >([]);
   const [autoRequests, setAutoRequests] = useState<AutoRequestRow[]>([]);
   const [autoPreviewBuilt, setAutoPreviewBuilt] = useState(false);
+  const [nightStart, setNightStart] = useState("18:00");
   const [selectedAircraftIds, setSelectedAircraftIds] = useState<string[]>([]);
   const [settingsStudentId, setSettingsStudentId] = useState("");
   const [settingsForm, setSettingsForm] = useState({
@@ -1602,10 +1608,11 @@ export default function CfiScheduleManager() {
       originalStartAt: entry.start_at,
       studentUserId: entry.student_user_id ?? "",
       kind: entry.lesson_kind ?? "flight",
+      flightCategory: flightCategoryFromNote(entry.note),
       date: localDateKey(start),
       start: localDateTimeValue(start).slice(11),
       durationMin: Math.round((end.getTime() - start.getTime()) / 60_000),
-      note: entry.note,
+      note: visibleScheduleNote(entry.note),
       aircraftId: aircraft.some(
         (item) =>
           item.id === entry.aircraft_id && item.operational_status !== "away",
@@ -1760,7 +1767,10 @@ export default function CfiScheduleManager() {
       start_at: start.toISOString(),
       end_at: end.toISOString(),
       lesson_kind: lesson.kind,
-      note: lesson.note,
+      note: scheduleNoteWithFlightCategory(
+        lesson.kind === "flight" ? lesson.flightCategory : "standard",
+        lesson.note,
+      ),
       aircraft_id: lesson.kind !== "ground" ? lesson.aircraftId || null : null,
       aircraft_tail_number:
         lesson.kind !== "ground"
@@ -2242,6 +2252,8 @@ export default function CfiScheduleManager() {
           studentUserId: student.student_user_id,
           flightSessions: target,
           groundSessions: 0,
+          dayXcSessions: 0,
+          nightXcSessions: 0,
           selected: existingFlight < target,
         };
       }),
@@ -2256,11 +2268,21 @@ export default function CfiScheduleManager() {
         (item) =>
           item.selected && (item.flightSessions > 0 || item.groundSessions > 0),
       )
-      .map(({ studentUserId, flightSessions, groundSessions }) => ({
+      .map(
+        ({
+          studentUserId,
+          flightSessions,
+          groundSessions,
+          dayXcSessions,
+          nightXcSessions,
+        }) => ({
         studentUserId,
         flightSessions,
         groundSessions,
-      }));
+          dayXcSessions,
+          nightXcSessions,
+        }),
+      );
     if (!requests.length) {
       setError(
         "Select at least one student and choose how many lessons to add.",
@@ -2286,6 +2308,7 @@ export default function CfiScheduleManager() {
       aircraftReservations,
       teachingRules,
       instructorTimeOff,
+      nightStartMinute: timeToMinutes(nightStart),
     });
     setAutoDrafts(result.drafts);
     setAutoUnscheduled(result.unscheduled);
@@ -3027,12 +3050,17 @@ export default function CfiScheduleManager() {
                       (entry.aircraft_id
                         ? "Aircraft"
                         : "Aircraft not specified");
+                    const flightCategory = flightCategoryFromNote(entry.note);
                     const lessonLabel =
                       entry.lesson_kind === "ground"
                         ? "Ground"
                         : entry.lesson_kind === "solo"
                           ? `Solo · ${aircraftLabel}`
-                          : aircraftLabel;
+                          : flightCategory === "night_xc"
+                            ? `${aircraftLabel} · Night XC`
+                            : flightCategory === "day_xc"
+                              ? `${aircraftLabel} · XC`
+                              : aircraftLabel;
                     const subjectLabel = entry.training_subjects?.length
                       ? entry.training_subjects.length === 1
                         ? (entry.training_subjects[0].subject_snapshot?.title ??
@@ -3616,7 +3644,17 @@ export default function CfiScheduleManager() {
               {formatTime(detailEntry.start_at)}–
               {formatTime(detailEntry.end_at)}
             </p>
-            <p className="capitalize">{detailEntry.lesson_kind}</p>
+            <p>
+              {detailEntry.lesson_kind === "flight"
+                ? flightCategoryFromNote(detailEntry.note) === "night_xc"
+                  ? "Night XC"
+                  : flightCategoryFromNote(detailEntry.note) === "day_xc"
+                    ? "Day XC"
+                    : "Flight"
+                : detailEntry.lesson_kind === "solo"
+                  ? "Solo"
+                  : "Ground"}
+            </p>
             {detailEntry.assigned_instructor_name ? (
               <p>Instructor: {detailEntry.assigned_instructor_name}</p>
             ) : null}
@@ -3784,8 +3822,10 @@ export default function CfiScheduleManager() {
                 </div>
               </section>
             ) : null}
-            {detailEntry.note ? (
-              <p className="whitespace-pre-wrap">{detailEntry.note}</p>
+            {visibleScheduleNote(detailEntry.note) ? (
+              <p className="whitespace-pre-wrap">
+                {visibleScheduleNote(detailEntry.note)}
+              </p>
             ) : null}
             {entryWarnings(detailEntry).map((warning) => (
               <p key={warning} className="text-sm text-amber-800">
@@ -4464,6 +4504,10 @@ export default function CfiScheduleManager() {
                     return {
                       ...current,
                       kind: nextKind,
+                      flightCategory:
+                        nextKind === "flight"
+                          ? current.flightCategory
+                          : "standard",
                       aircraftId:
                         nextKind === "ground" ? "" : current.aircraftId,
                       trainingCourseModules: changesTrack
@@ -4498,6 +4542,30 @@ export default function CfiScheduleManager() {
               </select>
             </label>
           </div>
+          {lesson.kind === "flight" ? (
+            <label className="saas-field">
+              <span>Flight type</span>
+              <select
+                value={lesson.flightCategory}
+                onChange={(event) => {
+                  const flightCategory = event.target.value as FlightCategory;
+                  setLessonWarnings([]);
+                  setLesson((current) => ({
+                    ...current,
+                    flightCategory,
+                    durationMin:
+                      flightCategory === "standard"
+                        ? current.durationMin
+                        : 180,
+                  }));
+                }}
+              >
+                <option value="standard">Standard</option>
+                <option value="day_xc">Day XC</option>
+                <option value="night_xc">Night XC</option>
+              </select>
+            </label>
+          ) : null}
           {lesson.kind !== "ground" ? (
             <label className="saas-field">
               <span>Aircraft</span>
@@ -5596,6 +5664,8 @@ export default function CfiScheduleManager() {
                 studentUserId: student.student_user_id,
                 flightSessions: 1,
                 groundSessions: 0,
+                dayXcSessions: 0,
+                nightXcSessions: 0,
                 selected: false,
               };
               const override = weekOverrides.find(
@@ -5703,14 +5773,24 @@ export default function CfiScheduleManager() {
                         value={request.flightSessions}
                         disabled={!request.selected}
                         aria-label={`Flight lessons for ${student.student_name}`}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const flightSessions = Math.max(
+                            0,
+                            Math.min(14, Number(event.target.value) || 0),
+                          );
+                          const dayXcSessions = Math.min(
+                            request.dayXcSessions,
+                            flightSessions,
+                          );
                           updateAutoRequest(student.student_user_id, {
-                            flightSessions: Math.max(
-                              0,
-                              Math.min(14, Number(event.target.value) || 0),
+                            flightSessions,
+                            dayXcSessions,
+                            nightXcSessions: Math.min(
+                              request.nightXcSessions,
+                              flightSessions - dayXcSessions,
                             ),
-                          })
-                        }
+                          });
+                        }}
                       />
                     </label>
                     <label>
@@ -5733,11 +5813,97 @@ export default function CfiScheduleManager() {
                         }
                       />
                     </label>
+                    <details className={styles.autoXc}>
+                      <summary>
+                        {request.dayXcSessions + request.nightXcSessions
+                          ? `XC ${request.dayXcSessions + request.nightXcSessions}`
+                          : "+ XC"}
+                      </summary>
+                      <div>
+                        <label>
+                          <span>Day XC</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={14}
+                            value={request.dayXcSessions}
+                            disabled={!request.selected}
+                            aria-label={`Day cross-country lessons for ${student.student_name}`}
+                            onChange={(event) => {
+                              const dayXcSessions = Math.max(
+                                0,
+                                Math.min(
+                                  14,
+                                  Number(event.target.value) || 0,
+                                ),
+                              );
+                              updateAutoRequest(student.student_user_id, {
+                                dayXcSessions,
+                                flightSessions: Math.max(
+                                  request.flightSessions,
+                                  dayXcSessions + request.nightXcSessions,
+                                ),
+                              });
+                            }}
+                          />
+                        </label>
+                        <label>
+                          <span>Night XC</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={14}
+                            value={request.nightXcSessions}
+                            disabled={!request.selected}
+                            aria-label={`Night cross-country lessons for ${student.student_name}`}
+                            onChange={(event) => {
+                              const nightXcSessions = Math.max(
+                                0,
+                                Math.min(
+                                  14,
+                                  Number(event.target.value) || 0,
+                                ),
+                              );
+                              updateAutoRequest(student.student_user_id, {
+                                nightXcSessions,
+                                flightSessions: Math.max(
+                                  request.flightSessions,
+                                  request.dayXcSessions + nightXcSessions,
+                                ),
+                              });
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </details>
                   </div>
                 </div>
               );
             })}
           </div>
+          {autoRequests.some(
+            (item) => item.selected && item.nightXcSessions > 0,
+          ) ? (
+            <label className={styles.autoNightStart}>
+              <span>Night starts</span>
+              <input
+                className={styles.nativePicker}
+                data-native-picker
+                type="time"
+                step={900}
+                value={nightStart}
+                onClick={(event) => showNativePicker(event.currentTarget)}
+                onChange={(event) => {
+                  setNightStart(event.target.value);
+                  setAutoPreviewBuilt(false);
+                  setAutoDrafts([]);
+                  setAutoUnscheduled([]);
+                }}
+              />
+            </label>
+          ) : null}
         </section>
         <section className={styles.formSection}>
           <div className={styles.sectionHeading}>
@@ -5800,7 +5966,7 @@ export default function CfiScheduleManager() {
                           {formatTime(draft.start_at)}–
                           {formatTime(draft.end_at)} ·{" "}
                           {draft.lesson_kind === "flight"
-                            ? `Flight · ${draft.aircraft_tail_number}`
+                            ? `${draft.flight_category === "night_xc" ? "Night XC" : draft.flight_category === "day_xc" ? "Day XC" : "Flight"} · ${draft.aircraft_tail_number}`
                             : "Ground"}
                         </p>
                       ))}
@@ -5809,10 +5975,15 @@ export default function CfiScheduleManager() {
                       ) : null}
                       {missed.map((item) => (
                         <p
-                          key={item.lessonKind}
+                          key={`${item.lessonKind}-${item.flightCategory}`}
                           className={styles.autoStudentWarning}
                         >
-                          {item.remaining} {item.lessonKind} could not be
+                          {item.remaining}{" "}
+                          {item.flightCategory === "night_xc"
+                            ? "Night XC"
+                            : item.flightCategory === "day_xc"
+                              ? "Day XC"
+                              : item.lessonKind} could not be
                           scheduled. {item.reason}
                         </p>
                       ))}

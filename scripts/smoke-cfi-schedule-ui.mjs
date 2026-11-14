@@ -139,6 +139,13 @@ try {
   await menuAction(page,'Auto schedule','Add to schedule');
   mobileDialog=page.getByRole('dialog',{name:'Automatic scheduling',exact:true});
   await assertMobileDialogFits(page,mobileDialog,'Automatic scheduling');
+  const mobileAutoStudent=mobileDialog.getByRole('checkbox',{name:/UI Schedule Student/});
+  if(!(await mobileAutoStudent.isChecked())) await mobileAutoStudent.click();
+  await mobileDialog.getByText('+ XC',{exact:true}).first().click();
+  const mobileNightXc=mobileDialog.getByLabel(/Night cross-country lessons/).first();
+  await mobileNightXc.fill('1');
+  assert(await mobileDialog.getByText('Night starts',{exact:true}).isVisible(),'Night XC reveals one compact night boundary control');
+  await assertMobileDialogFits(page,mobileDialog,'Automatic scheduling with XC');
   await mobileDialog.getByLabel('Close',{exact:true}).click();
   await page.setViewportSize({width:1440,height:1100});
   const firstLesson=page.locator(`[data-schedule-entry-id="${eventIds[0]}"]`);

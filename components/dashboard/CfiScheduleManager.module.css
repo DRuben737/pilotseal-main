@@ -210,9 +210,17 @@
 .autoStudentWarning { display: block; margin-top: 3px; color: #9a5200; font-size: 11px; line-height: 1.4; }
 .autoCount { display: grid; grid-template-columns: auto 54px auto; align-items: center; gap: 6px; color: var(--schedule-muted); font-size: 12px; }
 .autoCount input { width: 54px; min-height: 36px; border: 1px solid #d2d2d7; border-radius: 8px; background: #fff; color: var(--schedule-ink); text-align: center; font: inherit; font-size: 14px; }
-.autoCounts { display: flex; gap: 8px; }
+.autoCounts { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .autoCounts label { display: grid; gap: 3px; color: var(--schedule-muted); font-size: 11px; }
 .autoCounts input { width: 58px; min-height: 36px; border: 1px solid #d2d2d7; border-radius: 8px; text-align: center; font-size: 14px; }
+.autoXc { position: relative; }
+.autoXc summary { display: grid; min-height: 36px; place-items: center; padding: 6px 10px; border: 1px solid var(--ps-line); border-radius: var(--ps-radius-sm, 8px); corner-shape: squircle; background: var(--ps-surface-3); color: var(--schedule-blue); font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; }
+.autoXc summary::-webkit-details-marker { display: none; }
+.autoXc summary:focus-visible, .autoXc input:focus-visible, .autoNightStart input:focus-visible { border-color: transparent; outline: none; box-shadow: var(--ps-focus-ring); }
+.autoXc[open] { flex-basis: 100%; }
+.autoXc > div { display: flex; justify-content: flex-end; gap: 8px; padding-top: 8px; }
+.autoNightStart { display: grid; grid-template-columns: minmax(0, 1fr) 116px; align-items: center; gap: 12px; width: min(100%, 320px); margin: 12px 0 0 auto; color: var(--schedule-muted); font-size: 12px; }
+.autoNightStart input { width: 100%; border: 1px solid var(--ps-line); border-radius: var(--ps-radius-sm, 8px); corner-shape: squircle; background: var(--ps-surface-3); font-size: 14px; font-variant-numeric: tabular-nums; }
 .aircraftChoices { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 0 16px; margin-top: 8px; border-top: 1px solid var(--schedule-line); }
 .aircraftChoices label { display: flex; align-items: flex-start; gap: 8px; min-height: 38px; padding: 8px 2px; border-bottom: 1px solid var(--schedule-line); cursor: pointer; }
 .aircraftChoices strong { font-size: 13px; }
@@ -250,6 +258,9 @@
   .autoStudentRow { grid-template-columns: 1fr; gap: 8px; padding: 12px 0; }
   .autoCount { padding-left: 26px; justify-content: start; }
   .autoCounts { padding-left: 26px; }
+  .autoXc summary { min-height: 44px; }
+  .autoXc > div { justify-content: flex-start; }
+  .autoNightStart { margin-left: 26px; width: calc(100% - 26px); }
   .toolbar { justify-content: flex-start; }
   .infoHint summary { width: 44px; height: 44px; margin: -8px; }
   .availabilityWeekNav { margin-bottom: 2px; }

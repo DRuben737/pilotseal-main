@@ -7,7 +7,29 @@ import {
 } from "@/lib/training-guide";
 
 export type LessonKind = "flight" | "ground" | "solo";
+export type FlightCategory = "standard" | "day_xc" | "night_xc";
 export type AvailabilityScope = "weekly" | "date";
+
+const flightCategoryMarker = /^\[\[ps:flight:(day_xc|night_xc)\]\]\s*/;
+
+export function flightCategoryFromNote(note = ""): FlightCategory {
+  const match = note.match(flightCategoryMarker);
+  return (match?.[1] as FlightCategory | undefined) ?? "standard";
+}
+
+export function visibleScheduleNote(note = "") {
+  return note.replace(flightCategoryMarker, "");
+}
+
+export function scheduleNoteWithFlightCategory(
+  category: FlightCategory,
+  note = "",
+) {
+  const visibleNote = visibleScheduleNote(note);
+  return category === "standard"
+    ? visibleNote
+    : `[[ps:flight:${category}]] ${visibleNote}`.trimEnd();
+}
 
 export type ScheduleAccess = {
   /** For person storage, student_user_id is the People ID, NOT an auth ID. */
@@ -214,6 +236,7 @@ export type ScheduleDraft = {
   student_user_id: string;
   student_name: string;
   lesson_kind: LessonKind;
+  flight_category: FlightCategory;
   start_at: string;
   end_at: string;
   note: string;
@@ -228,6 +251,8 @@ export type AutomaticScheduleRequest = {
   studentUserId: string;
   flightSessions: number;
   groundSessions: number;
+  dayXcSessions: number;
+  nightXcSessions: number;
 };
 
 export type AutomaticScheduleUnscheduled = {
@@ -237,6 +262,7 @@ export type AutomaticScheduleUnscheduled = {
   scheduled: number;
   remaining: number;
   lessonKind: LessonKind;
+  flightCategory: FlightCategory;
   reason: string;
 };
 
@@ -924,11 +950,15 @@ export async function createScheduleEvents(
   const { error } = await supabase
     .from("cfi_schedule_events")
     .insert(
-      drafts.map((draft) => ({
-        ...draft,
-        created_by: createdBy,
-        status: "scheduled",
-      })),
+      drafts.map((draft) => {
+        const { flight_category: flightCategory, ...event } = draft;
+        void flightCategory;
+        return {
+          ...event,
+          created_by: createdBy,
+          status: "scheduled",
+        };
+      }),
     );
   if (error) throw error;
 }
@@ -1107,6 +1137,7 @@ export function generateAutomaticSchedule(input: {
   aircraftReservations: AircraftReservation[];
   teachingRules?: TeachingRules;
   instructorTimeOff?: InstructorTimeOff[];
+  nightStartMinute?: number;
 }) {
   const rules = input.teachingRules ?? defaultTeachingRules;
   const dayCount = 7;
@@ -1138,6 +1169,7 @@ export function generateAutomaticSchedule(input: {
       input.selectedAircraftIds.includes(aircraft.id),
   );
   const usedDaysByStudent = new Map<string, Set<string>>();
+  const weeklyFlightTotals = new Map<string, number>();
   const settings = input.access.flatMap((access) => {
     const request = input.requests?.find(
       (item) => item.studentUserId === access.student_user_id,
@@ -1170,6 +1202,22 @@ export function generateAutomaticSchedule(input: {
               localDateKey(new Date(entry.start_at)) === localDateKey(date),
           ),
       ).length;
+    const existingFlights = input.existingEntries.filter(
+      (entry) =>
+        entry.entry_type === "lesson" &&
+        entry.status === "scheduled" &&
+        entry.student_user_id === access.student_user_id &&
+        entry.lesson_kind === "flight" &&
+        consideredDates.some(
+          (date) =>
+            localDateKey(new Date(entry.start_at)) === localDateKey(date),
+        ),
+    );
+    const existingByFlightCategory = (flightCategory: FlightCategory) =>
+      existingFlights.filter(
+        (entry) => flightCategoryFromNote(entry.note) === flightCategory,
+      ).length;
+    weeklyFlightTotals.set(access.student_user_id, existingFlights.length);
     const fallback = Math.max(
       0,
       (override?.target_sessions ?? access.default_weekly_sessions) -
@@ -1177,32 +1225,70 @@ export function generateAutomaticSchedule(input: {
     );
     const counts: Array<{
       lessonKind: LessonKind;
+      flightCategory: FlightCategory;
       requested: number;
       existing: number;
     }> = request
-      ? [
-          {
-            lessonKind: "flight",
-            requested: Math.max(
-              0,
-              Math.min(14, Math.floor(request.flightSessions || 0)) -
-                existingByKind("flight"),
-            ),
-            existing: existingByKind("flight"),
-          },
-          {
-            lessonKind: "ground",
-            requested: Math.max(
-              0,
-              Math.min(14, Math.floor(request.groundSessions || 0)) -
-                existingByKind("ground"),
-            ),
-            existing: existingByKind("ground"),
-          },
-        ]
+      ? (() => {
+          const flightTotal = Math.max(
+            0,
+            Math.min(14, Math.floor(request.flightSessions || 0)),
+          );
+          const dayXcTotal = Math.min(
+            flightTotal,
+            Math.max(0, Math.floor(request.dayXcSessions || 0)),
+          );
+          const nightXcTotal = Math.min(
+            flightTotal - dayXcTotal,
+            Math.max(0, Math.floor(request.nightXcSessions || 0)),
+          );
+          const standardFlightTotal =
+            flightTotal - dayXcTotal - nightXcTotal;
+          return [
+            {
+              lessonKind: "flight" as const,
+              flightCategory: "night_xc" as const,
+              requested: Math.max(
+                0,
+                nightXcTotal - existingByFlightCategory("night_xc"),
+              ),
+              existing: existingByFlightCategory("night_xc"),
+            },
+            {
+              lessonKind: "flight" as const,
+              flightCategory: "day_xc" as const,
+              requested: Math.max(
+                0,
+                dayXcTotal - existingByFlightCategory("day_xc"),
+              ),
+              existing: existingByFlightCategory("day_xc"),
+            },
+            {
+              lessonKind: "flight" as const,
+              flightCategory: "standard" as const,
+              requested: Math.max(
+                0,
+                standardFlightTotal -
+                  existingByFlightCategory("standard"),
+              ),
+              existing: existingByFlightCategory("standard"),
+            },
+            {
+              lessonKind: "ground",
+              flightCategory: "standard" as const,
+              requested: Math.max(
+                0,
+                Math.min(14, Math.floor(request.groundSessions || 0)) -
+                  existingByKind("ground"),
+              ),
+              existing: existingByKind("ground"),
+            },
+          ];
+        })()
       : [
           {
             lessonKind: "flight",
+            flightCategory: "standard",
             requested: fallback,
             existing: existingByKind("flight"),
           },
@@ -1222,10 +1308,14 @@ export function generateAutomaticSchedule(input: {
     usedDaysByStudent.set(access.student_user_id, usedDays);
     return counts
       .filter((item) => item.requested > 0)
-      .map(({ lessonKind, requested, existing }) => ({
+      .map(({ lessonKind, flightCategory, requested, existing }) => ({
         access,
         lessonKind,
-        durationMin: override?.duration_min ?? access.default_duration_min,
+        flightCategory,
+        durationMin:
+          flightCategory === "standard"
+            ? (override?.duration_min ?? access.default_duration_min)
+            : 180,
         requested,
         remaining: requested,
         existing,
@@ -1293,10 +1383,18 @@ export function generateAutomaticSchedule(input: {
           const end = new Date(startMs + setting.durationMin * 60_000);
           const localStartMinute = start.getHours() * 60 + start.getMinutes();
           const localEndMinute = end.getHours() * 60 + end.getMinutes();
+          const nightStartMinute = Math.max(
+            0,
+            Math.min(1439, input.nightStartMinute ?? 18 * 60),
+          );
           if (
             localDateKey(end) !== dateKey ||
             localStartMinute < rules.start_minute ||
-            localEndMinute > rules.end_minute
+            localEndMinute > rules.end_minute ||
+            (setting.flightCategory === "day_xc" &&
+              localEndMinute > nightStartMinute) ||
+            (setting.flightCategory === "night_xc" &&
+              localStartMinute < nightStartMinute)
           )
             continue;
           if (
@@ -1432,12 +1530,26 @@ export function generateAutomaticSchedule(input: {
       .map((setting) => ({ setting, placement: findBestPlacement(setting) }))
       .filter((choice) => choice.placement !== null);
     choices.sort((a, b) => {
+      const categoryPriority = (setting: (typeof settings)[number]) =>
+        setting.flightCategory === "night_xc"
+          ? 0
+          : setting.flightCategory === "day_xc"
+            ? 1
+            : setting.lessonKind === "flight"
+              ? 2
+              : 3;
+      if (categoryPriority(a.setting) !== categoryPriority(b.setting))
+        return categoryPriority(a.setting) - categoryPriority(b.setting);
       if (a.setting.lessonKind !== b.setting.lessonKind)
         return a.setting.lessonKind === "flight" ? -1 : 1;
       const aWeeklyTotal =
-        a.setting.existing + (a.setting.requested - a.setting.remaining);
+        a.setting.lessonKind === "flight"
+          ? (weeklyFlightTotals.get(a.setting.access.student_user_id) ?? 0)
+          : a.setting.existing + (a.setting.requested - a.setting.remaining);
       const bWeeklyTotal =
-        b.setting.existing + (b.setting.requested - b.setting.remaining);
+        b.setting.lessonKind === "flight"
+          ? (weeklyFlightTotals.get(b.setting.access.student_user_id) ?? 0)
+          : b.setting.existing + (b.setting.requested - b.setting.remaining);
       return (
         aWeeklyTotal - bWeeklyTotal ||
         a.placement!.dayLessonCount - b.placement!.dayLessonCount ||
@@ -1460,15 +1572,24 @@ export function generateAutomaticSchedule(input: {
       student_user_id: setting.access.student_user_id,
       student_name: setting.access.student_name,
       lesson_kind: setting.lessonKind,
+      flight_category: setting.flightCategory,
       aircraft_id: placement.aircraft?.id ?? null,
       aircraft_tail_number: placement.aircraft?.tail_number ?? null,
       start_at: placement.start.toISOString(),
       end_at: placement.end.toISOString(),
-      note: "Auto-scheduled",
+      note: scheduleNoteWithFlightCategory(
+        setting.flightCategory,
+        "Auto-scheduled",
+      ),
       auto_generated: true,
       assigned_instructor_user_id: input.cfiUserId,
     });
     setting.remaining -= 1;
+    if (setting.lessonKind === "flight")
+      weeklyFlightTotals.set(
+        setting.access.student_user_id,
+        (weeklyFlightTotals.get(setting.access.student_user_id) ?? 0) + 1,
+      );
     setting.usedDays.add(localDateKey(placement.start));
     madeProgress = true;
   }
@@ -1482,6 +1603,7 @@ export function generateAutomaticSchedule(input: {
         scheduled: setting.requested - setting.remaining,
         remaining: setting.remaining,
         lessonKind: setting.lessonKind,
+        flightCategory: setting.flightCategory,
         reason:
           setting.availabilityDays === 0
             ? "No availability is set for the selected days."
@@ -1493,7 +1615,11 @@ export function generateAutomaticSchedule(input: {
                     setting.preferredAircraftIds.includes(aircraft.id),
                   )
                 ? "None of the selected aircraft match this student’s preferences."
-                : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, and aircraft availability.",
+                : setting.flightCategory === "night_xc"
+                  ? "No continuous 3-hour night window matches the student, instructor and selected aircraft."
+                  : setting.flightCategory === "day_xc"
+                    ? "No continuous 3-hour daytime window matches the student, instructor and selected aircraft."
+                    : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, and aircraft availability.",
       });
     }
   }
