@@ -5657,6 +5657,14 @@ export default function CfiScheduleManager() {
             role="group"
             aria-label="Students to automatically schedule"
           >
+            <div className={styles.autoRosterHeader} aria-hidden="true">
+              <span />
+              <div>
+                <span>Flight</span>
+                <span>Ground</span>
+                <span>XC</span>
+              </div>
+            </div>
             {activeStudents.map((student) => {
               const request = autoRequests.find(
                 (item) => item.studentUserId === student.student_user_id,
@@ -5745,15 +5753,11 @@ export default function CfiScheduleManager() {
                     <span>
                       <strong>{student.student_name}</strong>
                       <span className={styles.autoStudentMeta}>
-                        {availableDays} available day
-                        {availableDays === 1 ? "" : "s"} · Existing{" "}
-                        {existingFlight} Flight, {existingGround} Ground ·{" "}
-                        {duration} min
-                      </span>
-                      <span className={styles.autoStudentMeta}>
+                        {availableDays} day{availableDays === 1 ? "" : "s"} ·{" "}
+                        {existingFlight}F / {existingGround}G · {duration} min
                         {preferredAircraft.length
-                          ? `Prefers ${preferredAircraft.join(", ")}`
-                          : "No aircraft preference"}
+                          ? ` · ${preferredAircraft.join(", ")}`
+                          : ""}
                       </span>
                       {availableDays === 0 ? (
                         <span className={styles.autoStudentWarning}>
@@ -5813,7 +5817,7 @@ export default function CfiScheduleManager() {
                         }
                       />
                     </label>
-                    <details className={styles.autoXc}>
+                    <details className={styles.autoXc} name="auto-xc">
                       <summary>
                         {request.dayXcSessions + request.nightXcSessions
                           ? `XC ${request.dayXcSessions + request.nightXcSessions}`

@@ -146,6 +146,9 @@ try {
   await mobileNightXc.fill('1');
   assert(await mobileDialog.getByText('Night starts',{exact:true}).isVisible(),'Night XC reveals one compact night boundary control');
   await assertMobileDialogFits(page,mobileDialog,'Automatic scheduling with XC');
+  await page.setViewportSize({width:1440,height:1000});
+  const compactAutoRow=mobileDialog.locator('[data-selected]').first();
+  assert((await compactAutoRow.evaluate(row=>row.getBoundingClientRect().height))<=60,'opening XC stays inside a compact desktop roster row');
   await mobileDialog.getByLabel('Close',{exact:true}).click();
   await page.setViewportSize({width:1440,height:1100});
   const firstLesson=page.locator(`[data-schedule-entry-id="${eventIds[0]}"]`);
