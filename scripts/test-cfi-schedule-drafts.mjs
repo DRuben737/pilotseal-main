@@ -145,8 +145,8 @@ assert.equal(nightXcResult.drafts[0].flight_category,'night_xc','Night XC is ide
 assert.equal(new Date(nightXcResult.drafts[0].start_at).getHours(),18,'Night XC starts no earlier than the selected night boundary');
 assert.equal((Date.parse(nightXcResult.drafts[0].end_at)-Date.parse(nightXcResult.drafts[0].start_at))/60000,180,'Night XC defaults to three hours');
 const daytimeOnlyRules={...defaultTeachingRules,start_minute:420,latest_start_minute:899,end_minute:900,max_daily_teaching_min:480,weekdays:[1]};
-const afterHoursNightXc=generateAutomaticSchedule({...autoInput,slots:[nightSlot],blocks:[],teachingRules:daytimeOnlyRules,nightStartMinute:1080,requests:[{studentUserId:'a',flightSessions:1,groundSessions:0,dayXcSessions:0,nightXcSessions:1}]});
-assert.equal(new Date(afterHoursNightXc.drafts[0].start_at).getHours(),18,'Night XC may start after the instructor’s usual daytime teaching window');
+const afterHoursNightXc=generateAutomaticSchedule({...autoInput,slots:[],blocks:[],teachingRules:daytimeOnlyRules,nightStartMinute:1080,requests:[{studentUserId:'a',flightSessions:1,groundSessions:0,dayXcSessions:0,nightXcSessions:1}]});
+assert.equal(new Date(afterHoursNightXc.drafts[0].start_at).getHours(),18,'Night XC overrides both ordinary student availability and the instructor’s daytime teaching window');
 const existingNightXc={...a,note:'[[ps:flight:night_xc]] Auto-scheduled'};
 assert.equal(generateAutomaticSchedule({...autoInput,blocks:[],existingEntries:[existingNightXc],requests:[{studentUserId:'a',flightSessions:1,groundSessions:0,dayXcSessions:0,nightXcSessions:1}]}).drafts.length,0,'an existing Night XC satisfies both its category and the Flight total');
 const fairAccess=['fa','fb','fc'].map((id)=>({student_user_id:id,student_name:id.toUpperCase(),default_duration_min:120,default_weekly_sessions:3}));

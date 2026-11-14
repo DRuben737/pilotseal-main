@@ -1319,15 +1319,18 @@ export function generateAutomaticSchedule(input: {
         requested,
         remaining: requested,
         existing,
-        availabilityDays: consideredDates.filter(
-          (date) =>
-            availabilityForDate({
-              date,
-              studentUserId: access.student_user_id,
-              slots: input.slots,
-              overrideDates: input.overrideDates,
-            }).length > 0,
-        ).length,
+        availabilityDays:
+          flightCategory === "night_xc"
+            ? consideredDates.length
+            : consideredDates.filter(
+                (date) =>
+                  availabilityForDate({
+                    date,
+                    studentUserId: access.student_user_id,
+                    slots: input.slots,
+                    overrideDates: input.overrideDates,
+                  }).length > 0,
+              ).length,
         usedDays,
         preferredAircraftIds:
           input.aircraftPreferences
@@ -1367,12 +1370,30 @@ export function generateAutomaticSchedule(input: {
       const dateKey = localDateKey(date);
       if (!allowedWeekdays.includes(((date.getDay() + 6) % 7) + 1)) continue;
       if (setting.usedDays.has(dateKey)) continue;
-      const periods = availabilityForDate({
-        date,
-        studentUserId: setting.access.student_user_id,
-        slots: input.slots,
-        overrideDates: input.overrideDates,
-      });
+      const nightStartMinute = Math.max(
+        0,
+        Math.min(1439, input.nightStartMinute ?? 18 * 60),
+      );
+      const periods =
+        setting.flightCategory === "night_xc"
+          ? (() => {
+              const start = new Date(date);
+              start.setHours(
+                Math.floor(nightStartMinute / 60),
+                nightStartMinute % 60,
+                0,
+                0,
+              );
+              const end = new Date(date);
+              end.setHours(24, 0, 0, 0);
+              return [{ start, end }];
+            })()
+          : availabilityForDate({
+              date,
+              studentUserId: setting.access.student_user_id,
+              slots: input.slots,
+              overrideDates: input.overrideDates,
+            });
       for (const period of periods) {
         for (
           let startMs = period.start.getTime();
@@ -1383,10 +1404,6 @@ export function generateAutomaticSchedule(input: {
           const end = new Date(startMs + setting.durationMin * 60_000);
           const localStartMinute = start.getHours() * 60 + start.getMinutes();
           const localEndMinute = end.getHours() * 60 + end.getMinutes();
-          const nightStartMinute = Math.max(
-            0,
-            Math.min(1439, input.nightStartMinute ?? 18 * 60),
-          );
           const outsideTeachingWindow =
             setting.flightCategory !== "night_xc" &&
             (localStartMinute < rules.start_minute ||
@@ -1619,7 +1636,7 @@ export function generateAutomaticSchedule(input: {
                   )
                 ? "None of the selected aircraft match this student’s preferences."
                 : setting.flightCategory === "night_xc"
-                  ? "No continuous 3-hour night window matches the student, instructor and selected aircraft."
+                  ? "No conflict-free 3-hour period is available after Night starts."
                   : setting.flightCategory === "day_xc"
                     ? "No continuous 3-hour daytime window matches the student, instructor and selected aircraft."
                     : "No remaining day satisfies student availability, your teaching hours or time off, one lesson per student, and aircraft availability.",
