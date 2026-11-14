@@ -62,9 +62,16 @@ async function contextFor(session) {
   return {context,page};
 }
 async function menuAction(page, name, menu = "Schedule options") {
-  const notification=page.getByLabel('New notification',{exact:true});
-  if (await notification.isVisible().catch(()=>false)) {
-    await notification.getByRole('button',{name:'Dismiss notification',exact:true}).click();
+  for (let index=0;index<5;index+=1) {
+    const dismissButtons=page.getByRole('button',{name:'Dismiss notification',exact:true});
+    let dismiss=null;
+    for(let buttonIndex=0;buttonIndex<await dismissButtons.count();buttonIndex+=1) {
+      const candidate=dismissButtons.nth(buttonIndex);
+      if(await candidate.isVisible().catch(()=>false)) { dismiss=candidate; break; }
+    }
+    if(!dismiss) break;
+    await dismiss.click({force:true});
+    await page.waitForTimeout(50);
   }
   await page.getByRole('button',{name:menu,exact:true}).click();
   await page.getByRole('menuitem',{name,exact:true}).click({force:true});
@@ -142,8 +149,8 @@ try {
   const mobileAutoStudent=mobileDialog.getByRole('checkbox',{name:/UI Schedule Student/});
   if(!(await mobileAutoStudent.isChecked())) await mobileAutoStudent.click();
   await mobileDialog.getByText('+ XC',{exact:true}).first().click();
-  const mobileNightXc=mobileDialog.getByLabel(/Night cross-country lessons/).first();
-  await mobileNightXc.fill('1');
+  await mobileDialog.getByRole('button',{name:/Increase Night XC for UI Schedule Student/}).click();
+  assert(await mobileDialog.getByLabel('1 Night XC',{exact:true}).isVisible(),'Night XC increments in the inline stepper');
   assert(await mobileDialog.getByText('Night starts',{exact:true}).isVisible(),'Night XC reveals one compact night boundary control');
   await assertMobileDialogFits(page,mobileDialog,'Automatic scheduling with XC');
   await page.setViewportSize({width:1440,height:1000});

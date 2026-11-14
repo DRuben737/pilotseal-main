@@ -5823,24 +5823,38 @@ export default function CfiScheduleManager() {
                           ? `XC ${request.dayXcSessions + request.nightXcSessions}`
                           : "+ XC"}
                       </summary>
-                      <div>
-                        <label>
-                          <span>Day XC</span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            max={14}
-                            value={request.dayXcSessions}
-                            disabled={!request.selected}
-                            aria-label={`Day cross-country lessons for ${student.student_name}`}
-                            onChange={(event) => {
-                              const dayXcSessions = Math.max(
-                                0,
-                                Math.min(
-                                  14,
-                                  Number(event.target.value) || 0,
+                      <div className={styles.autoXcSteppers}>
+                        <div className={styles.autoXcStepper}>
+                          <button
+                            type="button"
+                            disabled={
+                              !request.selected || request.dayXcSessions === 0
+                            }
+                            aria-label={`Decrease Day XC for ${student.student_name}`}
+                            onClick={() =>
+                              updateAutoRequest(student.student_user_id, {
+                                dayXcSessions: Math.max(
+                                  0,
+                                  request.dayXcSessions - 1,
                                 ),
+                              })
+                            }
+                          >
+                            −
+                          </button>
+                          <span aria-label={`${request.dayXcSessions} Day XC`}>
+                            D{request.dayXcSessions}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={
+                              !request.selected || request.dayXcSessions === 14
+                            }
+                            aria-label={`Increase Day XC for ${student.student_name}`}
+                            onClick={() => {
+                              const dayXcSessions = Math.min(
+                                14,
+                                request.dayXcSessions + 1,
                               );
                               updateAutoRequest(student.student_user_id, {
                                 dayXcSessions,
@@ -5850,25 +5864,41 @@ export default function CfiScheduleManager() {
                                 ),
                               });
                             }}
-                          />
-                        </label>
-                        <label>
-                          <span>Night XC</span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            max={14}
-                            value={request.nightXcSessions}
-                            disabled={!request.selected}
-                            aria-label={`Night cross-country lessons for ${student.student_name}`}
-                            onChange={(event) => {
-                              const nightXcSessions = Math.max(
-                                0,
-                                Math.min(
-                                  14,
-                                  Number(event.target.value) || 0,
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className={styles.autoXcStepper}>
+                          <button
+                            type="button"
+                            disabled={
+                              !request.selected || request.nightXcSessions === 0
+                            }
+                            aria-label={`Decrease Night XC for ${student.student_name}`}
+                            onClick={() =>
+                              updateAutoRequest(student.student_user_id, {
+                                nightXcSessions: Math.max(
+                                  0,
+                                  request.nightXcSessions - 1,
                                 ),
+                              })
+                            }
+                          >
+                            −
+                          </button>
+                          <span aria-label={`${request.nightXcSessions} Night XC`}>
+                            N{request.nightXcSessions}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={
+                              !request.selected || request.nightXcSessions === 14
+                            }
+                            aria-label={`Increase Night XC for ${student.student_name}`}
+                            onClick={() => {
+                              const nightXcSessions = Math.min(
+                                14,
+                                request.nightXcSessions + 1,
                               );
                               updateAutoRequest(student.student_user_id, {
                                 nightXcSessions,
@@ -5878,8 +5908,10 @@ export default function CfiScheduleManager() {
                                 ),
                               });
                             }}
-                          />
-                        </label>
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                     </details>
                   </div>
