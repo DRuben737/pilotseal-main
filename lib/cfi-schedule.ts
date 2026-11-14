@@ -1387,10 +1387,13 @@ export function generateAutomaticSchedule(input: {
             0,
             Math.min(1439, input.nightStartMinute ?? 18 * 60),
           );
+          const outsideTeachingWindow =
+            setting.flightCategory !== "night_xc" &&
+            (localStartMinute < rules.start_minute ||
+              localEndMinute > rules.end_minute);
           if (
             localDateKey(end) !== dateKey ||
-            localStartMinute < rules.start_minute ||
-            localEndMinute > rules.end_minute ||
+            outsideTeachingWindow ||
             (setting.flightCategory === "day_xc" &&
               localEndMinute > nightStartMinute) ||
             (setting.flightCategory === "night_xc" &&
