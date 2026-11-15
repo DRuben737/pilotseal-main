@@ -58,6 +58,13 @@ assert.equal(Date.parse(swapped.find(e => e.id === 'a').end_at) - Date.parse(swa
 assert.equal(swapped.find(e => e.id === 'a').lesson_kind, a.lesson_kind, 'lesson details stay with the student');
 assert.equal(scheduleChanges(original, swapped).length, 2, 'a swap publishes exactly two edits');
 assert.throws(() => swapScheduleLessons(original, 'a', 'a'), /different lessons/);
+const longLesson=lesson('long','09:00','12:00');
+const shortLesson=lesson('short','12:00','14:00');
+const unequalSwap=swapScheduleLessons([longLesson,shortLesson],'long','short');
+assert.equal(unequalSwap.find(e=>e.id==='short').start_at,new Date(longLesson.start_at).toISOString(),'the later short lesson moves to the beginning of the shared time block');
+assert.equal(unequalSwap.find(e=>e.id==='short').end_at,unequalSwap.find(e=>e.id==='long').start_at,'adjacent unequal lessons remain adjacent after swapping');
+assert.equal(unequalSwap.find(e=>e.id==='long').end_at,new Date(shortLesson.end_at).toISOString(),'the shared time block keeps its original ending');
+assert.equal(scheduleHasOverlap(unequalSwap),false,'swapping adjacent unequal lessons does not create a conflict');
 const sameStudentTarget={...c,id:'same-student',student_user_id:'a'};
 const sameStudentSwap=swapScheduleLessons([...original,sameStudentTarget],'a','same-student');
 assert.equal(sameStudentSwap.find(e=>e.id==='a').start_at,new Date(sameStudentTarget.start_at).toISOString(),'the same student can swap two lessons');

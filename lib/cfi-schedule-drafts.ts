@@ -182,6 +182,10 @@ export function swapScheduleLessons(
       "One of these lessons is no longer available. Refresh and try again.",
     );
 
+  const sourceStart = Date.parse(source.start_at);
+  const sourceEnd = Date.parse(source.end_at);
+  const targetStart = Date.parse(target.start_at);
+  const targetEnd = Date.parse(target.end_at);
   const moveTo = (entry: ScheduleEntry, startAt: string) => {
     const duration = Date.parse(entry.end_at) - Date.parse(entry.start_at);
     return {
@@ -190,13 +194,40 @@ export function swapScheduleLessons(
       end_at: new Date(Date.parse(startAt) + duration).toISOString(),
     };
   };
+  const sourceDate = new Date(sourceStart);
+  const targetDate = new Date(targetStart);
+  const sameLocalDate =
+    sourceDate.getFullYear() === targetDate.getFullYear() &&
+    sourceDate.getMonth() === targetDate.getMonth() &&
+    sourceDate.getDate() === targetDate.getDate();
+  const sourceFirst = sourceStart <= targetStart;
+  const earlier = sourceFirst ? source : target;
+  const later = sourceFirst ? target : source;
+  const earlierEnd = sourceFirst ? sourceEnd : targetEnd;
+  const laterStart = sourceFirst ? targetStart : sourceStart;
+  const gap = laterStart - earlierEnd;
+  const reordered =
+    sameLocalDate && gap >= 0
+      ? (() => {
+          const movedLater = moveTo(later, earlier.start_at);
+          const movedEarlier = moveTo(
+            earlier,
+            new Date(Date.parse(movedLater.end_at) + gap).toISOString(),
+          );
+          return new Map([
+            [movedLater.id, movedLater],
+            [movedEarlier.id, movedEarlier],
+          ]);
+        })()
+      : null;
   return entries
     .map((entry) =>
-      entry.id === sourceId
+      reordered?.get(entry.id) ??
+      (entry.id === sourceId
         ? moveTo(entry, target.start_at)
         : entry.id === targetId
           ? moveTo(entry, source.start_at)
-          : { ...entry },
+          : { ...entry }),
     )
     .sort(
       (left, right) => Date.parse(left.start_at) - Date.parse(right.start_at),

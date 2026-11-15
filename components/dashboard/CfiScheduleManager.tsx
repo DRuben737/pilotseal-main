@@ -251,8 +251,8 @@ function lessonDropMode(
 ): "before" | "swap" | "after" {
   const ratio = height > 0 ? (clientY - top) / height : 0.5;
   if (!allowSwap) return ratio < 0.5 ? "before" : "after";
-  if (ratio < 0.3) return "before";
-  if (ratio > 0.7) return "after";
+  if (ratio < 0.15) return "before";
+  if (ratio > 0.85) return "after";
   return "swap";
 }
 
