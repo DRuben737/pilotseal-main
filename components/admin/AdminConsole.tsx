@@ -283,16 +283,10 @@ export function CompactButton({
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   tone?: "neutral" | "primary" | "success" | "danger";
 }) {
-  const tones = {
-    neutral: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-    primary: "border-blue-700 bg-blue-700 text-white hover:bg-blue-800",
-    success: "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
-    danger: "border-rose-200 bg-white text-rose-700 hover:bg-rose-50",
-  };
   return (
     <button
       {...props}
-      className={`admin-compact-button admin-compact-button-${tone} min-h-8 cursor-pointer rounded-sm border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]} ${className}`}
+      className={`admin-compact-button admin-compact-button-${tone} min-h-8 cursor-pointer rounded-sm border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
@@ -324,7 +318,7 @@ export function WorksheetHeader({
   children: ReactNode;
   className?: string;
 }) {
-  return <th className={`border-b border-r border-slate-300 bg-blue-100 px-2 py-1.5 font-semibold text-slate-800 last:border-r-0 ${className}`}>{children}</th>;
+  return <th className={`admin-worksheet-header border-b border-r px-2 py-1.5 font-semibold last:border-r-0 ${className}`}>{children}</th>;
 }
 
 export function WorksheetCell({
@@ -338,14 +332,14 @@ export function WorksheetCell({
 }
 
 export const worksheetInputClass =
-  "h-8 w-full min-w-0 border-0 bg-transparent px-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:bg-blue-50 focus:ring-2 focus:ring-inset focus:ring-blue-600";
+  "admin-worksheet-input h-8 w-full min-w-0 border-0 bg-transparent px-2 text-xs outline-none";
 
 const badgeStyles = {
-  neutral: "border-slate-200 bg-slate-100 text-slate-700",
-  info: "border-blue-200 bg-blue-50 text-blue-700",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  warning: "border-amber-200 bg-amber-50 text-amber-800",
-  danger: "border-rose-200 bg-rose-50 text-rose-700",
+  neutral: "admin-status-badge-neutral",
+  info: "admin-status-badge-info",
+  success: "admin-status-badge-success",
+  warning: "admin-status-badge-warning",
+  danger: "admin-status-badge-danger",
 };
 
 export function StatusBadge({
@@ -355,7 +349,7 @@ export function StatusBadge({
   children: ReactNode;
   tone?: keyof typeof badgeStyles;
 }) {
-  return <span className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium ${badgeStyles[tone]}`}>{children}</span>;
+  return <span className={`admin-status-badge inline-flex items-center gap-1 border px-2 py-0.5 text-xs font-medium ${badgeStyles[tone]}`}>{children}</span>;
 }
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
@@ -418,12 +412,19 @@ export function DetailDrawer({
       };
     }
     const currentDialog = dialogRef.current;
+    const isTopDrawer = () => {
+      const drawers = Array.from(document.querySelectorAll<HTMLElement>('[data-admin-detail-drawer="true"]'));
+      return drawers.at(-1) === currentDialog;
+    };
     const focusFrame = requestAnimationFrame(() => {
       dialogRef.current?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')?.focus();
     });
     function onKeyDown(event: KeyboardEvent) {
       if (document.querySelector('[role="alertdialog"]')) return;
+      if (!isTopDrawer()) return;
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         onCloseRef.current();
         return;
       }
@@ -448,9 +449,7 @@ export function DetailDrawer({
     return () => {
       cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", onKeyDown);
-      if (!Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).some(dialog => dialog !== currentDialog)) {
-        restoreFocusRef.current?.focus();
-      }
+      if (restoreFocusRef.current?.isConnected) restoreFocusRef.current.focus();
     };
   }, [open, titleId]);
 
@@ -466,8 +465,8 @@ export function DetailDrawer({
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-[90]" role="presentation">
-      <button aria-label="Close details" className="absolute inset-0 cursor-default bg-slate-950/35" onClick={onClose} />
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`admin-dialog absolute flex w-full flex-col overflow-hidden bg-white shadow-2xl ${width === "wide" ? "max-w-5xl" : "max-w-2xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
+      <button aria-label="Close details" className="admin-dialog-backdrop absolute inset-0 cursor-default" onClick={onClose} />
+      <section data-admin-detail-drawer="true" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`admin-dialog absolute flex w-full flex-col overflow-hidden bg-white shadow-2xl ${width === "wide" ? "max-w-5xl" : "max-w-2xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
         <header className={`flex items-start justify-between border-b border-slate-200 ${compact ? "gap-3 px-4 py-3" : "gap-4 px-5 py-4"}`}>
           <div>
             <h2 id={titleId} className="text-base font-semibold text-slate-950">{title}</h2>
@@ -537,7 +536,11 @@ export function QuickEditPopover({
       if (!panelRef.current?.contains(target) && !anchorRef.current?.contains(target)) onOpenChangeRef.current(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChangeRef.current(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onOpenChangeRef.current(false);
+      }
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -576,7 +579,7 @@ export function QuickEditPopover({
 export function BulkActionBar({ count, children, onClear }: { count: number; children: ReactNode; onClear: () => void }) {
   if (!count) return null;
   return (
-    <div className="sticky bottom-3 z-30 mx-auto flex max-w-3xl flex-col gap-2 rounded-sm border border-slate-700 bg-slate-900 px-3 py-2 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+    <div className="admin-bulk-action-bar sticky bottom-3 z-30 mx-auto flex max-w-3xl flex-col gap-2 rounded-sm border px-3 py-2 shadow-lg sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm font-semibold">{count} aircraft selected</p>
       <div className="flex flex-wrap items-center gap-2">{children}<button type="button" onClick={onClear} className="min-h-8 rounded-sm px-3 text-xs text-slate-300 hover:bg-white/10 hover:text-white">Clear</button></div>
     </div>
@@ -606,6 +609,7 @@ export function ConfirmDialog({
   children?: ReactNode;
   confirmDisabled?: boolean;
 }) {
+  const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef(onCancel);
   useEffect(() => { cancelRef.current = onCancel; }, [onCancel]);
@@ -614,7 +618,11 @@ export function ConfirmDialog({
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) { event.preventDefault(); cancelRef.current(); }
+      if (event.key === "Escape" && !busy) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        cancelRef.current();
+      }
       if (event.key !== "Tab") return;
       const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') ?? []);
       if (!buttons.length) { event.preventDefault(); return; }
@@ -632,14 +640,14 @@ export function ConfirmDialog({
   }, [open]);
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/45 p-4">
-      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-sm border border-slate-200 bg-white p-4 shadow-xl">
-        <h2 id="confirm-title" className="text-base font-semibold text-slate-950">{title}</h2>
+    <div className="admin-confirm-backdrop fixed inset-0 z-[100] grid place-items-center p-4">
+      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby={titleId} className="console-dialog-surface w-full max-w-md rounded-sm border border-slate-200 bg-white p-4 shadow-xl">
+        <h2 id={titleId} className="text-base font-semibold text-slate-950">{title}</h2>
         <p className="mt-2 text-[13px] leading-5 text-slate-600">{description}</p>
         {children}
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" disabled={busy} onClick={onCancel} className="min-h-8 rounded-sm border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button type="button" disabled={busy || confirmDisabled} onClick={onConfirm} className={`min-h-8 rounded-sm px-3 text-xs font-semibold text-white disabled:opacity-60 ${destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-600 hover:bg-blue-700"}`}>{busy ? "Saving…" : confirmLabel}</button>
+          <button type="button" disabled={busy} onClick={onCancel} className="secondary-button">Cancel</button>
+          <button type="button" disabled={busy || confirmDisabled} onClick={onConfirm} className={destructive ? "danger-button" : "primary-button"}>{busy ? "Saving…" : confirmLabel}</button>
         </div>
       </section>
     </div>, document.body

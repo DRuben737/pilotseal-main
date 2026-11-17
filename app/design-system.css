@@ -1272,6 +1272,37 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   corner-shape: squircle;
 }
 
+.dashboard-content :where(p, li, dd) {
+  text-wrap: pretty;
+}
+
+.dashboard-content :where(time, input[type="number"], input[type="date"], input[type="time"], .tabular-nums) {
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-content :where(button, a, input, select, textarea):focus-visible,
+.admin-dialog :where(button, a, input, select, textarea):focus-visible,
+.console-dialog-surface :where(button, a, input, select, textarea):focus-visible {
+  outline: none !important;
+  box-shadow: var(--ps-focus-ring) !important;
+}
+
+.dashboard-content :is(.text-blue-600, .text-blue-700, .text-blue-800) {
+  color: var(--ps-sky-strong) !important;
+}
+
+.dashboard-content :is(.text-blue-900, .text-blue-950) {
+  color: var(--ps-ink-soft) !important;
+}
+
+.dashboard-content :is(.bg-blue-50, .bg-blue-100) {
+  background: color-mix(in srgb, var(--ps-sky) 64%, var(--ps-surface-3)) !important;
+}
+
+.dashboard-content :is(.border-blue-200, .border-blue-300, .border-blue-600, .border-blue-700) {
+  border-color: color-mix(in srgb, var(--ps-sky-strong) 34%, transparent) !important;
+}
+
 .dashboard-admin-chrome {
   margin: 0 calc(var(--ps-space-300) * -1) var(--ps-space-300);
   background: var(--ps-surface-1);
@@ -1475,11 +1506,93 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   color: var(--ps-surface-3);
 }
 
+.admin-compact-button {
+  border-radius: var(--ps-radius-sm);
+  corner-shape: squircle;
+}
+
+.admin-compact-button-neutral {
+  border-color: var(--ps-line-strong);
+  background: var(--ps-surface-3);
+  color: var(--ps-ink-soft);
+}
+
+.admin-compact-button-neutral:hover {
+  background: var(--ps-surface-1);
+  color: var(--ps-ink);
+}
+
+.admin-compact-button-success {
+  border-color: color-mix(in srgb, var(--ps-meadow-strong) 28%, transparent);
+  background: var(--ps-meadow);
+  color: var(--ps-meadow-strong);
+}
+
+.admin-compact-button-danger {
+  border-color: color-mix(in srgb, var(--ps-danger) 24%, transparent);
+  background: var(--ps-surface-3);
+  color: var(--ps-danger);
+}
+
+.admin-compact-button-danger:hover {
+  background: color-mix(in srgb, var(--ps-danger) 7%, var(--ps-surface-3));
+}
+
+.admin-worksheet-header {
+  border-color: var(--ps-line-strong);
+  background: color-mix(in srgb, var(--ps-sky) 62%, var(--ps-surface-2));
+  color: var(--ps-ink-soft);
+}
+
+.admin-worksheet-input {
+  color: var(--ps-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-worksheet-input::placeholder {
+  color: var(--ps-ink-faint);
+}
+
+.admin-status-badge {
+  border-radius: var(--ps-radius-pill);
+  corner-shape: squircle;
+}
+
+.admin-status-badge-neutral {
+  border-color: var(--ps-line);
+  background: var(--ps-surface-1);
+  color: var(--ps-ink-soft);
+}
+
+.admin-status-badge-info {
+  border-color: color-mix(in srgb, var(--ps-sky-strong) 24%, transparent);
+  background: color-mix(in srgb, var(--ps-sky) 64%, var(--ps-surface-3));
+  color: var(--ps-sky-strong);
+}
+
+.admin-status-badge-success {
+  border-color: color-mix(in srgb, var(--ps-meadow-strong) 24%, transparent);
+  background: color-mix(in srgb, var(--ps-meadow) 64%, var(--ps-surface-3));
+  color: var(--ps-meadow-strong);
+}
+
+.admin-status-badge-warning {
+  border-color: color-mix(in srgb, var(--ps-warning) 24%, transparent);
+  background: color-mix(in srgb, var(--ps-warning) 7%, var(--ps-surface-3));
+  color: var(--ps-warning);
+}
+
+.admin-status-badge-danger {
+  border-color: color-mix(in srgb, var(--ps-danger) 24%, transparent);
+  background: color-mix(in srgb, var(--ps-danger) 7%, var(--ps-surface-3));
+  color: var(--ps-danger);
+}
+
 .dashboard-content .admin-compact-button-primary:hover,
 .admin-dialog .admin-compact-button-primary:hover,
 .console-dialog-surface .admin-compact-button-primary:hover {
-  border-color: var(--ps-accent);
-  background: var(--ps-accent);
+  border-color: var(--ps-ink-soft);
+  background: var(--ps-ink-soft);
   color: var(--ps-surface-3);
 }
 
@@ -1515,6 +1628,20 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   background: var(--ps-surface-2) !important;
   color: var(--ps-ink);
   box-shadow: var(--ps-shadow-float) !important;
+  corner-shape: squircle;
+}
+
+.admin-dialog-backdrop,
+.admin-confirm-backdrop {
+  background: color-mix(in srgb, var(--ps-ink) 28%, transparent);
+}
+
+.admin-bulk-action-bar {
+  border-color: color-mix(in srgb, var(--ps-surface-3) 20%, transparent);
+  border-radius: var(--ps-radius-md);
+  background: var(--ps-ink);
+  color: var(--ps-surface-3);
+  box-shadow: var(--ps-shadow-float);
   corner-shape: squircle;
 }
 

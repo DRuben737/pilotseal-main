@@ -31,7 +31,6 @@ export default function OrganizationMembershipSettings() {
     <section className="saas-panel">
       <header>
         <h2 className="text-lg font-semibold text-slate-950">Organization membership</h2>
-        <p className="mt-1 text-sm text-slate-600">Manage the organizations connected to your account.</p>
       </header>
       {status ? <p className="mt-3 text-sm text-slate-600" role="status">{status}</p> : null}
       <div className="mt-4 divide-y divide-slate-200">

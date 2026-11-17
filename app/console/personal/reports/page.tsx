@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 
+import { AdminPageHeader } from "@/components/admin/AdminConsole";
 import ReportsManager from "@/components/dashboard/ReportsManager";
 
 export const metadata = { title: "Reports" };
 
 export default function Page() {
-  return <Suspense fallback={null}><ReportsManager /></Suspense>;
+  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Reports" /><Suspense fallback={null}><ReportsManager /></Suspense></div>;
 }

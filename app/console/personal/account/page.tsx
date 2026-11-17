@@ -1,8 +1,9 @@
+import { AdminPageHeader } from "@/components/admin/AdminConsole";
 import AccountSettingsPanel from "@/components/dashboard/AccountSettingsPanel";
 import OrganizationMembershipSettings from "@/components/dashboard/OrganizationMembershipSettings";
 
 export const metadata = { title: "Account" };
 
 export default function Page() {
-  return <div className="grid gap-4"><AccountSettingsPanel /><OrganizationMembershipSettings /></div>;
+  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Account" /><AccountSettingsPanel /><OrganizationMembershipSettings /></div>;
 }

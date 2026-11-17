@@ -12,7 +12,6 @@ import {
 } from "@/components/auth/auth-errors";
 import ScheduleAccessSettings from "@/components/dashboard/ScheduleAccessSettings";
 import PilotPrivilegePicker, { normalizeLowerPrivileges } from "@/components/forms/PilotPrivilegePicker";
-import { getDeterministicGreeting } from "@/lib/greetings";
 import {
   CERTIFICATE_TYPE_LABELS,
   convertDisplayDateToIsoDate,
@@ -429,7 +428,6 @@ export default function AccountSettingsPanel() {
   const [savingMedical, setSavingMedical] = useState(false);
   const [medicalStatus, setMedicalStatus] = useState("");
   const [medicalForm, setMedicalForm] = useState<MedicalForm>(emptyMedicalForm);
-  const [greeting, setGreeting] = useState("");
   const [showDisplayName, setShowDisplayName] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -502,15 +500,6 @@ export default function AccountSettingsPanel() {
       cancelled = true;
     };
   }, [session?.user?.email, session?.user?.id]);
-
-  useEffect(() => {
-    if (session?.user?.id) {
-      setGreeting(getDeterministicGreeting(session.user.id));
-      return;
-    }
-
-    setGreeting("");
-  }, [session?.user?.id]);
 
   useEffect(() => {
     const onboardingTarget = searchParams.get("onboarding");
@@ -999,8 +988,6 @@ export default function AccountSettingsPanel() {
 
   return (
     <div className="dashboard-settings-list">
-      {greeting ? <p className="saas-greeting">{greeting}</p> : null}
-
       <section className="saas-panel dashboard-setting-row">
         <div className="saas-section-toggle">
           <div className="saas-section-toggle-main">

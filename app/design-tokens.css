@@ -22,7 +22,7 @@
   --ps-line-strong: rgba(32, 35, 31, 0.16);
 
   --ps-font-display: Georgia, "Times New Roman", serif;
-  --ps-font-sans: "Manrope", var(--font-inter), system-ui, sans-serif;
+  --ps-font-sans: var(--font-manrope), "Manrope", var(--font-inter), system-ui, sans-serif;
   --ps-font-mono: "Geist Mono", ui-monospace, monospace;
 
   --ps-text-xs: 0.75rem;

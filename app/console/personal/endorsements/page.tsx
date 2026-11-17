@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 
+import { AdminPageHeader } from "@/components/admin/AdminConsole";
 import EndorsementRecordsManager from "@/components/dashboard/EndorsementRecordsManager";
 
 export const metadata = { title: "Records" };
 
 export default function Page() {
-  return <Suspense fallback={null}><EndorsementRecordsManager /></Suspense>;
+  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Endorsements" /><Suspense fallback={null}><EndorsementRecordsManager /></Suspense></div>;
 }

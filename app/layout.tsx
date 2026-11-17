@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Manrope } from "next/font/google";
 import NotificationExperience from "@/components/notifications/NotificationExperience";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import OrganizationProvider from "@/components/organizations/OrganizationProvider";
@@ -16,6 +16,11 @@ import "@/components/tools-native/styles/FlightBrief.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
 });
 
 export const metadata: Metadata = {
@@ -52,7 +57,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body className={`${inter.variable} ${inter.className} app-body`}>
+      <body className={`${inter.variable} ${manrope.variable} ${manrope.className} app-body`}>
         <ToolProvider>
           <AuthSessionProvider>
             <OrganizationProvider>
