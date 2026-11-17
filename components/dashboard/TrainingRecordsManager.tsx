@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
+import { AdminPageHeader, DetailDrawer } from "@/components/admin/AdminConsole";
 import {
   fetchOrganizationStudents,
   type OrganizationStudent,
@@ -1007,29 +1008,23 @@ export default function TrainingRecordsManager({
   return (
     <>
       <main
-        className={`${styles.screenOnly} mx-auto w-full max-w-7xl px-4 py-6 sm:px-6`}
+        className={`${styles.screenOnly} training-records-workspace w-full py-4`}
       >
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-              {activeOrganization?.name ?? "USATS"}
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-950">
-              Training Records
-            </h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
+        <AdminPageHeader
+          eyebrow={activeOrganization?.name ?? "USATS"}
+          title="Training records"
+          action={
             <button
               className="primary-button cursor-pointer"
               type="button"
-              disabled={!courses.length || organizationLoading}
+              disabled={!activeOrganizationId || organizationLoading}
               onClick={startNew}
             >
               New log
             </button>
-          </div>
-        </header>
-        {message ? (
+          }
+        />
+        {message && !editorOpen ? (
           <p
             className="mt-4 border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950"
             role="status"
@@ -1037,20 +1032,20 @@ export default function TrainingRecordsManager({
             {message}
           </p>
         ) : null}
-        {editorOpen ? (
-          <section className="mt-6 border border-slate-200 bg-white">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
-              <h2 className="text-lg font-semibold text-slate-950">
-                {form.id ? "Edit log" : "New log"}
-              </h2>
-              <button
-                className="secondary-button cursor-pointer"
-                type="button"
-                onClick={() => setEditorOpen(false)}
+        <DetailDrawer
+          open={editorOpen}
+          width="wide"
+          title={form.id ? "Edit training log" : "New training log"}
+          onClose={() => setEditorOpen(false)}
+        >
+            {message ? (
+              <p
+                className="mx-4 mt-4 border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950 sm:mx-5"
+                role="status"
               >
-                Close
-              </button>
-            </div>
+                {message}
+              </p>
+            ) : null}
             <nav className={styles.stepNav} aria-label="Training record steps">
               {STEPS.map((label, index) => (
                 <button
@@ -1447,10 +1442,9 @@ export default function TrainingRecordsManager({
                 )}
               </div>
             </div>
-          </section>
-        ) : (
-          <>
-            <section className="mt-5 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+        </DetailDrawer>
+        <>
+            <section className="admin-toolbar training-records-toolbar mt-4 flex flex-wrap items-center gap-2 border-b border-slate-200 py-3">
               <label className={styles.recordSearch}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
@@ -1459,6 +1453,7 @@ export default function TrainingRecordsManager({
                 <input
                   type="search"
                   placeholder="Search student"
+                  disabled={!courseFilter}
                   value={studentQuery}
                   onChange={(event) => setStudentQuery(event.target.value)}
                 />
@@ -1469,10 +1464,13 @@ export default function TrainingRecordsManager({
                 </svg>
                 <span className="sr-only">Filter course</span>
                 <select
+                  disabled={!records.length}
                   value={courseFilter}
                   onChange={(event) => setCourseFilter(event.target.value)}
                 >
-                  <option value="">Select course</option>
+                  <option value="">
+                    {records.length ? "Select course" : "No courses with records"}
+                  </option>
                   {Array.from(
                     new Map(
                       records.map((record) => [
@@ -1488,6 +1486,15 @@ export default function TrainingRecordsManager({
                 </select>
               </label>
             </section>
+            {!courseFilter ? (
+              <p className="saas-empty-state mt-4">
+                {loading
+                  ? "Loading training records…"
+                  : records.length
+                    ? "Select a course to view training records."
+                    : "No training records yet."}
+              </p>
+            ) : null}
             {courseFilter ? (
               <section className="mt-3 grid gap-2">
                 {loading ? (
@@ -1503,7 +1510,7 @@ export default function TrainingRecordsManager({
                     const detailsId = `training-records-${groupKey.replaceAll(":", "-")}`;
                     return (
                       <section
-                        className="overflow-hidden border border-slate-200 bg-white"
+                        className="training-record-group overflow-hidden border border-slate-200 bg-white"
                         key={groupKey}
                       >
                         <header
@@ -1525,12 +1532,12 @@ export default function TrainingRecordsManager({
                             <span className="truncate text-sm font-semibold text-slate-950">
                               {firstRecord.student_name}
                             </span>
-                            <span className="border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-800">
+                            <span className="training-record-course-badge px-1.5 py-0.5 text-[11px] font-bold">
                               {courseCode(firstRecord.course_title)}
                             </span>
                           </button>
                           <button
-                            className="shrink-0 cursor-pointer text-xs font-semibold text-blue-700 hover:text-blue-900"
+                            className="training-record-print-action shrink-0 cursor-pointer text-xs font-semibold"
                             type="button"
                             onClick={() =>
                               printRecords(
@@ -1583,8 +1590,7 @@ export default function TrainingRecordsManager({
                 )}
               </section>
             ) : null}
-          </>
-        )}
+        </>
       </main>
       <TrainingRecordPrint
         records={

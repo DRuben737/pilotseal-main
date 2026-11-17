@@ -1704,3 +1704,42 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
     transform: none !important;
   }
 }
+
+.training-records-workspace .admin-page-header {
+  margin-bottom: var(--ps-space-100);
+}
+
+.training-records-toolbar {
+  border-color: var(--ps-line) !important;
+  background: transparent !important;
+}
+
+.training-records-workspace .saas-empty-state {
+  min-height: 9rem;
+  display: grid;
+  place-items: center;
+  color: var(--ps-ink-muted);
+}
+
+.training-record-group {
+  border-color: var(--ps-line) !important;
+  border-radius: var(--ps-radius-md);
+  background: var(--ps-surface-3) !important;
+  corner-shape: squircle;
+}
+
+.training-record-course-badge {
+  border: 1px solid color-mix(in srgb, var(--ps-sky-strong) 24%, transparent);
+  border-radius: var(--ps-radius-pill);
+  background: color-mix(in srgb, var(--ps-sky) 62%, var(--ps-surface-3));
+  color: var(--ps-ink-soft);
+  corner-shape: squircle;
+}
+
+.training-record-print-action {
+  color: var(--ps-ink-soft);
+}
+
+.training-record-print-action:hover {
+  color: var(--ps-ink);
+}
