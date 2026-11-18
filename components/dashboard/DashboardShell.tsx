@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { useOrganization } from "@/components/organizations/OrganizationProvider";
@@ -268,10 +268,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [enabledFeatureIds, setEnabledFeatureIds] = useState<OptionalFeatureId[]>([]);
   const [featuresReadyUserId, setFeaturesReadyUserId] = useState("");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
-  const mobileNavigationRef = useRef<HTMLElement>(null);
-  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarPreferenceStorageKey = session?.user?.id
     ? `pilotseal:console-sidebar-expanded:${session.user.id}`
     : "";
@@ -284,39 +281,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }, [loading, pathname, router, session]);
 
   useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     if (!sidebarPreferenceStorageKey) return;
     setSidebarExpanded(window.localStorage.getItem(sidebarPreferenceStorageKey) !== "false");
   }, [sidebarPreferenceStorageKey]);
-
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && !mobileNavigationRef.current?.contains(event.target)) {
-        setMobileMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setMobileMenuOpen(false);
-      mobileMenuButtonRef.current?.focus();
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [mobileMenuOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -724,100 +691,35 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </div>
 
             <div className="dashboard-content min-w-0 flex-1">
-              <section ref={mobileNavigationRef} className="dashboard-mobile-navigation" aria-label="Console navigation">
-                {workspaceLinks.length > 1 ? (
-                  <nav className="dashboard-mobile-workspace-tabs" aria-label="Switch workspace">
-                    {workspaceLinks.map((item) => (
-                      <Link
-                        key={item.workspace}
-                        href={item.href}
-                        aria-current={workspace === item.workspace ? "page" : undefined}
-                        className={workspace === item.workspace ? "dashboard-mobile-workspace-active" : ""}
-                        onClick={() => {
-                          if (item.workspace === "organization" && organizationContextValue !== activeOrganizationId) {
-                            setActiveOrganizationId(organizationContextValue);
-                          }
-                        }}
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
-                  </nav>
-                ) : null}
-                <div className="dashboard-mobile-page-menu">
-                  <button
-                    ref={mobileMenuButtonRef}
-                    type="button"
-                    aria-label={`${mobileMenuOpen ? "Close" : "Open"} ${workspaceLabel} navigation`}
-                    aria-expanded={mobileMenuOpen}
-                    aria-controls="dashboard-mobile-page-list"
-                    title={`${mobileMenuOpen ? "Close" : "Open"} ${workspaceLabel} navigation`}
-                    onClick={() => setMobileMenuOpen((open) => !open)}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <DashboardIcon kind={currentLink?.label ?? "Overview"} />
-                      <span className="truncate">{currentLink?.label ?? workspaceLabel}</span>
-                    </span>
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                      <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" />
-                    </svg>
-                  </button>
-                  {mobileMenuOpen ? (
-                    <nav id="dashboard-mobile-page-list" aria-label={`${workspaceLabel} pages`}>
-                      {visibleDashboardLinks.map((item) => {
-                        const active = isDashboardDestinationActive(pathname, item.href);
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            aria-current={active ? "page" : undefined}
-                            className={active ? "dashboard-mobile-page-active" : ""}
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-                              <DashboardIcon kind={item.label} />
-                              {item.label === "Notifications" && unreadNotificationCount > 0 ? (
-                                <span className="dashboard-mobile-notification-badge">{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</span>
-                              ) : null}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                            {active ? (
-                              <svg className="dashboard-mobile-current-mark" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                                <path d="m4.5 10.5 3.2 3.2 7.8-8" />
-                              </svg>
-                            ) : null}
-                          </Link>
-                        );
-                      })}
-                      <Link
-                        href="/home"
-                        className="dashboard-mobile-page-exit"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="h-[18px] w-[18px]">
-                            <path d="m11.5 4-6 6 6 6" />
-                            <path d="M6 10h9" />
-                          </svg>
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">Back to PilotSeal</span>
-                      </Link>
-                      <button
-                        type="button"
-                        className="dashboard-mobile-page-signout"
-                        disabled={signingOut}
-                        onClick={() => void handleSignOut()}
-                      >
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                          <DashboardIcon kind="signout" />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">
-                          {signingOut ? "Signing out..." : "Sign out"}
-                        </span>
-                      </button>
-                    </nav>
-                  ) : null}
-                </div>
+              <section className="dashboard-mobile-navigation" aria-label="Console navigation">
+                <nav className="dashboard-mobile-workspace-tabs" aria-label="Switch workspace">
+                  {workspaceLinks.map((item) => (
+                    <Link
+                      key={item.workspace}
+                      href={item.href}
+                      aria-current={workspace === item.workspace ? "page" : undefined}
+                      className={workspace === item.workspace ? "dashboard-mobile-workspace-active" : ""}
+                      onClick={() => {
+                        if (item.workspace === "organization" && organizationContextValue !== activeOrganizationId) {
+                          setActiveOrganizationId(organizationContextValue);
+                        }
+                      }}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </nav>
+                <Link
+                  href="/tools"
+                  className="dashboard-mobile-tools-link"
+                  aria-label="Back to tools"
+                  title="Back to tools"
+                >
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="m9 4-6 6 6 6" />
+                    <path d="M3.5 10H17" />
+                  </svg>
+                </Link>
               </section>
 
               <div className="dashboard-admin-chrome">
@@ -845,6 +747,27 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 </div>
               ) : null}
               {currentLink ? children : null}
+              <nav className="dashboard-mobile-bottom-navigation" aria-label={`${workspaceLabel} pages`}>
+                {visibleDashboardLinks.map((item) => {
+                  const active = isDashboardDestinationActive(pathname, item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={active ? "dashboard-mobile-bottom-link-active" : ""}
+                    >
+                      <span className="dashboard-mobile-bottom-icon">
+                        <DashboardIcon kind={item.label} />
+                        {item.label === "Notifications" && unreadNotificationCount > 0 ? (
+                          <span className="dashboard-mobile-notification-badge">{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</span>
+                        ) : null}
+                      </span>
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
             </div>
 
           </section>
