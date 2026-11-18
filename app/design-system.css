@@ -1648,6 +1648,22 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   corner-shape: squircle;
 }
 
+.dashboard-content .admin-empty-row {
+  display: flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ps-space-200);
+  border: 1px solid var(--ps-line);
+  border-radius: var(--ps-radius-sm);
+  background: var(--ps-surface-1);
+  padding: var(--ps-space-100) var(--ps-space-200);
+  color: var(--ps-ink-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  corner-shape: squircle;
+}
+
 .admin-dialog,
 .console-dialog-surface {
   border: 1px solid var(--ps-line);

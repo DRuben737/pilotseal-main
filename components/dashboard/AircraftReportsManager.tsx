@@ -402,16 +402,16 @@ export default function AircraftReportsManager() {
 
   return (
     <section className="space-y-5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-        {organizations.length > 1 ? (
+      {organizations.length > 1 ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <label className="flex min-w-0 items-center gap-2">
             <span>Organization</span>
             <select className="min-w-0 max-w-full" aria-label="Organization" value={activeOrganization.id} disabled={busy || showForm || Boolean(activeReport)} onChange={event => setActiveOrganizationId(event.target.value)}>
               {organizations.map(organization => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
             </select>
           </label>
-        ) : <p className="break-words text-slate-600">Organization: {activeOrganization.name}</p>}
-      </div>
+        </div>
+      ) : null}
       {!showForm && !activeReport ? <Feedback message={message} error={error || organizationError} /> : null}
       <DetailDrawer open={showForm} title="New aircraft report" description={activeOrganization.name} width="wide" onClose={() => { if (!busyRef.current) { setShowForm(false); setFormErrors({}); } }}>
         <div id="aircraft-report-new-form">
@@ -645,9 +645,9 @@ export default function AircraftReportsManager() {
         </div>
 
         <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHidden} onChange={event => { setShowHidden(event.target.checked); if (event.target.checked) setStatusFilter("all"); }} />Show hidden</label>
-        {loading ? <p className="saas-empty-state mt-5">Loading reports…</p> : null}
+        {loading ? <p className="admin-empty-row mt-3">Loading reports…</p> : null}
         {!loading && filteredReports.length === 0 ? (
-          <div className="saas-empty-state mt-5">
+          <div className="admin-empty-row mt-3">
             <p>
               {statusFilter === "open" && !query.trim()
                 ? "No open aircraft reports."
@@ -655,7 +655,7 @@ export default function AircraftReportsManager() {
             </p>
             {statusFilter !== "all" ? (
               <button
-                className="ghost-button mt-3"
+                className="ghost-button"
                 type="button"
                 onClick={() => setStatusFilter("all")}
               >

@@ -354,7 +354,7 @@ export default function EndorsementRecordsManager({ organizationOnly = false }: 
       </div>
       {loading ? <p className="saas-meta-text mt-5">Loading records...</p> : null}
       {!loading && filteredGroups.length === 0
-        ? <p className="saas-empty-state mt-5">{query.trim()
+        ? <p className="admin-empty-row mt-3">{query.trim()
             ? "No records match your search."
             : isOrganizationView
               ? "No organization endorsements yet."

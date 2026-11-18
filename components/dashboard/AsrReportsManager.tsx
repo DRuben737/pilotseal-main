@@ -624,9 +624,7 @@ export default function AsrReportsManager() {
 
   return (
     <section className="space-y-5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-        {organizations.length > 1 ? <label className="flex min-w-0 items-center gap-2"><span>Organization</span><select aria-label="Organization" className="min-w-0 max-w-full" value={activeOrganization.id} disabled={busy || showForm || Boolean(activeReport)} onChange={event => setActiveOrganizationId(event.target.value)}>{organizations.map(organization => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label> : <p className="break-words text-slate-600">Organization: {activeOrganization.name}</p>}
-      </div>
+      {organizations.length > 1 ? <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><label className="flex min-w-0 items-center gap-2"><span>Organization</span><select aria-label="Organization" className="min-w-0 max-w-full" value={activeOrganization.id} disabled={busy || showForm || Boolean(activeReport)} onChange={event => setActiveOrganizationId(event.target.value)}>{organizations.map(organization => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label></div> : null}
       {organizationError ? <p className="text-sm text-rose-700" role="alert">{organizationError}</p> : null}
       {message ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
@@ -806,8 +804,8 @@ export default function AsrReportsManager() {
           {query ? <button className="ghost-button" type="button" onClick={() => setQuery("")}>Clear search</button> : null}
         </div>
         <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHidden} onChange={event => { setShowHidden(event.target.checked); if (event.target.checked) setStatusFilter("all"); }} />Show hidden</label>
-        {loading ? <p className="saas-empty-state mt-5">Loading ASR reports…</p> : null}
-        {!loading && filteredReports.length === 0 ? <p className="saas-empty-state mt-5">No matching ASR reports.</p> : null}
+        {loading ? <p className="admin-empty-row mt-3">Loading ASR reports…</p> : null}
+        {!loading && filteredReports.length === 0 ? <p className="admin-empty-row mt-3">No matching ASR reports.</p> : null}
         <FlatRecordGroups groups={reportGroups} searching={query.trim()} renderRecord={report => (
             <article key={report.id} className={`px-3 py-2.5 ${activeReportId === report.id ? "bg-blue-50" : "bg-white"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
