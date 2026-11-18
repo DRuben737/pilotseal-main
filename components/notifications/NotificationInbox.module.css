@@ -11,7 +11,7 @@
 .filters button[aria-pressed="true"] { background: #ecf5ff; color: #409eff; font-weight: 600; }
 .search { display: flex; align-items: center; gap: 8px; width: 240px; max-width: 100%; border: 1px solid #dcdfe6; border-radius: 3px; padding: 0 10px; color: #909399; background: white; }
 .search input { width: 100%; min-width: 0; height: 28px; border: 0; background: transparent; padding: 0; font-size: 12px; box-shadow: none; }
-.search:focus-within { outline: 2px solid #409eff; outline-offset: 2px; }
+.search:focus-within { outline: none; box-shadow: var(--ps-focus-ring); }
 .search input:focus { outline: none; box-shadow: none; }
 .messages { min-width: 0; }
 .message { display: grid; grid-template-columns: 6px minmax(0,1fr) auto; align-items: start; gap: 9px; padding: 9px 8px; border-bottom: 1px solid #ebeef5; transition: background 120ms ease; }
@@ -35,7 +35,7 @@
 .rowActions a:hover { color: #409eff; }
 .rowActions button:hover { color: #c45656; }
 .inbox button:disabled { cursor: default; opacity: .45; }
-.inbox :is(button,a):focus-visible { outline: 2px solid #409eff; outline-offset: 3px; }
+.inbox :is(button,a):focus-visible { outline: none; box-shadow: var(--ps-focus-ring-compact); }
 .empty { display: grid; justify-items: center; gap: 12px; padding: 72px 16px; color: #909399; }
 .empty p { margin: 0; font-size: 13px; }
 @media (max-width: 640px) {

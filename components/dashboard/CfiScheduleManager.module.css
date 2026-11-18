@@ -36,7 +36,9 @@
 .helpContent ol { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
 .iconButton { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--schedule-blue); font-size: 24px; line-height: 1; cursor: pointer; }
 .root button:disabled { cursor: default; opacity: .4; }
-.root button:focus-visible, .root input:focus-visible, .menuPanel button:focus-visible { outline: 2px solid #0071e3; outline-offset: 2px; }
+.root button:focus-visible, .menuPanel button:focus-visible { outline: none; box-shadow: var(--ps-focus-ring-compact); }
+.root input:not([type="checkbox"]):not([type="radio"]):focus-visible { outline: none; box-shadow: var(--ps-focus-ring); }
+.root :is(input[type="checkbox"], input[type="radio"]):focus-visible { outline: none; box-shadow: var(--ps-focus-ring-compact); }
 .iconButton:active, .textButton:active { background: var(--schedule-surface); }
 .menu { position: relative; flex: 0 0 auto; }
 .menuPanel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 75; min-width: 215px; max-width: calc(100vw - 48px); max-height: 65dvh; overflow: auto; padding: 5px; background: #fff; border: 1px solid #d2d2d7; border-radius: 12px; }
@@ -50,7 +52,7 @@
 .datePicker input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .nativePicker { min-height: 38px; cursor: pointer; touch-action: manipulation; color-scheme: light; }
 .nativePicker::-webkit-calendar-picker-indicator { min-width: 24px; min-height: 24px; padding: 8px; margin: -8px; cursor: pointer; }
-.datePicker:focus-within { outline: 2px solid #0071e3; outline-offset: 2px; border-radius: 6px; }
+.datePicker:focus-within { outline: none; border-radius: 6px; box-shadow: var(--ps-focus-ring); }
 .weekArrow { flex: 0 0 30px; width: 30px; height: 40px; border: 0; border-radius: 6px; background: transparent; color: var(--schedule-blue); font-size: 27px; cursor: pointer; }
 .weekArrow:hover, .iconButton:hover, .textButton:hover { background: var(--schedule-surface); }
 .dateInput { max-width: 160px; min-height: 40px; padding: 6px 0; border: 0; background: transparent; color: var(--schedule-ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
@@ -145,7 +147,7 @@
 .availabilityStudentName { margin: 0; color: var(--schedule-ink); font-size: 13px; font-weight: 600; }
 .weeklyTargetField { display: flex; align-items: center; gap: 6px; color: var(--schedule-muted); font-size: 12px; white-space: nowrap; }
 .weeklyTargetField input { width: 50px; min-height: 32px; border: 1px solid #cfd8e3; border-radius: 6px; background: #fff; padding: 4px 6px; color: var(--schedule-ink); font: inherit; text-align: center; }
-.weeklyTargetField input:focus-visible { outline: 2px solid #0a66c2; outline-offset: 1px; }
+.weeklyTargetField input:focus-visible { outline: none; box-shadow: var(--ps-focus-ring); }
 .availabilityModeBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--schedule-line); }
 .modeSwitch { display: inline-flex; border: 1px solid #cfd8e3; }
 .modeSwitch button { min-height: 32px; padding: 5px 10px; border: 0; border-right: 1px solid #cfd8e3; background: #fff; color: var(--schedule-muted); font: inherit; font-size: 12px; cursor: pointer; }
@@ -191,7 +193,7 @@
 .infoHint summary { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--schedule-muted); cursor: pointer; list-style: none; touch-action: manipulation; }
 .infoHint summary::-webkit-details-marker { display: none; }
 .infoHint summary:hover, .infoHint summary:focus-visible { background: var(--schedule-surface); color: var(--schedule-blue); outline: none; }
-.infoHint summary:focus-visible { box-shadow: 0 0 0 2px #99c8f4; }
+.infoHint summary:focus-visible { box-shadow: var(--ps-focus-ring-compact); }
 .infoHint summary svg { width: 17px; height: 17px; }
 .infoHint p { display: none; position: absolute; z-index: 90; top: calc(100% + 4px); right: 0; width: min(260px, calc(100vw - 40px)); margin: 0; padding: 8px 10px; border: 1px solid #d2d2d7; border-radius: 6px; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.12); color: #3a3a3c; font-size: 12px; font-weight: 400; line-height: 1.45; }
 .infoHint[open] p, .infoHint:hover p, .infoHint:focus-within p { display: block; }
@@ -219,7 +221,8 @@
 .autoXc { position: relative; }
 .autoXc summary { display: grid; min-height: 34px; place-items: center; padding: 6px 8px; border: 1px solid var(--ps-line); border-radius: var(--ps-radius-sm); corner-shape: squircle; background: var(--ps-surface-3); color: var(--schedule-blue); font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; touch-action: manipulation; }
 .autoXc summary::-webkit-details-marker { display: none; }
-.autoXc summary:focus-visible, .autoXcStepper button:focus-visible, .autoNightStart input:focus-visible { border-color: transparent; outline: none; box-shadow: var(--ps-focus-ring); }
+.autoXc summary:focus-visible, .autoXcStepper button:focus-visible { border-color: transparent; outline: none; box-shadow: var(--ps-focus-ring-compact); }
+.autoNightStart input:focus-visible { border-color: transparent; outline: none; box-shadow: var(--ps-focus-ring); }
 .autoXc[open] { display: grid; grid-template-columns: 48px 76px; align-items: center; gap: 4px; }
 .autoXcSteppers { display: grid; gap: 2px; }
 .autoXcStepper { display: grid; grid-template-columns: 22px 32px 22px; align-items: center; min-height: 16px; font-size: 11px; font-variant-numeric: tabular-nums; }
