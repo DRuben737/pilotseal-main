@@ -286,31 +286,22 @@
 
 .tools-index {
   max-width: 72rem;
-  gap: var(--ps-space-600);
+  gap: var(--ps-space-400);
 }
 
 .tools-index-intro {
-  display: grid;
-  max-width: 46rem;
-  gap: var(--ps-space-200);
-  padding-top: var(--ps-space-300);
+  padding-top: var(--ps-space-100);
+  padding-bottom: var(--ps-space-200);
+  border-bottom: 1px solid var(--ps-line);
 }
 
 .tools-index-intro h1 {
   margin: 0;
-  font-family: var(--ps-font-display);
-  font-size: clamp(3rem, 7vw, 5.75rem);
-  font-weight: 400;
-  letter-spacing: -0.055em;
-  line-height: 0.94;
-}
-
-.tools-index-intro p:last-child {
-  margin: 0;
-  max-width: 38rem;
-  color: var(--ps-ink-muted);
-  font-size: var(--ps-text-base);
-  line-height: 1.6;
+  font-family: var(--ps-font-sans);
+  font-size: var(--ps-text-3xl);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
 }
 
 .learn-index-intro {
@@ -433,8 +424,11 @@
 }
 
 .tools-index-row {
-  min-height: 5.5rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 1.25rem;
+  gap: var(--ps-space-100);
+  min-height: 4rem;
   margin-left: var(--ps-space-200);
+  padding-block: var(--ps-space-75);
   border-bottom-color: var(--ps-line);
   color: var(--ps-ink);
   transition: background-color var(--ps-motion-fast) var(--ps-motion-curve), transform var(--ps-motion-fast) var(--ps-motion-curve);
@@ -446,6 +440,8 @@
 }
 
 .tools-index-icon {
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: var(--ps-radius-md);
   background: var(--ps-sky);
   color: var(--ps-ink-soft);

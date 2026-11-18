@@ -32,12 +32,7 @@ export default function ToolsPage() {
     <main className="page-shell page-tools px-3">
       <div className="site-shell tools-index">
         <header className="tools-index-intro">
-          <p className="eyebrow">Flight desk</p>
-          <h1>Plan clearly. Teach precisely.</h1>
-          <p>
-            Practical tools for endorsements, flight planning, aircraft limits,
-            and the decisions made before takeoff.
-          </p>
+          <h1>Tools</h1>
         </header>
         <div className="tools-index-groups">
           {toolGroups.map((group) => (
@@ -51,7 +46,6 @@ export default function ToolsPage() {
                       <span className="tools-index-icon"><ToolIcon tool={key} /></span>
                       <span className="tools-index-copy">
                         <strong>{tool.title}</strong>
-                        <span>{tool.description}</span>
                       </span>
                       <svg className="tools-index-chevron" viewBox="0 0 20 20" aria-hidden="true">
                         <path d="m7.5 4.5 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
