@@ -712,13 +712,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <Link
                   href="/tools"
                   className="dashboard-mobile-tools-link"
-                  aria-label="Back to tools"
-                  title="Back to tools"
+                  aria-label="Tools"
+                  title="Tools"
                 >
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                    <path d="m9 4-6 6 6 6" />
-                    <path d="M3.5 10H17" />
-                  </svg>
+                  Tools
                 </Link>
               </section>
 
