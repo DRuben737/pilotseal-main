@@ -10425,36 +10425,3 @@ summary:focus-visible {
     print-color-adjust: exact;
   }
 }
-
-/* Selected mobile destinations use a filled surface, never a framed state. */
-@media (max-width: 760px) {
-  .dashboard-mobile-navigation {
-    grid-template-columns: minmax(0, 1fr) 64px;
-  }
-
-  .dashboard-mobile-workspace-tabs a {
-    border: 0;
-    outline: 0;
-  }
-
-  .dashboard-content .dashboard-mobile-workspace-tabs a.dashboard-mobile-workspace-active,
-  .dashboard-mobile-bottom-navigation .dashboard-mobile-bottom-link-active {
-    background: var(--ps-meadow) !important;
-    color: var(--ps-ink) !important;
-    border: 0 !important;
-    outline: 0 !important;
-    box-shadow: none !important;
-  }
-
-  .dashboard-mobile-bottom-navigation .dashboard-mobile-bottom-link-active::after {
-    content: none;
-  }
-
-  .dashboard-mobile-tools-link {
-    width: 64px;
-    border: 0;
-    border-left: 1px solid var(--ps-line);
-    font-size: 0.7rem;
-    font-weight: 600;
-  }
-}

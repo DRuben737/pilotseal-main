@@ -1733,7 +1733,7 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
 #dashboard-mobile-page-list .dashboard-mobile-page-active {
   border: 0;
   outline: 0;
-  background: var(--ps-meadow);
+  background: var(--ps-surface-3);
   color: var(--ps-ink);
   box-shadow: none;
 }
@@ -1755,8 +1755,7 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   }
 
   .dashboard-admin-chrome {
-    margin: 0 0 var(--ps-space-200);
-    background: transparent;
+    display: none;
   }
 
   .dashboard-breadcrumbs {
@@ -1781,14 +1780,47 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
     text-wrap: balance;
   }
 
-  .dashboard-content:has(h1) .dashboard-admin-chrome {
-    display: none;
-  }
-
   .dashboard-mobile-navigation {
     display: grid;
-    gap: var(--ps-space-75);
+    grid-template-columns: minmax(0, 1fr) 64px;
+    gap: 0;
     margin-bottom: var(--ps-space-200);
+    background: var(--ps-surface-1);
+  }
+
+  .dashboard-mobile-workspace-tabs {
+    gap: var(--ps-space-25);
+    background: transparent;
+    padding: var(--ps-space-50);
+  }
+
+  .dashboard-mobile-workspace-tabs a {
+    border: 0;
+    border-radius: var(--ps-radius-sm);
+    outline: 0;
+    corner-shape: squircle;
+  }
+
+  .dashboard-content .dashboard-mobile-workspace-tabs a.dashboard-mobile-workspace-active,
+  .dashboard-mobile-bottom-navigation .dashboard-mobile-bottom-link-active {
+    border: 0 !important;
+    outline: 0 !important;
+    background: var(--ps-surface-3) !important;
+    color: var(--ps-ink) !important;
+    box-shadow: none !important;
+  }
+
+  .dashboard-mobile-bottom-navigation .dashboard-mobile-bottom-link-active::after {
+    content: none;
+  }
+
+  .dashboard-mobile-tools-link {
+    width: 64px;
+    border: 0 !important;
+    background: transparent;
+    color: var(--ps-ink-muted);
+    font-size: var(--ps-text-xs);
+    font-weight: 500;
   }
 
   .dashboard-mobile-page-menu {
@@ -1836,16 +1868,41 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
     corner-shape: squircle;
   }
 
-  .admin-page-header {
+  .console-shell .admin-page-header:not(:has(.admin-page-action)) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     min-height: 0;
-    align-items: flex-start;
-    flex-direction: column;
-    padding-block: var(--ps-space-100);
+    margin: -1px;
+    overflow: hidden;
+    border: 0;
+    padding: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  .admin-page-action,
-  .admin-page-action > * {
-    width: 100%;
+  .console-shell .admin-page-header:has(.admin-page-action) {
+    min-height: 0;
+    align-items: center;
+    justify-content: flex-end;
+    border: 0;
+    padding: 0 0 var(--ps-space-100);
+  }
+
+  .console-shell .admin-page-header:has(.admin-page-action) .admin-page-heading-copy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .console-shell .admin-page-action {
+    margin-left: auto;
   }
 
   .admin-dialog {
