@@ -1658,6 +1658,37 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   corner-shape: squircle;
 }
 
+.admin-dialog[data-admin-detail-drawer="true"] {
+  inset: 0 0 0 auto !important;
+  width: min(40rem, calc(100vw - var(--ps-space-600))) !important;
+  height: 100dvh;
+  max-width: 40rem !important;
+  max-height: none;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: var(--ps-radius-xl) 0 0 var(--ps-radius-xl) !important;
+  transform: none !important;
+  animation: ps-admin-drawer-in var(--ps-motion-base) var(--ps-motion-curve);
+}
+
+.admin-dialog[data-admin-detail-drawer="true"].max-w-5xl {
+  width: min(52rem, calc(100vw - var(--ps-space-600))) !important;
+  max-width: 52rem !important;
+}
+
+@keyframes ps-admin-drawer-in {
+  from {
+    opacity: 0.82;
+    transform: translateX(var(--ps-space-300));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .admin-dialog-backdrop,
 .admin-confirm-backdrop {
   background: color-mix(in srgb, var(--ps-ink) 28%, transparent);
@@ -1905,15 +1936,14 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
     margin-left: auto;
   }
 
-  .admin-dialog {
-    inset: auto 0 0 !important;
-    width: 100% !important;
+  .admin-dialog[data-admin-detail-drawer="true"]:is(.max-w-2xl, .max-w-5xl) {
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh;
     max-width: none !important;
-    max-height: min(92dvh, 56rem) !important;
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: var(--ps-radius-xl) var(--ps-radius-xl) 0 0 !important;
+    max-height: none !important;
+    border: 0;
+    border-radius: 0 !important;
     transform: none !important;
   }
 }
@@ -1928,10 +1958,15 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
 }
 
 .training-records-workspace .saas-empty-state {
-  min-height: 9rem;
-  display: grid;
-  place-items: center;
+  display: flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: flex-start;
+  border-style: solid;
+  border-radius: var(--ps-radius-sm);
+  padding: var(--ps-space-100) var(--ps-space-200);
   color: var(--ps-ink-muted);
+  font-size: 0.8125rem;
 }
 
 .training-record-group {
