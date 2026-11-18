@@ -1690,7 +1690,7 @@ export default function OrganizationManager({
 
             <div className="max-w-full overflow-x-auto" data-edit-grid>
               <table className="w-full min-w-[820px] border-collapse text-left text-xs">
-                <thead className="bg-blue-100 font-semibold text-slate-800">
+                <thead className="bg-[var(--ps-surface-2)] font-semibold text-[var(--ps-ink-soft)]">
                   <tr>
                     <GridHeader className="min-w-52">Model</GridHeader>
                     <GridHeader className="w-32">Type</GridHeader>
@@ -2056,9 +2056,9 @@ export default function OrganizationManager({
               ) : visibleStudentMembers.map((member) => {
                 const name = memberDisplayName(member, peopleByUserId.get(member.user_id));
                 return <div key={member.user_id} role="listitem" className="flex min-h-9 items-center gap-3 border-b border-slate-200 px-3 py-1.5">
-                  <button type="button" className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={() => openMemberDetail(member)}>
-                    <span className="block break-words text-[13px] font-medium leading-5 text-slate-900">{name}</span>
-                    <span className="block text-xs font-normal text-slate-500">{formatManagementRole(member)}</span>
+                  <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={() => openMemberDetail(member)}>
+                    <span className="min-w-0 truncate text-[13px] font-medium leading-5 text-slate-900">{name}</span>
+                    <span className="shrink-0 text-xs font-normal text-slate-500">{formatManagementRole(member)}</span>
                   </button>
                   <label className={`flex shrink-0 items-center gap-2 text-xs font-medium ${canManageMembers ? "cursor-pointer text-slate-700" : "text-slate-400"}`}>
                     <input
@@ -2316,7 +2316,7 @@ export default function OrganizationManager({
 
             <AircraftWorksheet title="Aircraft identity">
               <table className="w-full min-w-[780px] border-collapse text-left text-xs">
-                <thead className="bg-blue-100 font-semibold text-slate-800">
+                <thead className="bg-[var(--ps-surface-2)] font-semibold text-[var(--ps-ink-soft)]">
                   <tr>
                     <GridHeader className="min-w-52">Model</GridHeader>
                     <GridHeader className="w-36">Tail number</GridHeader>
@@ -2340,7 +2340,7 @@ export default function OrganizationManager({
                     <GridCell><AircraftWorksheetInput ariaLabel="Tail number" disabled={editingAssignedAircraft} value={aircraftForm.tail_number} onChange={(value) => updateAircraftField("tail_number", value.toUpperCase())} placeholder="N5520X" required /></GridCell>
                     <GridCell><AircraftWorksheetInput ariaLabel="Basic empty weight in pounds" disabled={editingAssignedAircraft} type="number" min={0} value={aircraftForm.empty_weight} onChange={(value) => updateAircraftField("empty_weight", value)} required /></GridCell>
                     <GridCell><AircraftWorksheetInput ariaLabel="Empty weight longitudinal arm" disabled={editingAssignedAircraft} type="number" value={aircraftForm.empty_arm} onChange={(value) => updateAircraftField("empty_arm", value)} required /></GridCell>
-                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel="Empty weight lateral arm" disabled={editingAssignedAircraft} type="number" value={aircraftForm.empty_lat_arm} onChange={(value) => updateAircraftField("empty_lat_arm", value)} placeholder="0 = centerline" /></td>
+                    <td className="border-t border-[var(--ps-line)] p-0"><AircraftWorksheetInput ariaLabel="Empty weight lateral arm" disabled={editingAssignedAircraft} type="number" value={aircraftForm.empty_lat_arm} onChange={(value) => updateAircraftField("empty_lat_arm", value)} placeholder="0 = centerline" /></td>
                   </tr>
                 </tbody>
               </table>
@@ -2348,7 +2348,7 @@ export default function OrganizationManager({
 
             <AircraftWorksheet title="Status and meter">
               <table className="w-full min-w-[860px] border-collapse text-left text-xs">
-                <thead className="bg-slate-100 font-semibold text-slate-700">
+                <thead className="bg-[var(--ps-surface-2)] font-semibold text-[var(--ps-ink-soft)]">
                   <tr>
                     <GridHeader className="w-36">Status</GridHeader>
                     <GridHeader className="min-w-52">Status note</GridHeader>
@@ -2377,7 +2377,7 @@ export default function OrganizationManager({
                     </GridCell>
                     <GridCell><AircraftWorksheetInput ariaLabel="Current meter reading" type="number" min={0} value={aircraftForm.current_meter_value} onChange={(value) => updateAircraftField("current_meter_value", value)} /></GridCell>
                     <GridCell><UsDateTimeInput aria-label="Meter reading observed at" className={gridControlClass} max={toDateTimeLocal(new Date().toISOString())} value={aircraftForm.meter_observed_at} onChange={(value) => updateAircraftField("meter_observed_at", value)} /></GridCell>
-                    <td className="border-t border-slate-200 p-0"><AircraftWorksheetInput ariaLabel="Meter change reason" value={aircraftForm.meter_change_reason} onChange={(value) => updateAircraftField("meter_change_reason", value)} placeholder="Required when reading changes" /></td>
+                    <td className="border-t border-[var(--ps-line)] p-0"><AircraftWorksheetInput ariaLabel="Meter change reason" value={aircraftForm.meter_change_reason} onChange={(value) => updateAircraftField("meter_change_reason", value)} placeholder="Required when reading changes" /></td>
                   </tr>
                 </tbody>
               </table>
@@ -2385,7 +2385,7 @@ export default function OrganizationManager({
 
             <AircraftWorksheet title="Inspection and registration due">
               <table className="w-full min-w-[840px] border-collapse text-left text-xs">
-                <thead className="bg-amber-100 font-semibold text-slate-800">
+                <thead className="bg-[var(--ps-surface-2)] font-semibold text-[var(--ps-ink-soft)]">
                   <tr>
                     <GridHeader className="w-28">100-hour</GridHeader>
                     <GridHeader className="w-28">Annual</GridHeader>
@@ -2402,7 +2402,7 @@ export default function OrganizationManager({
                     {(["annual_due_date", "static_due_date", "transponder_due_date", "elt_due_date", "adsb_due_date"] as const).map((key) => (
                       <GridCell key={key}><UsDateInput precision="month" aria-label={`${formatDueLabel(key)} MM/YYYY`} className={gridControlClass} value={aircraftForm[key]} onChange={(value) => updateAircraftField(key, value)} /></GridCell>
                     ))}
-                    <td className="border-t border-slate-200 p-0"><UsDateInput precision="month" aria-label={`${formatDueLabel("registration_due_date")} MM/YYYY`} className={gridControlClass} value={aircraftForm.registration_due_date} onChange={(value) => updateAircraftField("registration_due_date", value)} /></td>
+                    <td className="border-t border-[var(--ps-line)] p-0"><UsDateInput precision="month" aria-label={`${formatDueLabel("registration_due_date")} MM/YYYY`} className={gridControlClass} value={aircraftForm.registration_due_date} onChange={(value) => updateAircraftField("registration_due_date", value)} /></td>
                   </tr>
                 </tbody>
               </table>
@@ -2989,9 +2989,9 @@ function AircraftWorksheet({
   children: React.ReactNode;
 }) {
   return (
-    <fieldset className="min-w-0 overflow-hidden border border-slate-300 bg-white">
+    <fieldset className="min-w-0 overflow-hidden rounded-[var(--ps-radius-sm)] border border-[var(--ps-line)] bg-[var(--ps-surface-3)]">
       <legend className="sr-only">{title}</legend>
-      <div className="border-b border-slate-300 bg-slate-800 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+      <div className="border-b border-[var(--ps-line)] bg-[var(--ps-surface-1)] px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ps-ink-soft)]">
         {title}
       </div>
       <div className="max-w-full overflow-x-auto" data-edit-grid>{children}</div>
@@ -3027,7 +3027,7 @@ function AircraftWorksheetInput({
 }
 
 const gridControlClass =
-  "block h-7 w-full min-w-20 border-0 bg-transparent px-1.5 py-0 text-xs text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:bg-blue-50/60 focus:bg-blue-50 focus:ring-2 focus:ring-inset focus:ring-blue-600";
+  "block h-7 w-full min-w-20 border-0 bg-transparent px-1.5 py-0 text-xs text-[var(--ps-ink)] outline-none transition-colors placeholder:text-[var(--ps-ink-faint)] hover:bg-[var(--ps-surface-1)] focus:bg-[var(--ps-surface-3)] focus:ring-0";
 
 function GridHeader({
   children,
@@ -3042,7 +3042,7 @@ function GridHeader({
 }) {
   return (
     <th
-      className={`h-7 border-b border-slate-300 px-1.5 py-0 ${
+      className={`h-7 border-b border-[var(--ps-line)] px-1.5 py-0 ${
         last ? "" : "border-r"
       } ${className}`}
       title={title}
@@ -3053,7 +3053,7 @@ function GridHeader({
 }
 
 function GridCell({ children }: { children: React.ReactNode }) {
-  return <td className="border-r border-t border-slate-200 p-0">{children}</td>;
+  return <td className="border-r border-t border-[var(--ps-line)] p-0">{children}</td>;
 }
 
 function GridIndexCell({ children }: { children: React.ReactNode }) {

@@ -13,7 +13,7 @@ export default function OrganizationEndorsementsWorkspace() {
 
   return (
     <div className="grid gap-3">
-      <AdminPageHeader eyebrow="Organization" title="Endorsements" />
+      <AdminPageHeader title="Endorsements" />
       <ManagementTabs
         id="organization-endorsements"
         label="Organization endorsement sections"

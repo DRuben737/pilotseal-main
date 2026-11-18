@@ -6,5 +6,5 @@ import ReportsManager from "@/components/dashboard/ReportsManager";
 export const metadata = { title: "Organization Reports" };
 
 export default function Page() {
-  return <div className="grid gap-3"><AdminPageHeader eyebrow="Organization" title="Reports" /><Suspense fallback={null}><ReportsManager /></Suspense></div>;
+  return <div className="grid gap-3"><AdminPageHeader title="Reports" /><Suspense fallback={null}><ReportsManager /></Suspense></div>;
 }

@@ -4,5 +4,5 @@ import OrganizationNotificationPublisher from "@/components/notifications/Organi
 export const metadata = { title: "Organization Notifications" };
 
 export default function Page() {
-  return <div className="grid gap-3"><AdminPageHeader eyebrow="Organization" title="Notifications" /><OrganizationNotificationPublisher activeOrganizationOnly /></div>;
+  return <div className="grid gap-3"><AdminPageHeader title="Notifications" /><OrganizationNotificationPublisher activeOrganizationOnly /></div>;
 }
