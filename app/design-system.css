@@ -2070,3 +2070,234 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
 .training-record-print-action:hover {
   color: var(--ps-ink);
 }
+
+/* Shared console surfaces. Keep these last so legacy utility rules cannot
+   reintroduce square controls, blue outlines, or card-heavy drawers. */
+.admin-dialog-backdrop,
+.admin-confirm-backdrop {
+  background: color-mix(in srgb, var(--ps-ink) 28%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.admin-dialog[data-admin-detail-drawer="true"] {
+  inset: 0 0 0 auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  border: 0;
+  border-left: 1px solid var(--ps-line-strong);
+  border-radius: var(--ps-radius-lg) 0 0 var(--ps-radius-lg);
+  background: var(--ps-surface-2);
+  color: var(--ps-ink);
+  box-shadow: -16px 0 40px color-mix(in srgb, var(--ps-ink) 10%, transparent);
+  corner-shape: squircle;
+}
+
+.admin-dialog-header {
+  min-height: 3.75rem;
+  border-bottom: 1px solid var(--ps-line);
+  background: var(--ps-surface-1);
+}
+
+.admin-dialog-header h2 {
+  margin: 0;
+  color: var(--ps-ink);
+  font-size: var(--ps-text-base);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.admin-dialog-description {
+  margin-top: var(--ps-space-25);
+  max-width: 56rem;
+  color: var(--ps-ink-muted);
+  font-size: var(--ps-text-xs);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.admin-dialog-body {
+  background: var(--ps-surface-2);
+  overscroll-behavior: contain;
+}
+
+.admin-dialog-close {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem !important;
+  flex: 0 0 2rem;
+  place-items: center;
+  border: 0;
+  border-radius: var(--ps-radius-sm);
+  background: transparent;
+  color: var(--ps-ink-muted);
+  font-size: 1.25rem !important;
+  line-height: 1;
+  corner-shape: squircle;
+}
+
+.admin-dialog-close:hover {
+  background: var(--ps-surface-3);
+  color: var(--ps-ink);
+}
+
+.console-dialog-surface.admin-confirm-dialog {
+  border: 1px solid var(--ps-line-strong);
+  border-radius: var(--ps-radius-lg);
+  background: var(--ps-surface-2);
+  color: var(--ps-ink);
+  box-shadow: 0 20px 56px color-mix(in srgb, var(--ps-ink) 16%, transparent);
+  corner-shape: squircle;
+}
+
+.dashboard-content :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea
+),
+.admin-dialog :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea
+),
+.console-dialog-surface :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea
+) {
+  border: 1px solid var(--ps-line);
+  border-radius: var(--ps-radius-md) !important;
+  background: var(--ps-surface-3) !important;
+  color: var(--ps-ink) !important;
+  outline: none !important;
+  corner-shape: squircle;
+}
+
+.dashboard-content :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea
+):focus,
+.admin-dialog :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea
+):focus,
+.console-dialog-surface :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea
+):focus {
+  border-color: var(--ps-line) !important;
+  outline: none !important;
+  box-shadow: var(--ps-focus-ring) !important;
+}
+
+.dashboard-content input[type="checkbox"],
+.admin-dialog input[type="checkbox"],
+.console-dialog-surface input[type="checkbox"] {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+  margin: 0;
+  border: 1px solid var(--ps-line-strong) !important;
+  border-radius: 0.25rem !important;
+  padding: 0 !important;
+  box-shadow: none;
+}
+
+.dashboard-content input[type="checkbox"]:focus-visible,
+.admin-dialog input[type="checkbox"]:focus-visible,
+.console-dialog-surface input[type="checkbox"]:focus-visible {
+  border-color: var(--ps-line-strong) !important;
+  outline: none !important;
+  box-shadow: var(--ps-focus-ring-compact) !important;
+}
+
+.dashboard-content input[type="checkbox"]:checked,
+.admin-dialog input[type="checkbox"]:checked,
+.console-dialog-surface input[type="checkbox"]:checked {
+  border-color: var(--ps-meadow-strong) !important;
+  background: var(--ps-meadow-strong) !important;
+}
+
+.admin-dialog :where(article, .saas-panel, .saas-subpanel, .rounded-xl, .rounded-2xl),
+.console-dialog-surface :where(article, .saas-panel, .saas-subpanel, .rounded-xl, .rounded-2xl) {
+  border-color: var(--ps-line) !important;
+  border-radius: var(--ps-radius-md) !important;
+  background: var(--ps-surface-3) !important;
+  box-shadow: none !important;
+  corner-shape: squircle;
+}
+
+.dashboard-content :where(.data-row-actions) {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: var(--ps-space-50);
+  white-space: nowrap;
+}
+
+.activity-only-workspace > .management-tabs > .management-tabs-header {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .dashboard-content h1 {
+    font-size: 1.25rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .dashboard-content h2,
+  .admin-dialog h2,
+  .console-dialog-surface h2 {
+    font-size: 1rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .dashboard-content h3,
+  .admin-dialog h3,
+  .console-dialog-surface h3 {
+    font-size: 0.9375rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .dashboard-content :where(p, li, dd),
+  .admin-dialog :where(p, li, dd),
+  .console-dialog-surface :where(p, li, dd) {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  .dashboard-content :where(button, a, summary),
+  .admin-dialog :where(button, a, summary),
+  .console-dialog-surface :where(button, a, summary) {
+    font-size: 0.8125rem;
+  }
+
+  .admin-dialog[data-admin-detail-drawer="true"] {
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh;
+    max-width: none !important;
+    border: 0;
+    border-radius: 0 !important;
+    box-shadow: none;
+  }
+
+  .admin-dialog-header {
+    min-height: 3.5rem;
+    padding: var(--ps-space-100) var(--ps-space-200) !important;
+  }
+
+  .admin-dialog-body {
+    padding: var(--ps-space-200) !important;
+  }
+
+  .dashboard-content :is(.primary-button, .secondary-button, .ghost-button, .danger-button),
+  .admin-dialog :is(.primary-button, .secondary-button, .ghost-button, .danger-button),
+  .console-dialog-surface :is(.primary-button, .secondary-button, .ghost-button, .danger-button) {
+    min-height: var(--ps-touch-target);
+  }
+}

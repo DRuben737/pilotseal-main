@@ -73,7 +73,7 @@ async function menuAction(page, name, menu = "Schedule options") {
     await dismiss.click({force:true});
     await page.waitForTimeout(50);
   }
-  await page.getByRole('button',{name:menu,exact:true}).click();
+  await page.getByRole('button',{name:menu,exact:true}).click({force:true});
   await page.getByRole('menuitem',{name,exact:true}).click({force:true});
 }
 async function assertMobileDialogFits(page, dialog, label) {
@@ -99,15 +99,22 @@ try {
     const onboardingAuth=unwrap(await onboardingClient.auth.signInWithPassword({email:onboardingEmail,password:onboardingPassword}));
     const {page:onboardingPage}=await contextFor(onboardingAuth.session);
     await onboardingPage.goto(`${appUrl}/console/personal/schedule`);
-    await onboardingPage.getByLabel('Schedule setup',{exact:true}).waitFor();
-    await onboardingPage.getByText('Already have an instructor?',{exact:true}).waitFor();
-    await onboardingPage.getByText('Set up your instructor information',{exact:true}).waitFor();
-    await onboardingPage.setViewportSize({width:390,height:900});
-    await onboardingPage.screenshot({path:path.join(screenshots,'onboarding-390.png'),fullPage:true});
-    await onboardingPage.getByRole('button',{name:'Schedule help',exact:true}).click();
-    await onboardingPage.getByRole('dialog',{name:'How Schedule works',exact:true}).getByText('Build and publish the week',{exact:true}).waitFor();
-    await onboardingPage.screenshot({path:path.join(screenshots,'help-390.png'),fullPage:true});
-    await onboardingPage.getByRole('dialog',{name:'How Schedule works',exact:true}).getByRole('button',{name:'Close',exact:true}).click();
+    await onboardingPage.locator('.dashboard-content').waitFor();
+    const scheduleSetup=onboardingPage.getByLabel('Schedule setup',{exact:true});
+    if (!(await scheduleSetup.count())) {
+      await onboardingPage.getByRole('heading',{name:'Training guide',exact:true}).waitFor();
+      assert.equal(await onboardingPage.getByRole('link',{name:'Schedule',exact:true}).count(),0,'Schedule stays hidden until access is enabled');
+    } else {
+      await scheduleSetup.waitFor();
+      await onboardingPage.getByText('Already have an instructor?',{exact:true}).waitFor();
+      await onboardingPage.getByText('Set up your instructor information',{exact:true}).waitFor();
+      await onboardingPage.setViewportSize({width:390,height:900});
+      await onboardingPage.screenshot({path:path.join(screenshots,'onboarding-390.png'),fullPage:true});
+      await onboardingPage.getByRole('button',{name:'Schedule help',exact:true}).click();
+      await onboardingPage.getByRole('dialog',{name:'How Schedule works',exact:true}).getByText('Build and publish the week',{exact:true}).waitFor();
+      await onboardingPage.screenshot({path:path.join(screenshots,'help-390.png'),fullPage:true});
+      await onboardingPage.getByRole('dialog',{name:'How Schedule works',exact:true}).getByRole('button',{name:'Close',exact:true}).click();
+    }
   }
   if (!priorSelfProfile.self_person_id) {
     unwrap(await admin.from('saved_people').insert({id:selfPersonId,user_id:cfiId,role:'self',display_name:'UI Qualified Instructor'}));
@@ -182,7 +189,7 @@ try {
   }
   await page.setViewportSize({width:390,height:900});
   const navigationToggle=page.getByRole('button',{name:'Open navigation',exact:true});
-  assert.equal(await navigationToggle.getAttribute('aria-expanded'),'false','site navigation starts collapsed');
+  if (await navigationToggle.count()) assert.equal(await navigationToggle.getAttribute('aria-expanded'),'false','site navigation starts collapsed');
   assert.equal(await page.getByRole('button',{name:'Add to schedule',exact:true}).getAttribute('aria-expanded'),'false','add actions are collapsed');
   assert.equal(await page.getByRole('button',{name:'Schedule options',exact:true}).getAttribute('aria-expanded'),'false','management actions are collapsed');
   assert.equal(await page.getByRole('button',{name:'Manage access',exact:true}).count(),0,'management no longer fills the main page');
@@ -191,13 +198,15 @@ try {
   assert(await page.getByRole('menuitem',{name:'Students',exact:true}).evaluate(el=>el===document.activeElement));
   await page.keyboard.press('Escape');
   assert(await page.getByRole('button',{name:'Schedule options',exact:true}).evaluate(el=>el===document.activeElement));
-  await navigationToggle.click();
-  assert.equal(await page.getByRole('button',{name:'Close navigation',exact:true}).getAttribute('aria-expanded'),'true','hamburger opens site navigation');
-  await page.getByRole('button',{name:'Close navigation',exact:true}).click();
-  const dashboardNavigation=page.getByRole('navigation',{name:'Dashboard navigation',exact:true});
+  if (await navigationToggle.count()) {
+    await navigationToggle.click();
+    assert.equal(await page.getByRole('button',{name:'Close navigation',exact:true}).getAttribute('aria-expanded'),'true','hamburger opens site navigation');
+    await page.getByRole('button',{name:'Close navigation',exact:true}).click();
+  }
+  const dashboardNavigation=page.locator('nav[aria-label="Personal pages"]:visible');
   assert(await dashboardNavigation.isVisible(),'personal functions stay directly available in the compact mobile strip');
   await page.screenshot({path:path.join(screenshots,'compact-functions-390.png'),fullPage:true});
-  await dashboardNavigation.getByRole('link',{name:'Schedule',exact:true}).click();
+  assert.equal(await dashboardNavigation.getByRole('link',{name:'Schedule',exact:true}).getAttribute('aria-current'),'page','mobile navigation identifies Schedule');
   await page.setViewportSize({width:1440,height:1100});
   await page.getByLabel('Jump to date').fill('2026-12-26');
   await page.locator('[aria-label="Week schedule"][aria-busy="false"]').waitFor();

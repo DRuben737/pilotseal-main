@@ -41,6 +41,7 @@
     "test:notifications:realtime:local": "node scripts/test-notification-realtime-local.mjs",
     "test:notifications:sync:local": "node scripts/test-notification-sync-ui-local.mjs",
     "test:notifications:timing:local": "node scripts/test-notification-timing-ui-local.mjs",
+    "test:console-ui:local": "node scripts/test-console-ui-local.mjs",
     "test:piston-engine": "tsx --test scripts/test-piston-engine-model.ts"
   },
   "dependencies": {

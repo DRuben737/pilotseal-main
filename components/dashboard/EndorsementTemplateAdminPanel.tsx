@@ -1,9 +1,8 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 
-import { AdminNameList, AdminPagination, CompactToolbar, ManagementDisclosure } from "@/components/admin/AdminConsole";
+import { AdminNameList, AdminPagination, CompactToolbar, DetailDrawer, ManagementDisclosure } from "@/components/admin/AdminConsole";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import EndorsementWordingEditor from "@/components/dashboard/EndorsementWordingEditor";
 import { endorsementTemplateDataVersion } from "@/components/tools-native/templates";
@@ -282,14 +281,6 @@ function createSourceFormFromSettings(settings: EndorsementTemplateSettings): So
     source_date: settings.source_date,
     updated_date: settings.updated_date,
   };
-}
-
-function renderOverlay(content: ReactNode) {
-  if (typeof document === "undefined") {
-    return content;
-  }
-
-  return createPortal(content, document.body);
 }
 
 export default function EndorsementTemplateAdminPanel({ view = "templates" }: { view?: "templates" | "requests" }) {
@@ -584,76 +575,49 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
       <AdminNameList label="Endorsement templates" emptyLabel="No endorsements match the current filters." items={visibleTemplates.map((template) => ({ id: template.id, name: template.title }))} onSelect={(item) => setPreviewTemplate(visibleTemplates.find((template) => template.id === item.id) ?? null)} />
       <AdminPagination page={page} pageSize={pageSize} total={filteredTemplates.length} onPageChange={setPage} />
 
-      {previewTemplate
-        ? renderOverlay(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
-              <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[86vh] w-full max-w-3xl overflow-auto rounded-sm border border-slate-200 bg-white p-5 shadow-lg">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="eyebrow">Preview endorsement</p>
-                    <h2 className="text-base font-semibold text-slate-950">{previewTemplate.title}</h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {[previewTemplate.reference_number, getDisplayCategory(previewTemplate)].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                  <button type="button" className="secondary-button" onClick={() => setPreviewTemplate(null)}>
-                    Close
-                  </button>
-                </div>
+      <DetailDrawer
+        open={Boolean(previewTemplate)}
+        title={previewTemplate?.title ?? "Endorsement"}
+        description={previewTemplate ? [previewTemplate.reference_number, getDisplayCategory(previewTemplate)].filter(Boolean).join(" · ") : undefined}
+        onClose={() => setPreviewTemplate(null)}
+      >
+        {previewTemplate ? <>
+          <div className="border border-slate-200 bg-slate-50 p-4">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
+              {getPreviewState(createFormFromTemplate(previewTemplate)).rendered}
+            </p>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm text-slate-600">
+            {previewTemplate.reference_number ? <span>AC number: {previewTemplate.reference_number}</span> : null}
+            <span>Where it appears: {getVisibilityLabel(previewTemplate.status)}</span>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                setForm(createFormFromTemplate(previewTemplate));
+                setPreviewTemplate(null);
+                setEditorOpen(true);
+              }}
+            >
+              Edit
+            </button>
+          </div>
+        </> : null}
+      </DetailDrawer>
 
-                <div className="mt-4 border border-slate-200 bg-slate-50 p-4">
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                    {getPreviewState(createFormFromTemplate(previewTemplate)).rendered}
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-2 text-sm text-slate-600">
-                  {previewTemplate.reference_number ? <span>AC number: {previewTemplate.reference_number}</span> : null}
-                  <span>Where it appears: {getVisibilityLabel(previewTemplate.status)}</span>
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={() => {
-                      setForm(createFormFromTemplate(previewTemplate));
-                      setPreviewTemplate(null);
-                      setEditorOpen(true);
-                    }}
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        : null}
-
-      {editorOpen
-        ? renderOverlay(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
-          <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[92vh] w-full max-w-3xl overflow-auto rounded-sm border border-slate-200 bg-white p-4 shadow-lg sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="eyebrow">{form.id ? "Edit endorsement" : "New endorsement"}</p>
-                <h2 className="text-base font-semibold text-slate-950">
-                  {form.title || "Endorsement details"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                onClick={() => {
-                  setForm(emptyForm);
-                  setEditorOpen(false);
-                }}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-3 grid gap-x-3 gap-y-2 md:grid-cols-2">
+      <DetailDrawer
+        open={editorOpen}
+        width="wide"
+        title={form.id ? "Edit endorsement" : "New endorsement"}
+        description={form.title || "Endorsement details"}
+        onClose={() => {
+          setForm(emptyForm);
+          setEditorOpen(false);
+        }}
+      >
+            <div className="grid gap-x-3 gap-y-2 md:grid-cols-2">
               <label className="grid gap-1 text-sm font-medium text-slate-700">
                 Name
                 <input
@@ -726,33 +690,22 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
             <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3">
               <button
                 type="button"
-                className="rounded-md bg-blue-800 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="primary-button"
                 onClick={handleSave}
                 disabled={saving}
               >
                 {saving ? "Saving..." : form.id ? "Save changes" : "Create endorsement"}
               </button>
             </div>
-          </div>
-        </div>
-          )
-        : null}
+      </DetailDrawer>
 
-      {sourceEditorOpen
-        ? renderOverlay(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4">
-              <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[92vh] w-full max-w-2xl overflow-auto rounded-sm border border-slate-200 bg-white p-5 shadow-lg">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="eyebrow">Source details</p>
-                    <h2 className="text-base font-semibold text-slate-950">Generator source text</h2>
-                  </div>
-                  <button type="button" className="secondary-button" onClick={() => setSourceEditorOpen(false)}>
-                    Close
-                  </button>
-                </div>
-
-                <div className="mt-4 grid gap-3">
+      <DetailDrawer
+        open={sourceEditorOpen}
+        title="Source details"
+        description="Generator source text"
+        onClose={() => setSourceEditorOpen(false)}
+      >
+                <div className="grid gap-3">
                   <label className="grid gap-1 text-sm font-medium text-slate-700">
                     Template data
                     <input
@@ -795,10 +748,7 @@ export default function EndorsementTemplateAdminPanel({ view = "templates" }: { 
                     {saving ? "Saving..." : "Save source details"}
                   </button>
                 </div>
-              </div>
-            </div>
-          )
-        : null}
+      </DetailDrawer>
 
     </ManagementDisclosure>
   );

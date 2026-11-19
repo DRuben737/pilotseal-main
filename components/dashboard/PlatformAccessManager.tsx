@@ -17,6 +17,7 @@ import {
   worksheetInputClass,
 } from "@/components/admin/AdminConsole";
 import { usePersistentDashboardView } from "@/components/admin/usePersistentDashboardView";
+import { useConsoleSurfaceStack } from "@/components/admin/useConsoleSurfaceStack";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { formatUsDateTime } from "@/lib/date-format";
 import Panel from "@/components/ui/Panel";
@@ -54,7 +55,8 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
   const [revokeReason, setRevokeReason] = useState("");
   const [reviewRequest, setReviewRequest] = useState<PlatformOrganizationRequest | null>(null);
   const [reviewReason, setReviewReason] = useState("");
-  const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
+  const surfaces = useConsoleSurfaceStack<Exclude<DrawerMode, null>>();
+  const drawerMode: DrawerMode = surfaces.current;
   const [revokeConfirmOpen, setRevokeConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -118,7 +120,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
       const account = await setPlatformAdminByEmail({ email, makeAdmin: true, reason: grantReason });
       setEmail("");
       setGrantReason("");
-      setDrawerMode(null);
+      surfaces.closeAll();
       setStatus(`Platform access granted to ${account?.email ?? "the account"}.`);
       await loadData();
     } catch (nextError) {
@@ -142,7 +144,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
       setOrganizationName("");
       setOwnerEmail("");
       setOrganizationReason("");
-      setDrawerMode(null);
+      surfaces.closeAll();
       setStatus(`${organization?.name ?? "Organization"} was created and assigned to ${organization?.owner_email ?? "the owner"}.`);
       await loadData();
     } catch (nextError) {
@@ -166,7 +168,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
       setStatus(`Platform access revoked from ${revokeTarget.email ?? "the account"}.`);
       setRevokeTarget(null);
       setRevokeReason("");
-      setDrawerMode(null);
+      surfaces.closeAll();
       setRevokeConfirmOpen(false);
       await loadData();
     } catch (nextError) {
@@ -187,7 +189,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
       setStatus(`${reviewRequest.requested_name} was ${decision}.`);
       setReviewRequest(null);
       setReviewReason("");
-      setDrawerMode(null);
+      surfaces.closeAll();
       await loadData();
     } catch (nextError) {
       setError(errorMessage(nextError));
@@ -204,7 +206,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
   }
 
   return (
-    <div className="grid gap-3">
+    <div className={`grid gap-3 ${activityOnly ? "activity-only-workspace" : ""}`}>
       {!embedded ? <AdminPageHeader
         title={activityOnly ? "Activity" : "Organizations"}
       /> : null}
@@ -225,8 +227,8 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
         onChange={(id) => setActiveAccessTab(id as AccessTab)}
         actions={!activityOnly ? (
           <div className="flex gap-2">
-            <CompactButton type="button" onClick={() => setDrawerMode("admin")}>Grant access</CompactButton>
-            <CompactButton type="button" tone="primary" onClick={() => setDrawerMode("organization")}>Add organization</CompactButton>
+            <CompactButton type="button" onClick={() => surfaces.open("admin")}>Grant access</CompactButton>
+            <CompactButton type="button" tone="primary" onClick={() => surfaces.open("organization")}>Add organization</CompactButton>
           </div>
         ) : undefined}
         helpContent={activeAccessTab === "requests"
@@ -251,7 +253,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
               <td className="px-3 py-2"><StatusBadge tone={request.email_verified ? "success" : "warning"}>{request.email_verified ? "Verified" : "Unverified"}</StatusBadge></td>
               <td className="px-3 py-2"><StatusBadge tone={request.status === "approved" ? "success" : request.status === "rejected" ? "danger" : "warning"}>{request.status}</StatusBadge></td>
               <td className="px-3 py-2 text-xs text-slate-500">{formatDate(request.submitted_at)}</td>
-              <td className="px-3 py-2 text-right">{request.status === "pending" ? <CompactButton type="button" onClick={() => { setReviewRequest(request); setReviewReason(""); setDrawerMode("request"); }}>Review</CompactButton> : <span className="text-xs text-slate-500" title={request.review_reason ?? undefined}>{request.review_reason || "Reviewed"}</span>}</td>
+              <td className="px-3 py-2 text-right">{request.status === "pending" ? <CompactButton type="button" onClick={() => { setReviewRequest(request); setReviewReason(""); surfaces.open("request"); }}>Review</CompactButton> : <span className="text-xs text-slate-500" title={request.review_reason ?? undefined}>{request.review_reason || "Reviewed"}</span>}</td>
             </tr>
           ))}
         </tbody>
@@ -311,7 +313,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
                     onClick={() => {
                       setRevokeTarget(admin);
                       setRevokeReason("");
-                      setDrawerMode("revoke");
+                      surfaces.open("revoke");
                     }}
                   >
                     Revoke
@@ -345,7 +347,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
       ) : null}
       </ManagementTabs>
 
-      <DetailDrawer open={drawerMode === "organization"} onClose={() => setDrawerMode(null)} title="Add organization" description="Create the organization and assign its first Owner in one step.">
+      <DetailDrawer open={drawerMode === "organization"} onClose={surfaces.back} title="Add organization" description="Create the organization and assign its first Owner in one step.">
         <form onSubmit={handleCreateOrganization}>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-700">
@@ -358,11 +360,11 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
             </label>
           </div>
           <label className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">Reason<textarea required minLength={3} maxLength={500} rows={3} value={organizationReason} onChange={(event) => setOrganizationReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
-          <DrawerActions busy={busy} onCancel={() => setDrawerMode(null)} submitLabel="Create organization" />
+          <DrawerActions busy={busy} onCancel={surfaces.back} submitLabel="Create organization" />
         </form>
       </DetailDrawer>
 
-      <DetailDrawer open={drawerMode === "admin"} onClose={() => setDrawerMode(null)} title="Grant platform access" description="This does not change the account's organization role.">
+      <DetailDrawer open={drawerMode === "admin"} onClose={surfaces.back} title="Grant platform access" description="This does not change the account's organization role.">
         <form onSubmit={handleGrant}>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-700">
@@ -374,15 +376,15 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
               <input required minLength={3} maxLength={500} value={grantReason} onChange={(event) => setGrantReason(event.target.value)} className={worksheetInputClass} placeholder="Why access is needed" />
             </label>
           </div>
-          <DrawerActions busy={busy} onCancel={() => setDrawerMode(null)} submitLabel="Grant access" />
+          <DrawerActions busy={busy} onCancel={surfaces.back} submitLabel="Grant access" />
         </form>
       </DetailDrawer>
 
-      <DetailDrawer open={drawerMode === "revoke" && Boolean(revokeTarget)} onClose={() => setDrawerMode(null)} title={`Revoke ${revokeTarget?.email ?? "platform access"}`} description="The account and organization memberships will remain unchanged.">
+      <DetailDrawer open={drawerMode === "revoke" && Boolean(revokeTarget)} onClose={surfaces.back} title={`Revoke ${revokeTarget?.email ?? "platform access"}`} description="The account and organization memberships will remain unchanged.">
         <label className="grid gap-1 text-xs font-semibold text-slate-700">Reason<textarea autoFocus required minLength={3} maxLength={500} rows={4} value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
-        <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={() => setDrawerMode(null)}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={revokeReason.trim().length < 3} onClick={() => setRevokeConfirmOpen(true)}>Continue</CompactButton></div>
+        <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" onClick={surfaces.back}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={revokeReason.trim().length < 3} onClick={() => setRevokeConfirmOpen(true)}>Continue</CompactButton></div>
       </DetailDrawer>
-      <DetailDrawer open={drawerMode === "request" && Boolean(reviewRequest)} onClose={() => setDrawerMode(null)} title={`Review ${reviewRequest?.requested_name ?? "company"}`} description="Approval creates the organization and makes the verified requester its Owner. Rejection creates no organization.">
+      <DetailDrawer open={drawerMode === "request" && Boolean(reviewRequest)} onClose={surfaces.back} title={`Review ${reviewRequest?.requested_name ?? "company"}`} description="Approval creates the organization and makes the verified requester its Owner. Rejection creates no organization.">
         <div className="grid gap-3">
           <WorksheetGrid label="Registration request">
             <thead><tr><WorksheetHeader>Company</WorksheetHeader><WorksheetHeader>Requester email</WorksheetHeader></tr></thead>
@@ -390,7 +392,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
           </WorksheetGrid>
           {!reviewRequest?.email_verified ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Approval is disabled until the requester verifies this email.</p> : null}
           <label className="grid gap-1 text-xs font-semibold text-slate-700">Decision reason<textarea autoFocus required minLength={3} maxLength={500} rows={4} value={reviewReason} onChange={(event) => setReviewReason(event.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal" /></label>
-          <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => setDrawerMode(null)}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={busy || reviewReason.trim().length < 3} onClick={() => void handleReviewRequest("rejected")}>Reject</CompactButton><CompactButton type="button" tone="primary" disabled={busy || !reviewRequest?.email_verified || reviewReason.trim().length < 3} onClick={() => void handleReviewRequest("approved")}>Approve &amp; create</CompactButton></div>
+          <div className="flex justify-end gap-2"><CompactButton type="button" onClick={surfaces.back}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={busy || reviewReason.trim().length < 3} onClick={() => void handleReviewRequest("rejected")}>Reject</CompactButton><CompactButton type="button" tone="primary" disabled={busy || !reviewRequest?.email_verified || reviewReason.trim().length < 3} onClick={() => void handleReviewRequest("approved")}>Approve &amp; create</CompactButton></div>
         </div>
       </DetailDrawer>
       <ConfirmDialog open={revokeConfirmOpen} title="Revoke platform access?" description={`This removes platform-level approval access from ${revokeTarget?.email ?? "this account"}. Organization memberships are not changed.`} confirmLabel="Revoke access" destructive busy={busy} onCancel={() => setRevokeConfirmOpen(false)} onConfirm={() => void handleRevoke()} />

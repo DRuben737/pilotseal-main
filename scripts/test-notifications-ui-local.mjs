@@ -69,7 +69,7 @@ try{
   pilotPage.on('console',msg=>{if(msg.type()==='error' && !msg.text().includes('WebSocket')) console.log('Pilot page error:',msg.text().replace(/eyJ[\w.-]+/g,'[redacted]'));});
   pilotPage.on('pageerror',error=>console.log('Pilot runtime error:',error.message));
   await pilotPage.goto(`${appUrl}/console/personal/account`);
-  const push=pilotPage.getByRole('complementary',{name:'New notification',exact:true});
+  const push=pilotPage.locator('.notification-push, .notification-critical').filter({hasText:`${prefix} live`});
   try { await push.waitFor({timeout:45000}); } catch(e) {
     console.log('Pilot page:',pilotPage.url(),await pilotPage.evaluate(()=>document.visibilityState));
     console.log((await pilotPage.locator('body').innerText()).slice(0,1500));
@@ -77,7 +77,7 @@ try{
     await pilotPage.screenshot({path:`${output}/push-failure.png`}); throw e;
   }
   await push.getByText(`${prefix} live`,{exact:true}).waitFor();
-  await push.getByRole('button',{name:'View message',exact:true}).click();
+  await push.getByRole('button',{name:/^(View message|Review details)$/}).click();
   drawer=pilotPage.getByRole('dialog',{name:`${prefix} live`,exact:true});await drawer.waitFor();
   await drawer.getByText('Full announcement text with receipt confirmation.',{exact:true}).waitFor();
   await drawer.getByRole('button',{name:'Confirm receipt',exact:true}).click();
@@ -107,10 +107,11 @@ try{
   // Wait for the initial inbox pass and channel subscription to settle.
   await Promise.race([inboxReady,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Initial inbox did not settle')),15000))]);
   const onlineId=unwrap(await publisher.rpc('save_notification_publication',{p_organization_id:null,p_title:`${prefix} online`,p_message:'Arrived while the page was already open.',p_priority:'critical',p_status:'sent',p_audience_user_ids:ids}));publicationIds.push(onlineId);
-  const onlinePush=onlinePage.getByRole('complementary',{name:'New notification',exact:true});
+  const onlinePush=onlinePage.locator('.notification-push, .notification-critical').filter({hasText:`${prefix} online`});
   await onlinePush.getByText(`${prefix} online`,{exact:true}).waitFor({timeout:10000});
   await onlinePage.screenshot({path:`${output}/push-online.png`});
-  await onlinePush.getByRole('button',{name:'Dismiss notification',exact:true}).click();
+  const dismiss=onlinePush.getByRole('button',{name:/^(Dismiss notification|Confirm receipt)$/});
+  await dismiss.click();
   await onlinePush.waitFor({state:'hidden'});
   await onlineContext.close();
  }finally{if(inserted.length)unwrap(await admin.from('notification_delivery_states').delete().eq('user_id',pilotAuth.user.id).in('notification_id',inserted));}

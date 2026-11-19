@@ -379,6 +379,7 @@ export function DetailDrawer({
   children: ReactNode;
 }) {
   const titleId = useId();
+  const descriptionId = useId();
   const dialogRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -417,7 +418,10 @@ export function DetailDrawer({
       return drawers.at(-1) === currentDialog;
     };
     const focusFrame = requestAnimationFrame(() => {
-      dialogRef.current?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')?.focus();
+      const preferred = dialogRef.current?.querySelector<HTMLElement>(
+        '[autofocus]:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]):not([data-dialog-close])'
+      );
+      (preferred ?? dialogRef.current?.querySelector<HTMLElement>("[data-dialog-close]"))?.focus();
     });
     function onKeyDown(event: KeyboardEvent) {
       if (document.querySelector('[role="alertdialog"]')) return;
@@ -465,16 +469,16 @@ export function DetailDrawer({
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-[90]" role="presentation">
-      <button aria-label="Close details" className="admin-dialog-backdrop absolute inset-0 cursor-default" onClick={onClose} />
-      <section data-admin-detail-drawer="true" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`admin-dialog absolute flex w-full flex-col overflow-hidden bg-white shadow-2xl ${width === "wide" ? "max-w-5xl" : "max-w-2xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
-        <header className={`flex items-start justify-between border-b border-slate-200 ${compact ? "gap-3 px-4 py-3" : "gap-4 px-5 py-4"}`}>
+      <button type="button" aria-label="Close details" className="admin-dialog-backdrop absolute inset-0 cursor-default" onClick={onClose} />
+      <section data-admin-detail-drawer="true" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} className={`admin-dialog absolute flex w-full flex-col overflow-hidden ${width === "wide" ? "max-w-5xl" : "max-w-2xl"} ${compact ? "admin-detail-drawer-compact" : ""}`}>
+        <header className={`admin-dialog-header flex items-start justify-between ${compact ? "gap-3 px-4 py-3" : "gap-4 px-5 py-4"}`}>
           <div>
-            <h2 id={titleId} className="text-base font-semibold text-slate-950">{title}</h2>
-            {description ? <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p> : null}
+            <h2 id={titleId}>{title}</h2>
+            {description ? <p id={descriptionId} className="admin-dialog-description">{description}</p> : null}
           </div>
-          <button autoFocus type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-sm border border-slate-200 text-lg text-slate-600 hover:bg-slate-50" aria-label="Close">×</button>
+          <button data-dialog-close type="button" onClick={onClose} className="admin-dialog-close" aria-label="Close">×</button>
         </header>
-        <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? "p-4" : "p-5"}`}>{children}</div>
+        <div className={`admin-dialog-body min-h-0 flex-1 overflow-y-auto ${compact ? "p-4" : "p-5"}`}>{children}</div>
       </section>
     </div>,
     document.body
@@ -641,7 +645,7 @@ export function ConfirmDialog({
   if (!open) return null;
   return createPortal(
     <div className="admin-confirm-backdrop fixed inset-0 z-[100] grid place-items-center p-4">
-      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby={titleId} className="console-dialog-surface w-full max-w-md rounded-sm border border-slate-200 bg-white p-4 shadow-xl">
+      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby={titleId} className="console-dialog-surface admin-confirm-dialog w-full max-w-md p-4">
         <h2 id={titleId} className="text-base font-semibold text-slate-950">{title}</h2>
         <p className="mt-2 text-[13px] leading-5 text-slate-600">{description}</p>
         {children}

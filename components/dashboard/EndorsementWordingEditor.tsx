@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DetailDrawer } from "@/components/admin/AdminConsole";
 
 import {
   ENDORSEMENT_AUTOMATIC_FIELDS,
@@ -624,13 +625,7 @@ export default function EndorsementWordingEditor({
         date, instructor name, certificate number and recent experience end date.
       </p>
 
-      {pickerOpen ? (
-        <div data-endorsement-child-dialog className="fixed inset-0 z-[10001] flex items-center justify-center bg-slate-950/50 p-4">
-          <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[82vh] w-full max-w-lg overflow-auto rounded-sm bg-white p-4 shadow-2xl">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-lg font-semibold text-slate-950">Insert fill-in</h3>
-              <button type="button" className="secondary-button" onClick={() => setPickerOpen(false)}>Close</button>
-            </div>
+      <DetailDrawer compact open={pickerOpen} title="Insert fill-in" onClose={() => setPickerOpen(false)}>
             <input
               type="search"
               value={pickerQuery}
@@ -691,18 +686,11 @@ export default function EndorsementWordingEditor({
             }}>
               Create a new fill-in
             </button>
-          </div>
-        </div>
-      ) : null}
+      </DetailDrawer>
 
-      {fieldDraft ? (
-        <div data-endorsement-child-dialog className="fixed inset-0 z-[10002] flex items-center justify-center bg-slate-950/50 p-4">
-          <div role="dialog" aria-modal="true" className="console-dialog-surface max-h-[86vh] w-full max-w-lg overflow-auto rounded-sm bg-white p-4 shadow-2xl">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-lg font-semibold text-slate-950">{fieldDraft.editingKey ? "Edit fill-in" : "New fill-in"}</h3>
-              <button type="button" className="secondary-button" onClick={closeFieldEditor}>Close</button>
-            </div>
-            <div className="mt-4 grid gap-3">
+      <DetailDrawer compact open={Boolean(fieldDraft)} title={fieldDraft?.editingKey ? "Edit fill-in" : "New fill-in"} onClose={closeFieldEditor}>
+        {fieldDraft ? <>
+            <div className="grid gap-3">
               <label className="grid gap-1 text-sm font-medium text-slate-700">
                 Question shown to users
                 <input value={fieldDraft.label} onChange={(event) => setFieldDraft((current) => current ? { ...current, label: event.target.value } : current)} className="rounded-lg border border-slate-200 px-3 py-2 font-normal" autoFocus />
@@ -735,9 +723,8 @@ export default function EndorsementWordingEditor({
             <div className="mt-5 flex justify-end">
               <button type="button" className="primary-button" onClick={saveFieldDraft}>Save fill-in</button>
             </div>
-          </div>
-        </div>
-      ) : null}
+        </> : null}
+      </DetailDrawer>
     </div>
   );
 }

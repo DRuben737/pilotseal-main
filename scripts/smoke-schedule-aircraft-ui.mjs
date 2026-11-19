@@ -47,6 +47,15 @@ try{
   const key=`sb-${new URL(env.API_URL).hostname.split('.')[0]}-auth-token`;
   await context.addInitScript(({key,value})=>localStorage.setItem(key,value),{key,value:JSON.stringify(auth.session)});
   const page=await context.newPage();
+  async function dismissPush() {
+    const button=page.getByRole('button',{name:'Dismiss notification',exact:true});
+    if(await button.count() && await button.first().isVisible().catch(()=>false)) await button.first().click({force:true});
+  }
+  async function menuAction(menu,item) {
+    await dismissPush();
+    await page.getByRole('button',{name:menu,exact:true}).click({force:true});
+    await page.getByRole('menuitem',{name:item,exact:true}).click({force:true});
+  }
   const browserErrors=[];
   page.on('pageerror',error=>browserErrors.push(error.message));
   page.on('console',message=>{if(message.type()==='error') browserErrors.push(message.text());});
@@ -57,21 +66,20 @@ try{
     throw new Error(`Schedule workspace did not load at ${page.url()}: ${await page.locator('body').innerText()} | ${browserErrors.join(' | ')}`);
   }
   await page.locator('[aria-label="Upcoming days"][aria-busy="false"], [aria-label="Week schedule"][aria-busy="false"]').waitFor();
-  await page.getByRole('button',{name:'Schedule options',exact:true}).click();
-  await page.getByRole('menuitem',{name:'Student availability',exact:true}).click();
+  await menuAction('Schedule options','Student availability');
   const availabilityOverview=page.getByRole('dialog',{name:'Student availability',exact:true});
   await availabilityOverview.waitFor();
   await availabilityOverview.getByRole('region',{name:'Aircraft UI Student availability',exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'student availability overview fits a mobile viewport');
   await page.keyboard.press('Escape');
   await availabilityOverview.waitFor({state:'hidden'});
-  await page.getByRole('button',{name:'Schedule options',exact:true}).click();
+  await dismissPush();
+  await page.getByRole('button',{name:'Schedule options',exact:true}).click({force:true});
   assert.equal(await page.getByRole('menuitem',{name:'Swap lessons',exact:true}).count(),0,'lesson swapping does not add a separate menu action');
-  await page.getByRole('button',{name:'Schedule options',exact:true}).click();
+  await page.getByRole('button',{name:'Schedule options',exact:true}).click({force:true});
   await page.getByLabel('Jump to date').fill(date);
   await page.locator('[aria-label="Upcoming days"][aria-busy="false"], [aria-label="Week schedule"][aria-busy="false"]').waitFor();
-  await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
-  await page.getByRole('menuitem',{name:'Add lesson',exact:true}).click();
+  await menuAction('Add to schedule','Add lesson');
   const lesson=page.getByRole('dialog',{name:'Add lesson',exact:true});
   await lesson.waitFor();
   assert.equal(await lesson.locator(`option[value="${aircraftId}"]`).count(),0,'away aircraft are excluded from Add lesson');
@@ -82,8 +90,7 @@ try{
   await page.getByLabel('Schedule workspace',{exact:true}).waitFor();
   await page.getByLabel('Jump to date').fill(date);
   await page.locator('[aria-label="Upcoming days"][aria-busy="false"], [aria-label="Week schedule"][aria-busy="false"]').waitFor();
-  await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
-  await page.getByRole('menuitem',{name:'Add lesson',exact:true}).click();
+  await menuAction('Add to schedule','Add lesson');
   await lesson.waitFor();
   await lesson.getByLabel('Date',{exact:true}).fill(date);
   const aircraftSelect=lesson.locator('select').nth(3);
@@ -129,8 +136,7 @@ try{
   assert.match(calendarCardText,/Aircraft UI Student · N000PS/,'Flight calendar cards show the aircraft instead of a separate Flight label');
   assert.doesNotMatch(calendarCardText,/\bFlight\b|tap for details|schedule issue/i,'calendar cards omit redundant type and issue instructions');
   assert.match(calendarCardText,/\d+ issues?/,'calendar cards show only a compact issue count');
-  await page.getByRole('button',{name:'Add to schedule',exact:true}).click();
-  await page.getByRole('menuitem',{name:'Auto schedule',exact:true}).click();
+  await menuAction('Add to schedule','Auto schedule');
   const auto=page.getByRole('dialog',{name:'Automatic scheduling',exact:true});
   assert.equal(await auto.getByRole('button',{name:'Add block',exact:true}).count(),0,'automatic scheduling does not show the aircraft-block editor');
   assert.equal(await auto.getByRole('checkbox',{name:/N000PS/}).count(),0,'grounded aircraft are excluded from automatic scheduling');

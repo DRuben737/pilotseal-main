@@ -31,6 +31,7 @@ export default function NotificationPublicationManager({ organizationId, sourceN
   const [report, setReport] = useState<{ title: string; rows: PublicationReceipt[] } | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [withdraw, setWithdraw] = useState<NotificationPublication | null>(null);
+  const [returnDetail, setReturnDetail] = useState<NotificationPublication | null>(null);
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -43,8 +44,12 @@ export default function NotificationPublicationManager({ organizationId, sourceN
     void load();
     return () => { cancelled = true; };
   }, [organizationId]);
-  async function refresh() { setHistory(await fetchNotificationPublications(organizationId)); }
-  async function edit(publication?: NotificationPublication) {
+  async function refresh() {
+    const publications = await fetchNotificationPublications(organizationId);
+    setHistory(publications);
+    return publications;
+  }
+  async function edit(publication?: NotificationPublication, parent?: NotificationPublication | null) {
     try {
       setAudience(await fetchPublicationAudience(organizationId));
     } catch (e) {
@@ -52,6 +57,7 @@ export default function NotificationPublicationManager({ organizationId, sourceN
       return;
     }
     setForm(publication ? { ...publication, status: publication.status === "withdrawn" ? "draft" : publication.status === "scheduled" && publication.scheduled_at && Date.parse(publication.scheduled_at) <= Date.now() ? "sent" : publication.status, scheduled_at: localInputDate(publication.scheduled_at), expires_at: localInputDate(publication.expires_at) } : { ...emptyForm });
+    setReturnDetail(parent ?? null);
     setError(""); setPreview(false); setOpen(true);
   }
   async function save(event: React.FormEvent) {
@@ -62,7 +68,9 @@ export default function NotificationPublicationManager({ organizationId, sourceN
     try {
       await saveNotificationPublication(organizationId, { ...form, scheduled_at: form.status === "scheduled" ? new Date(form.scheduled_at).toISOString() : null, expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null, action_url: null });
       setOpen(false); setStatus(form.status === "draft" ? "Draft saved." : form.status === "scheduled" ? "Notification scheduled." : "Notification published.");
-      await refresh();
+      const publications = await refresh();
+      if (returnDetail && form.id) setDetail(publications.find((publication) => publication.id === form.id) ?? returnDetail);
+      setReturnDetail(null);
     } catch (e) { setError(errorMessage(e)); }
     finally { savingRef.current = false; setSaving(false); }
   }
@@ -75,11 +83,28 @@ export default function NotificationPublicationManager({ organizationId, sourceN
   async function confirmWithdraw() {
     if (!withdraw || savingRef.current) return;
     savingRef.current = true; setSaving(true); setError("");
-    try { await withdrawNotificationPublication(withdraw.id); setWithdraw(null); setStatus("Notification withdrawn."); await refresh(); }
+    try { await withdrawNotificationPublication(withdraw.id); setWithdraw(null); setReturnDetail(null); setStatus("Notification withdrawn."); await refresh(); }
     catch (e) { setError(errorMessage(e)); }
     finally { savingRef.current = false; setSaving(false); }
   }
   const publicationStatus = (p: NotificationPublication) => p.status === "scheduled" && p.scheduled_at && Date.parse(p.scheduled_at) <= Date.now() ? "sent" : p.status;
+  const closeEditor = () => {
+    if (saving) return;
+    setOpen(false);
+    if (returnDetail) setDetail(returnDetail);
+    setReturnDetail(null);
+  };
+  const closeReport = () => {
+    setReport(null);
+    if (returnDetail) setDetail(returnDetail);
+    setReturnDetail(null);
+  };
+  const closeWithdraw = () => {
+    if (saving) return;
+    setWithdraw(null);
+    if (returnDetail) setDetail(returnDetail);
+    setReturnDetail(null);
+  };
   const visible = history.filter(p => (filter === "all" || publicationStatus(p) === filter)).filter(p => `${p.title} ${p.message} ${p.status}`.toLowerCase().includes(query.toLowerCase()));
   return <section className="grid min-w-0 gap-3">
     {status ? <p role="status" className="text-sm text-slate-600">{status}</p> : null}
@@ -94,9 +119,9 @@ export default function NotificationPublicationManager({ organizationId, sourceN
       <td><div className="data-row-actions"><CompactButton type="button" onClick={() => void edit(p)}>{p.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" disabled={reportLoading} onClick={() => void showReport(p)}>Receipts</CompactButton>{p.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setError(""); setWithdraw(p); }}>Withdraw</CompactButton> : null}</div></td>
     </tr>)}</tbody></AdminDataTable>}
     <DetailDrawer open={Boolean(detail)} title={detail?.title ?? "Notification"} onClose={() => setDetail(null)}>
-      {detail ? <div className="grid gap-4"><p className="text-sm text-slate-500">{publicationStatus(detail)} · {detail.audience_user_ids ? `${detail.audience_user_ids.length} recipients` : "All members"}</p><p className="whitespace-pre-wrap break-words text-sm">{detail.message}</p><div className="flex flex-wrap gap-2"><CompactButton type="button" onClick={() => { setDetail(null); void edit(detail); }}>{detail.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" onClick={() => { setDetail(null); void showReport(detail); }}>Receipts</CompactButton>{detail.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { setDetail(null); setError(""); setWithdraw(detail); }}>Withdraw</CompactButton> : null}</div></div> : null}
+      {detail ? <div className="grid gap-4"><p className="text-sm text-slate-500">{publicationStatus(detail)} · {detail.audience_user_ids ? `${detail.audience_user_ids.length} recipients` : "All members"}</p><p className="whitespace-pre-wrap break-words text-sm">{detail.message}</p><div className="flex flex-wrap gap-2"><CompactButton type="button" onClick={() => { const parent = detail; setDetail(null); void edit(parent, parent); }}>{detail.status === "withdrawn" ? "Republish" : "Edit"}</CompactButton><CompactButton type="button" onClick={() => { const parent = detail; setReturnDetail(parent); setDetail(null); void showReport(parent); }}>Receipts</CompactButton>{detail.status !== "withdrawn" ? <CompactButton type="button" onClick={() => { const parent = detail; setReturnDetail(parent); setDetail(null); setError(""); setWithdraw(parent); }}>Withdraw</CompactButton> : null}</div></div> : null}
     </DetailDrawer>
-    <DetailDrawer open={open} title={form.id ? "Edit notification" : "New notification"} onClose={() => { if (!saving) setOpen(false); }}>
+    <DetailDrawer open={open} title={form.id ? "Edit notification" : "New notification"} onClose={closeEditor}>
       <form onSubmit={event => void save(event)} className="grid gap-3">
         {error ? <p role="alert" className="text-sm text-rose-700">{error}</p> : null}
         <fieldset disabled={saving} className="grid gap-3">
@@ -109,17 +134,17 @@ export default function NotificationPublicationManager({ organizationId, sourceN
           <NotificationAudiencePicker audience={audience} value={form.audience_user_ids} onChange={value => { setError(""); setForm(current => ({ ...current, audience_user_ids: value })); }} />
           <button type="button" className="secondary-button justify-self-start" aria-expanded={preview} onClick={() => setPreview(!preview)}>{preview ? "Hide preview" : "Preview"}</button>
           {preview ? <article aria-label="Notification preview" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><span className="text-xs text-slate-500">{sourceName}</span><h3 className="mt-2 font-semibold">{form.title || "Notification title"}</h3><p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-600">{form.message || "Message"}</p>{form.requires_acknowledgement ? <span className="mt-2 block text-xs text-slate-500">Receipt confirmation required</span> : null}</article> : null}
-          <div className="flex justify-end gap-2"><CompactButton type="button" onClick={() => setOpen(false)}>Cancel</CompactButton><CompactButton type="submit" tone="primary">{saving ? "Saving…" : form.status === "draft" ? "Save draft" : form.status === "scheduled" ? "Schedule" : form.id ? "Publish correction" : "Publish"}</CompactButton></div>
+          <div className="flex justify-end gap-2"><CompactButton type="button" onClick={closeEditor}>Cancel</CompactButton><CompactButton type="submit" tone="primary">{saving ? "Saving…" : form.status === "draft" ? "Save draft" : form.status === "scheduled" ? "Schedule" : form.id ? "Publish correction" : "Publish"}</CompactButton></div>
         </fieldset>
       </form>
     </DetailDrawer>
-    <DetailDrawer open={Boolean(report)} title={report ? `Receipts: ${report.title}` : "Receipts"} onClose={() => setReport(null)}>
+    <DetailDrawer open={Boolean(report)} title={report ? `Receipts: ${report.title}` : "Receipts"} onClose={closeReport}>
       {report ? <><p className="mb-3 text-sm text-slate-600">{report.rows.filter(r => r.read_at).length} read · {report.rows.filter(r => r.acknowledged_at).length} confirmed · {report.rows.length} recipients</p><AdminDataTable label="Notification receipts"><thead><tr><th>Recipient</th><th>Displayed</th><th>Read</th><th>Confirmed</th></tr></thead><tbody>{report.rows.map(r => <tr key={r.user_id}><td>{r.display_name}</td><td>{r.displayed_at ? "Yes" : "—"}</td><td>{r.read_at ? "Yes" : "—"}</td><td>{r.acknowledged_at ? "Yes" : "—"}</td></tr>)}</tbody></AdminDataTable></> : null}
     </DetailDrawer>
-    <DetailDrawer open={Boolean(withdraw)} title="Withdraw notification" onClose={() => { if (!saving) setWithdraw(null); }}>
+    <DetailDrawer open={Boolean(withdraw)} title="Withdraw notification" onClose={closeWithdraw}>
       <p className="text-sm">Withdraw “{withdraw?.title}” from recipients’ inboxes?</p>
       {error ? <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p> : null}
-      <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" disabled={saving} onClick={() => setWithdraw(null)}>Cancel</CompactButton><CompactButton type="button" disabled={saving} onClick={() => void confirmWithdraw()}>{saving ? "Withdrawing…" : "Withdraw"}</CompactButton></div>
+      <div className="mt-4 flex justify-end gap-2"><CompactButton type="button" disabled={saving} onClick={closeWithdraw}>Cancel</CompactButton><CompactButton type="button" tone="danger" disabled={saving} onClick={() => void confirmWithdraw()}>{saving ? "Withdrawing…" : "Withdraw"}</CompactButton></div>
     </DetailDrawer>
   </section>;
 }
