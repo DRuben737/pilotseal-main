@@ -2071,6 +2071,133 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   color: var(--ps-ink);
 }
 
+.training-records-mobile-new-log {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  .training-records-workspace {
+    padding-top: var(--ps-space-75) !important;
+    padding-bottom: var(--ps-space-200) !important;
+  }
+
+  .training-records-workspace .admin-page-header {
+    display: none !important;
+  }
+
+  .training-records-toolbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: var(--ps-space-50) !important;
+    margin-top: 0 !important;
+    border-bottom: 0 !important;
+    padding-block: 0 !important;
+  }
+
+  .training-records-toolbar > label {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: 100%;
+    overflow: hidden;
+    transition:
+      max-width var(--ps-motion-base) var(--ps-motion-curve),
+      opacity var(--ps-motion-fast) ease,
+      padding var(--ps-motion-base) var(--ps-motion-curve),
+      border-width var(--ps-motion-fast) ease;
+  }
+
+  .training-records-toolbar > label select {
+    font-size: 0.78125rem !important;
+    font-weight: 500 !important;
+  }
+
+  .training-records-desktop-new-log {
+    display: none !important;
+  }
+
+  .training-records-mobile-new-log {
+    display: inline-grid !important;
+    width: var(--ps-touch-target);
+    height: var(--ps-touch-target);
+    min-width: var(--ps-touch-target);
+    min-height: var(--ps-touch-target);
+    max-height: var(--ps-touch-target);
+    flex: 0 0 var(--ps-touch-target);
+    place-items: center;
+    overflow: hidden;
+    padding: 0 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 450 !important;
+    line-height: 1;
+    transition:
+      width var(--ps-motion-base) var(--ps-motion-curve),
+      min-width var(--ps-motion-base) var(--ps-motion-curve),
+      flex-basis var(--ps-motion-base) var(--ps-motion-curve),
+      opacity var(--ps-motion-fast) ease,
+      padding var(--ps-motion-base) var(--ps-motion-curve);
+  }
+
+  .training-records-search-active > label,
+  .training-records-search-active > .training-records-mobile-new-log {
+    width: 0;
+    min-width: 0;
+    max-width: 0;
+    flex-basis: 0;
+    border-width: 0;
+    padding-inline: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .training-records-workspace .saas-empty-state {
+    min-height: var(--ps-touch-target);
+    margin-top: var(--ps-space-75) !important;
+    padding: var(--ps-space-75) var(--ps-space-100);
+    font-size: 0.75rem;
+  }
+
+  .training-records-workspace > section.mt-3 {
+    gap: var(--ps-space-50);
+    margin-top: var(--ps-space-75) !important;
+  }
+
+  .training-record-group > header {
+    min-height: var(--ps-touch-target);
+    gap: var(--ps-space-75) !important;
+    padding: var(--ps-space-50) var(--ps-space-100) !important;
+  }
+
+  .training-record-group > header button:first-child {
+    gap: var(--ps-space-75) !important;
+  }
+
+  .training-record-group > header button:first-child .text-sm {
+    font-size: 0.8125rem !important;
+  }
+
+  .training-record-print-action {
+    min-height: var(--ps-touch-target);
+    padding-inline: var(--ps-space-50);
+    font-size: 0.6875rem !important;
+  }
+
+  .training-record-group article {
+    min-height: var(--ps-touch-target);
+    padding: var(--ps-space-50) var(--ps-space-100) !important;
+  }
+
+  .training-record-group article :is(strong, button) {
+    font-size: 0.75rem !important;
+  }
+
+  .training-record-group article button {
+    min-height: var(--ps-touch-target);
+    padding-inline: var(--ps-space-50);
+  }
+}
+
 /* Shared console surfaces. Keep these last so legacy utility rules cannot
    reintroduce square controls, blue outlines, or card-heavy drawers. */
 .admin-dialog-backdrop,

@@ -611,6 +611,7 @@ export default function TrainingRecordsManager({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [studentQuery, setStudentQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [courseFilter, setCourseFilter] = useState("");
   const [printStudentId, setPrintStudentId] = useState("");
   const [printCourseId, setPrintCourseId] = useState("");
@@ -618,6 +619,7 @@ export default function TrainingRecordsManager({
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(
     () => new Set(),
   );
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
 
   async function reload() {
     if (!session?.user?.id || !activeOrganizationId) return;
@@ -1015,7 +1017,7 @@ export default function TrainingRecordsManager({
           title="Training records"
           action={
             <button
-              className="primary-button cursor-pointer"
+              className="primary-button training-records-desktop-new-log cursor-pointer"
               type="button"
               disabled={!activeOrganizationId || organizationLoading}
               onClick={startNew}
@@ -1444,20 +1446,44 @@ export default function TrainingRecordsManager({
             </div>
         </DetailDrawer>
         <>
-            <section className="admin-toolbar training-records-toolbar mt-4 flex flex-wrap items-center gap-2 border-b border-slate-200 py-3">
-              <label className={styles.recordSearch}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
-                </svg>
+            <section
+              className={`admin-toolbar training-records-toolbar mt-4 flex flex-wrap items-center gap-2 border-b border-slate-200 py-3 ${mobileSearchOpen ? "training-records-search-active" : ""}`}
+            >
+              <div className={styles.recordSearch}>
+                <button
+                  className={styles.recordSearchTrigger}
+                  type="button"
+                  aria-label={mobileSearchOpen ? "Close search" : "Search students"}
+                  aria-expanded={mobileSearchOpen}
+                  disabled={!courseFilter}
+                  onClick={() => {
+                    const nextOpen = !mobileSearchOpen;
+                    setMobileSearchOpen(nextOpen);
+                    if (nextOpen) {
+                      requestAnimationFrame(() => mobileSearchInputRef.current?.focus());
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
+                  </svg>
+                </button>
                 <span className="sr-only">Search student</span>
                 <input
+                  ref={mobileSearchInputRef}
                   type="search"
                   placeholder="Search student"
                   disabled={!courseFilter}
                   value={studentQuery}
                   onChange={(event) => setStudentQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      setMobileSearchOpen(false);
+                      mobileSearchInputRef.current?.blur();
+                    }
+                  }}
                 />
-              </label>
+              </div>
               <label className={styles.recordCourseFilter}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M4 6h16M7 12h10m-7 6h4" />
@@ -1469,7 +1495,7 @@ export default function TrainingRecordsManager({
                   onChange={(event) => setCourseFilter(event.target.value)}
                 >
                   <option value="">
-                    {records.length ? "Select course" : "No courses with records"}
+                    {records.length ? "Select course" : "No courses"}
                   </option>
                   {Array.from(
                     new Map(
@@ -1485,6 +1511,16 @@ export default function TrainingRecordsManager({
                   ))}
                 </select>
               </label>
+              <button
+                className="primary-button training-records-mobile-new-log cursor-pointer"
+                type="button"
+                aria-label="New training log"
+                title="New training log"
+                disabled={!activeOrganizationId || organizationLoading}
+                onClick={startNew}
+              >
+                <span aria-hidden="true">＋</span>
+              </button>
             </section>
             {!courseFilter ? (
               <p className="saas-empty-state mt-4">
