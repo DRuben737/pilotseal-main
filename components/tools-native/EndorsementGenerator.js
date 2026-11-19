@@ -31,6 +31,7 @@ import {
   ENDORSEMENT_TEMPLATE_CATEGORY_ORDER,
   getEndorsementTemplateCategory,
 } from '@/lib/endorsement-template-categories';
+import { getInstructorCertificateDateLabel } from '@/lib/endorsement-wording';
 import { fetchMyStudentCandidates } from '@/lib/student-candidates';
 
 const FIELD_CONFIG = [
@@ -82,15 +83,6 @@ const AVERY_5163_LABELS_PER_PAGE = AVERY_5163_COLUMNS * AVERY_5163_ROWS;
 const AVERY_5163_SIDE_MARGIN = 11.25;
 const AVERY_5163_TOP_MARGIN = 36;
 const AVERY_5163_COLUMN_GAP = 13.5;
-const CFI_NO_EXPIRATION_EFFECTIVE_DATE = '2024-12-01';
-
-function getInstructorCertificateDateLabel(certificate) {
-  const mostRecentIssuanceDate = certificate.issue_date || certificate.last_event_date;
-  return mostRecentIssuanceDate && mostRecentIssuanceDate < CFI_NO_EXPIRATION_EFFECTIVE_DATE
-    ? 'Exp.'
-    : 'RE';
-}
-
 function getInstructorCertificateDate(certificate, person) {
   const certificateForDate = getInstructorCertificateDateLabel(certificate) === 'Exp.'
     ? { ...certificate, last_event_date: null }
