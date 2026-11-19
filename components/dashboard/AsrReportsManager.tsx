@@ -616,10 +616,10 @@ export default function AsrReportsManager() {
   }
 
   if (organizationsLoading) {
-    return <section className="saas-panel"><p className="saas-empty-state">Loading organization…</p></section>;
+    return <p className="admin-empty-row">Loading organization…</p>;
   }
   if (!activeOrganization) {
-    return <section className="saas-panel"><p className="saas-empty-state">Select an organization before creating an ASR.</p></section>;
+    return <p className="admin-empty-row">Select an organization to create an ASR.</p>;
   }
 
   return (

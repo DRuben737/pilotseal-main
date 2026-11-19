@@ -172,7 +172,7 @@ export default function AircraftAssignmentsManager({ embedded = false }: { embed
 
   return (
     <section className={`${embedded ? "" : "space-y-5"} pb-24`}>
-      {!embedded ? <AdminPageHeader eyebrow="Platform administration" title="Aircraft Assignments" /> : null}
+      {!embedded ? <AdminPageHeader title="Aircraft Assignments" /> : null}
       {error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {notice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p> : null}
 
@@ -194,7 +194,7 @@ export default function AircraftAssignmentsManager({ embedded = false }: { embed
           </tr>
         </thead>
         <tbody>
-          {loading ? <tr><td colSpan={8} className="p-8 text-center text-slate-500">Loading assignments…</td></tr> : null}
+          {loading ? <tr><td colSpan={8} className="px-3 py-3 text-left text-xs text-slate-500">Loading assignments…</td></tr> : null}
           {!loading && pageRows.length === 0 ? <tr><td colSpan={8}><EmptyState title="No eligible aircraft" description="Only private aircraft owned by this Platform Super Admin account appear here." /></td></tr> : null}
           {pageRows.map((item) => {
             const organizationIds = assignmentMap.get(item.id) ?? [];

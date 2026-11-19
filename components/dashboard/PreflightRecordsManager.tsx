@@ -126,7 +126,7 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
       summary={loading ? "Loading…" : `${records.length}`}
       className="dashboard-data-workspace"
       defaultOpen
-      actions={<Link className="secondary-button" href="/tools/flight-brief">New Flight Brief</Link>}
+      actions={<Link className="primary-button" href="/tools/flight-brief">New Flight Brief</Link>}
       helpContent={
         <>
           <p>Flight Brief records, including drafts and finalized history, are retained for up to 7 days and then expire automatically.</p>
@@ -136,7 +136,7 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
       }
     >
 
-      <div className="mt-5 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+      <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto]">
         <input
           type="search"
           value={query}
@@ -160,9 +160,9 @@ export default function PreflightRecordsManager({ organizationOnly = false }: { 
           </button>
         ) : null}
       </div>
-      {loading ? <p className="saas-empty-state mt-5">Loading preflight records...</p> : null}
+      {loading ? <p className="admin-empty-row mt-3">Loading preflight records...</p> : null}
       {!loading && filteredRecords.length === 0 ? (
-        <p className="saas-empty-state mt-5">No matching preflight records.</p>
+        <p className="admin-empty-row mt-3">No matching preflight records.</p>
       ) : null}
 
       {!loading && filteredRecords.length > 0 ? (

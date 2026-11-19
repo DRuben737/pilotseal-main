@@ -3336,7 +3336,7 @@ export default function CfiScheduleManager() {
         {!activeStudents.length ? (
           <EmptyState
             title="No students have schedule access"
-            description="Choose students already saved in People using Manage access. An account is not required."
+            description="Use Manage access to add saved students."
           />
         ) : (
           <div className="mt-4 max-w-full overflow-x-auto">
@@ -3859,7 +3859,7 @@ export default function CfiScheduleManager() {
         </div>
         <div className={styles.accessList}>
           {!authorizedCandidates.length ? (
-            <p className="saas-empty-state">No students are authorized.</p>
+            <p className="admin-empty-row">No students are authorized.</p>
           ) : (
             authorizedCandidates.map((candidate) => (
               <div key={candidate.student_user_id} className={styles.accessRow}>
@@ -3913,7 +3913,7 @@ export default function CfiScheduleManager() {
             </div>
             <div className={styles.accessPickerList}>
               {!addableCandidates.length ? (
-                <p className="saas-empty-state">No more students to add.</p>
+                <p className="admin-empty-row">No more students to add.</p>
               ) : (
                 addableCandidates.map((candidate) => (
                   <label key={candidate.student_user_id}>

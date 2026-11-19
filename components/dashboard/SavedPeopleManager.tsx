@@ -1380,7 +1380,7 @@ export default function SavedPeopleManager() {
                         );
                       })
                     ) : (
-                      <p className="saas-empty-state">No certificates saved for this person.</p>
+                      <p className="admin-empty-row">No certificates saved for this person.</p>
                     )}
                   </div> : null}
 

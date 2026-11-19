@@ -1298,7 +1298,7 @@ export default function AccountSettingsPanel() {
             )}
           </div>
         ) : showMedical ? (
-          <div className="saas-empty-state mt-5">
+          <div className="admin-empty-row mt-3">
             <p>No medical certificate saved</p>
           </div>
         ) : null}
@@ -1417,7 +1417,7 @@ export default function AccountSettingsPanel() {
             ) : null}
 
             {selfCertificates.length === 0 ? (
-              <p className="saas-empty-state">Add your pilot, flight instructor, or ground instructor certificate.</p>
+              <p className="admin-empty-row">Add a pilot, flight instructor, or ground instructor certificate.</p>
             ) : (
               <div className="people-cert-list">
                 {selfCertificates.map((certificate) => {

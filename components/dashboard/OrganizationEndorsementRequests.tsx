@@ -136,7 +136,7 @@ export default function OrganizationEndorsementRequests({ organizationId, embedd
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {!requests.length ? <tr><td colSpan={5}><EmptyState title="No endorsement requests" description="Proposed wording changes will appear here." /></td></tr> : null}
+          {!requests.length ? <tr><td colSpan={5}><EmptyState title="No endorsement requests" /></td></tr> : null}
           {requests.map((request) => (
             <tr key={request.id} className="hover:bg-blue-50/40">
               <td className="px-3 py-2 font-semibold text-slate-950">{request.proposed_data.reference_number ? `${request.proposed_data.reference_number} · ` : ""}{request.proposed_data.title}</td>

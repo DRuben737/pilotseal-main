@@ -5,5 +5,5 @@ import OrganizationMembershipSettings from "@/components/dashboard/OrganizationM
 export const metadata = { title: "Account" };
 
 export default function Page() {
-  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Account" /><AccountSettingsPanel /><OrganizationMembershipSettings /></div>;
+  return <div className="grid gap-3"><AdminPageHeader title="Account" /><AccountSettingsPanel /><OrganizationMembershipSettings /></div>;
 }

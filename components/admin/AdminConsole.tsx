@@ -352,11 +352,11 @@ export function StatusBadge({
   return <span className={`admin-status-badge inline-flex items-center gap-1 border px-2 py-0.5 text-xs font-medium ${badgeStyles[tone]}`}>{children}</span>;
 }
 
-export function EmptyState({ title, description }: { title: string; description: string }) {
+export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="border-y border-slate-200 px-4 py-6 text-center">
-      <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-      <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">{description}</p>
+    <div className="admin-empty-state">
+      <h2>{title}</h2>
+      {description ? <p>{description}</p> : null}
     </div>
   );
 }

@@ -6,5 +6,5 @@ import EndorsementRecordsManager from "@/components/dashboard/EndorsementRecords
 export const metadata = { title: "Records" };
 
 export default function Page() {
-  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Endorsements" /><Suspense fallback={null}><EndorsementRecordsManager /></Suspense></div>;
+  return <div className="grid gap-3"><AdminPageHeader title="Endorsements" /><Suspense fallback={null}><EndorsementRecordsManager /></Suspense></div>;
 }

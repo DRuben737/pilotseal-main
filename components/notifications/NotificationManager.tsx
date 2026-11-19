@@ -453,7 +453,7 @@ export default function NotificationManager({
       {platformPublishingOnly && isAdmin ? <NotificationPublicationManager organizationId={null} sourceName="PilotSeal" /> : null}
       {platformPublishingOnly && isAdmin && adminHistory.length > 0 ? (
         <>
-        <ManagementDisclosure id="platform-notices" eyebrow="Platform administration" title="Earlier platform notices" summary={`${adminHistory.length}`}>
+        <ManagementDisclosure id="platform-notices" title="Earlier platform notices" summary={`${adminHistory.length}`}>
           <div className="grid gap-3">
             <DetailDrawer open={showComposer} title={form.id ? "Edit platform notice" : "Create platform notice"} onClose={() => setShowComposer(false)}>
           <article>

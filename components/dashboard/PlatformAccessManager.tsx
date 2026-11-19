@@ -206,7 +206,6 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
   return (
     <div className="grid gap-3">
       {!embedded ? <AdminPageHeader
-        eyebrow="Platform administration"
         title={activityOnly ? "Activity" : "Organizations"}
       /> : null}
       {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
@@ -244,7 +243,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
           <tr className="border-b border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700"><th className="px-3 py-2">Company</th><th className="px-3 py-2">Requester</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Submitted</th><th className="px-3 py-2 text-right">Actions</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {!organizationRequests.length ? <tr><td colSpan={6}><EmptyState title="No company requests" description="Company registrations awaiting platform approval will appear here." /></td></tr> : null}
+          {!organizationRequests.length ? <tr><td colSpan={6}><EmptyState title="No company requests" /></td></tr> : null}
           {organizationRequests.map((request) => (
             <tr key={request.id} className="hover:bg-blue-50/40">
               <td className="px-3 py-2 font-semibold text-slate-950">{request.requested_name}</td>
@@ -271,7 +270,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {!organizations.length ? <tr><td colSpan={5}><EmptyState title="No organizations" description="Create the first organization with the button above." /></td></tr> : null}
+          {!organizations.length ? <tr><td colSpan={5}><EmptyState title="No organizations" /></td></tr> : null}
           {organizations.map((organization) => (
             <tr key={organization.id} className="hover:bg-blue-50/40">
               <td className="px-3 py-2 font-semibold text-slate-950">{organization.name}</td>
@@ -331,7 +330,7 @@ export default function PlatformAccessManager({ activityOnly = false, embedded =
           <tr><th className="px-3 py-2">Changed by</th><th className="px-3 py-2">Action</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Reason</th><th className="px-3 py-2">When</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {!auditLog.length ? <tr><td colSpan={5}><EmptyState title="No role changes" description="Platform access changes will appear here." /></td></tr> : null}
+          {!auditLog.length ? <tr><td colSpan={5}><EmptyState title="No role changes" /></td></tr> : null}
           {auditLog.map((entry) => (
             <tr key={entry.id} className="hover:bg-slate-50">
               <td className="px-3 py-2 text-xs text-slate-700">{entry.actor_email || "Deleted account"}</td>

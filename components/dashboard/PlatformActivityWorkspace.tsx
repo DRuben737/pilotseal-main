@@ -14,7 +14,7 @@ export default function PlatformActivityWorkspace() {
 
   return (
     <div className="grid gap-3">
-      <AdminPageHeader eyebrow="Platform administration" title="Activity" />
+      <AdminPageHeader title="Activity" />
       <ManagementTabs
         id="platform-activity"
         label="Platform activity type"

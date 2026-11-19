@@ -6,5 +6,5 @@ import NotificationManager from "@/components/notifications/NotificationManager"
 export const metadata = { title: "Notifications" };
 
 export default function Page() {
-  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Notifications" /><Suspense fallback={null}><NotificationManager /></Suspense></div>;
+  return <div className="grid gap-3"><AdminPageHeader title="Notifications" /><Suspense fallback={null}><NotificationManager /></Suspense></div>;
 }

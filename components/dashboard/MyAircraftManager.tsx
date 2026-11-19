@@ -713,7 +713,7 @@ export default function MyAircraftManager() {
           </div>
 
           {visibleMyAircraft.length === 0 ? (
-            <p className="saas-empty-state">No aircraft attached yet.</p>
+            <p className="admin-empty-row">No aircraft attached yet.</p>
           ) : (
             visibleMyAircraft.map((aircraft) => (
               <div key={aircraft.id} className="my-aircraft-row">
@@ -801,7 +801,7 @@ export default function MyAircraftManager() {
               <span>Access</span>
             </div>
             {visibleOrganizationAircraft.length === 0 ? (
-              <p className="saas-empty-state">No aircraft to display.</p>
+              <p className="admin-empty-row">No aircraft to display.</p>
             ) : (
               visibleOrganizationAircraft.map((aircraft) => (
                 <div key={aircraft.id} className="my-aircraft-row">

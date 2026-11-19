@@ -385,19 +385,11 @@ export default function AircraftReportsManager() {
     selectedInstructor?.status === "linked";
 
   if (organizationsLoading) {
-    return <section className="saas-panel"><p className="saas-empty-state">Loading organization…</p></section>;
+    return <p className="admin-empty-row">Loading organization…</p>;
   }
 
   if (!activeOrganization) {
-    return (
-      <section className="saas-panel">
-        <p className="saas-kicker">Reports</p>
-        <h1 className="saas-subsection-title">Aircraft discrepancy reports</h1>
-        <p className="saas-empty-state mt-5">
-          Join or select an organization before submitting an aircraft report.
-        </p>
-      </section>
-    );
+    return <p className="admin-empty-row">Select an organization to create aircraft reports.</p>;
   }
 
   return (

@@ -4,5 +4,5 @@ import CfiScheduleManager from "@/components/dashboard/CfiScheduleManager";
 export const metadata = { title: "Schedule" };
 
 export default function Page() {
-  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Schedule" /><CfiScheduleManager /></div>;
+  return <div className="grid gap-3"><AdminPageHeader title="Schedule" /><CfiScheduleManager /></div>;
 }

@@ -4,5 +4,5 @@ import PreflightRecordsManager from "@/components/dashboard/PreflightRecordsMana
 export const metadata = { title: "Flight Briefs" };
 
 export default function Page() {
-  return <div className="grid gap-3"><AdminPageHeader eyebrow="Personal" title="Flight briefs" /><PreflightRecordsManager /></div>;
+  return <div className="grid gap-3"><AdminPageHeader title="Flight briefs" /><PreflightRecordsManager /></div>;
 }

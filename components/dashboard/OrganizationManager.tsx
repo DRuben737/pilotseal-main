@@ -2104,7 +2104,7 @@ export default function OrganizationManager({
             <AdminDataTable label="Pending organization invitations">
               <thead className="bg-slate-100 text-xs font-semibold text-slate-700"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Instructor</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {!pendingPeople.length ? <tr><td colSpan={5}><EmptyState title="No pending invitations" description="Open email invitations will appear here." /></td></tr> : null}
+                {!pendingPeople.length ? <tr><td colSpan={5}><EmptyState title="No pending invitations" /></td></tr> : null}
                 {pendingPeople.map((person) => {
                   const invitation = memberInvitations.find(
                     (item) => item.organization_person_id === person.id && item.status === "pending",
@@ -2121,7 +2121,7 @@ export default function OrganizationManager({
             </AdminDataTable>
           </div>
           <div className="md:hidden">
-            {!pendingPeople.length ? <EmptyState title="No pending invitations" description="Open email invitations will appear here." /> : (
+            {!pendingPeople.length ? <EmptyState title="No pending invitations" /> : (
               <ul className="grid gap-2" aria-label="Pending organization invitations">
                 {pendingPeople.map((person) => {
                   const invitation = memberInvitations.find(

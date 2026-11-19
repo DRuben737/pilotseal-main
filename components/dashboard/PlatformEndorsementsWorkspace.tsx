@@ -14,7 +14,7 @@ export default function PlatformEndorsementsWorkspace() {
 
   return (
     <div className="grid gap-3">
-      <AdminPageHeader eyebrow="Platform administration" title="Endorsements" />
+      <AdminPageHeader title="Endorsements" />
       <ManagementTabs
         id="platform-endorsements"
         label="Endorsement sections"

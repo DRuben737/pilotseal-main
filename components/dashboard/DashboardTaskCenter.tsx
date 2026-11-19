@@ -209,7 +209,7 @@ export default function DashboardTaskCenter() {
           <h2>Needs attention</h2>
           <span>{loading ? "Loading…" : `${tasks.length} items`}</span>
         </div>
-        {!loading && !tasks.length ? <EmptyState title="You are clear for now" description="New reminders, requests, and due items will appear here." /> : null}
+        {!loading && !tasks.length ? <EmptyState title="You are clear for now" /> : null}
         {tasks.length ? (
           <div className="dashboard-task-list" role="list">
             {tasks.map((task) => (

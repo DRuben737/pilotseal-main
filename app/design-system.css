@@ -1070,7 +1070,40 @@ body :where(input[type="checkbox"], input[type="radio"]) {
 }
 
 body input[type="checkbox"] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  border: 1px solid var(--ps-line-strong);
   border-radius: 0.25rem;
+  background: var(--ps-surface-3);
+  transition:
+    border-color var(--ps-motion-fast) var(--ps-motion-curve),
+    background-color var(--ps-motion-fast) var(--ps-motion-curve),
+    box-shadow var(--ps-motion-fast) var(--ps-motion-curve);
+}
+
+body input[type="checkbox"]::before {
+  width: 0.55rem;
+  height: 0.55rem;
+  background: var(--ps-surface-3);
+  clip-path: polygon(14% 44%, 0 59%, 40% 100%, 100% 16%, 84% 0, 38% 65%);
+  content: "";
+  transform: scale(0);
+  transition: transform var(--ps-motion-fast) var(--ps-motion-curve);
+}
+
+body input[type="checkbox"]:checked {
+  border-color: var(--ps-meadow-strong);
+  background: var(--ps-meadow-strong);
+}
+
+body input[type="checkbox"]:checked::before {
+  transform: scale(1);
+}
+
+body input[type="checkbox"]:focus-visible {
+  outline: none !important;
+  box-shadow: var(--ps-focus-ring-compact) !important;
 }
 
 body :where(input, select, textarea) {
@@ -1465,7 +1498,7 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
 }
 
 .dashboard-content .admin-data-table :is(th, td) {
-  height: 2.5rem;
+  height: 2.25rem;
   border-color: var(--ps-line);
   padding: var(--ps-space-75) var(--ps-space-100);
   color: var(--ps-ink-soft);
@@ -1662,6 +1695,36 @@ body :where(.primary-button, .secondary-button, .ui-button, .ui-pill-button):act
   font-size: 0.8125rem;
   line-height: 1.4;
   corner-shape: squircle;
+}
+
+.dashboard-content .admin-empty-state {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 3.5rem;
+  align-items: center;
+  gap: var(--ps-space-100);
+  border-top: 1px solid var(--ps-line);
+  border-bottom: 1px solid var(--ps-line);
+  padding: var(--ps-space-100) var(--ps-space-200);
+  color: var(--ps-ink-muted);
+  text-align: left;
+}
+
+.dashboard-content .admin-empty-state h2 {
+  flex: none;
+  margin: 0;
+  color: var(--ps-ink-soft);
+  font-size: var(--ps-text-sm);
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.dashboard-content .admin-empty-state p {
+  min-width: 0;
+  margin: 0;
+  color: var(--ps-ink-muted);
+  font-size: var(--ps-text-xs);
+  line-height: 1rem;
 }
 
 .admin-dialog,
