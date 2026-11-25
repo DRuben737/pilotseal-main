@@ -1,7 +1,7 @@
 ---
 title: "Site Log"
 summary: "Ongoing development notes and history of PilotSeal."
-updated: "2026-10-25"
+updated: "2026-11-25"
 ---
 
 
@@ -370,6 +370,29 @@ Additional updates included:
 - Source-aware notifications with grouped audiences and organization publishing controls
 - Improved notification inbox and publication management
 - Better reconciliation of pending organization invitations
+
+Later in October, the Training Guide added USATS instrument and commercial course material and brought course modules into Schedule. Organization student lists gained an active status control, and notifications gained device-aware delivery and improved subscription recovery.
+
+</details>
+
+<details>
+<summary>November 2026 — Training Records, Console Refresh, and Cross-Country Scheduling</summary>
+
+Added a USATS training records workflow for flight and ground lessons. Staff with access can browse records by course, score lesson items, and print records in lesson-date order. Training Course Outline (TCO) modules can also be edited.
+
+Refreshed PilotSeal’s design across the site and Console. Personal, organization, and platform workspaces received more consistent navigation and controls, including a collapsible sidebar on desktop, clearer workspace tabs on mobile, and more compact management views.
+
+Scheduling updates included:
+
+- Automatic scheduling for cross-country lessons, including Night XC outside daytime availability and regular teaching hours
+- A clearer course module picker and more compact scheduling controls
+- More reliable lesson dragging and swapping, including swaps between lessons of different lengths
+
+Additional updates included:
+
+- Aircraft reference speeds and a print summary in Weight & Balance, with a fix for blank print pages
+- A shorter endorsement workflow and clearer CFI endorsement recency labels
+- Clearer recipient names in notifications
 
 </details>
 
